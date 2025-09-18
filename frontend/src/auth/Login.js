@@ -15,24 +15,28 @@ function Login() {
     <div className="auth-container">
       <div className="auth-form">
         <h2>Đăng nhập</h2>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} autoComplete="off">
           <div className="form-group">
-            <label>Email:</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              placeholder=" "
+              autoComplete="off"
             />
+            <label>Email:</label>
           </div>
           <div className="form-group">
-            <label>Mật khẩu:</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              placeholder=" "
+              autoComplete="new-password"
             />
+            <label>Mật khẩu:</label>
           </div>
           <button type="submit" className="auth-button">Đăng nhập</button>
         </form>

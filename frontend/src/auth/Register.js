@@ -21,42 +21,50 @@ function Register() {
     <div className="auth-container">
       <div className="auth-form">
         <h2>Đăng ký</h2>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} autoComplete="off">
           <div className="form-group">
-            <label>Họ tên:</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
+              placeholder=" "
+              autoComplete="off"
             />
+            <label>Họ tên:</label>
           </div>
           <div className="form-group">
-            <label>Email:</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              placeholder=" "
+              autoComplete="off"
             />
+            <label>Email:</label>
           </div>
           <div className="form-group">
-            <label>Mật khẩu:</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              placeholder=" "
+              autoComplete="new-password"
             />
+            <label>Mật khẩu:</label>
           </div>
           <div className="form-group">
-            <label>Xác nhận mật khẩu:</label>
             <input
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
+              placeholder=" "
+              autoComplete="new-password"
             />
+            <label>Xác nhận mật khẩu:</label>
           </div>
           <button type="submit" className="auth-button">Đăng ký</button>
         </form>
