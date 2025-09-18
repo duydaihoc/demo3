@@ -39,6 +39,34 @@ function HomePage() {
                 </div>
               </div>
             </div>
+            <div className="home-stat-table">
+              <div className="home-stat-title">Bảng thống kê giao dịch trong ngày</div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ví</th>
+                    <th>Thu</th>
+                    <th>Chi</th>
+                    <th>Net</th>
+                    <th>Giao dịch</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Tổng</td>
+                    <td>0₫</td>
+                    <td>0₫</td>
+                    <td>0₫</td>
+                    <td>0</td>
+                  </tr>
+                  <tr>
+                    <td colSpan="5" style={{ textAlign: 'center', color: '#888' }}>Không có giao dịch trong ngày.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+          <aside className="home-right">
             <div className="home-card">
               <div className="home-card-title">Ví</div>
               <div className="home-card-sub">Quản lý các ví của bạn</div>
@@ -74,34 +102,6 @@ function HomePage() {
                 </div>
               </div>
             </div>
-            <div className="home-stat-table">
-              <div className="home-stat-title">Bảng thống kê giao dịch trong ngày</div>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Ví</th>
-                    <th>Thu</th>
-                    <th>Chi</th>
-                    <th>Net</th>
-                    <th>Giao dịch</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>Tổng</td>
-                    <td>0₫</td>
-                    <td>0₫</td>
-                    <td>0₫</td>
-                    <td>0</td>
-                  </tr>
-                  <tr>
-                    <td colSpan="5" style={{ textAlign: 'center', color: '#888' }}>Không có giao dịch trong ngày.</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </section>
-          <aside className="home-right">
             <div className="home-reminder">
               <div className="home-reminder-title">Ghi chú / Nhắc nhở</div>
               <ul className="home-reminder-list">
