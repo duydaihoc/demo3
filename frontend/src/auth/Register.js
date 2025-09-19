@@ -6,15 +6,42 @@ function Register() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (password !== confirmPassword) {
-      alert('Mật khẩu không khớp!');
+      setError('Mật khẩu không khớp!');
       return;
     }
-    // Handle register logic here
-    console.log('Register:', { name, email, password });
+    setLoading(true);
+    setError('');
+    setSuccess('');
+    try {
+      const response = await fetch('http://localhost:5000/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setSuccess(data.message); // Show success message
+        setName('');
+        setEmail('');
+        setPassword('');
+        setConfirmPassword('');
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 1200); // Delay redirect to show message
+      } else {
+        setError(data.message);
+      }
+    } catch (err) {
+      setError('Network error');
+    }
+    setLoading(false);
   };
 
   return (
@@ -66,9 +93,15 @@ function Register() {
             />
             <label>Xác nhận mật khẩu:</label>
           </div>
-          <button type="submit" className="auth-button">Đăng ký</button>
+          {error && <div className="error-message">{error}</div>}
+          {success && <div className="success-message">{success}</div>}
+          <button type="submit" className="auth-button" disabled={loading}>
+            {loading ? 'Đang xử lý...' : 'Đăng ký'}
+          </button>
         </form>
-        <p>Đã có tài khoản? <a href="/login">Đăng nhập</a></p>
+        <p>
+          Đã có tài khoản? <a href="/login">Đăng nhập</a>
+        </p>
       </div>
     </div>
   );

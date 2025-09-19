@@ -4,11 +4,36 @@ import './Login.css';
 function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Handle login logic here
-    console.log('Login:', { email, password });
+    setLoading(true);
+    setError('');
+    setSuccess('');
+    try {
+      const response = await fetch('http://localhost:5000/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('userName', data.name);
+        setSuccess(data.message); // Show success message
+        setTimeout(() => {
+          window.location.href = '/home';
+        }, 1200); // Delay redirect to show message
+      } else {
+        setError(data.message);
+      }
+    } catch (err) {
+      setError('Network error');
+    }
+    setLoading(false);
   };
 
   return (
@@ -38,7 +63,11 @@ function Login() {
             />
             <label>Mật khẩu:</label>
           </div>
-          <button type="submit" className="auth-button">Đăng nhập</button>
+          {error && <p className="error-message">{error}</p>}
+          {success && <p className="success-message">{success}</p>}
+          <button type="submit" className="auth-button" disabled={loading}>
+            {loading ? 'Đang xử lý...' : 'Đăng nhập'}
+          </button>
         </form>
         <p>Chưa có tài khoản? <a href="/register">Đăng ký</a></p>
       </div>

@@ -3,9 +3,11 @@ import Sidebar from './Sidebar';
 import './TransactionsPage.css';
 
 function TransactionsPage() {
+  const userName = localStorage.getItem('userName') || 'Tên người dùng'; // Get from localStorage with fallback
+
   return (
     <div>
-      <Sidebar userName="Nguyễn Văn A" />
+      <Sidebar userName={userName} />
       <main className="transactions-main" style={{ marginLeft: 220 }}>
         <div className="transactions-header">
           <span className="transactions-title">Giao dịch</span>

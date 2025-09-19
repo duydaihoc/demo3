@@ -1,9 +1,17 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import './Sidebar.css';
 
 function Sidebar({ userName = "Tên người dùng" }) {
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const handleLogout = (e) => {
+    e.preventDefault();
+    localStorage.removeItem('token');
+    localStorage.removeItem('userName');
+    navigate('/login');
+  };
 
   return (
     <nav className="sidebar">
@@ -36,9 +44,11 @@ function Sidebar({ userName = "Tên người dùng" }) {
           </Link>
         </li>
         <li>
+          {/* Sử dụng Link để giữ nguyên CSS, xử lý logout bằng onClick */}
           <Link
-            to="/logout"
+            to="/login"
             className={location.pathname === "/logout" ? "active" : ""}
+            onClick={handleLogout}
           >
             Đăng xuất
           </Link>

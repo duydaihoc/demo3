@@ -3,9 +3,11 @@ import Sidebar from './Sidebar';
 import './HomePage.css';
 
 function HomePage() {
+  const userName = localStorage.getItem('userName') || 'Tên người dùng'; // Get from localStorage with fallback
+
   return (
     <div>
-      <Sidebar userName="Nguyễn Văn A" />
+      <Sidebar userName={userName} />
       <main className="home-main" style={{ marginLeft: 220 }}>
         <div className="home-header">
           <span className="home-title">Trang chủ</span>

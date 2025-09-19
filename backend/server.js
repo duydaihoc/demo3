@@ -6,10 +6,18 @@ const User = require('./models/User');
 const Expense = require('./models/Expense');
 const Category = require('./models/Category');
 const Income = require('./models/Income');
+const cors = require('cors'); // Add CORS package
+const authRoutes = require('./routes/auth'); // Add auth routes import
 
 dotenv.config();
 
 const app = express();
+
+// Enable CORS for all origins (adjust for production security)
+app.use(cors());
+
+// Parse JSON request bodies
+app.use(express.json());
 
 // Kiểm tra nếu MONGO_URI không được cấu hình
 if (!process.env.MONGO_URI) {
@@ -85,6 +93,9 @@ app.get('/create-sample-data', async (req, res) => {
     res.status(500).json({ message: 'Failed to create sample data', error: error.message });
   }
 });
+
+// Mount auth routes
+app.use('/api/auth', authRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

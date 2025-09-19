@@ -3,9 +3,11 @@ import Sidebar from './Sidebar';
 import './SettingsPage.css';
 
 function SettingsPage() {
+  const userName = localStorage.getItem('userName') || 'Tên người dùng'; // Get from localStorage with fallback
+
   return (
     <div>
-      <Sidebar userName="Nguyễn Văn A" />
+      <Sidebar userName={userName} />
       <main className="settings-main" style={{ marginLeft: 220 }}>
         <div className="settings-header">
           <span className="settings-title">Cài đặt tài khoản</span>
