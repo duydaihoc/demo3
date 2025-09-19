@@ -8,6 +8,7 @@ const Category = require('./models/Category');
 const Income = require('./models/Income');
 const cors = require('cors'); // Add CORS package
 const authRoutes = require('./routes/auth'); // Add auth routes import
+const adminRoutes = require('./routes/admin'); // Import admin routes
 
 dotenv.config();
 
@@ -96,6 +97,8 @@ app.get('/create-sample-data', async (req, res) => {
 
 // Mount auth routes
 app.use('/api/auth', authRoutes);
+// Mount admin routes
+app.use('/api/admin', adminRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

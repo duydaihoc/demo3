@@ -6,6 +6,10 @@ import Register from './auth/Register';
 import HomePage from './home/HomePage';
 import TransactionsPage from './home/TransactionsPage';
 import SettingsPage from './home/SettingsPage';
+import AdminPage from './admin/AdminPage';
+import AdminUsersPage from './admin/AdminUsersPage';
+import AdminGroupsPage from './admin/AdminGroupsPage';
+import AdminFamiliesPage from './admin/AdminFamiliesPage';
 
 function App() {
   return (
@@ -17,12 +21,16 @@ function App() {
         <Route path="/home" element={<HomePage />} />
         <Route path="/transactions" element={<TransactionsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/admin" element={<AdminPage />} />
+        <Route path="/admin/users" element={<AdminUsersPage />} />
+        <Route path="/admin/groups" element={<AdminGroupsPage />} />
+        <Route path="/admin/families" element={<AdminFamiliesPage />} />
       </Routes>
     </Router>
   );
 }
 
 export default App;
-        
+
 
 

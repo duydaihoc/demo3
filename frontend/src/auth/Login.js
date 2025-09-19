@@ -23,9 +23,14 @@ function Login() {
       if (response.ok) {
         localStorage.setItem('token', data.token);
         localStorage.setItem('userName', data.name);
+        localStorage.setItem('role', data.role); // Save role
         setSuccess(data.message); // Show success message
         setTimeout(() => {
-          window.location.href = '/home';
+          if (data.role === 'admin') {
+            window.location.href = '/admin';
+          } else {
+            window.location.href = '/home';
+          }
         }, 1200); // Delay redirect to show message
       } else {
         setError(data.message);
