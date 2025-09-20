@@ -6,9 +6,12 @@ const User = require('./models/User');
 const Expense = require('./models/Expense');
 const Category = require('./models/Category');
 const Income = require('./models/Income');
+const Wallet = require('./models/Wallet'); // Import Wallet model
 const cors = require('cors'); // Add CORS package
 const authRoutes = require('./routes/auth'); // Add auth routes import
 const adminRoutes = require('./routes/admin'); // Import admin routes
+const walletRoutes = require('./routes/wallet'); // Import wallet routes
+const categoryRoutes = require('./routes/Category'); // Import category routes
 
 dotenv.config();
 
@@ -28,7 +31,66 @@ if (!process.env.MONGO_URI) {
 
 // Connect to MongoDB
 connectDB()
-  .then(() => console.log('MongoDB connected successfully')) // Xóa "lỗi gì" hoặc chuỗi không cần thiết
+  .then(async () => {
+    console.log('MongoDB connected successfully');
+    
+    // Tự động tạo các danh mục mặc định khi server khởi động
+    try {
+      // Kiểm tra xem đã có danh mục nào chưa
+      const categoriesCount = await Category.countDocuments();
+      console.log(`Đã có ${categoriesCount} danh mục trong cơ sở dữ liệu`);
+      
+      if (categoriesCount < 20) {
+        console.log('Tiếp tục tạo thêm danh mục còn thiếu...');
+        
+        // Lấy các danh mục hiện có
+        const existingCategories = await Category.find({}, 'name type');
+        const existingNames = existingCategories.map(cat => `${cat.name}-${cat.type}`);
+        
+        // Danh sách tất cả danh mục mặc định
+        const allDefaultCategories = [
+          { name: 'Ăn uống', description: 'Các chi phí ăn uống hàng ngày', type: 'expense', icon: '🍔' },
+          { name: 'Di chuyển', description: 'Xăng xe, taxi, xe buýt', type: 'expense', icon: '🚗' },
+          { name: 'Hóa đơn & Tiện ích', description: 'Điện, nước, internet', type: 'expense', icon: '📝' },
+          { name: 'Mua sắm', description: 'Quần áo, đồ dùng', type: 'expense', icon: '🛍️' },
+          { name: 'Giải trí', description: 'Phim ảnh, âm nhạc, chơi game', type: 'expense', icon: '🎮' },
+          { name: 'Y tế', description: 'Thuốc men, khám bệnh', type: 'expense', icon: '💊' },
+          { name: 'Giáo dục', description: 'Sách vở, học phí', type: 'expense', icon: '📚' },
+          { name: 'Nhà cửa', description: 'Thuê nhà, sửa chữa', type: 'expense', icon: '🏠' },
+          { name: 'Thú cưng', description: 'Thức ăn, chăm sóc thú cưng', type: 'expense', icon: '🐱' },
+          { name: 'Quà tặng (Chi)', description: 'Quà tặng cho người khác', type: 'expense', icon: '🎁' },
+          { name: 'Lương', description: 'Thu nhập từ công việc chính', type: 'income', icon: '💰' },
+          { name: 'Thưởng', description: 'Tiền thưởng, hoa hồng', type: 'income', icon: '🏆' },
+          { name: 'Đầu tư', description: 'Lợi nhuận từ đầu tư', type: 'income', icon: '📈' },
+          { name: 'Bán đồ', description: 'Thu từ bán đồ cũ', type: 'income', icon: '🏷️' },
+          { name: 'Tiền được tặng', description: 'Tiền được người khác tặng', type: 'income', icon: '🎁' },
+          { name: 'Trợ cấp', description: 'Tiền trợ cấp, phụ cấp', type: 'income', icon: '📋' },
+          { name: 'Lãi suất', description: 'Lãi từ ngân hàng', type: 'income', icon: '🏦' },
+          { name: 'Freelance', description: 'Thu từ công việc tự do', type: 'income', icon: '💻' },
+          { name: 'Cho thuê', description: 'Thu từ cho thuê tài sản', type: 'income', icon: '🔑' },
+          { name: 'Thu nhập khác', description: 'Các nguồn thu khác', type: 'income', icon: '💵' }
+        ];
+        
+        // Lọc ra các danh mục chưa tồn tại
+        const categoriesToCreate = allDefaultCategories.filter(cat => 
+          !existingNames.includes(`${cat.name}-${cat.type}`)
+        );
+        
+        console.log(`Cần tạo thêm ${categoriesToCreate.length} danh mục`);
+        
+        if (categoriesToCreate.length > 0) {
+          await Category.insertMany(categoriesToCreate);
+          console.log('Đã tạo bổ sung các danh mục còn thiếu');
+          
+          // Đếm lại để xác nhận
+          const updatedCount = await Category.countDocuments();
+          console.log(`Hiện tại có ${updatedCount} danh mục trong cơ sở dữ liệu`);
+        }
+      }
+    } catch (error) {
+      console.error('Lỗi khi tạo danh mục mặc định:', error.message);
+    }
+  })
   .catch((err) => {
     console.error('MongoDB connection failed:', err.message);
     process.exit(1); // Exit the process with failure
@@ -72,6 +134,15 @@ app.get('/create-sample-data', async (req, res) => {
     const category = new Category({ name: 'Food', description: 'Food-related expenses' });
     await category.save();
 
+    // Tạo dữ liệu mẫu cho Wallet
+    const wallet = new Wallet({
+      name: 'Ví chính',
+      currency: 'VND',
+      initialBalance: 1000000,
+      owner: user._id
+    });
+    await wallet.save();
+
     // Tạo dữ liệu mẫu cho Expense
     const expense = new Expense({
       user: user._id,
@@ -99,6 +170,10 @@ app.get('/create-sample-data', async (req, res) => {
 app.use('/api/auth', authRoutes);
 // Mount admin routes
 app.use('/api/admin', adminRoutes);
+// Mount wallet routes
+app.use('/api/wallets', walletRoutes);
+// Mount category routes
+app.use('/api/categories', categoryRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

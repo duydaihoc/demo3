@@ -5,7 +5,6 @@ const CategorySchema = new Schema({
   name: {
     type: String,
     required: true,
-    unique: true,
     trim: true
   },
   description: {
@@ -36,5 +35,8 @@ const CategorySchema = new Schema({
     default: Date.now
   }
 }, { timestamps: true });
+
+// Tạo compound index thay vì unique trên trường name
+CategorySchema.index({ name: 1, type: 1 }, { unique: true });
 
 module.exports = mongoose.model('Category', CategorySchema);

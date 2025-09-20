@@ -1,5 +1,6 @@
 import React from 'react';
 import Sidebar from './Sidebar';
+import Wallets from './Wallets';
 import './HomePage.css';
 
 function HomePage() {
@@ -69,41 +70,8 @@ function HomePage() {
             </div>
           </section>
           <aside className="home-right">
-            <div className="home-card">
-              <div className="home-card-title">Ví</div>
-              <div className="home-card-sub">Quản lý các ví của bạn</div>
-              <div style={{ marginTop: '16px' }}>
-                <div style={{
-                  display: 'flex',
-                  gap: '18px',
-                  flexWrap: 'wrap'
-                }}>
-                  <div style={{
-                    background: '#e3f6f5',
-                    borderRadius: '10px',
-                    padding: '12px 18px',
-                    minWidth: '120px',
-                    textAlign: 'center',
-                    boxShadow: '0 2px 8px rgba(42,82,152,0.08)'
-                  }}>
-                    <div style={{ color: '#2a5298', fontWeight: 'bold' }}>Ví tiền mặt</div>
-                    <div style={{ color: '#4ecdc4', fontSize: '1.2rem', fontWeight: 'bold' }}>0₫</div>
-                  </div>
-                  <div style={{
-                    background: '#fff6f6',
-                    borderRadius: '10px',
-                    padding: '12px 18px',
-                    minWidth: '120px',
-                    textAlign: 'center',
-                    boxShadow: '0 2px 8px rgba(255,107,107,0.08)'
-                  }}>
-                    <div style={{ color: '#ff6b6b', fontWeight: 'bold' }}>Ví ngân hàng</div>
-                    <div style={{ color: '#ff6b6b', fontSize: '1.2rem', fontWeight: 'bold' }}>0₫</div>
-                  </div>
-                  {/* Có thể thêm nhiều ví khác ở đây */}
-                </div>
-              </div>
-            </div>
+            {/* Đưa Wallets sang bên phải */}
+            <Wallets />
             <div className="home-reminder">
               <div className="home-reminder-title">Ghi chú / Nhắc nhở</div>
               <ul className="home-reminder-list">
@@ -120,3 +88,4 @@ function HomePage() {
 }
 
 export default HomePage;
+
