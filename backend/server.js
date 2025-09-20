@@ -49,26 +49,26 @@ connectDB()
         
         // Danh sách tất cả danh mục mặc định
         const allDefaultCategories = [
-          { name: 'Ăn uống', description: 'Các chi phí ăn uống hàng ngày', type: 'expense', icon: '🍔' },
-          { name: 'Di chuyển', description: 'Xăng xe, taxi, xe buýt', type: 'expense', icon: '🚗' },
-          { name: 'Hóa đơn & Tiện ích', description: 'Điện, nước, internet', type: 'expense', icon: '📝' },
-          { name: 'Mua sắm', description: 'Quần áo, đồ dùng', type: 'expense', icon: '🛍️' },
-          { name: 'Giải trí', description: 'Phim ảnh, âm nhạc, chơi game', type: 'expense', icon: '🎮' },
-          { name: 'Y tế', description: 'Thuốc men, khám bệnh', type: 'expense', icon: '💊' },
-          { name: 'Giáo dục', description: 'Sách vở, học phí', type: 'expense', icon: '📚' },
-          { name: 'Nhà cửa', description: 'Thuê nhà, sửa chữa', type: 'expense', icon: '🏠' },
-          { name: 'Thú cưng', description: 'Thức ăn, chăm sóc thú cưng', type: 'expense', icon: '🐱' },
-          { name: 'Quà tặng (Chi)', description: 'Quà tặng cho người khác', type: 'expense', icon: '🎁' },
-          { name: 'Lương', description: 'Thu nhập từ công việc chính', type: 'income', icon: '💰' },
-          { name: 'Thưởng', description: 'Tiền thưởng, hoa hồng', type: 'income', icon: '🏆' },
-          { name: 'Đầu tư', description: 'Lợi nhuận từ đầu tư', type: 'income', icon: '📈' },
-          { name: 'Bán đồ', description: 'Thu từ bán đồ cũ', type: 'income', icon: '🏷️' },
-          { name: 'Tiền được tặng', description: 'Tiền được người khác tặng', type: 'income', icon: '🎁' },
-          { name: 'Trợ cấp', description: 'Tiền trợ cấp, phụ cấp', type: 'income', icon: '📋' },
-          { name: 'Lãi suất', description: 'Lãi từ ngân hàng', type: 'income', icon: '🏦' },
-          { name: 'Freelance', description: 'Thu từ công việc tự do', type: 'income', icon: '💻' },
-          { name: 'Cho thuê', description: 'Thu từ cho thuê tài sản', type: 'income', icon: '🔑' },
-          { name: 'Thu nhập khác', description: 'Các nguồn thu khác', type: 'income', icon: '💵' }
+          { name: 'Ăn uống', description: 'Các chi phí ăn uống hàng ngày', type: 'expense', icon: '🍔', owner: null, createdBy: 'system', creatorName: 'Hệ thống' },
+          { name: 'Di chuyển', description: 'Xăng xe, taxi, xe buýt', type: 'expense', icon: '🚗', owner: null, createdBy: 'system', creatorName: 'Hệ thống' },
+          { name: 'Hóa đơn & Tiện ích', description: 'Điện, nước, internet', type: 'expense', icon: '📝', owner: null, createdBy: 'system', creatorName: 'Hệ thống' },
+          { name: 'Mua sắm', description: 'Quần áo, đồ dùng', type: 'expense', icon: '🛍️', owner: null, createdBy: 'system', creatorName: 'Hệ thống' },
+          { name: 'Giải trí', description: 'Phim ảnh, âm nhạc, chơi game', type: 'expense', icon: '🎮', owner: null, createdBy: 'system', creatorName: 'Hệ thống' },
+          { name: 'Y tế', description: 'Thuốc men, khám bệnh', type: 'expense', icon: '💊', owner: null, createdBy: 'system', creatorName: 'Hệ thống' },
+          { name: 'Giáo dục', description: 'Sách vở, học phí', type: 'expense', icon: '📚', owner: null, createdBy: 'system', creatorName: 'Hệ thống' },
+          { name: 'Nhà cửa', description: 'Thuê nhà, sửa chữa', type: 'expense', icon: '🏠', owner: null, createdBy: 'system', creatorName: 'Hệ thống' },
+          { name: 'Thú cưng', description: 'Thức ăn, chăm sóc thú cưng', type: 'expense', icon: '🐱', owner: null, createdBy: 'system', creatorName: 'Hệ thống' },
+          { name: 'Quà tặng (Chi)', description: 'Quà tặng cho người khác', type: 'expense', icon: '🎁', owner: null, createdBy: 'system', creatorName: 'Hệ thống' },
+          { name: 'Lương', description: 'Thu nhập từ công việc chính', type: 'income', icon: '💰', owner: null, createdBy: 'system', creatorName: 'Hệ thống' },
+          { name: 'Thưởng', description: 'Tiền thưởng, hoa hồng', type: 'income', icon: '🏆', owner: null, createdBy: 'system', creatorName: 'Hệ thống' },
+          { name: 'Đầu tư', description: 'Lợi nhuận từ đầu tư', type: 'income', icon: '📈', owner: null, createdBy: 'system', creatorName: 'Hệ thống' },
+          { name: 'Bán đồ', description: 'Thu từ bán đồ cũ', type: 'income', icon: '🏷️', owner: null, createdBy: 'system', creatorName: 'Hệ thống' },
+          { name: 'Tiền được tặng', description: 'Tiền được người khác tặng', type: 'income', icon: '🎁', owner: null, createdBy: 'system', creatorName: 'Hệ thống' },
+          { name: 'Trợ cấp', description: 'Tiền trợ cấp, phụ cấp', type: 'income', icon: '📋', owner: null, createdBy: 'system', creatorName: 'Hệ thống' },
+          { name: 'Lãi suất', description: 'Lãi từ ngân hàng', type: 'income', icon: '🏦', owner: null, createdBy: 'system', creatorName: 'Hệ thống' },
+          { name: 'Freelance', description: 'Thu từ công việc tự do', type: 'income', icon: '💻', owner: null, createdBy: 'system', creatorName: 'Hệ thống' },
+          { name: 'Cho thuê', description: 'Thu từ cho thuê tài sản', type: 'income', icon: '🔑', owner: null, createdBy: 'system', creatorName: 'Hệ thống' },
+          { name: 'Thu nhập khác', description: 'Các nguồn thu khác', type: 'income', icon: '💵', owner: null, createdBy: 'system', creatorName: 'Hệ thống' }
         ];
         
         // Lọc ra các danh mục chưa tồn tại
@@ -80,7 +80,7 @@ connectDB()
         
         if (categoriesToCreate.length > 0) {
           await Category.insertMany(categoriesToCreate);
-          console.log('Đã tạo bổ sung các danh mục còn thiếu');
+          console.log('Đã tạo bổ sung các danh mục hệ thống còn thiếu');
           
           // Đếm lại để xác nhận
           const updatedCount = await Category.countDocuments();

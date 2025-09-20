@@ -21,8 +21,8 @@ const CategorySchema = new Schema({
     default: '❓'
   },
   owner: {
-    type: Schema.Types.ObjectId,
-    ref: 'User',
+    // Changed from ObjectId to Mixed type to support both ObjectId and string IDs (for temp users)
+    type: Schema.Types.Mixed,
     required: false // null means system category
   },
   wallet: {
@@ -30,13 +30,32 @@ const CategorySchema = new Schema({
     ref: 'Wallet',
     required: false // null means global/shared category
   },
+  createdBy: {
+    type: String,
+    enum: ['system', 'admin', 'user'],
+    default: 'system'
+  },
+  creatorName: {
+    type: String,
+    default: 'Hệ thống'
+  },
   createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
     type: Date,
     default: Date.now
   }
 }, { timestamps: true });
 
 // Tạo compound index thay vì unique trên trường name
-CategorySchema.index({ name: 1, type: 1 }, { unique: true });
+// Modified index to include owner for more flexibility
+CategorySchema.index({ name: 1, type: 1, owner: 1 }, { unique: true });
 
 module.exports = mongoose.model('Category', CategorySchema);
+
+// The Category schema already has these fields:
+// owner: Mixed type to support both ObjectId and string IDs
+// createdBy: String enum ('system', 'admin', 'user')
+// creatorName: String for displaying the creator's name

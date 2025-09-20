@@ -1,0 +1,502 @@
+/* Main layout */
+.admin-layout {
+  display: flex;
+  width: 100%;
+  min-height: 100vh;
+  background-color: #f6f9fc;
+}
+
+.admin-content {
+  flex-grow: 1;
+  padding: 2rem;
+}
+
+.admin-cat-page {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.admin-page-title {
+  color: #4562a8;
+  margin-bottom: 1.5rem;
+  font-size: 2rem;
+  border-bottom: 2px solid #e3e9f3;
+  padding-bottom: 0.5rem;
+}
+
+/* Section styling */
+.admin-section {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  border-left: 4px solid transparent;
+}
+
+.system-section {
+  border-left-color: #4CAF50;
+}
+
+.user-section {
+  border-left-color: #FF9800;
+}
+
+.admin-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+}
+
+.icon-wrapper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  margin-right: 10px;
+  font-size: 16px;
+}
+
+.system-icon {
+  background-color: rgba(76, 175, 80, 0.15);
+  color: #4CAF50;
+}
+
+.user-icon {
+  background-color: rgba(255, 152, 0, 0.15);
+  color: #FF9800;
+}
+
+.section-title {
+  font-size: 1.25rem;
+  margin: 0;
+  color: #333;
+  font-weight: 600;
+}
+
+.category-count {
+  display: inline-block;
+  background-color: #f0f4f7;
+  color: #70757a;
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 0.9rem;
+  margin-left: 12px;
+  font-weight: 500;
+}
+
+.add-btn {
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.add-btn:hover {
+  background-color: #3e8e41;
+}
+
+/* Table styling */
+.table-container {
+  overflow-x: auto;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.admin-table th {
+  background-color: #f8f9fa;
+  color: #5f6368;
+  padding: 12px 15px;
+  font-weight: 600;
+  border-bottom: 1px solid #eceff1;
+}
+
+.admin-table td {
+  padding: 12px 15px;
+  border-bottom: 1px solid #eceff1;
+  color: #202124;
+}
+
+.admin-table tbody tr:hover {
+  background-color: #f8f9fa;
+}
+
+.icon-cell {
+  font-size: 1.5rem;
+  text-align: center;
+  width: 60px;
+}
+
+.empty-text {
+  color: #9aa0a6;
+  font-style: italic;
+}
+
+/* Category type badges */
+.type-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.type-badge.expense {
+  background-color: #ffebe5;
+  color: #e53935;
+}
+
+.type-badge.income {
+  background-color: #e3f7e3;
+  color: #43a047;
+}
+
+/* Creator badges */
+.creator-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.creator-badge.system {
+  background-color: #e8f0fe;
+  color: #4285f4;
+}
+
+.creator-badge.admin {
+  background-color: #e6f4ea;
+  color: #34a853;
+}
+
+.creator-badge.user {
+  background-color: #fff8e1;
+  color: #fbbc05;
+}
+
+/* User ID styling */
+.user-id-cell {
+  font-family: monospace;
+}
+
+.user-id-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-id {
+  background-color: #f1f3f4;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.copy-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+  padding: 2px 4px;
+}
+
+.copy-btn:hover {
+  opacity: 1;
+}
+
+/* Action buttons */
+.action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.edit-btn, .delete-btn {
+  padding: 5px 10px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.2s;
+}
+
+.edit-btn {
+  background-color: #e8f0fe;
+  color: #1a73e8;
+}
+
+.delete-btn {
+  background-color: #fce8e6;
+  color: #d93025;
+}
+
+.edit-btn:hover {
+  background-color: #1a73e8;
+  color: white;
+}
+
+.delete-btn:hover {
+  background-color: #d93025;
+  color: white;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 2rem;
+  color: #70757a;
+  font-style: italic;
+}
+
+/* Loading and error states */
+.admin-loading, .admin-error {
+  text-align: center;
+  padding: 2rem;
+  font-size: 1.1rem;
+}
+
+.admin-error {
+  color: #d93025;
+}
+
+/* Modal styling */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  width: 90%;
+  max-width: 500px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #eceff1;
+}
+
+.modal-header h3 {
+  margin: 0;
+  color: #202124;
+  font-weight: 500;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #5f6368;
+}
+
+.modal-form {
+  padding: 24px;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #202124;
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #dfe1e5;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+.emoji-input {
+  font-size: 1.5rem;
+}
+
+.emoji-preview {
+  font-size: 2rem;
+  text-align: center;
+  margin-top: 8px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.submit-btn, .cancel-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition: background-color 0.2s;
+}
+
+.submit-btn {
+  background-color: #1a73e8;
+  color: white;
+}
+
+.submit-btn:hover {
+  background-color: #0d66d0;
+}
+
+.cancel-btn {
+  background-color: #f8f9fa;
+  color: #5f6368;
+}
+
+.cancel-btn:hover {
+  background-color: #e8eaed;
+}
+
+
+.creator-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background-color: rgba(42,82,152,0.05);
+  color: #2a5298;
+}
+
+.creator-badge.system {
+  background-color: rgba(42,82,152,0.08);
+  color: #2a5298;
+}
+
+.creator-badge.admin {
+  background-color: rgba(78,205,196,0.1);
+  color: #36968e;
+}
+
+.creator-badge.user {
+  background-color: rgba(255,193,7,0.1);
+  color: #e6a100;
+}
+
+.creator-badge::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.creator-badge.system::before {
+  background-color: #2a5298;
+}
+
+.creator-badge.admin::before {
+  background-color: #4ecdc4;
+}
+
+.creator-badge.user::before {
+  background-color: #ffc107;
+}
+
+.owner-id {
+  display: inline-block;
+  padding: 2px 6px;
+  background-color: rgba(0,0,0,0.04);
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.85rem;
+  color: #555;
+  cursor: default;
+  transition: all 0.2s;
+}
+
+.owner-id:hover {
+  background-color: rgba(42,82,152,0.08);
+  color: #2a5298;
+}
+
+.user-id-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-id {
+  display: inline-block;
+  padding: 4px 8px;
+  background-color: rgba(42,82,152,0.06);
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.85rem;
+  color: #2a5298;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.copy-id-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 2px 4px;
+  border-radius: 4px;
+  opacity: 0.6;
+  transition: all 0.2s;
+}
+
+.copy-id-btn:hover {
+  opacity: 1;
+  background-color: rgba(78,205,196,0.1);
+  transform: scale(1.1);
+}
+
+.owner-cell {
+  max-width: 180px;
+  white-space: nowrap;
+}

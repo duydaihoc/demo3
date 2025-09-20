@@ -10,6 +10,7 @@ import AdminPage from './admin/AdminPage';
 import AdminUsersPage from './admin/AdminUsersPage';
 import AdminGroupsPage from './admin/AdminGroupsPage';
 import AdminFamiliesPage from './admin/AdminFamiliesPage';
+import AdminCategoriesPage from './admin/AdminCategoriesPage'; // Import new component
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
         <Route path="/admin/users" element={<AdminUsersPage />} />
         <Route path="/admin/groups" element={<AdminGroupsPage />} />
         <Route path="/admin/families" element={<AdminFamiliesPage />} />
+        <Route path="/admin/categories" element={<AdminCategoriesPage />} /> {/* Add new route */}
       </Routes>
     </Router>
   );

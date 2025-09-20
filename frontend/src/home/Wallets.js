@@ -25,8 +25,32 @@ function Wallets() {
   const [undoData, setUndoData] = useState(null);
   const undoTimerRef = useRef(null);
 
+  const getUserInfo = useCallback(() => {
+    const userId = localStorage.getItem('userId');
+    const userName = localStorage.getItem('userName');
+    const token = localStorage.getItem('token');
+    
+    return {
+      userId, 
+      userName,
+      token,
+      headers: token ? {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      } : {
+        'Content-Type': 'application/json'
+      }
+    };
+  }, []);
+
   // Fetch wallets khi component mount
   useEffect(() => {
+    // Set a temporary user ID if none exists (for anonymous users)
+    if (!localStorage.getItem('userId') && !localStorage.getItem('tempUserId')) {
+      const tempId = 'temp_' + Math.random().toString(36).substring(2, 15);
+      localStorage.setItem('tempUserId', tempId);
+    }
+    
     fetchWallets();
   }, []);
 
@@ -147,33 +171,45 @@ function Wallets() {
       alert('Vui lòng nhập tên danh mục');
       return;
     }
+    
     setCreatingCategory(true);
     try {
-      // Lấy userId từ localStorage nếu có (nếu bạn có hệ thống auth)
-      const ownerId = localStorage.getItem('userId') || undefined;
-
+      // Get complete user info with username
+      const userInfo = getUserInfo();
+      const userId = userInfo.userId || localStorage.getItem('tempUserId');
+      const userName = userInfo.userName || 'Người dùng';
+      const isAdmin = localStorage.getItem('userRole') === 'admin';
+      
+      console.log('Creating category with owner:', userId, 'name:', userName);
+      
       const res = await fetch('http://localhost:5000/api/categories', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: userInfo.headers,
         body: JSON.stringify({ 
           name, 
           type: categoryFilter, 
           icon: newCategoryIcon || '❓',
-          ...(ownerId ? { owner: ownerId } : {}) // chỉ gửi owner khi có
+          owner: userId,
+          createdBy: isAdmin ? 'admin' : 'user',  // Set proper creator type
+          creatorName: userName  // Send the actual userName
         })
       });
+      
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || 'Failed to create category');
+        const errData = await res.json();
+        console.error('Category creation error:', errData);
+        throw new Error(errData.message || 'Failed to create category');
       }
+      
       const created = await res.json();
-      // add to state and select it
+      console.log('Created category:', created);
+      
       setCategories(prev => [created, ...prev]);
       setSelectedCategories(prev => [...prev, created._id]);
       setNewCategoryName('');
       setNewCategoryIcon('🎯');
     } catch (err) {
-      console.error(err);
+      console.error('Category creation failed:', err);
       alert('Lỗi khi tạo danh mục: ' + (err.message || ''));
     } finally {
       setCreatingCategory(false);
