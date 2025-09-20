@@ -21,7 +21,7 @@ router.get('/', async (req, res) => {
 // @access  Public (sẽ thêm auth sau)
 router.post('/', async (req, res) => {
   try {
-    const { name, description, type, icon } = req.body;
+    const { name, description, type, icon, owner } = req.body;
     
     // Validation
     if (!name || name.trim() === '') {
@@ -32,17 +32,28 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ message: 'Loại danh mục không hợp lệ' });
     }
 
-    const newCategory = new Category({
+    const categoryData = {
       name: name.trim(),
       description: description || '',
       type,
       icon: icon || '❓'
-    });
+    };
+
+    // Nếu client gửi owner (userId) và là ObjectId hợp lệ thì gán owner
+    if (owner && mongoose.Types.ObjectId.isValid(owner)) {
+      categoryData.owner = owner;
+    }
+
+    const newCategory = new Category(categoryData);
 
     const category = await newCategory.save();
     res.status(201).json(category);
   } catch (err) {
     console.error(err.message);
+    // trả lỗi rõ hơn khi duplicate key
+    if (err.code === 11000) {
+      return res.status(400).json({ message: 'Danh mục đã tồn tại' });
+    }
     res.status(500).json({ message: 'Server Error', error: err.message });
   }
 });
