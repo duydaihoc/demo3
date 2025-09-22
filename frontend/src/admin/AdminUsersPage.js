@@ -11,6 +11,10 @@ function AdminUsersPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
 
+  // New state for user wallets modal
+  const [userWallets, setUserWallets] = useState([]);
+  const [walletsModal, setWalletsModal] = useState({ show: false, userId: null, userName: '' });
+
   const navigate = useNavigate();
   const token = localStorage.getItem('token');
 
@@ -79,6 +83,33 @@ function AdminUsersPage() {
     setDeleteId(null);
   };
 
+  // New: open wallets modal and fetch wallets for that user (admin)
+  const openUserWallets = async (user) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:5000/api/wallets/user/${user._id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        console.error('Failed to load wallets');
+        setUserWallets([]);
+      } else {
+        const data = await res.json();
+        setUserWallets(data || []);
+      }
+      setWalletsModal({ show: true, userId: user._id, userName: user.name });
+    } catch (err) {
+      console.error('Error fetching user wallets', err);
+      setUserWallets([]);
+      setWalletsModal({ show: true, userId: user._id, userName: user.name });
+    }
+  };
+
+  const closeWalletsModal = () => {
+    setWalletsModal({ show: false, userId: null, userName: '' });
+    setUserWallets([]);
+  };
+
   return (
     <div className="admin-layout">
       <AdminSidebar />
@@ -137,6 +168,8 @@ function AdminUsersPage() {
                     <td>{user.email}</td>
                     <td>{user.role}</td>
                     <td>
+                      {/* Changed: open modal instead of navigate */}
+                      <button className="admin-wallet-btn" onClick={() => openUserWallets(user)}>Ví</button>
                       <button onClick={() => handleEdit(user)}>Sửa</button>
                       <button onClick={() => handleDelete(user._id)}>Xóa</button>
                     </td>
@@ -145,6 +178,8 @@ function AdminUsersPage() {
               )}
           </tbody>
         </table>
+
+        {/* existing confirm delete modal */}
         {showConfirm && (
           <div className="admin-confirm-modal">
             <div className="admin-confirm-content">
@@ -154,6 +189,59 @@ function AdminUsersPage() {
             </div>
           </div>
         )}
+
+        {/* NEW: User wallets modal (reworked UI into cards with split categories) */}
+        {walletsModal.show && (
+          <div className="admin-confirm-modal">
+            <div className="admin-confirm-content wallets-modal" style={{ maxWidth: 900 }}>
+              <div className="wallets-modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0 }}>Ví của: {walletsModal.userName}</h3>
+                <button className="confirm-btn" onClick={closeWalletsModal}>Đóng</button>
+              </div>
+
+              <div className="wallets-modal-grid" style={{ marginTop: 14 }}>
+                {userWallets.length === 0 ? (
+                  <div className="no-wallet">Không có ví</div>
+                ) : userWallets.map(w => {
+                  const expenseCats = (w.categories || []).filter(c => c.type === 'expense');
+                  const incomeCats = (w.categories || []).filter(c => c.type === 'income');
+                  return (
+                    <div key={w._id} className="wallet-card-admin">
+                      <div className="wallet-card-admin-header">
+                        <div className="w-name">{w.name}</div>
+                        <div className="w-balance">
+                          {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: w.currency || 'VND' }).format(w.initialBalance || 0)}
+                          <div className="w-currency">{w.currency}</div>
+                        </div>
+                      </div>
+
+                      <div className="wallet-cats-split">
+                        <div className="cats-col">
+                          <div className="cats-title">Chi tiêu</div>
+                          <div className="cats-list">
+                            {expenseCats.length === 0 ? <span className="cat-empty">—</span> : expenseCats.map(c => (
+                              <span key={c._id} className="cat-chip">{c.icon} <span className="cat-name">{c.name}</span></span>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="cats-col">
+                          <div className="cats-title">Thu nhập</div>
+                          <div className="cats-list">
+                            {incomeCats.length === 0 ? <span className="cat-empty">—</span> : incomeCats.map(c => (
+                              <span key={c._id} className="cat-chip">{c.icon} <span className="cat-name">{c.name}</span></span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );

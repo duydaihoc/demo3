@@ -57,15 +57,57 @@ function Wallets() {
   }, []);
 
   // fetchCategories ổn định bằng useCallback
-  const fetchCategories = useCallback(async () => {
+  const fetchCategories = useCallback(async (ownerFilter) => {
     try {
       const response = await fetch('http://localhost:5000/api/categories');
       const data = await response.json();
-      setCategories(data || []);
+
+      const userInfo = getUserInfo();
+      const authUserId = userInfo.userId;
+      const tempId = localStorage.getItem('tempUserId');
+      const isAdmin = localStorage.getItem('userRole') === 'admin';
+      const isObjectId = id => typeof id === 'string' && /^[0-9a-fA-F]{24}$/.test(id);
+
+      // If ownerFilter provided, normalize to string id (could be object or string)
+      const normalizeOwner = (o) => {
+        if (!o) return null;
+        if (typeof o === 'string') return o;
+        if (o._id) return String(o._id);
+        return null;
+      };
+      const ownerToMatch = normalizeOwner(ownerFilter);
+
+      const filtered = (data || []).filter(cat => {
+        // admin sees everything
+        if (isAdmin) return true;
+
+        // system categories created by admin are visible to all
+        if (cat.createdBy === 'admin') return true;
+
+        // public category (no owner) -> visible
+        if (!cat.owner) return true;
+
+        // normalize category owner id
+        const ownerId = typeof cat.owner === 'string' ? cat.owner : (cat.owner && cat.owner._id ? String(cat.owner._id) : undefined);
+
+        // if ownerFilter provided: show only categories owned by that owner
+        if (ownerToMatch) {
+          return ownerId === ownerToMatch;
+        }
+
+        // otherwise (no ownerFilter): show categories owned by current auth user or tempId
+        if (authUserId && isObjectId(authUserId) && ownerId === authUserId) return true;
+        if (tempId && ownerId === tempId) return true;
+
+        // otherwise hide category
+        return false;
+      });
+
+      setCategories(filtered || []);
     } catch (error) {
       console.error('Error fetching categories:', error);
     }
-  }, []);
+  }, [getUserInfo]);
 
   // Lấy categories khi modal chọn danh mục mở (dependency đầy đủ để tránh cảnh báo ESLint)
   useEffect(() => {
@@ -202,7 +244,7 @@ function Wallets() {
     }
   };
 
-  const handleCreateCategory = async (e) => {
+  const handleCreateCategory = async (e, ownerOverride) => {
     e.preventDefault();
     const name = (newCategoryName || '').trim();
     if (!name) {
@@ -216,8 +258,6 @@ function Wallets() {
       const headers = {
         'Content-Type': 'application/json',
       };
-      
-      // Add Authorization header if token exists
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
@@ -228,21 +268,27 @@ function Wallets() {
       const userName = userInfo.userName || 'Người dùng';
       const isAdmin = localStorage.getItem('userRole') === 'admin';
 
-      // Determine owner to send: prefer real ObjectId for authenticated users
+      // Determine owner to send: prefer ownerOverride if provided, else prefer authUserId, else tempId
       const isObjectId = id => typeof id === 'string' && /^[0-9a-fA-F]{24}$/.test(id);
-      const ownerToSend = isObjectId(authUserId) ? authUserId : (tempId ? tempId : undefined);
+      const normalizeOwner = (o) => {
+        if (!o) return undefined;
+        if (typeof o === 'string') return o;
+        if (o._id) return String(o._id);
+        return undefined;
+      };
+      const overrideOwnerId = normalizeOwner(ownerOverride);
+      const ownerToSend = overrideOwnerId
+        ? overrideOwnerId
+        : (isObjectId(authUserId) ? authUserId : (tempId ? tempId : undefined));
 
       const body = {
         name,
         type: categoryFilter,
         icon: newCategoryIcon || '❓',
-        // createdBy: admin/user depends on role
         createdBy: isAdmin ? 'admin' : (isObjectId(authUserId) ? 'user' : 'user'),
         creatorName: userName
       };
       if (ownerToSend) body.owner = ownerToSend;
-
-      console.log('Creating category request body:', body);
 
       const res = await fetch('http://localhost:5000/api/categories', {
         method: 'POST',
@@ -257,14 +303,17 @@ function Wallets() {
       }
       
       const created = await res.json();
-      console.log('Created category:', created);
-      
+      // add to local categories and select it
       setCategories(prev => [created, ...prev]);
       setSelectedCategories(prev => [...prev, created._id]);
       setNewCategoryName('');
       setNewCategoryIcon('🎯');
-      // notification thay vì alert
       showNotification('Tạo danh mục thành công!', 'success');
+
+      // if ownerOverride was provided, optionally refresh filtered categories for that owner
+      if (overrideOwnerId) {
+        await fetchCategories(overrideOwnerId);
+      }
     } catch (err) {
       console.error('Category creation failed:', err);
       showNotification('Lỗi khi tạo danh mục: ' + (err.message || ''), 'error');
@@ -322,7 +371,9 @@ function Wallets() {
       setSelectedCategories(catIds);
       setShowEditModal(true);
       setDetailWallet(data);
-      if (categories.length === 0) fetchCategories();
+      // Ensure categories are filtered for this wallet's owner (so we don't show other users' categories)
+      const ownerIdForFilter = data.owner;
+      await fetchCategories(ownerIdForFilter);
     } catch (err) {
       console.error(err);
       alert('Không thể tải thông tin ví để sửa.');
@@ -739,6 +790,30 @@ function Wallets() {
                     );
                   })}
                 </div>
+
+                {/* New category form inside Edit modal: create category for this wallet owner */}
+                <div className="new-category-form edit-new-category" /* not a form to avoid nested form submit */>
+                  <input
+                    className="new-cat-input"
+                    placeholder="Tên danh mục mới"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                  />
+                  <input
+                    className="new-cat-input icon-input"
+                    placeholder="Icon (emoji) ví dụ: 🎁"
+                    value={newCategoryIcon}
+                    onChange={(e) => setNewCategoryIcon(e.target.value)}
+                  />
+                  <button
+                    className="new-cat-btn"
+                    type="button"
+                    disabled={creatingCategory}
+                    onClick={(e) => handleCreateCategory(e, detailWallet && detailWallet.owner)}
+                  >
+                    {creatingCategory ? 'Đang tạo...' : 'Thêm danh mục cho chủ ví này'}
+                  </button>
+                </div>
               </div>
 
               <div className="wallet-modal-actions">
@@ -779,4 +854,3 @@ function Wallets() {
 }
 
 export default Wallets;
-      

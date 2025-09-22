@@ -189,4 +189,28 @@ router.delete('/:id', requireAuth, async (req, res) => {
   }
 });
 
+// NEW: admin-only endpoint to get wallets for a specific user
+router.get('/user/:userId', requireAuth, async (req, res) => {
+  try {
+    // only admin can request other users' wallets
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const { userId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: 'Invalid user ID' });
+    }
+
+    const wallets = await Wallet.find({ owner: userId })
+      .sort({ createdAt: -1 })
+      .populate('categories', 'name icon type');
+
+    res.json(wallets);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ message: 'Server Error', error: err.message });
+  }
+});
+
 module.exports = router;
