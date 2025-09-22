@@ -56,6 +56,27 @@ router.get('/', requireAuth, async (req, res) => {
   }
 });
 
+// @route   GET /api/wallets/:id
+// @desc    Get wallet detail by ID
+// @access  Private
+router.get('/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid wallet ID' });
+    }
+    // Chỉ trả về ví thuộc user đang đăng nhập
+    const wallet = await Wallet.findOne({ _id: id, owner: req.user._id }).populate('categories', 'name icon type');
+    if (!wallet) {
+      return res.status(404).json({ message: 'Wallet not found or access denied' });
+    }
+    res.json(wallet);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ message: 'Server Error', error: err.message });
+  }
+});
+
 // @route   PATCH /api/wallets/:id
 // @desc    Update wallet categories
 // @access  Private
@@ -151,7 +172,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
     }
     
     // First find the wallet to verify ownership
-    const wallet = await Wallet.findOne({ _id: id, owner: req.user._id });
+    const wallet = await Wallet.findOne({ _id: id, owner: req.user._id }).populate('categories', 'name icon type');
     
     if (!wallet) {
       return res.status(404).json({ message: 'Wallet not found or access denied' });
@@ -160,7 +181,8 @@ router.delete('/:id', requireAuth, async (req, res) => {
     // Now delete the wallet
     await Wallet.findByIdAndDelete(id);
     
-    res.json({ message: 'Wallet deleted successfully' });
+    // Trả về dữ liệu ví vừa xóa để frontend có thể dùng cho undo
+    res.json({ message: 'Wallet deleted successfully', wallet });
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ message: 'Server Error', error: err.message });

@@ -604,24 +604,143 @@
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: 22px;
-  background: rgba(20,40,80,0.95);
-  color: #fff;
-  padding: 12px 18px;
-  border-radius: 10px;
-  box-shadow: 0 12px 30px rgba(10,30,60,0.3);
+  bottom: 24px;
+  background: #fff;
+  color: #163a5a;
+  padding: 10px 16px;
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.12);
+  z-index: 9998;
   display: flex;
   gap: 12px;
   align-items: center;
-  z-index: 2000;
+  font-weight: 600;
 }
 
 .undo-btn {
-  background: linear-gradient(90deg,#4ecdc4,#2a5298);
-  color: #fff;
+  background: transparent;
   border: none;
-  padding: 8px 12px;
-  border-radius: 8px;
+  color: #1565c0;
   cursor: pointer;
   font-weight: 700;
+}
+
+.undo-btn:hover { text-decoration: underline; }
+
+/* Toast notification */
+.wallet-toast {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  min-width: 220px;
+  max-width: calc(100% - 48px);
+  padding: 12px 18px;
+  background: #fff;
+  color: #163a5a;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 10px;
+  box-shadow: 0 8px 30px rgba(7,22,37,0.14);
+  z-index: 99999;        /* very high so it sits above overlays */
+  opacity: 0;
+  transform: translateY(-12px) scale(.98);
+  animation: toastIn 360ms forwards;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  pointer-events: auto;  /* allow clicks */
+}
+
+/* Auto fade out handled by JS (we use same class; animation below for exit if desired) */
+@keyframes toastIn {
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes toastOut {
+  to {
+    opacity: 0;
+    transform: translateY(-12px) scale(.98);
+  }
+}
+
+.wallet-toast.success {
+  border-left: 6px solid #43a047; /* green */
+  background: linear-gradient(180deg, #ffffff, #fcfffb);
+  color: #1b5e20;
+}
+.wallet-toast.error {
+  border-left: 6px solid #e53935; /* red */
+  background: linear-gradient(180deg, #fff, #fff5f5);
+  color: #b71c1c;
+}
+
+/* Small icon (optional) */
+.wallet-toast::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: transparent;
+  display: inline-block;
+}
+
+/* Confirmation toast */
+.wallet-toast.confirm {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  width: 320px;
+  max-width: calc(100% - 48px);
+  padding: 14px;
+  background: #fff;
+  color: #163a5a;
+  border-radius: 10px;
+  box-shadow: 0 10px 40px rgba(7,22,37,0.14);
+  z-index: 100000;       /* ensure highest */
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: toastIn 280ms ease-out forwards;
+  pointer-events: auto;
+}
+
+/* confirm message */
+.wallet-toast.confirm .confirm-message {
+  font-size: 14px;
+  color: #0f2940;
+}
+
+/* actions row */
+.wallet-toast.confirm .confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* buttons: make clearly interactive */
+.confirm-btn {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-weight: 700;
+  background: #eef6ff;
+  color: #1565c0;
+  transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms;
+  pointer-events: auto;
+}
+.confirm-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(21,101,192,0.12); opacity: 0.98; }
+
+.confirm-btn.danger {
+  background: linear-gradient(180deg,#ffecec,#fff0f0);
+  color: #b71c1c;
+}
+.confirm-btn.danger:hover { box-shadow: 0 6px 18px rgba(183,28,28,0.12); }
+
+/* keep existing toast animations */
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(-8px) scale(.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }

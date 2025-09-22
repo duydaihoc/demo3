@@ -24,6 +24,8 @@ function Wallets() {
   const [editForm, setEditForm] = useState({ name: '', currency: 'VND', initialBalance: 0 });
   const [undoData, setUndoData] = useState(null);
   const undoTimerRef = useRef(null);
+  const [notification, setNotification] = useState({ show: false, message: '', type: '' });
+  const [confirmDelete, setConfirmDelete] = useState({ show: false, walletId: null, walletName: '' });
 
   const getUserInfo = useCallback(() => {
     const userId = localStorage.getItem('userId');
@@ -149,14 +151,15 @@ function Wallets() {
         setShowCategoryModal(true);
         fetchCategories();
         setSelectedCategories([]);
-        alert('Tạo ví thành công! Hãy chọn danh mục cho ví.');
+        // dùng notification thay vì alert
+        showNotification('Tạo ví thành công! Hãy chọn danh mục cho ví.', 'success');
       } else {
         const error = await response.json();
-        alert('Lỗi: ' + error.message);
+        showNotification('Lỗi khi tạo ví: ' + (error.message || ''), 'error');
       }
     } catch (error) {
       console.error('Error creating wallet:', error);
-      alert('Có lỗi xảy ra khi tạo ví!');
+      showNotification('Có lỗi xảy ra khi tạo ví!', 'error');
     } finally {
       setLoading(false);
     }
@@ -191,10 +194,11 @@ function Wallets() {
       setCreatedWalletId(null);
       setSelectedCategories([]);
       fetchWallets();
-      alert('Đã lưu danh mục cho ví!');
+      // dùng notification
+      showNotification('Đã lưu danh mục cho ví!', 'success');
     } catch (error) {
       console.error(error);
-      alert('Lỗi khi lưu danh mục cho ví!');
+      showNotification('Lỗi khi lưu danh mục cho ví!', 'error');
     }
   };
 
@@ -202,7 +206,7 @@ function Wallets() {
     e.preventDefault();
     const name = (newCategoryName || '').trim();
     if (!name) {
-      alert('Vui lòng nhập tên danh mục');
+      showNotification('Vui lòng nhập tên danh mục', 'error');
       return;
     }
     
@@ -259,9 +263,11 @@ function Wallets() {
       setSelectedCategories(prev => [...prev, created._id]);
       setNewCategoryName('');
       setNewCategoryIcon('🎯');
+      // notification thay vì alert
+      showNotification('Tạo danh mục thành công!', 'success');
     } catch (err) {
       console.error('Category creation failed:', err);
-      alert('Lỗi khi tạo danh mục: ' + (err.message || ''));
+      showNotification('Lỗi khi tạo danh mục: ' + (err.message || ''), 'error');
     } finally {
       setCreatingCategory(false);
     }
@@ -280,7 +286,12 @@ function Wallets() {
 
   const handleOpenDetails = async (walletId) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/wallets/${walletId}`);
+      const token = localStorage.getItem('token');
+      const headers = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const res = await fetch(`http://localhost:5000/api/wallets/${walletId}`, { headers });
       if (!res.ok) throw new Error('Cannot load wallet');
       const data = await res.json();
       setDetailWallet(data);
@@ -291,85 +302,67 @@ function Wallets() {
     }
   };
 
-  const handleCloseDetails = () => {
-    setShowDetailModal(false);
-    setDetailWallet(null);
+  // Sửa lại: truyền đúng dữ liệu ví cho modal sửa
+  const handleOpenEdit = async (wallet) => {
+    try {
+      const token = localStorage.getItem('token');
+      const headers = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const res = await fetch(`http://localhost:5000/api/wallets/${wallet._id}`, { headers });
+      if (!res.ok) throw new Error('Cannot load wallet');
+      const data = await res.json();
+      setEditForm({
+        name: data.name || '',
+        currency: data.currency || 'VND',
+        initialBalance: data.initialBalance || 0
+      });
+      const catIds = (data.categories || []).map(c => (typeof c === 'string' ? c : c._id));
+      setSelectedCategories(catIds);
+      setShowEditModal(true);
+      setDetailWallet(data);
+      if (categories.length === 0) fetchCategories();
+    } catch (err) {
+      console.error(err);
+      alert('Không thể tải thông tin ví để sửa.');
+    }
   };
 
-  // Khi mở modal Sửa từ chi tiết hoặc danh sách
-  const handleOpenEdit = (wallet) => {
-    setEditForm({
-      name: wallet.name || '',
-      currency: wallet.currency || 'VND',
-      initialBalance: wallet.initialBalance || 0
-    });
-    // set selected categories from wallet (may be populated objects or ids)
-    const catIds = (wallet.categories || []).map(c => (typeof c === 'string' ? c : c._id));
-    setSelectedCategories(catIds);
-    setShowEditModal(true);
-    setDetailWallet(wallet);
-    // ensure categories available for selection
-    if (categories.length === 0) fetchCategories();
-  };
-
-  const handleEditChange = (e) => {
-    const { name, value } = e.target;
-    setEditForm(prev => ({ ...prev, [name]: value }));
-  };
-
-  // Khi submit sửa, gửi categories cùng các trường khác
+  // Sửa lại: cập nhật danh sách ví sau khi sửa
   const handleEditSubmit = async (e) => {
     e.preventDefault();
     if (!detailWallet) return;
     try {
+      const token = localStorage.getItem('token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
       const res = await fetch(`http://localhost:5000/api/wallets/${detailWallet._id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           name: editForm.name,
           currency: editForm.currency,
           initialBalance: Number(editForm.initialBalance) || 0,
-          categories: selectedCategories // gửi mảng id
+          categories: selectedCategories
         })
       });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.message || 'Update failed');
       }
-      const updated = await res.json();
-      // update local lists
-      setWallets(prev => prev.map(w => w._id === updated._id ? updated : w));
+      // const updated = await res.json(); // Xóa dòng này để tránh cảnh báo
+      // Cập nhật lại danh sách ví từ backend để đảm bảo đồng bộ
+      await fetchWallets();
       setShowEditModal(false);
       setDetailWallet(null);
       setSelectedCategories([]);
-      alert('Cập nhật ví thành công');
+      showNotification('Cập nhật ví thành công!', 'success');
     } catch (err) {
       console.error(err);
-      alert('Lỗi khi cập nhật ví');
-    }
-  };
-
-  const handleDelete = async (walletId) => {
-    if (!window.confirm('Xác nhận xóa ví này?')) return;
-    try {
-      const res = await fetch(`http://localhost:5000/api/wallets/${walletId}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || 'Delete failed');
-      }
-      const result = await res.json();
-      // remove from UI
-      setWallets(prev => prev.filter(w => w._id !== walletId));
-      // save undo data and start timer
-      setUndoData(result.wallet);
-      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
-      undoTimerRef.current = setTimeout(() => {
-        setUndoData(null);
-        undoTimerRef.current = null;
-      }, 8000); // 8s to undo
-    } catch (err) {
-      console.error(err);
-      alert('Lỗi khi xóa ví');
+      showNotification('Lỗi khi cập nhật ví', 'error');
     }
   };
 
@@ -403,6 +396,66 @@ function Wallets() {
     }
   };
 
+  // Thêm hàm đóng modal chi tiết ví
+  const handleCloseDetails = () => {
+    setShowDetailModal(false);
+    setDetailWallet(null);
+  };
+
+  // Thêm hàm xử lý thay đổi input trong modal sửa ví
+  const handleEditChange = (e) => {
+    const { name, value } = e.target;
+    setEditForm(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  // Hiển thị thông báo với hiệu ứng
+  const showNotification = (message, type = 'success') => {
+    setNotification({ show: true, message, type });
+    setTimeout(() => {
+      setNotification({ show: false, message: '', type: '' });
+    }, 2500);
+  };
+
+  // Hiển thị hộp xác nhận xóa dạng toast
+  const showConfirmDelete = (walletId, walletName) => {
+    setConfirmDelete({ show: true, walletId, walletName });
+  };
+
+  const cancelConfirmDelete = () => {
+    setConfirmDelete({ show: false, walletId: null, walletName: '' });
+  };
+
+  const handleDeleteConfirmed = async () => {
+    const { walletId, walletName } = confirmDelete;
+    if (!walletId) return;
+    setConfirmDelete({ show: false, walletId: null, walletName: '' });
+    try {
+      const token = localStorage.getItem('token');
+      const headers = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`http://localhost:5000/api/wallets/${walletId}`, {
+        method: 'DELETE',
+        headers
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Delete failed');
+      }
+      await fetchWallets();
+      setShowDetailModal(false);
+      setDetailWallet(null);
+      showNotification(`Đã xóa ví "${walletName}"`, 'success');
+    } catch (err) {
+      console.error(err);
+      showNotification('Lỗi khi xóa ví', 'error');
+    }
+  };
+
+  // Thêm confirm toast rendering gần Notification Toast
   return (
     <div className="wallets-container">
       <div className="wallets-title">Ví</div>
@@ -443,8 +496,7 @@ function Wallets() {
               <button className="wallet-action-btn" onClick={() => handleOpenDetails(wallet._id)}>Chi tiết</button>
             </div>
           ))
-        )
-        }
+        )}
         <div className="wallet-card wallet-add-card">
           <button className="wallet-add-btn" onClick={handleAddWalletClick}>
             + Thêm ví mới
@@ -627,7 +679,7 @@ function Wallets() {
 
             <div className="wallet-modal-actions" style={{ marginTop: 16 }}>
               <button className="wallet-modal-submit-btn" onClick={() => handleOpenEdit(detailWallet)}>Sửa</button>
-              <button className="wallet-modal-close-btn" onClick={() => { handleDelete(detailWallet._id); setShowDetailModal(false); }}>Xóa</button>
+              <button className="wallet-modal-close-btn" onClick={() => showConfirmDelete(detailWallet._id, detailWallet.name)}>Xóa</button>
               <button className="wallet-modal-close-btn" onClick={handleCloseDetails}>Đóng</button>
             </div>
           </div>
@@ -704,9 +756,27 @@ function Wallets() {
           Đã xóa ví "{undoData.name}". <button className="undo-btn" onClick={handleUndo}>Hoàn tác</button>
         </div>
       )}
+
+      {/* Notification Toast */}
+      {notification.show && (
+        <div className={`wallet-toast ${notification.type}`}>
+          {notification.message}
+        </div>
+      )}
+
+      {/* Confirmation Toast */}
+      {confirmDelete.show && (
+        <div className="wallet-toast confirm">
+          <div className="confirm-message">Bạn có chắc chắn muốn xóa ví "<strong>{confirmDelete.walletName}</strong>"?</div>
+          <div className="confirm-actions">
+            <button className="confirm-btn" onClick={cancelConfirmDelete}>Hủy</button>
+            <button className="confirm-btn danger" onClick={handleDeleteConfirmed}>Xóa</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 export default Wallets;
-
+      
