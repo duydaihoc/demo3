@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import './Login.css';
+import { FaExclamationCircle, FaCheckCircle } from 'react-icons/fa';
 
 function Login() {
   const [email, setEmail] = useState('');
@@ -54,8 +55,9 @@ function Login() {
               required
               placeholder=" "
               autoComplete="off"
+              className="auth-input"
             />
-            <label>Email:</label>
+            <label>Email</label>
           </div>
           <div className="form-group">
             <input
@@ -65,11 +67,22 @@ function Login() {
               required
               placeholder=" "
               autoComplete="new-password"
+              className="auth-input"
             />
-            <label>Mật khẩu:</label>
+            <label>Mật khẩu</label>
           </div>
-          {error && <p className="error-message">{error}</p>}
-          {success && <p className="success-message">{success}</p>}
+          {error && (
+            <div className="error-message">
+              <FaExclamationCircle className="error-icon" />
+              <span>{error}</span>
+            </div>
+          )}
+          {success && (
+            <div className="success-message">
+              <FaCheckCircle className="success-icon" />
+              <span>{success}</span>
+            </div>
+          )}
           <button type="submit" className="auth-button" disabled={loading}>
             {loading ? 'Đang xử lý...' : 'Đăng nhập'}
           </button>

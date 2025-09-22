@@ -46,7 +46,7 @@ function Wallets() {
   // Fetch wallets khi component mount
   useEffect(() => {
     // Set a temporary user ID if none exists (for anonymous users)
-    if (!localStorage.getItem('userId') && !localStorage.getItem('tempUserId')) {
+    if (!localStorage.getItem('userId')) {
       const tempId = 'temp_' + Math.random().toString(36).substring(2, 15);
       localStorage.setItem('tempUserId', tempId);
     }
@@ -74,12 +74,28 @@ function Wallets() {
 
   const fetchWallets = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/wallets');
+      const token = localStorage.getItem('token');
+      const headers = {};
+      
+      // Add Authorization header if token exists
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch('http://localhost:5000/api/wallets', {
+        headers: headers
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch wallets');
+      }
+      
       const data = await response.json();
       // data now includes populated categories (array of objects)
       setWallets(data);
     } catch (error) {
       console.error('Error fetching wallets:', error);
+      alert('Không thể tải danh sách ví. Vui lòng đăng nhập lại.');
     }
   };
 
@@ -105,11 +121,19 @@ function Wallets() {
     setLoading(true);
 
     try {
+      const token = localStorage.getItem('token');
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+      
+      // Add Authorization header if token exists
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch('http://localhost:5000/api/wallets', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: headers,
         body: JSON.stringify({
           name: formData.name,
           currency: formData.currency,
@@ -147,9 +171,19 @@ function Wallets() {
   const handleSaveCategories = async () => {
     if (!createdWalletId) return;
     try {
+      const token = localStorage.getItem('token');
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+      
+      // Add Authorization header if token exists
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const res = await fetch(`http://localhost:5000/api/wallets/${createdWalletId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: headers,
         body: JSON.stringify({ categories: selectedCategories })
       });
       if (!res.ok) throw new Error('Lưu danh mục thất bại');
@@ -174,6 +208,16 @@ function Wallets() {
     
     setCreatingCategory(true);
     try {
+      const token = localStorage.getItem('token');
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+      
+      // Add Authorization header if token exists
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const userInfo = getUserInfo();
       const authUserId = userInfo.userId; // may be null for anonymous
       const tempId = localStorage.getItem('tempUserId');
@@ -198,7 +242,7 @@ function Wallets() {
 
       const res = await fetch('http://localhost:5000/api/categories', {
         method: 'POST',
-        headers: userInfo.headers,
+        headers: headers,
         body: JSON.stringify(body)
       });
       

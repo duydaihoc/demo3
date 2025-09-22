@@ -27,10 +27,24 @@ router.post('/login', async (req, res) => {
   try {
     const user = await User.findOne({ email });
     if (!user || !(await bcrypt.compare(password, user.password))) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+      return res.status(401).json({ message: 'đăng nhập lại Email đã sai hoặc mật khẩu' });
     }
-    const token = jwt.sign({ email: user.email, role: user.role }, 'secretKey', { expiresIn: '1h' });
-    res.json({ token, name: user.name, role: user.role, message: 'Đăng nhập thành công!' });
+    const token = jwt.sign(
+      { 
+        id: user._id, // Include user ID in the token
+        email: user.email, 
+        role: user.role 
+      }, 
+      'secretKey', 
+      { expiresIn: '1h' }
+    );
+    res.json({ 
+      token, 
+      userId: user._id, // Also send user ID in the response
+      name: user.name, 
+      role: user.role, 
+      message: 'Đăng nhập thành công!' 
+    });
   } catch (error) {
     res.status(500).json({ message: 'Login failed', error: error.message });
   }

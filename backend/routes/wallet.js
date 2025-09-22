@@ -2,32 +2,32 @@ const express = require('express');
 const mongoose = require('mongoose');
 const Wallet = require('../models/Wallet');
 const Category = require('../models/Category');
+const { auth, requireAuth } = require('../middleware/auth');
 const router = express.Router();
+
+// Apply auth middleware to all wallet routes
+router.use(auth);
 
 // @route   POST /api/wallets
 // @desc    Create a new wallet
-// @access  Public (sẽ thêm auth sau)
-router.post('/', async (req, res) => {
+// @access  Private
+router.post('/', requireAuth, async (req, res) => {
   try {
-    const { name, currency, initialBalance, owner } = req.body;
+    const { name, currency, initialBalance } = req.body;
     
     if (!name || name.trim() === '') {
       return res.status(400).json({ message: 'Tên ví là bắt buộc' });
     }
-
-    // Use provided owner if valid, otherwise create temp id (existing behavior)
-    let ownerId;
-    if (owner && mongoose.Types.ObjectId.isValid(owner)) {
-      ownerId = owner;
-    } else {
-      ownerId = new mongoose.Types.ObjectId();
+    
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ message: 'Authentication required' });
     }
     
     const newWallet = new Wallet({
       name: name.trim(),
       currency: currency || 'VND',
       initialBalance: Number(initialBalance) || 0,
-      owner: ownerId
+      owner: req.user._id // Use the authenticated user's ID
     });
 
     const wallet = await newWallet.save();
@@ -41,11 +41,14 @@ router.post('/', async (req, res) => {
 });
 
 // @route   GET /api/wallets
-// @desc    Get all wallets
-// @access  Public
-router.get('/', async (req, res) => {
+// @desc    Get all wallets for the authenticated user
+// @access  Private
+router.get('/', requireAuth, async (req, res) => {
   try {
-    const wallets = await Wallet.find().sort({ createdAt: -1 }).populate('categories', 'name icon type');
+    // Only get wallets owned by the authenticated user
+    const wallets = await Wallet.find({ owner: req.user._id })
+      .sort({ createdAt: -1 })
+      .populate('categories', 'name icon type');
     res.json(wallets);
   } catch (err) {
     console.error(err.message);
@@ -55,8 +58,8 @@ router.get('/', async (req, res) => {
 
 // @route   PATCH /api/wallets/:id
 // @desc    Update wallet categories
-// @access  Public
-router.patch('/:id', async (req, res) => {
+// @access  Private
+router.patch('/:id', requireAuth, async (req, res) => {
   try {
     const { categories } = req.body;
     // Expect categories to be array of ids
@@ -97,76 +100,67 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
-// Add: GET single wallet by id (populate categories)
-router.get('/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ message: 'Invalid wallet id' });
-    }
-    const wallet = await Wallet.findById(id).populate('categories', 'name icon type');
-    if (!wallet) return res.status(404).json({ message: 'Wallet not found' });
-    res.json(wallet);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ message: 'Server Error', error: err.message });
-  }
-});
-
-// Add: PUT update wallet fields (name, currency, initialBalance)
-router.put('/:id', async (req, res) => {
+// @route   PUT /api/wallets/:id
+// @desc    Update a wallet
+// @access  Private
+router.put('/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, currency, initialBalance, categories } = req.body;
+    
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ message: 'Invalid wallet id' });
+      return res.status(400).json({ message: 'Invalid wallet ID' });
     }
-    const update = {};
-    if (name !== undefined) update.name = String(name).trim();
-    if (currency !== undefined) update.currency = currency;
-    if (initialBalance !== undefined) update.initialBalance = Number(initialBalance) || 0;
-
-    // Nếu client gửi categories -> validate và gán
-    if (categories !== undefined) {
-      if (!Array.isArray(categories)) {
-        return res.status(400).json({ message: 'categories must be an array of category IDs' });
-      }
-      const uniqueIds = [...new Set(categories)].filter(cid => mongoose.Types.ObjectId.isValid(cid));
-      if (uniqueIds.length > 0) {
-        // verify existence
-        const found = await Category.find({ _id: { $in: uniqueIds } }).select('_id');
-        const foundIds = found.map(f => f._id.toString());
-        const invalid = uniqueIds.filter(id => !foundIds.includes(id));
-        if (invalid.length > 0) {
-          return res.status(400).json({ message: 'Some category IDs are invalid', invalid });
-        }
-        update.categories = uniqueIds;
-      } else {
-        // empty list -> clear categories
-        update.categories = [];
-      }
+    
+    // First find the wallet to verify ownership
+    const wallet = await Wallet.findOne({ _id: id, owner: req.user._id });
+    
+    if (!wallet) {
+      return res.status(404).json({ message: 'Wallet not found or access denied' });
     }
-
-    const wallet = await Wallet.findByIdAndUpdate(id, update, { new: true }).populate('categories', 'name icon type');
-    if (!wallet) return res.status(404).json({ message: 'Wallet not found' });
-    res.json(wallet);
+    
+    const updateFields = {};
+    if (name) updateFields.name = name.trim();
+    if (currency) updateFields.currency = currency;
+    if (initialBalance !== undefined) updateFields.initialBalance = Number(initialBalance);
+    if (categories !== undefined) updateFields.categories = categories;
+    
+    // Now update the wallet
+    const updatedWallet = await Wallet.findByIdAndUpdate(
+      id,
+      { $set: updateFields },
+      { new: true }
+    ).populate('categories', 'name icon type');
+    
+    res.json(updatedWallet);
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ message: 'Server Error', error: err.message });
   }
 });
 
-// Add: DELETE wallet by id
-router.delete('/:id', async (req, res) => {
+// @route   DELETE /api/wallets/:id
+// @desc    Delete a wallet
+// @access  Private
+router.delete('/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
+    
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ message: 'Invalid wallet id' });
+      return res.status(400).json({ message: 'Invalid wallet ID' });
     }
-    const wallet = await Wallet.findByIdAndDelete(id);
-    if (!wallet) return res.status(404).json({ message: 'Wallet not found' });
-    // return deleted wallet data so frontend can optionally recreate (undo)
-    res.json({ message: 'Wallet deleted', wallet });
+    
+    // First find the wallet to verify ownership
+    const wallet = await Wallet.findOne({ _id: id, owner: req.user._id });
+    
+    if (!wallet) {
+      return res.status(404).json({ message: 'Wallet not found or access denied' });
+    }
+    
+    // Now delete the wallet
+    await Wallet.findByIdAndDelete(id);
+    
+    res.json({ message: 'Wallet deleted successfully' });
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ message: 'Server Error', error: err.message });

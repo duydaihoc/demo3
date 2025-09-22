@@ -96,14 +96,20 @@ router.post('/', async (req, res) => {
       icon: icon || '❓',
     };
 
-    // Helper to check ObjectId
-    const isObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
+    // Helper to check and create ObjectId
+    const createObjectId = (id) => {
+      if (!id) return null;
+      if (mongoose.Types.ObjectId.isValid(id)) {
+        return new mongoose.Types.ObjectId(id);
+      }
+      return id; // Return as is if not a valid ObjectId
+    };
 
     // Priority 1: authenticated user (from token middleware)
     if (req.user && (req.user.id || req.user._id)) {
       const uid = req.user.id || req.user._id;
       // store actual ObjectId
-      categoryData.owner = isObjectId(uid) ? mongoose.Types.ObjectId(uid) : uid;
+      categoryData.owner = createObjectId(uid);
       if (req.user.role === 'admin') {
         categoryData.createdBy = 'admin';
         categoryData.creatorName = req.user.name || 'Quản trị viên';
@@ -115,8 +121,8 @@ router.post('/', async (req, res) => {
     // Priority 2: frontend provided owner / creatorName
     else if (owner) {
       // If owner is a valid ObjectId string -> use it and try to resolve name
-      if (isObjectId(owner)) {
-        categoryData.owner = mongoose.Types.ObjectId(owner);
+      if (mongoose.Types.ObjectId.isValid(owner)) {
+        categoryData.owner = createObjectId(owner);
         categoryData.createdBy = createdBy === 'admin' ? 'admin' : 'user';
         if (creatorName) {
           categoryData.creatorName = creatorName;
