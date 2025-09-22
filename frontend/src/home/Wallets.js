@@ -174,25 +174,32 @@ function Wallets() {
     
     setCreatingCategory(true);
     try {
-      // Get complete user info with username
       const userInfo = getUserInfo();
-      const userId = userInfo.userId || localStorage.getItem('tempUserId');
+      const authUserId = userInfo.userId; // may be null for anonymous
+      const tempId = localStorage.getItem('tempUserId');
       const userName = userInfo.userName || 'Người dùng';
       const isAdmin = localStorage.getItem('userRole') === 'admin';
-      
-      console.log('Creating category with owner:', userId, 'name:', userName);
-      
+
+      // Determine owner to send: prefer real ObjectId for authenticated users
+      const isObjectId = id => typeof id === 'string' && /^[0-9a-fA-F]{24}$/.test(id);
+      const ownerToSend = isObjectId(authUserId) ? authUserId : (tempId ? tempId : undefined);
+
+      const body = {
+        name,
+        type: categoryFilter,
+        icon: newCategoryIcon || '❓',
+        // createdBy: admin/user depends on role
+        createdBy: isAdmin ? 'admin' : (isObjectId(authUserId) ? 'user' : 'user'),
+        creatorName: userName
+      };
+      if (ownerToSend) body.owner = ownerToSend;
+
+      console.log('Creating category request body:', body);
+
       const res = await fetch('http://localhost:5000/api/categories', {
         method: 'POST',
         headers: userInfo.headers,
-        body: JSON.stringify({ 
-          name, 
-          type: categoryFilter, 
-          icon: newCategoryIcon || '❓',
-          owner: userId,
-          createdBy: isAdmin ? 'admin' : 'user',  // Set proper creator type
-          creatorName: userName  // Send the actual userName
-        })
+        body: JSON.stringify(body)
       });
       
       if (!res.ok) {

@@ -96,51 +96,78 @@ router.post('/', async (req, res) => {
       icon: icon || '❓',
     };
 
-    // Handle owner ID and creator information with proper consistency
+    // Helper to check ObjectId
+    const isObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
+
+    // Priority 1: authenticated user (from token middleware)
     if (req.user && (req.user.id || req.user._id)) {
-      // For authenticated users
-      categoryData.owner = req.user.id || req.user._id;
-      
+      const uid = req.user.id || req.user._id;
+      // store actual ObjectId
+      categoryData.owner = isObjectId(uid) ? mongoose.Types.ObjectId(uid) : uid;
       if (req.user.role === 'admin') {
         categoryData.createdBy = 'admin';
-        categoryData.creatorName = 'Quản trị viên';
+        categoryData.creatorName = req.user.name || 'Quản trị viên';
       } else {
         categoryData.createdBy = 'user';
         categoryData.creatorName = req.user.name || 'Người dùng';
       }
     } 
+    // Priority 2: frontend provided owner / creatorName
     else if (owner) {
-      // For frontend-provided owner
-      categoryData.owner = owner;
-      
-      // Ensure consistency between createdBy and creatorName
-      if (createdBy === 'admin') {
-        categoryData.createdBy = 'admin';
-        categoryData.creatorName = 'Quản trị viên';
-      } else {
-        categoryData.createdBy = 'user';
-        
-        // Use provided creatorName or try to look it up
-        if (creatorName && createdBy !== 'admin' && creatorName !== 'Quản trị viên') {
+      // If owner is a valid ObjectId string -> use it and try to resolve name
+      if (isObjectId(owner)) {
+        categoryData.owner = mongoose.Types.ObjectId(owner);
+        categoryData.createdBy = createdBy === 'admin' ? 'admin' : 'user';
+        if (creatorName) {
           categoryData.creatorName = creatorName;
-        } else if (mongoose.Types.ObjectId.isValid(owner)) {
+        } else {
+          // try to lookup user name by id
           try {
-            const user = await User.findById(owner).select('name');
-            if (user && user.name) {
-              categoryData.creatorName = user.name;
+            const u = await User.findById(owner).select('name');
+            categoryData.creatorName = (u && u.name) ? u.name : (createdBy === 'admin' ? 'Quản trị viên' : 'Người dùng');
+          } catch (err) {
+            categoryData.creatorName = creatorName || (createdBy === 'admin' ? 'Quản trị viên' : 'Người dùng');
+          }
+        }
+      } 
+      // owner is not an ObjectId (likely temp_...) -> try to resolve by creatorName
+      else {
+        // If creatorName provided, attempt to find a matching user in DB
+        if (creatorName) {
+          try {
+            // Try find by exact name first, then by email as fallback
+            let foundUser = await User.findOne({ name: creatorName }).select('_id name email');
+            if (!foundUser) {
+              foundUser = await User.findOne({ email: creatorName }).select('_id name email');
+            }
+            if (foundUser) {
+              // convert to real ObjectId owner
+              categoryData.owner = foundUser._id;
+              categoryData.createdBy = 'user';
+              categoryData.creatorName = foundUser.name || creatorName;
             } else {
-              categoryData.creatorName = 'Người dùng';
+              // no matching user found — keep temp owner string
+              categoryData.owner = owner;
+              categoryData.createdBy = createdBy === 'admin' ? 'admin' : 'user';
+              // prefer provided creatorName, or mark as temporary user
+              categoryData.creatorName = creatorName || (owner.startsWith('temp_') ? 'Người dùng tạm' : 'Người dùng');
             }
           } catch (err) {
-            console.log('Could not find user name, using default');
-            categoryData.creatorName = 'Người dùng';
+            // lookup failed — keep temp owner and provided creatorName
+            categoryData.owner = owner;
+            categoryData.createdBy = createdBy === 'admin' ? 'admin' : 'user';
+            categoryData.creatorName = creatorName || (owner.startsWith('temp_') ? 'Người dùng tạm' : 'Người dùng');
           }
-        } else if (typeof owner === 'string' && owner.startsWith('temp_')) {
-          categoryData.creatorName = 'Người dùng tạm';
+        } else {
+          // No creatorName — keep temp owner
+          categoryData.owner = owner;
+          categoryData.createdBy = createdBy === 'admin' ? 'admin' : 'user';
+          categoryData.creatorName = owner.startsWith('temp_') ? 'Người dùng tạm' : (creatorName || 'Người dùng');
         }
       }
-    } else {
-      // System category (no owner)
+    } 
+    // Priority 3: no owner provided => system category
+    else {
       categoryData.createdBy = 'system';
       categoryData.creatorName = 'Hệ thống';
     }
@@ -152,7 +179,6 @@ router.post('/', async (req, res) => {
     res.status(201).json(category);
   } catch (err) {
     console.error('Error creating category:', err);
-    // trả lỗi rõ hơn khi duplicate key
     if (err.code === 11000) {
       return res.status(400).json({ message: 'Danh mục đã tồn tại' });
     }
