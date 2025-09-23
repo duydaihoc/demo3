@@ -26,6 +26,7 @@ function AdminCategoriesPage() {
   const fetchCategories = async () => {
     setLoading(true);
     try {
+      const token = localStorage.getItem('token');
       const response = await fetch('http://localhost:5000/api/categories');
       if (!response.ok) {
         throw new Error('Failed to fetch categories');
@@ -35,7 +36,34 @@ function AdminCategoriesPage() {
       // Separate categories into system and user categories
       // System categories include both system-created and admin-created categories
       const systemCats = data.filter(cat => cat.createdBy === 'system' || cat.createdBy === 'admin');
-      const userCats = data.filter(cat => cat.createdBy === 'user');
+      let userCats = data.filter(cat => cat.createdBy === 'user');
+      
+      // For admin view: fetch users to map owner id -> owner name
+      // so we can show creator name instead of raw id.
+      let userMap = {};
+      if (token) {
+        try {
+          const usersRes = await fetch('http://localhost:5000/api/admin/users', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (usersRes.ok) {
+            const usersData = await usersRes.json();
+            userMap = (usersData || []).reduce((m, u) => {
+              m[String(u._id)] = u.name || u.email || 'Người dùng';
+              return m;
+            }, {});
+          }
+        } catch (err) {
+          console.warn('Could not fetch users for owner name mapping', err);
+        }
+      }
+
+      // Attach ownerName to user categories for display
+      userCats = userCats.map(cat => {
+        const ownerId = cat.owner && (typeof cat.owner === 'string' ? cat.owner : (cat.owner._id || cat.owner.id));
+        const ownerName = ownerId ? (userMap[ownerId] || (ownerId.substring ? ownerId.substring(0,10) + '...' : ownerId)) : (cat.creatorName || 'Người dùng');
+        return { ...cat, ownerName, ownerId };
+      });
       
       setSystemCategories(systemCats);
       setUserCategories(userCats);
@@ -282,19 +310,17 @@ function AdminCategoriesPage() {
                             <td className="user-id-cell">
                               {category.owner ? (
                                 <div className="user-id-wrapper">
-                                  <span className="user-id">
-                                    {typeof category.owner === 'object' 
-                                      ? (category.owner._id || category.owner.id || '').substring(0, 10) + '...'
-                                      : (category.owner || '').substring(0, 10) + '...'}
+                                  <span className="user-name">
+                                    {category.ownerName || (typeof category.owner === 'object' ? (category.owner._id || '').substring(0,10) + '...' : (String(category.owner).substring(0,10) + '...'))}
                                   </span>
-                                  <button 
+                                  <button
                                     className="copy-btn"
                                     onClick={() => {
-                                      const idToCopy = typeof category.owner === 'object'
-                                        ? (category.owner._id || category.owner.id || '')
-                                        : (category.owner || '');
-                                      navigator.clipboard.writeText(idToCopy);
-                                      alert('Đã sao chép ID: ' + idToCopy);
+                                      const idToCopy = category.ownerId || (typeof category.owner === 'object' ? (category.owner._id || category.owner.id || '') : (category.owner || ''));
+                                      if (idToCopy) {
+                                        navigator.clipboard.writeText(idToCopy);
+                                        alert('Đã sao chép ID: ' + idToCopy);
+                                      }
                                     }}
                                   >
                                     📋
@@ -325,56 +351,49 @@ function AdminCategoriesPage() {
       {/* Add Category Modal */}
       {showAddModal && (
         <div className="modal-overlay">
-          <div className="modal">
+          <div className="modal modal-large">
             <div className="modal-header">
               <h3>Thêm danh mục mới</h3>
               <button className="close-btn" onClick={handleCloseModal}>×</button>
             </div>
-            <form className="modal-form" onSubmit={handleAddSubmit}>
-              <div className="form-group">
-                <label>Tên danh mục:</label>
-                <input 
-                  type="text" 
-                  name="name" 
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  required
-                />
+            <form className="modal-body modal-grid" onSubmit={handleAddSubmit}>
+              <div className="col">
+                <div className="field">
+                  <label>Tên danh mục</label>
+                  <input type="text" name="name" value={formData.name} onChange={handleInputChange} required />
+                </div>
+                <div className="field">
+                  <label>Mô tả</label>
+                  <textarea name="description" value={formData.description} onChange={handleInputChange} rows="4" />
+                </div>
+                <div className="field">
+                  <label>Loại</label>
+                  <div className="type-toggle">
+                    <button type="button" className={formData.type === 'expense' ? 'active' : ''} onClick={() => setFormData(prev => ({ ...prev, type: 'expense' }))}>Chi tiêu</button>
+                    <button type="button" className={formData.type === 'income' ? 'active' : ''} onClick={() => setFormData(prev => ({ ...prev, type: 'income' }))}>Thu nhập</button>
+                  </div>
+                </div>
               </div>
-              <div className="form-group">
-                <label>Mô tả:</label>
-                <textarea 
-                  name="description" 
-                  value={formData.description}
-                  onChange={handleInputChange}
-                ></textarea>
-              </div>
-              <div className="form-group">
-                <label>Loại:</label>
-                <select 
-                  name="type" 
-                  value={formData.type}
-                  onChange={handleInputChange}
-                >
-                  <option value="expense">Chi tiêu</option>
-                  <option value="income">Thu nhập</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Icon (emoji):</label>
-                <input 
-                  type="text" 
-                  name="icon" 
-                  value={formData.icon}
-                  onChange={handleInputChange}
-                  maxLength="2"
-                  className="emoji-input"
-                />
-                <div className="emoji-preview">{formData.icon}</div>
-              </div>
-              <div className="modal-actions">
-                <button type="submit" className="submit-btn">Thêm danh mục</button>
-                <button type="button" className="cancel-btn" onClick={handleCloseModal}>Hủy</button>
+              <div className="col">
+                <div className="field">
+                  <label>Icon (emoji)</label>
+                  <div className="emoji-row">
+                    <input type="text" name="icon" value={formData.icon} onChange={handleInputChange} maxLength="2" className="emoji-input" />
+                    <div className="emoji-preview large">{formData.icon}</div>
+                  </div>
+                </div>
+                <div className="field">
+                  <label>Chọn nhanh</label>
+                  <div className="emoji-picker">
+                    {['💸','🍔','🚌','🏠','🎁','💼','💡','🎯','💰','⚽'].map(e => (
+                      <button key={e} type="button" className="emoji-swatch" onClick={() => setFormData(prev => ({ ...prev, icon: e }))}>{e}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="modal-actions right">
+                  <button type="submit" className="primary-btn">Thêm danh mục</button>
+                  <button type="button" className="secondary-btn" onClick={handleCloseModal}>Hủy</button>
+                </div>
               </div>
             </form>
           </div>
@@ -384,56 +403,49 @@ function AdminCategoriesPage() {
       {/* Edit Category Modal */}
       {showEditModal && currentCategory && (
         <div className="modal-overlay">
-          <div className="modal">
+          <div className="modal modal-large">
             <div className="modal-header">
               <h3>Chỉnh sửa danh mục</h3>
               <button className="close-btn" onClick={handleCloseModal}>×</button>
             </div>
-            <form className="modal-form" onSubmit={handleEditSubmit}>
-              <div className="form-group">
-                <label>Tên danh mục:</label>
-                <input 
-                  type="text" 
-                  name="name" 
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  required
-                />
+            <form className="modal-body modal-grid" onSubmit={handleEditSubmit}>
+              <div className="col">
+                <div className="field">
+                  <label>Tên danh mục</label>
+                  <input type="text" name="name" value={formData.name} onChange={handleInputChange} required />
+                </div>
+                <div className="field">
+                  <label>Mô tả</label>
+                  <textarea name="description" value={formData.description} onChange={handleInputChange} rows="4" />
+                </div>
+                <div className="field">
+                  <label>Loại</label>
+                  <div className="type-toggle">
+                    <button type="button" className={formData.type === 'expense' ? 'active' : ''} onClick={() => setFormData(prev => ({ ...prev, type: 'expense' }))}>Chi tiêu</button>
+                    <button type="button" className={formData.type === 'income' ? 'active' : ''} onClick={() => setFormData(prev => ({ ...prev, type: 'income' }))}>Thu nhập</button>
+                  </div>
+                </div>
               </div>
-              <div className="form-group">
-                <label>Mô tả:</label>
-                <textarea 
-                  name="description" 
-                  value={formData.description}
-                  onChange={handleInputChange}
-                ></textarea>
-              </div>
-              <div className="form-group">
-                <label>Loại:</label>
-                <select 
-                  name="type" 
-                  value={formData.type}
-                  onChange={handleInputChange}
-                >
-                  <option value="expense">Chi tiêu</option>
-                  <option value="income">Thu nhập</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Icon (emoji):</label>
-                <input 
-                  type="text" 
-                  name="icon" 
-                  value={formData.icon}
-                  onChange={handleInputChange}
-                  maxLength="2"
-                  className="emoji-input"
-                />
-                <div className="emoji-preview">{formData.icon}</div>
-              </div>
-              <div className="modal-actions">
-                <button type="submit" className="submit-btn">Cập nhật danh mục</button>
-                <button type="button" className="cancel-btn" onClick={handleCloseModal}>Hủy</button>
+              <div className="col">
+                <div className="field">
+                  <label>Icon (emoji)</label>
+                  <div className="emoji-row">
+                    <input type="text" name="icon" value={formData.icon} onChange={handleInputChange} maxLength="2" className="emoji-input" />
+                    <div className="emoji-preview large">{formData.icon}</div>
+                  </div>
+                </div>
+                <div className="field">
+                  <label>Chọn nhanh</label>
+                  <div className="emoji-picker">
+                    {['💸','🍔','🚌','🏠','🎁','💼','💡','🎯','💰','⚽'].map(e => (
+                      <button key={e} type="button" className="emoji-swatch" onClick={() => setFormData(prev => ({ ...prev, icon: e }))}>{e}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="modal-actions right">
+                  <button type="submit" className="primary-btn">Cập nhật</button>
+                  <button type="button" className="secondary-btn" onClick={handleCloseModal}>Hủy</button>
+                </div>
               </div>
             </form>
           </div>
@@ -444,3 +456,4 @@ function AdminCategoriesPage() {
 }
 
 export default AdminCategoriesPage;
+              

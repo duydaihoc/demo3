@@ -28,6 +28,14 @@ function AdminSidebar() {
         </li>
         <li>
           <Link
+            to="/admin/wallets"
+            className={location.pathname === "/admin/wallets" ? "active" : ""}
+          >
+            💼 Quản lý ví
+          </Link>
+        </li>
+        <li>
+          <Link
             to="/admin/categories"
             className={location.pathname === "/admin/categories" ? "active" : ""}
           >

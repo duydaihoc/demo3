@@ -759,7 +759,6 @@ function Wallets() {
                 <label>Số dư:</label>
                 <input name="initialBalance" type="number" value={editForm.initialBalance} onChange={handleEditChange} min="0" />
               </div>
-
               {/* Category selector inside Edit modal */}
               <div style={{ marginTop: 10 }}>
                 <div style={{ marginBottom: 8, fontWeight: 700, color: '#163a5a' }}>Chọn danh mục</div>
