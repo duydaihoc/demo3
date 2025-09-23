@@ -639,6 +639,7 @@
   color: #163a5a;
   font-size: 14px;
   font-weight: 600;
+  
   border-radius: 10px;
   box-shadow: 0 8px 30px rgba(7,22,37,0.14);
   z-index: 99999;        /* very high so it sits above overlays */
