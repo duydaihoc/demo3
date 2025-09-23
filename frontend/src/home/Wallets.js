@@ -710,28 +710,83 @@ function Wallets() {
         </div>
       )}
 
-      {/* Details Modal */}
+      {/* Details Modal - ENHANCED */}
       {showDetailModal && detailWallet && (
         <div className="wallet-modal-overlay">
-          <div className="wallet-modal detail-modal">
-            <div className="wallet-modal-title">{detailWallet.name}</div>
-            <div style={{ marginBottom: 12 }}>
-              <strong>Số dư:</strong> {formatCurrency(detailWallet.initialBalance, detailWallet.currency)}
-            </div>
-            <div style={{ marginBottom: 8 }}>
-              <strong>Danh mục:</strong>
-              <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-                {(detailWallet.categories || []).map(c => (
-                  <div key={c._id} className="category-chip">{c.icon} {c.name}</div>
-                ))}
-                {(detailWallet.categories || []).length === 0 && <span style={{ color: '#666' }}>Chưa có danh mục</span>}
+          <div className="wallet-modal detail-modal enhanced-detail" role="dialog" aria-modal="true" aria-label={`Chi tiết ví ${detailWallet.name}`}>
+            <div className="detail-header">
+              <div className="detail-title">
+                <div className="wallet-modal-title">{detailWallet.name}</div>
+                <div className="wallet-subtitle">Số dư: <span className="balance-amount">{formatCurrency(detailWallet.initialBalance, detailWallet.currency)}</span></div>
               </div>
+              <button className="detail-close" onClick={handleCloseDetails} aria-label="Đóng">✕</button>
             </div>
 
-            <div className="wallet-modal-actions" style={{ marginTop: 16 }}>
-              <button className="wallet-modal-submit-btn" onClick={() => handleOpenEdit(detailWallet)}>Sửa</button>
-              <button className="wallet-modal-close-btn" onClick={() => showConfirmDelete(detailWallet._id, detailWallet.name)}>Xóa</button>
-              <button className="wallet-modal-close-btn" onClick={handleCloseDetails}>Đóng</button>
+            <div className="detail-body">
+              <div className="detail-columns">
+                <div className="detail-col categories-col">
+                  <div className="detail-section">
+                    <div className="section-header">
+                      <span className="type-badge expense">Chi tiêu</span>
+                      <span className="section-count">{(detailWallet.categories || []).filter(c => c.type === 'expense').length} mục</span>
+                    </div>
+                    <div className="detail-category-grid">
+                      {(detailWallet.categories || []).filter(c => c.type === 'expense').map(cat => (
+                        <div key={cat._id} className="detail-category-item">
+                          <div className="cat-icon">{cat.icon}</div>
+                          <div className="cat-meta">
+                            <div className="cat-name">{cat.name}</div>
+                            <div className="cat-sub">Chi tiêu</div>
+                          </div>
+                        </div>
+                      ))}
+                      {(detailWallet.categories || []).filter(c => c.type === 'expense').length === 0 && (
+                        <div className="empty-placeholder">Chưa có danh mục chi tiêu</div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="detail-section" style={{ marginTop: 14 }}>
+                    <div className="section-header">
+                      <span className="type-badge income">Thu nhập</span>
+                      <span className="section-count">{(detailWallet.categories || []).filter(c => c.type === 'income').length} mục</span>
+                    </div>
+                    <div className="detail-category-grid">
+                      {(detailWallet.categories || []).filter(c => c.type === 'income').map(cat => (
+                        <div key={cat._id} className="detail-category-item">
+                          <div className="cat-icon">{cat.icon}</div>
+                          <div className="cat-meta">
+                            <div className="cat-name">{cat.name}</div>
+                            <div className="cat-sub">Thu nhập</div>
+                          </div>
+                        </div>
+                      ))}
+                      {(detailWallet.categories || []).filter(c => c.type === 'income').length === 0 && (
+                        <div className="empty-placeholder">Chưa có danh mục thu nhập</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <aside className="detail-col info-col">
+                  <div className="info-card">
+                    <div className="info-row"><strong>Chủ ví:</strong> <span>{detailWallet.ownerName || '---'}</span></div>
+                    <div className="info-row"><strong>Mã ví:</strong> <span className="muted">{detailWallet._id}</span></div>
+                    <div className="info-row"><strong>Tổng danh mục:</strong> <span>{(detailWallet.categories || []).length}</span></div>
+                  </div>
+
+                  <div className="actions-card">
+                    <button className="action-btn primary" onClick={() => handleOpenEdit(detailWallet)}>Sửa ví</button>
+                    <button className="action-btn danger" onClick={() => showConfirmDelete(detailWallet._id, detailWallet.name)}>Xóa ví</button>
+                    <button className="action-btn" onClick={handleCloseDetails}>Đóng</button>
+                  </div>
+
+                  <div className="visual-note">
+                    <div className="sparkle" aria-hidden="true">✨</div>
+                    <div className="note-text">Các danh mục được sắp theo kiểu và có màu riêng để dễ phân biệt.</div>
+                  </div>
+                </aside>
+              </div>
             </div>
           </div>
         </div>
