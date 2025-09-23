@@ -1,0 +1,128 @@
+.settings-main {
+  background: #f7fafd;
+  min-height: 100vh;
+  width: calc(100vw - 220px);
+  font-family: 'Roboto', Arial, sans-serif;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.settings-header {
+  padding: 32px 32px 0 32px;
+}
+
+.settings-title {
+  font-size: 1.3rem;
+  font-weight: bold;
+  color: #2a5298;
+}
+
+.settings-content {
+  display: flex;
+  gap: 32px;
+  padding: 32px;
+}
+
+.settings-card {
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 4px 24px rgba(42,82,152,0.08);
+  padding: 28px 24px;
+  flex: 1;
+  min-width: 340px;
+  animation: fadeInCard 1s;
+}
+
+@keyframes fadeInCard {
+  from { opacity: 0; transform: translateY(30px);}
+  to { opacity: 1; transform: translateY(0);}
+}
+
+.settings-card-title {
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: #2a5298;
+  margin-bottom: 18px;
+}
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.settings-form-row {
+  display: flex;
+  gap: 18px;
+}
+
+.settings-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.settings-form-group label {
+  font-size: 1rem;
+  color: #2a5298;
+  font-weight: 500;
+}
+
+.settings-form-group input,
+.settings-form-group select {
+  padding: 10px 12px;
+  border: 1px solid #e3f6f5;
+  border-radius: 8px;
+  font-size: 1rem;
+  background: #f7fafd;
+  transition: border 0.2s, box-shadow 0.2s;
+}
+
+.settings-form-group input:focus,
+.settings-form-group select:focus {
+  border-color: #4ecdc4;
+  box-shadow: 0 0 8px #4ecdc4;
+  outline: none;
+}
+
+.settings-save-btn,
+.settings-change-btn {
+  padding: 12px 0;
+  background: linear-gradient(90deg, #4ecdc4, #2a5298);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(42,82,152,0.08);
+  transition: background 0.2s, transform 0.2s;
+  margin-top: 10px;
+}
+
+.settings-save-btn:hover,
+.settings-change-btn:hover {
+  background: linear-gradient(90deg, #2a5298, #4ecdc4);
+  transform: scale(1.05);
+}
+
+.settings-change-btn {
+  background: linear-gradient(90deg, #ff6b6b, #e74c3c);
+}
+
+.settings-change-btn:hover {
+  background: linear-gradient(90deg, #e74c3c, #ff6b6b);
+}
+
+@media (max-width: 900px) {
+  .settings-content {
+    flex-direction: column;
+    gap: 18px;
+    padding: 10px;
+  }
+  .settings-main {
+    width: 100vw;
+    padding: 0;
+  }
+}

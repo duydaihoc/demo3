@@ -1,0 +1,60 @@
+.admin-sidebar {
+  width: 220px;
+  min-height: 100vh;
+  background: linear-gradient(120deg, #2a5298 0%, #4ecdc4 100%);
+  color: #fff;
+  padding: 32px 0 0 0;
+  position: fixed;
+  left: 0;
+  top: 0;
+  box-shadow: 0 4px 24px rgba(42,82,152,0.13);
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+  animation: fadeInSidebar 0.7s;
+}
+
+@keyframes fadeInSidebar {
+  from { opacity: 0; transform: translateX(-40px);}
+  to { opacity: 1; transform: translateX(0);}
+}
+
+.admin-sidebar-title {
+  font-size: 1.3rem;
+  font-weight: bold;
+  padding: 0 24px 24px 24px;
+  letter-spacing: 1px;
+  background: linear-gradient(90deg, #fff 0%, #e3f6f5 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.admin-sidebar-menu {
+  list-style: none;
+  padding: 0 0 0 0;
+  margin: 0;
+}
+
+.admin-sidebar-menu li {
+  margin-bottom: 18px;
+}
+
+.admin-sidebar-menu a {
+  display: block;
+  padding: 12px 32px;
+  color: #fff;
+  font-size: 1.08rem;
+  border-radius: 8px 0 0 8px;
+  text-decoration: none;
+  transition: background 0.25s, transform 0.2s;
+  font-weight: 500;
+  position: relative;
+}
+
+.admin-sidebar-menu a.active,
+.admin-sidebar-menu a:hover {
+  background: linear-gradient(90deg, #e3f6f5 0%, #4ecdc4 100%);
+  color: #2a5298;
+  transform: translateX(8px) scale(1.04);
+  box-shadow: 0 2px 12px rgba(76,205,196,0.13);
+}
