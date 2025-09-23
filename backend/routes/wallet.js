@@ -65,8 +65,15 @@ router.get('/:id', requireAuth, async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: 'Invalid wallet ID' });
     }
-    // Chỉ trả về ví thuộc user đang đăng nhập
-    const wallet = await Wallet.findOne({ _id: id, owner: req.user._id }).populate('categories', 'name icon type');
+
+    // allow admin to access any wallet, normal users only their own
+    let wallet;
+    if (req.user && req.user.role === 'admin') {
+      wallet = await Wallet.findById(id).populate('categories', 'name icon type');
+    } else {
+      wallet = await Wallet.findOne({ _id: id, owner: req.user._id }).populate('categories', 'name icon type');
+    }
+
     if (!wallet) {
       return res.status(404).json({ message: 'Wallet not found or access denied' });
     }
@@ -83,37 +90,34 @@ router.get('/:id', requireAuth, async (req, res) => {
 router.patch('/:id', requireAuth, async (req, res) => {
   try {
     const { categories } = req.body;
-    // Expect categories to be array of ids
     if (!Array.isArray(categories)) {
       return res.status(400).json({ message: 'categories must be an array of category IDs' });
     }
 
-    // filter unique and valid ObjectIds
     const uniqueIds = [...new Set(categories)].filter(id => mongoose.Types.ObjectId.isValid(id));
-    if (uniqueIds.length === 0) {
-      // allow clearing categories
-      const walletCleared = await Wallet.findByIdAndUpdate(req.params.id, { categories: [] }, { new: true }).populate('categories', 'name icon type');
-      if (!walletCleared) return res.status(404).json({ message: 'Wallet not found' });
-      return res.json(walletCleared);
+
+    // verify categories exist
+    if (uniqueIds.length > 0) {
+      const found = await Category.find({ _id: { $in: uniqueIds } }).select('_id');
+      const foundIds = found.map(f => f._id.toString());
+      const invalid = uniqueIds.filter(id => !foundIds.includes(id));
+      if (invalid.length > 0) {
+        return res.status(400).json({ message: 'Some category IDs are invalid', invalid });
+      }
     }
 
-    // Verify that provided category ids exist
-    const found = await Category.find({ _id: { $in: uniqueIds } }).select('_id');
-    const foundIds = found.map(f => f._id.toString());
-    const invalid = uniqueIds.filter(id => !foundIds.includes(id));
-    if (invalid.length > 0) {
-      return res.status(400).json({ message: 'Some category IDs are invalid', invalid });
+    // allow admin to update any wallet, normal users only their own
+    let wallet;
+    if (req.user && req.user.role === 'admin') {
+      wallet = await Wallet.findByIdAndUpdate(req.params.id, { categories: uniqueIds }, { new: true }).populate('categories', 'name icon type');
+    } else {
+      // ensure ownership
+      const w = await Wallet.findOne({ _id: req.params.id, owner: req.user._id });
+      if (!w) return res.status(404).json({ message: 'Wallet not found or access denied' });
+      wallet = await Wallet.findByIdAndUpdate(req.params.id, { categories: uniqueIds }, { new: true }).populate('categories', 'name icon type');
     }
 
-    const wallet = await Wallet.findByIdAndUpdate(
-      req.params.id,
-      { categories: uniqueIds },
-      { new: true }
-    ).populate('categories', 'name icon type');
-
-    if (!wallet) {
-      return res.status(404).json({ message: 'Wallet not found' });
-    }
+    if (!wallet) return res.status(404).json({ message: 'Wallet not found' });
     res.json(wallet);
   } catch (err) {
     console.error(err.message);
@@ -128,31 +132,35 @@ router.put('/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, currency, initialBalance, categories } = req.body;
-    
+
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: 'Invalid wallet ID' });
     }
-    
-    // First find the wallet to verify ownership
-    const wallet = await Wallet.findOne({ _id: id, owner: req.user._id });
-    
+
+    // allow admin to update any wallet; normal users only their own
+    let wallet = null;
+    if (req.user && req.user.role === 'admin') {
+      wallet = await Wallet.findById(id);
+    } else {
+      wallet = await Wallet.findOne({ _id: id, owner: req.user._id });
+    }
+
     if (!wallet) {
       return res.status(404).json({ message: 'Wallet not found or access denied' });
     }
-    
+
     const updateFields = {};
-    if (name) updateFields.name = name.trim();
-    if (currency) updateFields.currency = currency;
+    if (name !== undefined) updateFields.name = name.trim ? name.trim() : name;
+    if (currency !== undefined) updateFields.currency = currency;
     if (initialBalance !== undefined) updateFields.initialBalance = Number(initialBalance);
     if (categories !== undefined) updateFields.categories = categories;
-    
-    // Now update the wallet
+
     const updatedWallet = await Wallet.findByIdAndUpdate(
       id,
       { $set: updateFields },
       { new: true }
     ).populate('categories', 'name icon type');
-    
+
     res.json(updatedWallet);
   } catch (err) {
     console.error(err.message);
@@ -166,22 +174,26 @@ router.put('/:id', requireAuth, async (req, res) => {
 router.delete('/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: 'Invalid wallet ID' });
     }
-    
-    // First find the wallet to verify ownership
-    const wallet = await Wallet.findOne({ _id: id, owner: req.user._id }).populate('categories', 'name icon type');
-    
+
+    // allow admin to delete any wallet; normal users only their own
+    let wallet;
+    if (req.user && req.user.role === 'admin') {
+      wallet = await Wallet.findById(id).populate('categories', 'name icon type');
+    } else {
+      wallet = await Wallet.findOne({ _id: id, owner: req.user._id }).populate('categories', 'name icon type');
+    }
+
     if (!wallet) {
       return res.status(404).json({ message: 'Wallet not found or access denied' });
     }
-    
-    // Now delete the wallet
+
     await Wallet.findByIdAndDelete(id);
-    
-    // Trả về dữ liệu ví vừa xóa để frontend có thể dùng cho undo
+
+    // return deleted wallet data for undo or client update
     res.json({ message: 'Wallet deleted successfully', wallet });
   } catch (err) {
     console.error(err.message);
