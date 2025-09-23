@@ -2,6 +2,7 @@ import React from 'react';
 import Sidebar from './Sidebar';
 import Wallets from './Wallets';
 import './HomePage.css';
+import FinanceDashboard from './FinanceDashboard'; // new component
 
 function HomePage() {
   const userName = localStorage.getItem('userName') || 'Tên người dùng'; // Get from localStorage with fallback
@@ -24,24 +25,8 @@ function HomePage() {
               <div className="home-card-value">0₫</div>
               <div className="home-card-sub">Không có chi tiêu trong tháng này</div>
             </div>
-            <div className="home-card">
-              <div className="home-card-title">Bảng điều khiển tài chính</div>
-              <div className="home-card-sub">Theo dõi chi tiêu & thu nhập mỗi ngày để đạt mục tiêu nhanh hơn 🚀</div>
-              <div style={{ display: 'flex', gap: '30px', marginTop: '18px' }}>
-                <div>
-                  <div className="home-card-title" style={{ fontSize: '1rem' }}>Tổng số dư</div>
-                  <div className="home-card-value" style={{ color: '#2a5298' }}>0₫</div>
-                </div>
-                <div>
-                  <div className="home-card-title" style={{ fontSize: '1rem' }}>Thu nhập tháng này</div>
-                  <div className="home-card-value" style={{ color: '#4ecdc4' }}>0₫</div>
-                </div>
-                <div>
-                  <div className="home-card-title" style={{ fontSize: '1rem' }}>Chi phí tháng này</div>
-                  <div className="home-card-value" style={{ color: '#ff6b6b' }}>0₫</div>
-                </div>
-              </div>
-            </div>
+            {/* Extracted financial dashboard into its own component */}
+            <FinanceDashboard />
             <div className="home-stat-table">
               <div className="home-stat-title">Bảng thống kê giao dịch trong ngày</div>
               <table>
@@ -88,4 +73,4 @@ function HomePage() {
 }
 
 export default HomePage;
-
+              

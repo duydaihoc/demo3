@@ -43,7 +43,7 @@
   padding: 32px;
 }
 
-.wallet-card {
+.wallet-card1 {
   background: linear-gradient(135deg, #2a5298 60%, #4ecdc4 100%);
   color: #fff;
   border-radius: 16px;
@@ -225,4 +225,119 @@
   .transactions-form {
     grid-template-columns: 1fr;
   }
+}
+
+/* Transaction toast */
+.tx-toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  min-width: 220px;
+  max-width: calc(100% - 40px);
+  padding: 12px 14px;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(7,22,37,0.14);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  z-index: 2000;
+  color: #fff;
+  font-weight: 700;
+  animation: txToastIn 260ms ease-out forwards;
+}
+
+.tx-toast.success { background: linear-gradient(90deg,#2a9d66,#38b27a); }
+.tx-toast.error { background: linear-gradient(90deg,#c94b4b,#e06464); }
+
+.tx-toast .tx-toast-message { flex: 1; font-size: 0.95rem; }
+.tx-toast .tx-toast-close {
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.9);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+}
+
+@keyframes txToastIn {
+  from { opacity: 0; transform: translateY(-8px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* optional: responsive tweak */
+@media (max-width: 480px) {
+  .tx-toast { left: 10px; right: 10px; top: 12px; min-width: unset; }
+}
+
+/* transaction action buttons */
+.tx-actions { display: flex; gap: 8px; }
+.tx-actions .tx-edit-btn,
+.tx-actions .tx-delete-btn {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: none;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 0.95rem;
+  box-shadow: 0 6px 18px rgba(7,22,37,0.06);
+}
+.tx-actions .tx-edit-btn {
+  background: linear-gradient(90deg,#2a5298,#4ecdc4);
+  color: #fff;
+}
+.tx-actions .tx-edit-btn:hover { transform: translateY(-3px); }
+.tx-actions .tx-delete-btn {
+  background: linear-gradient(180deg,#fff0f0,#ffecec);
+  color: #b71c1c;
+  border: 1px solid rgba(183,28,28,0.08);
+}
+.tx-actions .tx-delete-btn:hover { box-shadow: 0 10px 20px rgba(183,28,28,0.08); transform: translateY(-3px); }
+
+/* edit modal overlay */
+.tx-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(7,22,37,0.4);
+  z-index: 2500;
+}
+
+/* edit modal */
+.tx-edit-modal {
+  background: #fff;
+  border-radius: 12px;
+  padding: 18px;
+  width: 420px;
+  max-width: calc(100% - 40px);
+  box-shadow: 0 14px 48px rgba(7,22,37,0.18);
+  color: #0f2940;
+}
+.tx-edit-modal h3 { margin: 0 0 8px 0; color: #163a5a; }
+.tx-edit-modal form input,
+.tx-edit-modal form select {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #e6f0f4;
+  font-size: 0.95rem;
+  width: 100%;
+}
+.tx-edit-modal button[type="submit"] {
+  background: linear-gradient(90deg,#2a5298,#4ecdc4);
+  color: #fff;
+  border: none;
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 800;
+}
+.tx-edit-modal button[type="button"] {
+  background: #f2f7fa;
+  border: 1px solid rgba(15,40,64,0.06);
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
 }

@@ -7,10 +7,12 @@ const Expense = require('./models/Expense');
 const Category = require('./models/Category');
 const Income = require('./models/Income');
 const Wallet = require('./models/Wallet'); // Import Wallet model
+const Transaction = require('./models/Transaction'); // Import Transaction model
 const cors = require('cors'); // Add CORS package
 const authRoutes = require('./routes/auth'); // Add auth routes import
 const adminRoutes = require('./routes/admin'); // Import admin routes
 const walletRoutes = require('./routes/wallet'); // Import wallet routes
+const transactionRoutes = require('./routes/transactions'); // Import transaction routes
 const categoryRoutes = require('./routes/Category'); // Import category routes
 
 dotenv.config();
@@ -160,6 +162,23 @@ app.get('/create-sample-data', async (req, res) => {
     });
     await income.save();
 
+    // Tạo transaction mẫu (liên kết tới wallet và category vừa tạo)
+    try {
+      const transaction = new Transaction({
+        wallet: wallet._id,
+        category: category._id,
+        type: 'expense',
+        amount: 150000,
+        title: 'Chi tiêu mẫu',
+        description: 'Giao dịch mẫu để kiểm tra',
+        date: new Date(),
+        createdBy: user._id
+      });
+      await transaction.save();
+    } catch (txErr) {
+      console.warn('Không thể tạo transaction mẫu:', txErr.message);
+    }
+    
     res.status(201).json({ message: 'Sample data created successfully' });
   } catch (error) {
     res.status(500).json({ message: 'Failed to create sample data', error: error.message });
@@ -172,6 +191,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 // Mount wallet routes
 app.use('/api/wallets', walletRoutes);
+// Mount transaction routes
+app.use('/api/transactions', transactionRoutes);
 // Mount category routes
 app.use('/api/categories', categoryRoutes);
 

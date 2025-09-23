@@ -137,6 +137,8 @@ function Wallets() {
       const data = await response.json();
       // data now includes populated categories (array of objects)
       setWallets(data);
+      // notify other components (FinanceDashboard) immediately
+      try { window.dispatchEvent(new CustomEvent('walletsUpdated', { detail: data })); } catch(_) {}
     } catch (error) {
       console.error('Error fetching wallets:', error);
       alert('Không thể tải danh sách ví. Vui lòng đăng nhập lại.');
@@ -164,6 +166,23 @@ function Wallets() {
     e.preventDefault();
     setLoading(true);
 
+    // Validate name uniqueness client-side (trim & case-insensitive)
+    const entered = (formData.name || '').trim();
+    if (!entered) {
+      showNotification('Vui lòng nhập tên ví', 'error');
+      setLoading(false);
+      return;
+    }
+    const duplicate = wallets.some(w => {
+      const wName = (w && w.name) ? String(w.name).trim().toLowerCase() : '';
+      return wName && wName === entered.toLowerCase();
+    });
+    if (duplicate) {
+      showNotification('Tên ví đã tồn tại. Vui lòng nhập tên khác.', 'error');
+      setLoading(false);
+      return;
+    }
+
     try {
       const token = localStorage.getItem('token');
       const headers = {
@@ -187,7 +206,11 @@ function Wallets() {
 
       if (response.ok) {
         const newWallet = await response.json();
-        setWallets(prev => [newWallet, ...prev]);
+        setWallets(prev => {
+          const newList = [newWallet, ...prev];
+          try { window.dispatchEvent(new CustomEvent('walletsUpdated', { detail: newList })); } catch(_) {}
+          return newList;
+        });
         setCreatedWalletId(newWallet._id);
         setShowCreateModal(false);
         setShowCategoryModal(true);
@@ -434,7 +457,11 @@ function Wallets() {
       });
       if (!res.ok) throw new Error('Undo failed');
       const recreated = await res.json();
-      setWallets(prev => [recreated, ...prev]);
+      setWallets(prev => {
+        const newList = [recreated, ...prev];
+        try { window.dispatchEvent(new CustomEvent('walletsUpdated', { detail: newList })); } catch(_) {}
+        return newList;
+      });
       setUndoData(null);
       if (undoTimerRef.current) {
         clearTimeout(undoTimerRef.current);
