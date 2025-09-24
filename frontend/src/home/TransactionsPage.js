@@ -33,6 +33,8 @@ function TransactionsPage() {
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' }); // new
   const [incomeByCurrency, setIncomeByCurrency] = useState({});
   const [expenseByCurrency, setExpenseByCurrency] = useState({});
+  // confirm delete state for transactions
+  const [confirmDelete, setConfirmDelete] = useState({ show: false, txId: null, title: '' });
 
   const formatCurrency = (amount, currency) => {
     try {
@@ -174,7 +176,8 @@ function TransactionsPage() {
         amount: Number(form.amount),
         title: form.name,
         description: form.note,
-        date: form.date
+        // Always use server-localized ISO timestamp for "added now"
+        date: new Date().toISOString()
       };
 
       const res = await fetch('http://localhost:5000/api/transactions', { method: 'POST', headers, body: JSON.stringify(body) });
@@ -284,10 +287,17 @@ function TransactionsPage() {
     }
   };
 
-  // delete handler (simple confirm)
-  const handleDelete = async (txId) => {
-    const ok = window.confirm('Bạn có chắc chắn muốn xóa giao dịch này?');
-    if (!ok) return;
+  // open a confirmation dialog for deletion (replaces window.confirm)
+  const openDeleteConfirm = (tx) => {
+    setConfirmDelete({ show: true, txId: tx._id, title: tx.title || tx.description || '(không tên)' });
+  };
+
+  const cancelDelete = () => setConfirmDelete({ show: false, txId: null, title: '' });
+
+  // perform delete after user confirms
+  const handleDeleteConfirmed = async () => {
+    const txId = confirmDelete.txId;
+    if (!txId) return cancelDelete();
     try {
       const token = localStorage.getItem('token');
       const headers = {};
@@ -297,26 +307,16 @@ function TransactionsPage() {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.message || 'Xóa thất bại');
       }
+      // remove from list and refresh wallets/totals (backend reverts money)
       setTransactions(prev => prev.filter(t => t._id !== txId));
       showToast('Đã xóa giao dịch', 'success');
-      // refresh wallets/totals to reflect change
-      try {
-        const token2 = localStorage.getItem('token');
-        const headers2 = {};
-        if (token2) headers2['Authorization'] = `Bearer ${token2}`;
-        const r = await fetch('http://localhost:5000/api/wallets', { headers: headers2 });
-        if (r.ok) {
-          const data = await r.json();
-          setWallets(data || []);
-          try { window.dispatchEvent(new CustomEvent('walletsUpdated', { detail: data })); } catch(_) {}
-          const sums = {};
-          (data || []).forEach(w => { const curr = w.currency || 'VND'; const amt = Number(w.initialBalance) || 0; sums[curr] = (sums[curr] || 0) + amt; });
-          setTotalsByCurrency(sums);
-        }
-      } catch (_) {}
+      // refresh wallets/totals
+      await refreshWallets();
     } catch (err) {
       console.error('Delete transaction failed', err);
       showToast(err.message || 'Lỗi khi xóa giao dịch', 'error');
+    } finally {
+      cancelDelete();
     }
   };
 
@@ -467,7 +467,6 @@ function TransactionsPage() {
             </select>
 
             <input type="number" placeholder="Số tiền" value={form.amount} onChange={(e) => handleFormChange('amount', e.target.value)} required min="0" />
-            <input type="date" value={form.date} onChange={(e) => handleFormChange('date', e.target.value)} required />
             <input type="text" placeholder="Ghi chú" value={form.note} onChange={(e) => handleFormChange('note', e.target.value)} style={{ gridColumn: '1 / span 3' }} />
 
             <div style={{ display: 'flex', gap: 8 }}>
@@ -523,7 +522,7 @@ function TransactionsPage() {
                     <td>{amountFormatted}</td>
                     <td className="tx-actions">
                       <button className="tx-edit-btn" onClick={() => openEdit(tx)}>Sửa</button>
-                      <button className="tx-delete-btn" onClick={() => handleDelete(tx._id)}>Xóa</button>
+                      <button className="tx-delete-btn" onClick={() => openDeleteConfirm(tx)}>Xóa</button>
                     </td>
                   </tr>
                 );
@@ -579,8 +578,23 @@ function TransactionsPage() {
           </div>
         </div>
       )}
+
+      {/* Delete confirmation modal */}
+      {confirmDelete.show && (
+        <div className="tx-overlay" role="dialog" aria-modal="true">
+          <div className="tx-edit-modal" style={{ maxWidth: 420 }}>
+            <h3 style={{ marginTop: 0 }}>Xác nhận xóa</h3>
+            <p>Bạn có chắc chắn muốn xóa giao dịch "<strong>{confirmDelete.title}</strong>"? Sau khi xóa, số tiền sẽ được hoàn về ví.</p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+              <button type="button" onClick={cancelDelete} style={{ padding: '8px 12px', borderRadius: 8 }}>Hủy</button>
+              <button type="button" onClick={handleDeleteConfirmed} className="tx-delete-btn" style={{ padding: '8px 12px', borderRadius: 8 }}>Xóa</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 export default TransactionsPage;
+                    
