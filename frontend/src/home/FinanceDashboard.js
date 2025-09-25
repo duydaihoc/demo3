@@ -119,5 +119,4 @@ const FinanceDashboard = () => {
   );
 };
 
-export default FinanceDashboard;
 
