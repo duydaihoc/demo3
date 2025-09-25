@@ -72,6 +72,7 @@
 }
 
 .wallet-add-card {
+  
   display: flex;
   align-items: center;
   justify-content: center;
@@ -97,7 +98,7 @@
 }
 
 .wallet-empty-card {
-  background: #fff6f6;
+  background: linear-gradient(135deg, #2a5298 60%, #4ecdc4 100%);
   border-radius: 12px;
   min-width: 140px;
   text-align: center;
@@ -409,6 +410,17 @@
   font-weight: 600;
   color: #163a5a;
   font-size: 0.98rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* new: creator badge under category name */
+.category-creator {
+  font-size: 0.78rem;
+  color: #6b879a;
+  margin-top: 4px;
+  display: block;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -90,12 +90,18 @@ function Wallets() {
         // normalize category owner id
         const ownerId = typeof cat.owner === 'string' ? cat.owner : (cat.owner && cat.owner._id ? String(cat.owner._id) : undefined);
 
-        // if ownerFilter provided: show only categories owned by that owner
+        // If ownerFilter provided: show categories that are either:
+        // - owned by that wallet owner (ownerToMatch), OR
+        // - owned by the current auth user (so user-created categories are suggested), OR
+        // - owned by tempId (anonymous)
         if (ownerToMatch) {
-          return ownerId === ownerToMatch;
+          if (ownerId === ownerToMatch) return true;
+          if (authUserId && isObjectId(authUserId) && ownerId === authUserId) return true;
+          if (tempId && ownerId === tempId) return true;
+          return false;
         }
 
-        // otherwise (no ownerFilter): show categories owned by current auth user or tempId
+        // otherwise (no ownerFilter): show categories owned by current auth user or tempId (as before)
         if (authUserId && isObjectId(authUserId) && ownerId === authUserId) return true;
         if (tempId && ownerId === tempId) return true;
 
@@ -111,10 +117,18 @@ function Wallets() {
 
   // Lấy categories khi modal chọn danh mục mở (dependency đầy đủ để tránh cảnh báo ESLint)
   useEffect(() => {
-    if (showCategoryModal && categories.length === 0) {
-      fetchCategories();
+    if (!showCategoryModal) return;
+    // compute ownerToUse:
+    // - if we just created a wallet, prefer that wallet owner (may be string id)
+    // - otherwise use current logged userId or tempUserId
+    let ownerToUse = localStorage.getItem('userId') || localStorage.getItem('tempUserId') || null;
+    if (createdWalletId) {
+      const w = wallets.find(x => String(x._id) === String(createdWalletId));
+      if (w && (w.owner || w.owner === null)) ownerToUse = w.owner;
     }
-  }, [showCategoryModal, categories.length, fetchCategories]);
+    // always refresh categories for the modal so user-created categories are suggested
+    fetchCategories(ownerToUse);
+  }, [showCategoryModal, createdWalletId, wallets, fetchCategories]);
 
   const fetchWallets = async () => {
     try {
@@ -214,7 +228,10 @@ function Wallets() {
         setCreatedWalletId(newWallet._id);
         setShowCreateModal(false);
         setShowCategoryModal(true);
-        fetchCategories();
+        // Preload categories and include both wallet owner categories and user's own categories
+        // prefer newWallet.owner, fallback to current auth user id or tempId
+        const ownerToUse = newWallet.owner || localStorage.getItem('userId') || localStorage.getItem('tempUserId');
+        fetchCategories(ownerToUse);
         setSelectedCategories([]);
         // dùng notification thay vì alert
         showNotification('Tạo ví thành công! Hãy chọn danh mục cho ví.', 'success');
@@ -675,6 +692,9 @@ function Wallets() {
                 <div className="category-grid">
                   {(categoryFilter === 'expense' ? expenseCats : incomeCats).map(cat => {
                     const isSelected = selectedCategories.includes(cat._id);
+                    // New logic: hide any label for system/admin categories; show "Bạn tạo" for user-created ones
+                    const isSystem = cat.createdBy === 'admin' || cat.createdBy === 'system';
+                    const creatorLabel = isSystem ? '' : 'Bạn tạo';
                     return (
                       <button
                         key={cat._id}
@@ -684,7 +704,12 @@ function Wallets() {
                         aria-pressed={isSelected}
                       >
                         <div className="category-icon">{cat.icon}</div>
-                        <div className="category-name">{cat.name}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div className="category-name">{cat.name}</div>
+                          <div className="category-creator" title={creatorLabel ? `Tạo bởi ${creatorLabel}` : ''}>
+                            {creatorLabel ? `👤 ${creatorLabel}` : ''}
+                          </div>
+                        </div>
                         {isSelected && <div className="category-check">✓</div>}
                       </button>
                     );
@@ -855,6 +880,8 @@ function Wallets() {
                 <div className="category-grid" style={{ marginBottom: 8 }}>
                   {(categoryFilter === 'expense' ? expenseCats : incomeCats).map(cat => {
                     const isSelected = selectedCategories.includes(cat._id);
+                    const isSystem = cat.createdBy === 'admin' || cat.createdBy === 'system';
+                    const creatorLabel = isSystem ? '' : 'Bạn tạo';
                     return (
                       <button
                         key={cat._id}
@@ -865,7 +892,12 @@ function Wallets() {
                         style={{ marginBottom: 8 }}
                       >
                         <div className="category-icon">{cat.icon}</div>
-                        <div className="category-name">{cat.name}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div className="category-name">{cat.name}</div>
+                          <div className="category-creator" title={creatorLabel ? `Tạo bởi ${creatorLabel}` : ''}>
+                            {creatorLabel ? `👤 ${creatorLabel}` : ''}
+                          </div>
+                        </div>
                         {isSelected && <div className="category-check">✓</div>}
                       </button>
                     );
