@@ -36,6 +36,10 @@ function TransactionsPage() {
   // confirm delete state for transactions
   const [confirmDelete, setConfirmDelete] = useState({ show: false, txId: null, title: '' });
 
+  // thêm state cho lọc theo ngày
+  const [startDate, setStartDate] = useState(''); // format yyyy-mm-dd
+  const [endDate, setEndDate] = useState('');     // format yyyy-mm-dd
+
   const formatCurrency = (amount, currency) => {
     try {
       return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: currency || 'VND' }).format(amount);
@@ -51,17 +55,25 @@ function TransactionsPage() {
   };
 
   // fetch transactions for current user (admin can request all)
-  const fetchTransactions = async () => {
+  // fetch transactions for current user (admin can request all)
+  // accepts optional AbortSignal to cancel requests when unmounting/navigation
+  const fetchTransactions = async (signal) => {
     setLoadingTransactions(true);
     try {
       const token = localStorage.getItem('token');
       const headers = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
-      const res = await fetch('http://localhost:5000/api/transactions', { headers });
+      const opts = { headers };
+      if (signal) opts.signal = signal;
+      const res = await fetch('http://localhost:5000/api/transactions', opts);
       if (!res.ok) throw new Error('Không thể tải giao dịch');
       const data = await res.json();
       setTransactions(data || []);
     } catch (err) {
+      if (err.name === 'AbortError') {
+        // fetch was aborted — ignore
+        return;
+      }
       console.error('Fetch transactions failed', err);
       setTransactions([]);
     } finally {
@@ -93,45 +105,69 @@ function TransactionsPage() {
   };
 
   useEffect(() => {
-    const fetchWalletsAndTotals = async () => {
-      setLoadingTotals(true);
-      setTotalsError(null);
-      try {
-        const token = localStorage.getItem('token');
-        const headers = {};
-        if (token) headers['Authorization'] = `Bearer ${token}`;
+    const fetchWalletsAndTotals = async (signal) => {
+       setLoadingTotals(true);
+       setTotalsError(null);
+       try {
+         const token = localStorage.getItem('token');
+         const headers = {};
+         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const res = await fetch('http://localhost:5000/api/wallets', { headers });
-        if (!res.ok) throw new Error('Không thể tải ví');
-        const data = await res.json();
-        setWallets(data || []);
+         const res = await fetch('http://localhost:5000/api/wallets', { headers, signal });
+         if (!res.ok) throw new Error('Không thể tải ví');
+         const data = await res.json();
+         setWallets(data || []);
 
-        const sums = {};
-        (data || []).forEach(w => {
-          const curr = w.currency || 'VND';
-          const amt = Number(w.initialBalance) || 0;
-          sums[curr] = (sums[curr] || 0) + amt;
-        });
-        setTotalsByCurrency(sums);
-      } catch (err) {
+         const sums = {};
+         (data || []).forEach(w => {
+           const curr = w.currency || 'VND';
+           const amt = Number(w.initialBalance) || 0;
+           sums[curr] = (sums[curr] || 0) + amt;
+         });
+         setTotalsByCurrency(sums);
+       } catch (err) {
+        if (err.name === 'AbortError') {
+          // aborted, ignore
+          return;
+        }
         console.error('Fetch wallet totals failed', err);
-        setTotalsError('Không thể tải tổng số dư');
-      } finally {
-        setLoadingTotals(false);
-      }
-    };
-    fetchWalletsAndTotals();
-    // also load transactions
-    fetchTransactions();
-  }, []);
+         setTotalsError('Không thể tải tổng số dư');
+       } finally {
+         setLoadingTotals(false);
+       }
+     };
+    // use one AbortController for both requests so cleanup cancels all
+    const ctrl = new AbortController();
+    fetchWalletsAndTotals(ctrl.signal);
+    // also load transactions (pass signal)
+    fetchTransactions(ctrl.signal);
+    return () => { ctrl.abort(); };
+   }, []);
 
-  // filtered transactions by walletFilter
-  const filteredTransactions = (walletFilter && walletFilter !== '') 
-    ? transactions.filter(tx => {
-        const wid = tx.wallet && (typeof tx.wallet === 'string' ? tx.wallet : tx.wallet._id);
-        return String(wid) === String(walletFilter);
-      })
-    : transactions;
+  // filtered transactions by walletFilter AND date range
+  const filteredTransactions = transactions.filter(tx => {
+    // wallet filter
+    if (walletFilter && walletFilter !== '') {
+      const wid = tx.wallet && (typeof tx.wallet === 'string' ? tx.wallet : tx.wallet._id);
+      if (String(wid) !== String(walletFilter)) return false;
+    }
+    // date filter: tx.date may be string or Date
+    if (startDate || endDate) {
+      const txDate = tx.date ? new Date(tx.date) : null;
+      if (!txDate) return false;
+      if (startDate) {
+        const sd = new Date(startDate);
+        sd.setHours(0,0,0,0);
+        if (txDate < sd) return false;
+      }
+      if (endDate) {
+        const ed = new Date(endDate);
+        ed.setHours(23,59,59,999);
+        if (txDate > ed) return false;
+      }
+    }
+    return true;
+  });
 
   // show wallet column when "Tất cả ví" is selected
   const showWalletColumn = !walletFilter;
@@ -322,20 +358,39 @@ function TransactionsPage() {
 
   // Recompute monthly income/expense for displayed transactions whenever transactions or walletFilter change
   useEffect(() => {
+    // compute new maps from current source data & filters
     const inc = {};
     const exp = {};
-    // compute start/end of current month
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
-    const list = filteredTransactions || [];
+    const list = (transactions || []).filter(tx => {
+      if (walletFilter && walletFilter !== '') {
+        const wid = tx.wallet && (typeof tx.wallet === 'string' ? tx.wallet : tx.wallet._id);
+        if (String(wid) !== String(walletFilter)) return false;
+      }
+      if (startDate || endDate) {
+        const txDate = tx.date ? new Date(tx.date) : null;
+        if (!txDate) return false;
+        if (startDate) {
+          const sd = new Date(startDate);
+          sd.setHours(0,0,0,0);
+          if (txDate < sd) return false;
+        }
+        if (endDate) {
+          const ed = new Date(endDate);
+          ed.setHours(23,59,59,999);
+          if (txDate > ed) return false;
+        }
+      }
+      return true;
+    });
+
     list.forEach(tx => {
       const txDate = tx.date ? new Date(tx.date) : null;
       if (!txDate) return;
-      // only include transactions in current month
       if (txDate >= monthStart && txDate < monthEnd) {
-        // determine currency (prefer populated wallet currency, else lookup in wallets)
         let currency = 'VND';
         if (tx.wallet && typeof tx.wallet !== 'string' && tx.wallet.currency) currency = tx.wallet.currency;
         else if (typeof tx.wallet === 'string') {
@@ -343,16 +398,26 @@ function TransactionsPage() {
           if (w && w.currency) currency = w.currency;
         }
         const amt = Number(tx.amount) || 0;
-        if (tx.type === 'income') {
-          inc[currency] = (inc[currency] || 0) + amt;
-        } else {
-          exp[currency] = (exp[currency] || 0) + amt;
-        }
+        if (tx.type === 'income') inc[currency] = (inc[currency] || 0) + amt;
+        else exp[currency] = (exp[currency] || 0) + amt;
       }
     });
-    setIncomeByCurrency(inc);
-    setExpenseByCurrency(exp);
-  }, [filteredTransactions, wallets]); // recompute when displayed transactions or wallets change
+
+    // shallow compare helper
+    const mapsEqual = (a, b) => {
+      const ak = Object.keys(a || {});
+      const bk = Object.keys(b || {});
+      if (ak.length !== bk.length) return false;
+      for (let k of ak) {
+        if (Number(a[k]) !== Number(b[k])) return false;
+      }
+      return true;
+    };
+
+    // use functional setState to compare with previous value without referencing it in deps
+    setIncomeByCurrency(prev => mapsEqual(prev, inc) ? prev : inc);
+    setExpenseByCurrency(prev => mapsEqual(prev, exp) ? prev : exp);
+  }, [transactions, walletFilter, startDate, endDate, wallets]); // recompute when source data or filters change
 
   return (
     <div>
@@ -479,7 +544,37 @@ function TransactionsPage() {
           </form>
         </div>
         <div className="transactions-list-section">
-          <div className="transactions-list-title">Danh sách giao dịch</div>
+          <div className="transactions-list-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>Danh sách giao dịch</span>
+
+            {/* DATE RANGE PICKER */}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <label style={{ fontSize: 13, color: '#666' }}>Từ</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                aria-label="Từ ngày"
+                style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e6eef6' }}
+              />
+              <label style={{ fontSize: 13, color: '#666' }}>Đến</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                aria-label="Đến ngày"
+                style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e6eef6' }}
+              />
+              <button
+                type="button"
+                onClick={() => { setStartDate(''); setEndDate(''); }}
+                style={{ padding: '6px 10px', borderRadius: 6, background: '#eef7fb', border: '1px solid #d8edf6' }}
+              >
+                Đặt lại
+              </button>
+            </div>
+          </div>
+
           <table className="transactions-table">
             <thead>
               <tr>
@@ -494,9 +589,9 @@ function TransactionsPage() {
             </thead>
             <tbody>
               {loadingTransactions ? (
-                <tr><td colSpan="6" style={{ textAlign: 'center', color: '#888' }}>Đang tải...</td></tr>
+                <tr><td colSpan={showWalletColumn ? 7 : 6} style={{ textAlign: 'center', color: '#888' }}>Đang tải...</td></tr>
               ) : filteredTransactions.length === 0 ? (
-                <tr><td colSpan="6" style={{ textAlign: 'center', color: '#888' }}>(Chưa có giao dịch)</td></tr>
+                <tr><td colSpan={showWalletColumn ? 7 : 6} style={{ textAlign: 'center', color: '#888' }}>(Chưa có giao dịch)</td></tr>
               ) : filteredTransactions.map(tx => {
                 // compute derived values to avoid mixing && and || in JSX
                 const titleText = tx.title || tx.description || '—';
@@ -597,4 +692,3 @@ function TransactionsPage() {
 }
 
 export default TransactionsPage;
-                    

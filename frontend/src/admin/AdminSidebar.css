@@ -58,3 +58,85 @@
   transform: translateX(8px) scale(1.04);
   box-shadow: 0 2px 12px rgba(76,205,196,0.13);
 }
+
+/* New: parent button active style (mimic link) */
+.admin-parent-btn {
+  display: block;
+  text-decoration: none;
+  color: #fff;
+  /* larger touch target */
+  padding: 16px 36px !important;
+  font-size: 1.12rem;
+  line-height: 1.2;
+  min-height: 48px;
+  border-radius: 10px 0 0 10px;
+  box-sizing: border-box;
+}
+
+.admin-parent-btn.active,
+.admin-parent-btn:hover {
+  background: linear-gradient(90deg, #e3f6f5 0%, #4ecdc4 100%);
+  color: #2a5298;
+  transform: translateX(8px) scale(1.04);
+  box-shadow: 0 4px 18px rgba(76,205,196,0.16);
+}
+
+/* Submenu styles */
+.admin-submenu {
+  list-style: none;
+  padding-left: 18px;
+  margin: 8px 0 0 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.28s ease, opacity 0.2s ease;
+  opacity: 0;
+}
+
+.admin-submenu.open {
+  max-height: 240px; /* điều chỉnh để chứa 3 items */
+  opacity: 1;
+}
+
+/* smaller indent links inside submenu */
+.admin-submenu a {
+  display: block;
+  /* increase padding for easier tapping */
+  padding: 12px 24px;
+  color: #fff;
+  font-size: 0.98rem;
+  border-radius: 6px 0 0 6px;
+  text-decoration: none;
+  transition: background 0.2s, transform 0.15s;
+  font-weight: 500;
+}
+
+.admin-submenu a.active,
+.admin-submenu a:hover {
+  background: rgba(255,255,255,0.95);
+  color: #2a5298;
+  transform: translateX(6px);
+}
+
+/* chevron indicator - slightly larger for visibility */
+.chev {
+  /* larger hit area and visible size for easier tapping */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;        /* increases clickable area */
+  border-radius: 6px;
+  transition: transform 0.22s ease, background 0.15s;
+  opacity: 0.98;
+  margin-right: 6px;
+  font-size: 1.35rem;  /* increased size */
+  line-height: 1;
+}
+
+.chev.open {
+  transform: rotate(180deg);
+}
+
+/* subtle hover feedback */
+.admin-parent-btn .chev:hover {
+  background: rgba(255,255,255,0.06);
+}

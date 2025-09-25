@@ -1,10 +1,21 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import './AdminSidebar.css';
 
 function AdminSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [usersOpen, setUsersOpen] = useState(false);
+
+  useEffect(() => {
+    // Nếu đang ở trong users/wallets/categories/transactions thì auto mở submenu
+    const shouldOpen =
+      location.pathname.startsWith('/admin/users') ||
+      location.pathname.startsWith('/admin/wallets') ||
+      location.pathname.startsWith('/admin/categories') ||
+      location.pathname.startsWith('/admin/transactions');
+    setUsersOpen(shouldOpen);
+  }, [location.pathname]);
 
   const handleLogout = (e) => {
     e.preventDefault();
@@ -14,38 +25,79 @@ function AdminSidebar() {
     navigate('/login');
   };
 
+  const handleUsersToggle = (e) => {
+    e.preventDefault();
+    setUsersOpen((s) => !s);
+    navigate('/admin/users');
+  };
+
+  const parentActive =
+    location.pathname.startsWith('/admin/users') ||
+    location.pathname.startsWith('/admin/wallets') ||
+    location.pathname.startsWith('/admin/categories') ||
+    location.pathname.startsWith('/admin/transactions');
+
   return (
     <nav className="admin-sidebar">
       <div className="admin-sidebar-title">Quản trị hệ thống</div>
       <ul className="admin-sidebar-menu">
         <li>
-          <Link
-            to="/admin/users"
-            className={location.pathname === "/admin/users" ? "active" : ""}
+          {/* Thay Link bằng button để toggle submenu + điều hướng */}
+          <button
+            className={`admin-parent-btn ${parentActive ? 'active' : ''}`}
+            onClick={handleUsersToggle}
+            aria-expanded={usersOpen}
+            style={{
+              width: '100%',
+              padding: '12px 32px',
+              background: 'none',
+              border: 'none',
+              color: 'inherit',
+              fontSize: '1.08rem',
+              textAlign: 'left',
+              cursor: 'pointer',
+              borderRadius: '8px 0 0 8px',
+              fontWeight: 500,
+              position: 'relative'
+            }}
           >
             👤 Quản lý người dùng
-          </Link>
+            <span className={`chev ${usersOpen ? 'open' : ''}`} aria-hidden>▾</span>
+          </button>
+
+          {/* Submenu: gom quản lý ví, danh mục và giao dịch vào đây */}
+          <ul className={`admin-submenu ${usersOpen ? 'open' : ''}`}>
+            <li>
+              <Link
+                to="/admin/wallets"
+                className={location.pathname === '/admin/wallets' ? 'active' : ''}
+              >
+                💼 Quản lý ví
+              </Link>
+            </li>
+            <li>
+              <Link
+                to="/admin/categories"
+                className={location.pathname === '/admin/categories' ? 'active' : ''}
+              >
+                🗂️ Quản lý danh mục
+              </Link>
+            </li>
+            <li>
+              <Link
+                to="/admin/transactions"
+                className={location.pathname === '/admin/transactions' ? 'active' : ''}
+              >
+                💸 Quản lý giao dịch
+              </Link>
+            </li>
+          </ul>
         </li>
-        <li>
-          <Link
-            to="/admin/wallets"
-            className={location.pathname === "/admin/wallets" ? "active" : ""}
-          >
-            💼 Quản lý ví
-          </Link>
-        </li>
-        <li>
-          <Link
-            to="/admin/categories"
-            className={location.pathname === "/admin/categories" ? "active" : ""}
-          >
-            🗂️ Quản lý danh mục
-          </Link>
-        </li>
+
         <li>
           <Link
             to="/admin/groups"
-            className={location.pathname === "/admin/groups" ? "active" : ""}
+            className={location.pathname === '/admin/groups' ? 'active' : ''}
           >
             👥 Quản lý nhóm
           </Link>
@@ -53,7 +105,7 @@ function AdminSidebar() {
         <li>
           <Link
             to="/admin/families"
-            className={location.pathname === "/admin/families" ? "active" : ""}
+            className={location.pathname === '/admin/families' ? 'active' : ''}
           >
             🏠 Quản lý gia đình
           </Link>
