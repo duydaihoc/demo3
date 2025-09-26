@@ -302,6 +302,62 @@ export default function FinanceDashboard() {
     setPieChartType(type);
   };
 
+  // helper: primary currency to display amounts (fallback to VND)
+  const primaryCurrency = Object.keys(walletTotals)[0] || 'VND';
+
+  // total across currencies isn't strictly correct for mixed currencies,
+  // but we display primaryCurrency amount (existing behaviour in UI uses one currency)
+  const totalExpenseForPrimary = expenseByCurrency[primaryCurrency] || 0;
+
+  // --- New: compute today's transaction stats per wallet ---
+  const computeTodayStats = () => {
+    const txs = allTransactionsRef.current || [];
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+    // build a map of wallets by id for quick lookup
+    const walletMap = {};
+    (wallets || []).forEach(w => { walletMap[String(w._id)] = w; });
+
+    const stats = {};
+    // initialize entries for all wallets (so wallets with 0 tx still show)
+    (wallets || []).forEach(w => {
+      stats[String(w._id)] = { walletId: String(w._id), name: w.name || '(Không tên)', currency: w.currency || primaryCurrency, income: 0, expense: 0, count: 0 };
+    });
+
+    txs.forEach(tx => {
+      const txDate = tx.date ? new Date(tx.date) : null;
+      if (!txDate) return;
+      if (txDate < start || txDate > end) return;
+
+      const wid = tx.wallet && (typeof tx.wallet === 'string' ? tx.wallet : (tx.wallet._id || tx.wallet));
+      const key = wid ? String(wid) : 'unknown';
+      if (!stats[key]) {
+        // create synthetic entry if wallet not in current wallets list
+        const w = walletMap[key];
+        stats[key] = { walletId: key, name: (w && w.name) ? w.name : (tx.wallet && tx.wallet.name) || 'Ví khác', currency: (w && w.currency) ? w.currency : primaryCurrency, income: 0, expense: 0, count: 0 };
+      }
+
+      const amt = Number(tx.amount) || 0;
+      if (tx.type === 'income') stats[key].income += amt;
+      else stats[key].expense += amt;
+      stats[key].count += 1;
+    });
+
+    // compute total row
+    const totals = { income: 0, expense: 0, count: 0 };
+    Object.values(stats).forEach(s => {
+      totals.income += s.income;
+      totals.expense += s.expense;
+      totals.count += s.count;
+    });
+
+    return { perWallet: Object.values(stats), totals };
+  };
+  
+  const todayStats = computeTodayStats();
+
   if (loading) return <div className="fd-root"><div className="fd-loading">Đang tải bảng điều khiển...</div></div>;
   if (error) return <div className="fd-root"><div className="fd-error">Lỗi: {error}</div></div>;
 
@@ -360,11 +416,41 @@ export default function FinanceDashboard() {
 
   return (
     <div className="fd-root" aria-label="Bảng điều khiển tài chính">
+      {/* Composition card: show expense structure at top */}
+      <div className="fd-composition">
+        <div className="fd-composition-inner">
+          <div className="fd-comp-title">Cơ cấu chi tiêu</div>
+          <div className="fd-comp-value">
+            { (Object.keys(expenseByCurrency).length === 0) ? '0₫' : formatCurrency(totalExpenseForPrimary, primaryCurrency) }
+          </div>
+          <div className="fd-comp-sub">
+            {topCategories.length === 0 ? (
+              <div className="fd-comp-empty">Không có chi tiêu trong tháng này</div>
+            ) : (
+              <ul className="fd-comp-list">
+                {topCategories.map((c, i) => {
+                  const pct = totalExpenseForPrimary ? Math.round((c.total / totalExpenseForPrimary) * 100) : 0;
+                  return (
+                    <li key={c.id} className="fd-comp-item">
+                      <span className="fd-comp-icon"> {/* if icon available show it (clients may provide icons) */}
+                        { (c.icon) ? c.icon : '📌' }
+                      </span>
+                      <span className="fd-comp-name">{c.name}</span>
+                      <span className="fd-comp-amt">{formatCurrency(c.total, primaryCurrency)} <small className="fd-comp-pct">({pct}%)</small></span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Bank-style header cards */}
       <div className="fd-cards bank-style">
         <div className="fd-card fd-account">
           <div className="fd-account-top">
-            <div className="fd-account-title">Tài khoản chính</div>
+            <div className="fd-account-title">Tất cả ví</div>
             {/* removed action buttons as requested */}
           </div>
           <div className="fd-account-balance">
@@ -490,9 +576,56 @@ export default function FinanceDashboard() {
           )}
         </div>
       </div>
+
+      {/* Daily transactions stats (moved from HomePage) */}
+      <div style={{ marginTop: 16 }} className="home-stat-table">
+        <div className="home-stat-title" style={{ marginBottom: 8, fontWeight: 800 }}>Bảng thống kê giao dịch trong ngày</div>
+        <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff', borderRadius: 8 }}>
+          <thead>
+            <tr style={{ textAlign: 'left', borderBottom: '1px solid #eee' }}>
+              <th style={{ padding: '10px 8px' }}>Ví</th>
+              <th style={{ padding: '10px 8px' }}>Thu</th>
+              <th style={{ padding: '10px 8px' }}>Chi</th>
+              <th style={{ padding: '10px 8px' }}>Net</th>
+              <th style={{ padding: '10px 8px' }}>Giao dịch</th>
+            </tr>
+          </thead>
+          <tbody>
+            { /* nếu không có giao dịch hôm nay */ }
+            {todayStats.totals.count === 0 ? (
+              <tr>
+                <td colSpan="5" style={{ padding: '18px', textAlign: 'center', color: '#888', fontWeight: 700 }}>
+                  Hôm nay chưa có giao dịch nào
+                </td>
+              </tr>
+            ) : (
+              <>
+                { /* chỉ hiển thị những ví có giao dịch (count > 0) */ }
+                {todayStats.perWallet.filter(w => w.count > 0).map(w => (
+                  <tr key={w.walletId} style={{ borderBottom: '1px solid #f5f7fa' }}>
+                    <td style={{ padding: '10px 8px' }}>{w.name}</td>
+                    <td style={{ padding: '10px 8px', color: '#1b8e5a', fontWeight: 700 }}>{formatCurrency(w.income, w.currency)}</td>
+                    <td style={{ padding: '10px 8px', color: '#c93e3e', fontWeight: 700 }}>{formatCurrency(w.expense, w.currency)}</td>
+                    <td style={{ padding: '10px 8px', fontWeight: 800 }}>{formatCurrency((w.income - w.expense), w.currency)}</td>
+                    <td style={{ padding: '10px 8px' }}>{w.count}</td>
+                  </tr>
+                ))}
+                <tr style={{ fontWeight: 800 }}>
+                  <td style={{ padding: '10px 8px' }}>Tổng</td>
+                  <td style={{ padding: '10px 8px', color: '#1b8e5a' }}>{formatCurrency(todayStats.totals.income, primaryCurrency)}</td>
+                  <td style={{ padding: '10px 8px', color: '#c93e3e' }}>{formatCurrency(todayStats.totals.expense, primaryCurrency)}</td>
+                  <td style={{ padding: '10px 8px' }}>{formatCurrency((todayStats.totals.income - todayStats.totals.expense), primaryCurrency)}</td>
+                  <td style={{ padding: '10px 8px' }}>{todayStats.totals.count}</td>
+                </tr>
+              </>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
+
 
 
 

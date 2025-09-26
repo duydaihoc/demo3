@@ -20,14 +20,9 @@ function HomePage() {
         </div>
         <div className="home-content">
           <section className="home-left">
-            <div className="home-card">
-              <div className="home-card-title">Cơ cấu chi tiêu</div>
-              <div className="home-card-value">0₫</div>
-              <div className="home-card-sub">Không có chi tiêu trong tháng này</div>
-            </div>
-            {/* Extracted financial dashboard into its own component */}
+            {/* FinanceDashboard renders the composition + daily stats table now */}
             <FinanceDashboard />
-            <div className="home-stat-table">
+            {/* <div className="home-stat-table">
               <div className="home-stat-title">Bảng thống kê giao dịch trong ngày</div>
               <table>
                 <thead>
@@ -52,7 +47,7 @@ function HomePage() {
                   </tr>
                 </tbody>
               </table>
-            </div>
+            </div> */}
           </section>
           <aside className="home-right">
             {/* Đưa Wallets sang bên phải */}
@@ -73,4 +68,4 @@ function HomePage() {
 }
 
 export default HomePage;
-              
+
