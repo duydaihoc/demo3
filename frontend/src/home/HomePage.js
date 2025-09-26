@@ -3,9 +3,11 @@ import Sidebar from './Sidebar';
 import Wallets from './Wallets';
 import './HomePage.css';
 import FinanceDashboard from './FinanceDashboard'; // new component
+import { useNavigate } from 'react-router-dom';
 
 function HomePage() {
   const userName = localStorage.getItem('userName') || 'Tên người dùng'; // Get from localStorage with fallback
+  const navigate = useNavigate();
 
   return (
     <div>
@@ -14,8 +16,7 @@ function HomePage() {
         <div className="home-header">
           <span className="home-title">Trang chủ</span>
           <div className="home-actions">
-            <button>+ Ghi chép</button>
-            <button className="report-btn">Xuất báo cáo</button>
+            <button onClick={() => navigate('/transactions')}>+ Ghi chép</button>
           </div>
         </div>
         <div className="home-content">

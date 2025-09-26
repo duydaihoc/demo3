@@ -6,6 +6,26 @@
   font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif;
 }
 
+/* Export button wrapper and button */
+.fd-export-wrap {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding-right: 6px;
+}
+.fd-export-btn {
+  background: linear-gradient(90deg,#2a5298,#4ecdc4);
+  color: #fff;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 10px 26px rgba(42,82,152,0.12);
+  transition: transform .15s ease, box-shadow .15s ease, opacity .15s ease;
+}
+.fd-export-btn:hover { transform: translateY(-3px); box-shadow: 0 18px 40px rgba(42,82,152,0.16); }
+
 /* layout: big account card left + two small metrics right */
 .fd-cards.bank-style {
   display: flex;
