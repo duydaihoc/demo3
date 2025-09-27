@@ -3,7 +3,7 @@ import Sidebar from './Sidebar';
 import Wallets from './Wallets';
 import './HomePage.css';
 import FinanceDashboard from './FinanceDashboard'; // new component
-import SavingsGoals from './SavingsGoals';
+
 import { useNavigate } from 'react-router-dom';
 
 function HomePage() {
@@ -55,7 +55,7 @@ function HomePage() {
             {/* Đưa Wallets sang bên phải */}
             <Wallets />
             {/* Savings goals panel (moved below wallets) */}
-            <SavingsGoals />
+            
             <div className="home-reminder">
               <div className="home-reminder-title">Ghi chú / Nhắc nhở</div>
               <ul className="home-reminder-list">
