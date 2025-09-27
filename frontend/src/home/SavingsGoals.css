@@ -8,57 +8,58 @@
 
 /* Add goal button styling for empty state (like the image) */
 .empty-goals-container {
-  background-color: #ffffff;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  padding: 16px;
-  margin-top: 20px;
   display: flex;
   justify-content: center;
-  align-items: center;
+  padding: 40px 0;
 }
 
 .add-goal-card {
-  background-color: #ffffff;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  padding: 20px;
-  text-align: center;
+  background: linear-gradient(180deg, #ffffff, #f5f8fb);
+  border: 2px dashed rgba(42,82,152,0.12);
+  color: #15304a;
+  width: 280px;
+  height: 180px;
+  border-radius: 16px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  width: 100%;
-  max-width: 300px;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: transform 0.3s, border-color 0.3s, box-shadow 0.3s;
+  box-shadow: 0 8px 20px rgba(10,30,60,0.04);
 }
 
 .add-goal-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  transform: translateY(-8px);
+  border-color: rgba(42,82,152,0.24);
+  box-shadow: 0 16px 32px rgba(10,30,60,0.08);
 }
 
 .add-goal-icon {
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(90deg,#2a5298,#4ecdc4);
+  color: white;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  background-color: #4267b2;
-  color: white;
-  border-radius: 50%;
-  margin: 0 auto 12px;
   font-size: 24px;
-  font-weight: bold;
+  margin-bottom: 16px;
+  box-shadow: 0 8px 16px rgba(42,82,152,0.16);
 }
 
 .add-goal-text {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 600;
-  color: #333;
   margin-bottom: 8px;
+  color: #2a5298;
 }
 
 .add-goal-subtext {
-  font-size: 13px;
-  color: #777;
+  font-size: 0.85rem;
+  color: #607d8b;
 }
 
 /* Header and action buttons */
@@ -76,54 +77,60 @@
 }
 
 .add-goal-btn {
-  background-color: #4267b2;
-  color: white;
+  background: linear-gradient(90deg, #2a5298, #4ecdc4);
+  color: #fff;
   border: none;
-  border-radius: 4px;
-  padding: 6px 12px;
+  border-radius: 10px;
+  padding: 8px 16px;
   font-size: 0.9rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.2s;
+  box-shadow: 0 8px 16px rgba(42, 82, 152, 0.12);
+  transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .add-goal-btn:hover {
-  background-color: #365899;
+  transform: translateY(-3px);
+  box-shadow: 0 12px 24px rgba(42, 82, 152, 0.18);
 }
 
-/* Goal cards grid */
-.goals-cards {
+/* Goals grid */
+.goals-grid {
   display: grid;
-  grid-gap: 16px;
-  margin-top: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
 }
 
-/* Goal card styling (updated to bank-card look + more bottom space for actions) */
+/* Goal card - bank card style */
 .goal-card {
-  background: linear-gradient(135deg,#1a2a6c 0%,#b21f1f 100%);
-  border-radius: 16px;
-  color: white;
-  padding: 22px 20px 28px; /* extra bottom padding so actions don't overlap */
   position: relative;
-  overflow: hidden;
+  height: 180px;
+  padding: 20px;
+  border-radius: 16px;
+  color: #fff;
   box-shadow: 0 20px 50px rgba(12, 28, 64, 0.25), inset 0 -6px 18px rgba(0,0,0,0.12);
-  transition: transform 0.28s ease, box-shadow 0.28s ease;
-  min-height: 200px; /* make card taller */
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
+  justify-content: space-between;
 }
 
-/* chip (bank look) */
+.goal-card:hover {
+  transform: translateY(-10px) rotateX(4deg) rotateY(-2deg);
+  box-shadow: 0 30px 60px rgba(12, 28, 64, 0.35), inset 0 -6px 18px rgba(0,0,0,0.15);
+}
+
+/* Bank card chip */
 .goal-card-chip {
   position: absolute;
-  top: 18px;
+  top: 16px;
   left: 16px;
-  width: 44px;
-  height: 28px;
-  background: linear-gradient(90deg,#ffd54f,#caa21f);
+  width: 40px;
+  height: 26px;
+  background: linear-gradient(90deg, #ffd54f, #caa21f);
   border-radius: 6px;
   box-shadow: 0 4px 10px rgba(0,0,0,0.12);
-  z-index: 2;
 }
 
 /* ensure header spacing accounts for chip */
@@ -133,36 +140,52 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 30px;
-  padding-top: 10px;
+  margin-bottom: 16px;
+  padding-top: 8px;
 }
 
 .goal-card-header h3 {
   margin: 0;
   font-size: 1.1rem;
-  margin-left: 60px;
+  margin-left: 52px; /* space for the chip */
+  font-weight: 600;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 70%;
 }
 
 .goal-card-bank {
   font-size: 0.7rem;
   opacity: 0.8;
   letter-spacing: 1px;
+  text-transform: uppercase;
 }
 
+/* Balance information */
 .goal-card-balance {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
   margin-bottom: 10px;
 }
 
 .goal-target {
-  margin-left: 5px;
-  font-size: 0.9rem;
-  opacity: 0.8;
+  font-size: 1.2rem;
+  font-weight: 700;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
+.goal-percentage {
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  background-color: rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+}
+
+/* Progress bar */
 .goal-progress-container {
   background-color: rgba(255, 255, 255, 0.2);
   border-radius: 10px;
@@ -178,6 +201,7 @@
   transition: width 0.5s ease-in-out;
 }
 
+/* Footer with days remaining */
 .goal-card-footer {
   display: flex;
   justify-content: space-between;
@@ -185,68 +209,86 @@
   font-size: 0.85rem;
 }
 
-/* Actions row (placed after footer) */
+.goal-days {
+  opacity: 0.85;
+  font-weight: 500;
+}
+
+/* Card actions */
 .goal-card-actions {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.25);
   display: flex;
-  gap: 8px;
   justify-content: flex-end;
-  align-items: center;
-  margin-top: auto; /* push to bottom if possible */
-  z-index: 3;
+  gap: 8px;
+  opacity: 0;
+  transform: translateY(100%);
+  transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
-/* Small action buttons styled as bank-style pills */
-.goal-small-btn {
-  background: rgba(255,255,255,0.12);
-  color: #fff;
-  border: 1px solid rgba(255,255,255,0.16);
-  padding: 6px 10px;
-  border-radius: 10px;
-  font-weight: 700;
-  font-size: 0.86rem;
+.goal-card:hover .goal-card-actions {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.goal-action-btn {
+  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: transform 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
-  box-shadow: 0 6px 12px rgba(0,0,0,0.12);
-}
-.goal-small-btn:hover {
-  transform: translateY(-3px);
-  background: rgba(255,255,255,0.18);
-  box-shadow: 0 10px 22px rgba(0,0,0,0.14);
+  transition: background 0.2s, transform 0.2s;
 }
 
-/* Danger variant */
-.goal-small-btn.danger {
-  background: rgba(255, 100, 100, 0.12);
-  border-color: rgba(255,100,100,0.22);
-  color: #ffecec;
+.goal-action-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px);
 }
-.goal-small-btn.danger:hover {
-  background: rgba(255, 80, 80, 0.18);
-  box-shadow: 0 10px 22px rgba(183,28,28,0.12);
+
+.goal-action-btn.deposit {
+  background: rgba(76, 175, 80, 0.3);
+}
+
+.goal-action-btn.deposit:hover {
+  background: rgba(76, 175, 80, 0.5);
+}
+
+.goal-action-btn.delete {
+  background: rgba(255, 99, 71, 0.3);
+}
+
+.goal-action-btn.delete:hover {
+  background: rgba(255, 99, 71, 0.5);
 }
 
 /* Goal creation container */
-.goal-creation-container, .goal-deposit-container {
-  background-color: #ffffff;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  padding: 16px;
-  margin-top: 20px;
+.goal-creation-container {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
 }
 
-.goal-creation-header, .goal-deposit-header {
+.goal-creation-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
   border-bottom: 1px solid #eee;
-  padding-bottom: 10px;
+  padding-bottom: 16px;
 }
 
-.goal-creation-header h2, .goal-deposit-header h2 {
+.goal-creation-header h2 {
   margin: 0;
   font-size: 1.2rem;
-  color: #333;
+  color: #2a5298;
 }
 
 .close-btn {
@@ -261,456 +303,319 @@
   color: #333;
 }
 
-.goal-card-form {
+.goal-form {
   display: flex;
-  flex-direction: column;
-  gap: 25px;
+  gap: 24px;
 }
 
-/* Revert deposit panel to simple white card (restore original look) */
-.goal-deposit-container {
-  max-width: 820px;
-  margin: 18px auto;
-  padding: 18px;
-  background: #ffffff; /* simple white card */
-  border-radius: 10px;
-  box-shadow: 0 6px 24px rgba(12,28,64,0.06);
-  border: 1px solid rgba(15,40,64,0.04);
-}
-
-/* Remove previously added bank-style left card (hide if present) */
-.deposit-card {
-  display: none;
-}
-
-/* Simple deposit info box */
-.goal-deposit-info {
-  background-color: #fafafa;
-  border-radius: 8px;
-  padding: 12px;
-  margin-bottom: 14px;
-  border: 1px solid rgba(0,0,0,0.04);
-  color: #1b2b38;
-}
-
-/* Progress bar small and subtle */
-.goal-progress {
-  width: 100%;
-  height: 8px;
-  background: #f0f3f6;
-  border-radius: 6px;
-  overflow: hidden;
-  margin: 10px 0;
-}
-.goal-progress-fill {
-  height: 100%;
-  background: #4caf50;
-  transition: width .3s ease;
-}
-
-/* Right: form area — simple card (override previous fancy form card) */
-.deposit-form-card {
-  display: none; /* not used in simple layout */
-}
-
-/* deposit form (inline, simple) */
-.deposit-form {
+.form-preview {
+  flex: 1;
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 8px;
+  justify-content: center;
+  align-items: flex-start;
 }
 
-/* suggested-amounts kept simple */
-.suggested-amounts {
-  display:flex;
-  gap:8px;
-  margin-top:8px;
-  flex-wrap:wrap;
-}
-.suggested-amounts button {
-  background: #f1f5f9;
-  border: 1px solid rgba(15,40,64,0.06);
-  color: #0b3b57;
-  padding:6px 10px;
-  border-radius:8px;
-  font-weight:700;
-  cursor:pointer;
-}
-.suggested-amounts button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 18px rgba(15,40,64,0.04);
+.goal-card-preview {
+  width: 280px;
+  height: 180px;
+  border-radius: 16px;
+  padding: 20px;
+  color: white;
+  position: relative;
+  box-shadow: 0 20px 50px rgba(12, 28, 64, 0.25);
 }
 
-/* Action buttons: simple filled primary + subtle cancel */
-.submit-deposit-btn {
-  background: #2a9d5f;
-  color: #fff;
-  padding: 10px 14px;
-  border-radius: 8px;
-  border: none;
-  font-weight: 700;
-  cursor: pointer;
-}
-.submit-deposit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.cancel-btn {
-  background: transparent;
-  border: 1px solid rgba(15,40,64,0.06);
-  color: #12324a;
-  padding: 10px 14px;
-  border-radius: 8px;
+.form-fields {
+  flex: 1.5;
 }
 
-/* Loading / error messages (simple) */
-.loading-message, .error-message {
-  padding: 10px;
-  border-radius: 8px;
-  margin: 8px 0;
-  font-weight: 600;
+.form-group {
+  margin-bottom: 16px;
 }
-.loading-message { background:#fff7ec; color:#92400e; border:1px solid rgba(245,158,11,0.12); }
-.error-message { background:#fff0f0; color:#9b1c1c; border:1px solid rgba(239,68,68,0.08); }
-
-/* Responsive: keep stacked layout on small screens */
-@media (max-width: 900px) {
-  .goal-deposit-container { padding: 14px; }
-}
-
-/* Responsive tweaks */
-@media (max-width: 720px) {
-  .goal-deposit-container { padding:14px; margin: 12px; }
-  .deposit-form .form-actions { flex-direction:column-reverse; }
-  .submit-deposit-btn, .cancel-btn { width:100%; }
-  .suggested-amounts { justify-content:flex-start; }
-}
-  
 
 .form-group label {
-  font-size: 14px;
-  color: #555;
-  font-weight: 500;
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #2a5298;
 }
 
-/* Fix overlapping labels/placeholders by forcing labels to be static above inputs,
-   increase spacing and ensure inputs adapt height. This overrides potential global
-   floating-label styles. */
-.goal-form .form-group,
-.deposit-form .form-group {
-  position: relative; /* keep group positioning scoped */
-}
-
-/* Force label to appear as normal block above input (override floating/absolute) */
-.goal-form .form-group label,
-.deposit-form .form-group label {
-  position: static !important;
-  display: block !important;
-  margin-bottom: 8px !important;
-  padding: 0 !important;
-  transform: none !important;
-  left: auto !important;
-  top: auto !important;
-  width: auto !important;
-  background: transparent !important;
-  z-index: auto !important;
-}
-
-/* Make inputs flexible in height (avoid clipping) and add padding so browser icons (date) don't overlap text */
 .form-group input,
 .form-group select,
 .form-group textarea {
-  height: auto; /* let content define height */
-  min-height: 42px;
-  padding: 10px 12px; /* enough horizontal padding */
-  line-height: 1.25;
-  box-sizing: border-box;
-}
-
-/* ensure date inputs have space for icon on some browsers */
-.form-group input[type="date"] {
-  padding-right: 36px;
-}
-
-/* Slightly more vertical spacing between groups */
-.form-group {
-  gap: 10px;
-  margin-bottom: 18px;
-}
-
-/* Adjust goal-card-balance layout to show target and percentage neatly */
-.goal-card-balance {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
-
-/* smaller inline percentage style */
-.goal-percentage-inline {
-  font-size: 0.95rem;
-  opacity: 0.95;
-  font-weight: 600;
-}
-
-.form-group input, 
-.form-group select,
-.form-group textarea {
-  padding: 10px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 16px;
-  transition: border 0.2s ease;
-  height: 42px; /* Consistent height */
-  box-sizing: border-box; /* Include padding in height */
   width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 1rem;
+  background: #f9f9f9;
 }
 
-.form-group input:focus, 
+.form-group input:focus,
 .form-group select:focus,
 .form-group textarea:focus {
-  border-color: #1a2a6c;
   outline: none;
+  border-color: #2a5298;
+  box-shadow: 0 0 0 2px rgba(42,82,152,0.1);
+  background: #fff;
 }
 
 .form-actions {
   display: flex;
-  gap: 10px;
   justify-content: flex-end;
-  margin-top: 20px;
+  gap: 12px;
+  margin-top: 24px;
 }
 
 .cancel-btn {
-  background-color: #f1f1f1;
+  background: #f0f0f0;
   color: #333;
   border: none;
-  border-radius: 6px;
-  padding: 10px 15px;
-  font-size: 16px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.2s;
 }
 
 .cancel-btn:hover {
-  background-color: #e0e0e0;
+  background: #e0e0e0;
 }
 
-.submit-goal-btn, .submit-deposit-btn {
-  background-color: #4CAF50;
+.submit-goal-btn {
+  background: linear-gradient(90deg, #2a5298, #4ecdc4);
   color: white;
   border: none;
-  border-radius: 6px;
-  padding: 10px 15px;
-  font-size: 16px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.submit-goal-btn:hover, .submit-deposit-btn:hover {
-  background-color: #388e3c;
-}
-
-/* Deposit container specific styling */
-.goal-deposit-info {
-  background-color: #f9f9f9;
+  padding: 10px 16px;
   border-radius: 8px;
-  padding: 15px;
-  margin-bottom: 20px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 8px 16px rgba(42,82,152,0.16);
 }
 
-.goal-progress {
-  width: 100%;
-  height: 10px;
-  background-color: #e0e0e0;
-  border-radius: 5px;
-  overflow: hidden;
-  margin: 15px 0 5px;
+.submit-goal-btn:hover {
+  box-shadow: 0 12px 24px rgba(42,82,152,0.24);
+  transform: translateY(-2px);
 }
 
-.goal-progress-fill {
-  height: 100%;
-  background-color: #4CAF50;
-  transition: width 0.3s ease;
+.submit-goal-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
-/* Deposit panel (container) — make container subtle so cards stand out */
+/* Deposit modal */
 .goal-deposit-container {
-  max-width: 980px;
-  margin: 18px auto;
-  padding: 18px;
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
   display: flex;
-  gap: 20px;
-  align-items: stretch;
-  background: linear-gradient(180deg, rgba(240,248,255,0.6), rgba(250,255,250,0.45)); /* soft backdrop */
-  border-radius: 14px;
-  border: 1px solid rgba(20,40,80,0.04);
-  box-shadow: 0 10px 30px rgba(12,28,64,0.06);
+  gap: 24px;
 }
 
-/* Left: big bank-card representing the goal — stronger contrast so "card" is obvious */
 .deposit-card {
   flex: 1;
   border-radius: 16px;
   padding: 20px;
-  color: #fff;
+  color: white;
   position: relative;
-  overflow: hidden;
-  box-shadow: 0 28px 70px rgba(10,30,60,0.18), inset 0 -8px 24px rgba(0,0,0,0.2);
-  min-height: 220px;
+  box-shadow: 0 20px 50px rgba(12, 28, 64, 0.25);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  /* slightly warmer gradient to make it pop */
-  background: linear-gradient(135deg, rgba(26,58,124,0.95), rgba(45,116,149,0.95));
-  border: 1px solid rgba(255,255,255,0.06);
 }
 
-/* deposit-card meta tweaks */
-.deposit-card .deposit-amount { color: #fff; }
-.deposit-card .deposit-meta { color: rgba(255,255,255,0.92); }
-
-/* Right: form card — not plain white, use soft pastel/gradient and darker text */
-.deposit-form-card {
-  flex: 0 0 420px;
-  background: linear-gradient(180deg, #f1fbff, #eefaf6); /* soft, not plain white */
-  border-radius: 14px;
-  padding: 18px;
-  box-shadow: 0 18px 40px rgba(10,30,60,0.08);
-  border: 1px solid rgba(15,40,64,0.06);
+.deposit-card-content {
+  height: 100%;
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
-  color: #0f2940; /* darker text for contrast */
 }
 
-/* form headings inside form card */
-.deposit-form-card h3 { color: #0b3b57; }
+.deposit-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 30px 0 12px 50px;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
 
-/* input controls - adapt to new card background */
-.deposit-form-card .form-group input,
-.deposit-form-card .form-group select,
-.deposit-form-card .form-group textarea {
-  padding: 12px;
+.deposit-amount {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.deposit-progress {
+  background-color: rgba(255, 255, 255, 0.2);
   border-radius: 10px;
-  border: 1px solid rgba(15,40,64,0.08);
-  box-shadow: none;
-  background: linear-gradient(180deg,#ffffff,#f7fbff); /* subtle inner surface */
-  outline: none;
-  font-size: 0.96rem;
-  color: #0f2940;
+  height: 8px;
+  overflow: hidden;
+  margin: 10px 0;
 }
 
-/* placeholder color */
-.deposit-form-card .form-group input::placeholder,
-.deposit-form-card .form-group textarea::placeholder {
-  color: #8aa0b6;
+.deposit-progress-bar {
+  height: 100%;
+  border-radius: 10px;
+  background-color: #4caf50;
+  transition: width 0.5s ease-in-out;
 }
 
-/* suggested amount pills — tuned for pastel form */
-.deposit-form-card .suggested-amounts button {
-  background: linear-gradient(90deg,#ffffff,#f2fbff);
-  border: 1px solid rgba(15,40,64,0.06);
-  color: #0b3b57;
-  padding: 8px 12px;
-  border-radius: 999px;
-  font-weight:800;
-  cursor:pointer;
+.deposit-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
+  font-size: 0.85rem;
+  opacity: 0.85;
 }
-.deposit-form-card .suggested-amounts button:hover {
+
+.deposit-form-card {
+  flex: 1.5;
+  padding: 20px;
+  background: #f9f9f9;
+  border-radius: 12px;
+  border: 1px solid #eee;
+}
+
+.deposit-form-card h3 {
+  margin-top: 0;
+  margin-bottom: 24px;
+  color: #2a5298;
+  font-size: 1.2rem;
+}
+
+.deposit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.suggested-amounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.suggested-amounts button {
+  background: #f0f0f0;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.suggested-amounts button:hover {
+  background: #e0e0e0;
   transform: translateY(-2px);
-  box-shadow: 0 8px 18px rgba(15,40,64,0.06);
 }
 
-/* actions — green primary adapted for pastel theme */
-.deposit-form-card .submit-deposit-btn {
-  background: linear-gradient(90deg,#0fa26a,#16a34a);
-  color:#fff;
-  padding:10px 14px;
-  border-radius:10px;
-  border:none;
-  font-weight:800;
-  box-shadow: 0 10px 26px rgba(16,163,94,0.10);
+.currency-hint {
+  font-size: 0.85rem;
+  color: #666;
+  margin-top: 4px;
 }
 
-/* ensure cancel button remains visible */
-.deposit-form-card .cancel-btn {
-  background: transparent;
-  border: 1px solid rgba(15,40,64,0.06);
-  color: #12324a;
-  padding:10px 12px;
-  border-radius:8px;
+.submit-deposit-btn {
+  background: linear-gradient(90deg, #2a5298, #4ecdc4);
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 8px 16px rgba(42,82,152,0.16);
 }
 
-/* small helper under amount for currency hint */
-.deposit-form-card .currency-hint { color: #446077; }
+.submit-deposit-btn:hover {
+  box-shadow: 0 12px 24px rgba(42,82,152,0.24);
+  transform: translateY(-2px);
+}
 
-/* Responsive: stack on small screens */
+.submit-deposit-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Loading and error states */
+.loading-container,
+.error-container {
+  padding: 24px;
+  text-align: center;
+  background: #f9f9f9;
+  border-radius: 12px;
+  margin: 20px 0;
+}
+
+.error-container button {
+  margin-top: 12px;
+  padding: 8px 16px;
+  background: #2a5298;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.loading-message,
+.error-message {
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.loading-message {
+  background: #f0f8ff;
+  color: #0277bd;
+}
+
+.error-message {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.retry-button {
+  background: #2a5298;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  margin-top: 8px;
+  cursor: pointer;
+}
+
+/* Animations */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(30px);}
+  to { opacity: 1; transform: translateY(0);}
+}
+
+/* Responsive design */
 @media (max-width: 900px) {
+  .goal-form,
   .goal-deposit-container {
     flex-direction: column;
-    padding: 12px;
   }
-  .deposit-form-card { width: 100%; flex: none; }
-  .deposit-card { width: 100%; min-height: 180px; }
-}
-
-/* Responsive tweaks */
-@media (max-width: 720px) {
-  .goal-deposit-container { padding:14px; margin: 12px; }
-  .deposit-form .form-actions { flex-direction:column-reverse; }
-  .submit-deposit-btn, .cancel-btn { width:100%; }
-  .suggested-amounts { justify-content:flex-start; }
-}
-/* Removed stray CSS properties block that was outside of any selector */
-.deposit-form-card .suggested-amounts button:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 18px rgba(15,40,64,0.08);
-}
-
-/* actions */
-.deposit-form-card .form-actions {
-  display:flex;
-  gap:10px;
-  justify-content:flex-end;
-  margin-top:14px;
-}
-.deposit-form-card .submit-deposit-btn {
-  background: linear-gradient(90deg,#0f9d58,#16a34a);
-  color:#fff;
-  padding:10px 14px;
-  border-radius:10px;
-  border:none;
-  font-weight:800;
-  box-shadow: 0 12px 30px rgba(16,163,94,0.14);
-}
-.deposit-form-card .cancel-btn {
-  background: transparent;
-  border: 1px solid rgba(15,40,64,0.06);
-  color: #12324a;
-  padding:10px 12px;
-  border-radius:8px;
-}
-
-/* small helper under amount for currency hint */
-.deposit-form-card .currency-hint {
-  font-size: 0.88rem;
-  color: #5b6b78;
-  margin-top:6px;
-}
-
-/* responsive - stack on small screens */
-@media (max-width: 900px) {
-  .goal-deposit-container {
-    flex-direction: column;
-    padding: 12px;
+  
+  .form-preview {
+    margin-bottom: 24px;
   }
-  .deposit-form-card { width: 100%; flex: none; }
-  .deposit-card { width: 100%; min-height: 180px; }
+  
+  .goal-card-preview,
+  .deposit-card {
+    width: 100%;
+    max-width: 320px;
+  }
 }
 
-/* Responsive tweaks */
-@media (max-width: 720px) {
-  .goal-deposit-container { padding:14px; margin: 12px; }
-  .deposit-form .form-actions { flex-direction:column-reverse; }
-  .submit-deposit-btn, .cancel-btn { width:100%; }
-  .suggested-amounts { justify-content:flex-start; }
+@media (max-width: 600px) {
+  .goals-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .goal-card {
+    max-width: 100%;
+  }
 }

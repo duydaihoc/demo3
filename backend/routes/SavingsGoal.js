@@ -129,7 +129,15 @@ router.post('/:id/deposit', async (req, res) => {
     if (!wallet) return res.status(404).json({ message: 'Ví không tồn tại' });
     if (String(wallet.owner) !== String(userId)) return res.status(403).json({ message: 'Bạn không sở hữu ví này' });
 
+    // Check if wallet has initialBalance field but no balance field
+    // This handles wallets created before balance field was added
+    if (wallet.initialBalance !== undefined && wallet.balance === undefined) {
+      wallet.balance = wallet.initialBalance;
+    }
+
+    // Get the effective balance, prioritizing balance field if it exists
     const walletBalance = typeof wallet.balance === 'number' ? wallet.balance : (wallet.initialBalance || 0);
+    
     if (walletBalance < depositAmount) {
       return res.status(400).json({
         message: 'Số dư trong ví không đủ',
@@ -138,8 +146,21 @@ router.post('/:id/deposit', async (req, res) => {
       });
     }
 
-    // Update wallet then goal sequentially (no transaction)
+    // Update both initialBalance and balance to ensure compatibility with all app parts
     wallet.balance = walletBalance - depositAmount;
+    wallet.initialBalance = walletBalance - depositAmount;
+    
+    // Create a transaction record in wallet's transactions array if it exists
+    if (Array.isArray(wallet.transactions)) {
+      wallet.transactions.push({
+        type: 'expense',
+        amount: depositAmount,
+        date: new Date(),
+        category: 'savings', // You might want a special category for this
+        description: note || `Nạp tiền vào mục tiêu: ${goal.name}`
+      });
+    }
+    
     await wallet.save();
 
     goal.currentAmount = (goal.currentAmount || 0) + depositAmount;
@@ -152,6 +173,19 @@ router.post('/:id/deposit', async (req, res) => {
     if (!goal.walletId) goal.walletId = wallet._id;
     await goal.save();
 
+    // Notify any event listeners about the wallet update
+    try {
+      const io = req.app.get('socketio');
+      if (io) {
+        io.emit('wallet-updated', {
+          walletId: wallet._id,
+          newBalance: wallet.balance
+        });
+      }
+    } catch (socketErr) {
+      console.error('Socket notification error:', socketErr);
+    }
+
     const updatedGoal = await SavingsGoal.findById(goalId).populate('walletId', 'name currency balance').lean();
 
     res.status(200).json({
@@ -160,7 +194,8 @@ router.post('/:id/deposit', async (req, res) => {
       wallet: {
         _id: wallet._id,
         name: wallet.name,
-        balance: wallet.balance
+        balance: wallet.balance,
+        initialBalance: wallet.initialBalance
       }
     });
   } catch (err) {
@@ -187,20 +222,98 @@ router.delete('/:id', async (req, res) => {
     const goal = await SavingsGoal.findOne({ _id: req.params.id, owner: userId });
     if (!goal) return res.status(404).json({ message: 'Không tìm thấy mục tiêu' });
 
-    // If there's an associated wallet, return the money (best-effort)
-    if (goal.walletId && goal.currentAmount > 0) {
-      const wallet = await Wallet.findById(goal.walletId);
-      if (wallet) {
-        wallet.balance = (wallet.balance || 0) + goal.currentAmount;
-        await wallet.save();
+    // Track how much money is returned to each wallet
+    const walletReturns = {};
+    const returnSummary = [];
+    
+    // Process all contributions to return money to original wallets
+    if (Array.isArray(goal.contributions) && goal.contributions.length > 0) {
+      for (const contribution of goal.contributions) {
+        if (contribution.walletId && contribution.amount) {
+          const walletId = String(contribution.walletId);
+          const amount = Number(contribution.amount) || 0;
+          
+          // Add to wallet tracking
+          if (!walletReturns[walletId]) {
+            walletReturns[walletId] = 0;
+          }
+          walletReturns[walletId] += amount;
+        }
+      }
+      
+      // Now update all wallets with their returns
+      for (const [walletId, amount] of Object.entries(walletReturns)) {
+        try {
+          const wallet = await Wallet.findById(walletId);
+          if (wallet && amount > 0) {
+            // Add the money back to the wallet
+            wallet.balance = (wallet.balance || 0) + amount;
+            wallet.initialBalance = (wallet.initialBalance || 0) + amount;
+            
+            // Create a transaction record if applicable
+            if (Array.isArray(wallet.transactions)) {
+              wallet.transactions.push({
+                type: 'income',
+                amount,
+                date: new Date(),
+                category: 'savings_return',
+                description: `Hoàn tiền từ mục tiêu đã xóa: ${goal.name}`
+              });
+            }
+            
+            await wallet.save();
+            
+            // Add to summary for response
+            returnSummary.push({
+              walletId,
+              walletName: wallet.name || 'Unknown',
+              amount
+            });
+          }
+        } catch (walletErr) {
+          console.error(`Error returning funds to wallet ${walletId}:`, walletErr);
+          // Continue with other wallets even if one fails
+        }
+      }
+    } 
+    // For backward compatibility: if no contributions but there's a walletId and currentAmount
+    else if (goal.walletId && goal.currentAmount > 0) {
+      try {
+        const wallet = await Wallet.findById(goal.walletId);
+        if (wallet) {
+          wallet.balance = (wallet.balance || 0) + goal.currentAmount;
+          wallet.initialBalance = (wallet.initialBalance || 0) + goal.currentAmount;
+          
+          if (Array.isArray(wallet.transactions)) {
+            wallet.transactions.push({
+              type: 'income',
+              amount: goal.currentAmount,
+              date: new Date(),
+              category: 'savings_return',
+              description: `Hoàn tiền từ mục tiêu đã xóa: ${goal.name}`
+            });
+          }
+          
+          await wallet.save();
+          
+          returnSummary.push({
+            walletId: String(goal.walletId),
+            walletName: wallet.name || 'Unknown',
+            amount: goal.currentAmount
+          });
+        }
+      } catch (err) {
+        console.error('Error returning funds to wallet:', err);
       }
     }
-
+    
+    // Delete the goal after returning all money
     await SavingsGoal.deleteOne({ _id: goal._id });
 
     res.json({
       message: 'Đã xóa mục tiêu thành công',
-      returnedAmount: goal.currentAmount
+      returnedAmount: goal.currentAmount,
+      walletReturns: returnSummary
     });
   } catch (err) {
     console.error('Error deleting goal:', err);
