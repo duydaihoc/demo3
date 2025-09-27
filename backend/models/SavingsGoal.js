@@ -13,7 +13,7 @@ const ContributionSchema = new Schema({
   walletId: {
     type: Schema.Types.ObjectId,
     ref: 'Wallet',
-    required: true
+    required: false // Changed from true to false to make it optional
   },
   note: {
     type: String,

@@ -550,18 +550,7 @@ function Wallets() {
     }
   };
 
-  // NEW: palette + helpers (place near top inside component)
-  const walletGradients = [
-    'linear-gradient(135deg,#1e3c72,#2a5298)',
-    'linear-gradient(135deg,#2a5298,#4ecdc4)',
-    'linear-gradient(135deg,#283c86,#45a247)',
-    'linear-gradient(135deg,#614385,#516395)',
-    'linear-gradient(135deg,#0f2027,#203a43,#2c5364)',
-    'linear-gradient(135deg,#141e30,#243b55)',
-    'linear-gradient(135deg,#42275a,#734b6d)',
-  ];
-  const shortId = id => (id ? id.slice(-6).toUpperCase() : '------');
-
+  // Thêm confirm toast rendering gần Notification Toast
   return (
     <div className="wallets-container">
       <div className="wallets-title">Ví</div>
@@ -572,81 +561,48 @@ function Wallets() {
             <div className="wallet-note">Chưa có ví nào</div>
           </div>
         ) : (
-          wallets.map((wallet, idx) => {
-            const gradient = walletGradients[idx % walletGradients.length];
-            return (
-              <div
-                key={wallet._id}
-                className="wallet-card wallet-card-v2"
-                style={{ '--card-grad': gradient }}
-              >
-                <div className="wc-bg-shape wc-bg-a" />
-                <div className="wc-bg-shape wc-bg-b" />
-
-                <div className="wc-top">
-                  <span className="wc-label">WALLET</span>
-                  <span className="wc-id">#{shortId(wallet._id)}</span>
-                </div>
-
-                <div className="wc-balance" title="Số dư">
-                  {formatCurrency(wallet.initialBalance, wallet.currency)}
-                </div>
-
-                <div className="wc-name-row">
-                  <div className="wc-name" title={wallet.name}>{wallet.name}</div>
-                  <div className="wc-currency">{wallet.currency}</div>
-                </div>
-
-                {wallet.categories && wallet.categories.length > 0 && (
-                  <div className="wc-cats" title={`${wallet.categories.length} danh mục`}>
-                    {wallet.categories.slice(0,5).map(cat => (
-                      <span key={cat._id} className="wc-cat-icon" aria-label={cat.name} title={cat.name}>
-                        {cat.icon}
-                      </span>
-                    ))}
-                    {wallet.categories.length > 5 && (
-                      <span className="wc-cat-more">+{wallet.categories.length - 5}</span>
-                    )}
-                  </div>
-                )}
-
-                <div className="wc-actions">
-                  <button
-                    className="wc-btn"
-                    onClick={() => handleOpenDetails(wallet._id)}
-                    aria-label="Chi tiết ví"
-                  >
-                    Chi tiết
-                  </button>
-                </div>
+          wallets.map(wallet => (
+            <div key={wallet._id} className="wallet-card">
+              <div className="wallet-name">{wallet.name}</div>
+              <div className="wallet-balance">
+                {formatCurrency(wallet.initialBalance, wallet.currency)}
               </div>
-            );
-          })
+
+              {/* Hiển thị các icon danh mục đã gán (nhiều nhất 4, còn lại +n) */}
+              {wallet.categories && wallet.categories.length > 0 && (
+                <div className="wallet-cat-list" title={`${wallet.categories.length} danh mục`}>
+                  {wallet.categories.slice(0,4).map(cat => (
+                    <span
+                      key={cat._id}
+                      className="wallet-cat-icon"
+                      title={cat.name}            // hiển thị tên danh mục khi hover
+                      aria-label={cat.name}       // accessibility
+                      role="img"
+                    >
+                      {cat.icon}
+                    </span>
+                  ))}
+                  {wallet.categories.length > 4 && (
+                    <span className="wallet-cat-more">+{wallet.categories.length - 4}</span>
+                  )}
+                </div>
+              )}
+
+              <button className="wallet-action-btn" onClick={() => handleOpenDetails(wallet._id)}>Chi tiết</button>
+            </div>
+          ))
         )}
-        <div className="wallet-card wallet-card-v2 wallet-add-card-v2">
-          <button className="wc-add-btn" onClick={handleAddWalletClick}>+ Thêm ví mới</button>
-          <div className="wc-add-hint">Tạo và gán danh mục nhanh</div>
+        <div className="wallet-card wallet-add-card">
+          <button className="wallet-add-btn" onClick={handleAddWalletClick}>
+            + Thêm ví mới
+          </button>
         </div>
       </div>
-
       {showCreateModal && (
         <div className="wallet-modal-overlay">
-          <div
-            className="wallet-card wallet-card-v2 create-wallet-card"
-            style={{ '--card-grad': 'linear-gradient(135deg,#2a5298,#4ecdc4)' }}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Tạo ví mới"
-          >
-            <div className="wc-bg-shape wc-bg-a" />
-            <div className="wc-bg-shape wc-bg-b" />
-
-            <div className="wc-top" style={{ alignItems: 'center', gap: 8 }}>
-              <span className="wc-label">TẠO VÍ MỚI</span>
-              <button type="button" className="detail-close" onClick={handleCloseModal} aria-label="Đóng">✕</button>
-            </div>
-
-            <form className="create-wallet-form" onSubmit={handleSubmit} style={{ marginTop: 8 }}>
+          <div className="wallet-modal">
+            <div className="wallet-modal-title">Tạo ví mới</div>
+            <form className="wallet-modal-form" onSubmit={handleSubmit}>
               <div className="wallet-modal-field">
                 <label>Tên ví:</label>
                 <input
@@ -654,7 +610,7 @@ function Wallets() {
                   name="name"
                   value={formData.name}
                   onChange={handleInputChange}
-                  placeholder="Ví chi tiêu cá nhân"
+                  placeholder="Nhập tên ví"
                   required
                 />
               </div>
@@ -677,18 +633,17 @@ function Wallets() {
                   name="initialBalance"
                   value={formData.initialBalance}
                   onChange={handleInputChange}
-                  placeholder="0"
+                  placeholder="Nhập số tiền"
                   min="0"
                 />
               </div>
-
-              <div className="wallet-modal-actions" style={{ marginTop: 6 }}>
+              <div className="wallet-modal-actions">
                 <button
                   type="submit"
                   className="wallet-modal-submit-btn"
                   disabled={loading}
                 >
-                  {loading ? 'Đang tạo...' : 'Tạo ví'}
+                  {loading ? 'Đang tạo...' : 'Tạo'}
                 </button>
                 <button
                   type="button"
@@ -696,7 +651,7 @@ function Wallets() {
                   onClick={handleCloseModal}
                   disabled={loading}
                 >
-                  Hủy
+                  Đóng
                 </button>
               </div>
             </form>

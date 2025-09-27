@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const SavingsGoal = require('../models/SavingsGoal');
+const Wallet = require('../models/Wallet');
 
 // lightweight JWT payload parser (no verification) to extract user id if token provided
 function parseJwt(token) {
@@ -23,120 +24,228 @@ function getUserIdFromHeader(req) {
   return p && (p.id || p._id || p.sub) ? (p.id || p._id || p.sub) : null;
 }
 
-// GET /api/savings
-// optional query: owner=<id> to filter; otherwise returns goals for authenticated user if token present; admin/all if none
+// GET /api/savings - list goals for authenticated user
 router.get('/', async (req, res) => {
   try {
-    const ownerQuery = req.query.owner;
-    const authOwner = getUserIdFromHeader(req);
-    const filter = {};
+    const userId = getUserIdFromHeader(req);
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
 
-    if (ownerQuery) filter.owner = ownerQuery;
-    else if (authOwner) filter.owner = authOwner;
-    // else no filter -> return all (could be restricted later)
+    const goals = await SavingsGoal.find({ owner: userId })
+      .populate('walletId', 'name currency balance')
+      .sort({ createdAt: -1 })
+      .lean();
 
-    const goals = await SavingsGoal.find(filter).sort({ createdAt: -1 }).populate('walletId', 'name currency').lean();
     res.json(goals);
   } catch (err) {
-    console.error('GET /api/savings error', err);
-    res.status(500).json({ message: 'Lỗi khi tải mục tiêu tiết kiệm', error: err.message });
+    console.error('Error fetching goals:', err);
+    res.status(500).json({
+      message: 'Lỗi khi tải danh sách mục tiêu',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
-// POST /api/savings
+// POST /api/savings - create a new savings goal (no transactions)
 router.post('/', async (req, res) => {
   try {
     const authOwner = getUserIdFromHeader(req);
-    const owner = authOwner || req.body.owner;
-    if (!owner) return res.status(400).json({ message: 'Owner (user id) is required' });
+    if (!authOwner) return res.status(401).json({ message: 'Chưa đăng nhập' });
 
-    const { name, targetAmount, currentAmount = 0, startDate, targetDate, walletId } = req.body;
-    if (!name || !targetAmount) return res.status(400).json({ message: 'name and targetAmount are required' });
+    const { name, targetAmount, targetDate, color } = req.body;
+
+    if (!name || !name.trim()) return res.status(400).json({ message: 'Tên mục tiêu không được để trống' });
+    const amount = Number(targetAmount);
+    if (isNaN(amount) || amount <= 0) return res.status(400).json({ message: 'Số tiền mục tiêu phải lớn hơn 0' });
+    if (!targetDate || isNaN(new Date(targetDate).getTime())) return res.status(400).json({ message: 'Ngày đạt mục tiêu không hợp lệ' });
 
     const newGoal = new SavingsGoal({
-      name: String(name).trim(),
-      targetAmount: Number(targetAmount),
-      currentAmount: Number(currentAmount) || 0,
-      startDate: startDate ? new Date(startDate) : undefined,
-      targetDate: targetDate ? new Date(targetDate) : undefined,
-      owner,
-      walletId: walletId || undefined,
+      name: name.trim(),
+      targetAmount: amount,
+      currentAmount: 0,
+      startDate: new Date(),
+      targetDate: new Date(targetDate),
+      owner: authOwner,
+      color: color || '#4CAF50',
       contributions: []
     });
 
     const saved = await newGoal.save();
-    res.status(201).json(saved);
+    const populated = await SavingsGoal.findById(saved._id).populate('walletId', 'name currency').lean();
+    res.status(201).json(populated);
   } catch (err) {
-    console.error('POST /api/savings error', err);
-    res.status(500).json({ message: 'Lỗi khi tạo mục tiêu', error: err.message });
+    console.error('Error creating goal:', err);
+    if (err.name === 'ValidationError') {
+      return res.status(400).json({
+        message: 'Dữ liệu không hợp lệ',
+        errors: Object.values(err.errors).map(e => e.message)
+      });
+    }
+    res.status(500).json({
+      message: 'Có lỗi xảy ra khi tạo mục tiêu',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
-// GET /api/savings/:id
+// GET /api/savings/:id - get a single goal (owner only)
 router.get('/:id', async (req, res) => {
   try {
-    const goal = await SavingsGoal.findById(req.params.id).populate('walletId', 'name currency').lean();
-    if (!goal) return res.status(404).json({ message: 'Mục tiêu không tồn tại' });
+    const userId = getUserIdFromHeader(req);
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
+
+    const goal = await SavingsGoal.findOne({ _id: req.params.id, owner: userId })
+      .populate('walletId', 'name currency balance')
+      .lean();
+
+    if (!goal) return res.status(404).json({ message: 'Không tìm thấy mục tiêu' });
     res.json(goal);
   } catch (err) {
-    console.error('GET /api/savings/:id error', err);
-    res.status(500).json({ message: 'Lỗi khi tải mục tiêu', error: err.message });
+    console.error('Error fetching goal:', err);
+    res.status(500).json({
+      message: 'Lỗi khi tải thông tin mục tiêu',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
-// PUT /api/savings/:id  (replace/update)
-router.put('/:id', async (req, res) => {
+// POST /api/savings/:id/deposit - deposit into a goal from a wallet (non-transactional)
+router.post('/:id/deposit', async (req, res) => {
   try {
-    const updates = { ...req.body };
-    if (updates.startDate) updates.startDate = new Date(updates.startDate);
-    if (updates.targetDate) updates.targetDate = new Date(updates.targetDate);
-    if (typeof updates.targetAmount !== 'undefined') updates.targetAmount = Number(updates.targetAmount);
-    if (typeof updates.currentAmount !== 'undefined') updates.currentAmount = Number(updates.currentAmount);
+    const userId = getUserIdFromHeader(req);
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
 
-    const goal = await SavingsGoal.findByIdAndUpdate(req.params.id, updates, { new: true });
+    const { amount, walletId, note } = req.body;
+    const goalId = req.params.id;
+
+    if (!walletId) return res.status(400).json({ message: 'Vui lòng chọn ví' });
+    const depositAmount = Number(amount);
+    if (isNaN(depositAmount) || depositAmount <= 0) return res.status(400).json({ message: 'Số tiền không hợp lệ' });
+
+    const goal = await SavingsGoal.findById(goalId);
     if (!goal) return res.status(404).json({ message: 'Mục tiêu không tồn tại' });
-    res.json(goal);
+    if (String(goal.owner) !== String(userId)) return res.status(403).json({ message: 'Không có quyền thực hiện thao tác này' });
+
+    const wallet = await Wallet.findById(walletId);
+    if (!wallet) return res.status(404).json({ message: 'Ví không tồn tại' });
+    if (String(wallet.owner) !== String(userId)) return res.status(403).json({ message: 'Bạn không sở hữu ví này' });
+
+    const walletBalance = typeof wallet.balance === 'number' ? wallet.balance : (wallet.initialBalance || 0);
+    if (walletBalance < depositAmount) {
+      return res.status(400).json({
+        message: 'Số dư trong ví không đủ',
+        currentBalance: walletBalance,
+        requiredAmount: depositAmount
+      });
+    }
+
+    // Update wallet then goal sequentially (no transaction)
+    wallet.balance = walletBalance - depositAmount;
+    await wallet.save();
+
+    goal.currentAmount = (goal.currentAmount || 0) + depositAmount;
+    goal.contributions.push({
+      amount: depositAmount,
+      date: new Date(),
+      walletId: wallet._id,
+      note: note || `Nạp tiền vào mục tiêu ${goal.name}`
+    });
+    if (!goal.walletId) goal.walletId = wallet._id;
+    await goal.save();
+
+    const updatedGoal = await SavingsGoal.findById(goalId).populate('walletId', 'name currency balance').lean();
+
+    res.status(200).json({
+      message: 'Nạp tiền thành công',
+      goal: updatedGoal,
+      wallet: {
+        _id: wallet._id,
+        name: wallet.name,
+        balance: wallet.balance
+      }
+    });
   } catch (err) {
-    console.error('PUT /api/savings/:id error', err);
-    res.status(500).json({ message: 'Lỗi khi cập nhật mục tiêu', error: err.message });
+    console.error('Deposit error:', err);
+    if (err.name === 'ValidationError') {
+      return res.status(400).json({
+        message: 'Dữ liệu không hợp lệ',
+        errors: Object.values(err.errors).map(e => e.message)
+      });
+    }
+    res.status(500).json({
+      message: 'Có lỗi xảy ra khi nạp tiền',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
-// DELETE /api/savings/:id
+// DELETE /api/savings/:id - delete a goal (non-transactional)
 router.delete('/:id', async (req, res) => {
   try {
-    const deleted = await SavingsGoal.findByIdAndDelete(req.params.id);
-    if (!deleted) return res.status(404).json({ message: 'Mục tiêu không tồn tại' });
-    res.json({ message: 'Đã xóa mục tiêu', id: deleted._id });
+    const userId = getUserIdFromHeader(req);
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
+
+    const goal = await SavingsGoal.findOne({ _id: req.params.id, owner: userId });
+    if (!goal) return res.status(404).json({ message: 'Không tìm thấy mục tiêu' });
+
+    // If there's an associated wallet, return the money (best-effort)
+    if (goal.walletId && goal.currentAmount > 0) {
+      const wallet = await Wallet.findById(goal.walletId);
+      if (wallet) {
+        wallet.balance = (wallet.balance || 0) + goal.currentAmount;
+        await wallet.save();
+      }
+    }
+
+    await SavingsGoal.deleteOne({ _id: goal._id });
+
+    res.json({
+      message: 'Đã xóa mục tiêu thành công',
+      returnedAmount: goal.currentAmount
+    });
   } catch (err) {
-    console.error('DELETE /api/savings/:id error', err);
-    res.status(500).json({ message: 'Lỗi khi xóa mục tiêu', error: err.message });
+    console.error('Error deleting goal:', err);
+    res.status(500).json({
+      message: 'Lỗi khi xóa mục tiêu',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
-// POST /api/savings/:id/contribute  -> add contribution and update currentAmount
-router.post('/:id/contribute', async (req, res) => {
+// PUT /api/savings/:id - update goal (owner only)
+router.put('/:id', async (req, res) => {
   try {
-    const { amount, walletId, note } = req.body;
-    const num = Number(amount || 0);
-    if (!num || num <= 0) return res.status(400).json({ message: 'Amount phải lớn hơn 0' });
+    const userId = getUserIdFromHeader(req);
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
+
+    const { name, targetAmount, targetDate, color } = req.body;
+    const updates = {};
+    if (typeof name !== 'undefined') updates.name = String(name).trim();
+    if (typeof targetAmount !== 'undefined') {
+      const amt = Number(targetAmount);
+      if (isNaN(amt) || amt <= 0) return res.status(400).json({ message: 'Số tiền mục tiêu không hợp lệ' });
+      updates.targetAmount = amt;
+    }
+    if (typeof targetDate !== 'undefined') {
+      if (!targetDate || isNaN(new Date(targetDate).getTime())) return res.status(400).json({ message: 'Ngày đạt mục tiêu không hợp lệ' });
+      updates.targetDate = new Date(targetDate);
+    }
+    if (typeof color !== 'undefined') updates.color = color;
 
     const goal = await SavingsGoal.findById(req.params.id);
     if (!goal) return res.status(404).json({ message: 'Mục tiêu không tồn tại' });
+    if (String(goal.owner) !== String(userId)) return res.status(403).json({ message: 'Không có quyền cập nhật mục tiêu này' });
 
-    const contribution = {
-      amount: num,
-      date: new Date(),
-      walletId: walletId || goal.walletId || undefined,
-      note: note || ''
-    };
-    goal.contributions.push(contribution);
-    goal.currentAmount = (Number(goal.currentAmount) || 0) + num;
-    await goal.save();
-    res.status(201).json(goal);
+    // apply updates
+    Object.assign(goal, updates);
+    const saved = await goal.save();
+    const populated = await SavingsGoal.findById(saved._id).populate('walletId', 'name currency balance').lean();
+    res.json(populated);
   } catch (err) {
-    console.error('POST /api/savings/:id/contribute error', err);
-    res.status(500).json({ message: 'Lỗi khi đóng góp vào mục tiêu', error: err.message });
+    console.error('Update goal error:', err);
+    res.status(500).json({
+      message: 'Lỗi khi cập nhật mục tiêu',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 
