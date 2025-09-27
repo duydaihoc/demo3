@@ -557,45 +557,63 @@ function Wallets() {
       <div className="wallets-sub">Quản lý các ví của bạn</div>
       <div className="wallets-list">
         {wallets.length === 0 ? (
-          <div className="wallet-card wallet-empty-card">
+          <div className="wallet-card-v2 wallet-empty-card">
             <div className="wallet-note">Chưa có ví nào</div>
           </div>
         ) : (
           wallets.map(wallet => (
-            <div key={wallet._id} className="wallet-card">
-              <div className="wallet-name">{wallet.name}</div>
-              <div className="wallet-balance">
+            <div key={wallet._id} className="wallet-card-v2">
+              {/* Decorative blurred shapes */}
+              <div className="wc-bg-shape wc-bg-a"></div>
+              <div className="wc-bg-shape wc-bg-b"></div>
+              
+              {/* Top row */}
+              <div className="wc-top">
+                <div className="wc-label">Ví</div>
+                <div className="wc-id">{wallet._id.substring(wallet._id.length - 6)}</div>
+              </div>
+              
+              {/* Balance */}
+              <div className="wc-balance">
                 {formatCurrency(wallet.initialBalance, wallet.currency)}
               </div>
-
-              {/* Hiển thị các icon danh mục đã gán (nhiều nhất 4, còn lại +n) */}
+              
+              {/* Name + currency */}
+              <div className="wc-name-row">
+                <div className="wc-name">{wallet.name}</div>
+                <div className="wc-currency">{wallet.currency}</div>
+              </div>
+              
+              {/* Categories */}
               {wallet.categories && wallet.categories.length > 0 && (
-                <div className="wallet-cat-list" title={`${wallet.categories.length} danh mục`}>
+                <div className="wc-cats">
                   {wallet.categories.slice(0,4).map(cat => (
                     <span
                       key={cat._id}
-                      className="wallet-cat-icon"
-                      title={cat.name}            // hiển thị tên danh mục khi hover
-                      aria-label={cat.name}       // accessibility
+                      className="wc-cat-icon"
+                      title={cat.name}
+                      aria-label={cat.name}
                       role="img"
                     >
                       {cat.icon}
                     </span>
                   ))}
                   {wallet.categories.length > 4 && (
-                    <span className="wallet-cat-more">+{wallet.categories.length - 4}</span>
+                    <span className="wc-cat-more">+{wallet.categories.length - 4}</span>
                   )}
                 </div>
               )}
-
-              <button className="wallet-action-btn" onClick={() => handleOpenDetails(wallet._id)}>Chi tiết</button>
+              
+              {/* Actions */}
+              <div className="wc-actions">
+                <button className="wc-btn" onClick={() => handleOpenDetails(wallet._id)}>Chi tiết</button>
+              </div>
             </div>
           ))
         )}
-        <div className="wallet-card wallet-add-card">
-          <button className="wallet-add-btn" onClick={handleAddWalletClick}>
-            + Thêm ví mới
-          </button>
+        <div className="wallet-card-v2 wallet-add-card-v2" onClick={handleAddWalletClick}>
+          <div className="wc-add-btn">+ Thêm ví mới</div>
+          <div className="wc-add-hint">Tạo ví và theo dõi chi tiêu</div>
         </div>
       </div>
       {showCreateModal && (
