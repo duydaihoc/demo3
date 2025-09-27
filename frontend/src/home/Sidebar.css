@@ -38,6 +38,7 @@
   margin-bottom: 20px;
 }
 
+/* Links (existing) */
 .sidebar-menu a {
   display: block;
   width: calc(100% - 40px); /* Giới hạn chiều rộng bên trong sidebar */
@@ -81,4 +82,95 @@
 @keyframes underlineSlide {
   from { width: 0; opacity: 0; }
   to { width: 100%; opacity: 1; }
+}
+
+/* New: settings toggle button (match link appearance) */
+.sidebar-settings-btn {
+  display: block;
+  width: calc(100% - 40px);
+  margin: 0 auto;
+  padding: 12px 20px;
+  color: #fff;
+  background: transparent;
+  border: none;
+  text-align: left;
+  font-size: 1.1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s;
+  box-sizing: border-box;
+}
+
+/* caret */
+.sidebar-settings-btn .caret {
+  float: right;
+  opacity: 0.9;
+  margin-left: 6px;
+}
+
+/* hover / active */
+.sidebar-settings-btn:hover {
+  background: rgba(255,255,255,0.12);
+  transform: translateX(8px);
+}
+.sidebar-settings-btn.active {
+  background: rgba(255,255,255,0.18);
+  color: #4ecdc4;
+  font-weight: bold;
+}
+.sidebar-settings-btn.active::after {
+  content: '';
+  display:block;
+  position:absolute;
+  left:10px;
+  right:10px;
+  bottom:8px;
+  height:3px;
+  background: linear-gradient(90deg, #4ecdc4, #2a5298);
+  border-radius:2px;
+  box-shadow:0 2px 8px rgba(42,82,152,0.15);
+}
+
+/* Submenu styling */
+.sidebar-submenu {
+  list-style: disc;
+  padding-left: 44px; /* indent for bullets */
+  margin: 8px 0 0 0;
+  color: #fff;
+  font-size: 0.98rem;
+}
+
+.sidebar-submenu li {
+  margin: 8px 0;
+  position: relative;
+}
+
+/* Submenu links match main links but lighter */
+.sidebar-submenu a {
+  color: #fff;
+  text-decoration: none;
+  padding: 6px 10px;
+  display: inline-block;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sidebar-submenu a:hover {
+  background: rgba(255,255,255,0.06);
+  color: #dff7f0;
+  transform: translateX(6px);
+}
+
+/* Submenu small bullet color tweak */
+.sidebar-submenu li::marker {
+  color: rgba(255,255,255,0.9);
+  font-size: 0.7rem;
+}
+
+/* Responsive: make sidebar scrollable if content grows */
+@media (max-height: 700px) {
+  .sidebar {
+    overflow-y: auto;
+    padding-bottom: 20px;
+  }
 }

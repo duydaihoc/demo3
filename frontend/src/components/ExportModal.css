@@ -213,6 +213,43 @@
   cursor: not-allowed;
 }
 
+/* Add these styles to support the new data summary section */
+
+.export-data-summary {
+  margin: 16px 0;
+  padding: 12px;
+  background: rgba(42, 82, 152, 0.05);
+  border-radius: 8px;
+  border-left: 3px solid #2a5298;
+}
+
+.export-data-summary h4 {
+  margin: 0 0 8px 0;
+  color: #2a5298;
+  font-size: 14px;
+}
+
+.export-data-list {
+  margin: 0;
+  padding: 0 0 0 16px;
+  list-style-type: none;
+}
+
+.export-data-list li {
+  position: relative;
+  padding: 4px 0;
+  font-size: 13px;
+  color: #15304a;
+}
+
+.export-data-list li:before {
+  content: "✓";
+  color: #4ecdc4;
+  position: absolute;
+  left: -16px;
+  font-weight: bold;
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }

@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import './Sidebar.css';
 
 function Sidebar({ userName = "Tên người dùng" }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const settingsRef = useRef(null);
 
   const handleLogout = (e) => {
     e.preventDefault();
@@ -12,6 +14,17 @@ function Sidebar({ userName = "Tên người dùng" }) {
     localStorage.removeItem('userName');
     navigate('/login');
   };
+
+  // close submenu when clicking outside
+  useEffect(() => {
+    const onDocClick = (e) => {
+      if (settingsRef.current && !settingsRef.current.contains(e.target)) {
+        setShowSettingsMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
 
   return (
     <nav className="sidebar">
@@ -35,14 +48,30 @@ function Sidebar({ userName = "Tên người dùng" }) {
             Giao dịch
           </Link>
         </li>
-        <li>
-          <Link
-            to="/settings"
-            className={location.pathname === "/settings" ? "active" : ""}
+        <li ref={settingsRef}>
+          {/* Make "Cài đặt" a toggle (no immediate navigation) */}
+          <button
+            type="button"
+            className={`sidebar-settings-btn ${ (location.pathname === "/settings" && !location.search.includes('tab=categories')) || showSettingsMenu ? "active" : "" }`}
+            onClick={() => setShowSettingsMenu(prev => !prev)}
+            aria-expanded={showSettingsMenu}
+            aria-haspopup="menu"
           >
-            Cài đặt
-          </Link>
+            Cài đặt <span className="caret">▾</span>
+          </button>
+
+          {showSettingsMenu && (
+            <ul className="sidebar-submenu" role="menu">
+              <li role="menuitem">
+                <Link to="/settings" onClick={() => setShowSettingsMenu(false)}>Cài đặt người dùng</Link>
+              </li>
+              <li role="menuitem">
+                <Link to="/settings?tab=categories" onClick={() => setShowSettingsMenu(false)}>Cài đặt danh mục</Link>
+              </li>
+            </ul>
+          )}
         </li>
+
         <li>
           {/* Sử dụng Link để giữ nguyên CSS, xử lý logout bằng onClick */}
           <Link
