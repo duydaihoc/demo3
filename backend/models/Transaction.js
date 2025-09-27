@@ -9,20 +9,25 @@ const TransactionSchema = new Schema({
   },
   category: {
     type: Schema.Types.ObjectId,
-    ref: 'Category',
-    required: true
+    ref: 'Category'
   },
   type: {
     type: String,
-    enum: ['expense', 'income'],
+    enum: ['income', 'expense'],
     required: true
   },
   amount: {
     type: Number,
-    required: true
+    required: true,
+    default: 0
+  },
+  currency: {
+    type: String,
+    default: 'VND'
   },
   title: {
     type: String,
+    trim: true,
     default: ''
   },
   description: {
@@ -37,10 +42,20 @@ const TransactionSchema = new Schema({
     type: Schema.Types.ObjectId,
     ref: 'User'
   },
+  metadata: {
+    type: Schema.Types.Mixed
+  },
+  note: {
+    type: String,
+    default: ''
+  },
   createdAt: {
     type: Date,
     default: Date.now
   }
 });
+
+// Add an index to speed common queries (wallet + date)
+TransactionSchema.index({ wallet: 1, date: -1 });
 
 module.exports = mongoose.model('Transaction', TransactionSchema);

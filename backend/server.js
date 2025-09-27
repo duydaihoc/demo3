@@ -8,12 +8,14 @@ const Category = require('./models/Category');
 const Income = require('./models/Income');
 const Wallet = require('./models/Wallet'); // Import Wallet model
 const Transaction = require('./models/Transaction'); // Import Transaction model
+const SavingsGoal = require('./models/SavingsGoal'); // Import SavingsGoal model
 const cors = require('cors'); // Add CORS package
 const authRoutes = require('./routes/auth'); // Add auth routes import
 const adminRoutes = require('./routes/admin'); // Import admin routes
 const walletRoutes = require('./routes/wallet'); // Import wallet routes
 const transactionRoutes = require('./routes/transactions'); // Import transaction routes
 const categoryRoutes = require('./routes/Category'); // Import category routes
+const savingsRoutes = require('./routes/SavingsGoal'); // Import savings goal routes
 
 dotenv.config();
 
@@ -179,6 +181,22 @@ app.get('/create-sample-data', async (req, res) => {
       console.warn('Không thể tạo transaction mẫu:', txErr.message);
     }
     
+    // Create sample SavingsGoal linked to user and wallet (if possible)
+    try {
+      const goal = new SavingsGoal({
+        name: 'Quỹ nghỉ dưỡng',
+        targetAmount: 5000000,
+        currentAmount: 1000000,
+        owner: user._id,
+        walletId: wallet._id,
+        contributions: [{ amount: 1000000, walletId: wallet._id, note: 'Khởi tạo' }]
+      });
+      await goal.save();
+      console.log('Created sample savings goal');
+    } catch (sgErr) {
+      console.warn('Không thể tạo savings goal mẫu:', sgErr.message);
+    }
+
     res.status(201).json({ message: 'Sample data created successfully' });
   } catch (error) {
     res.status(500).json({ message: 'Failed to create sample data', error: error.message });
@@ -195,6 +213,8 @@ app.use('/api/wallets', walletRoutes);
 app.use('/api/transactions', transactionRoutes);
 // Mount category routes
 app.use('/api/categories', categoryRoutes);
+// Mount savings goal routes
+app.use('/api/savings', savingsRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
