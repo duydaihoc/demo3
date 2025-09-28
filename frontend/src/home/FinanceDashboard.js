@@ -1,12 +1,33 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import './FinanceDashboard.css';
 // Import Chart.js
-import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title } from 'chart.js';
-import { Pie, Bar } from 'react-chartjs-2';
+import { 
+  Chart as ChartJS, 
+  ArcElement, 
+  Tooltip, 
+  Legend, 
+  CategoryScale, 
+  LinearScale, 
+  BarElement, 
+  Title,
+  LineElement,
+  PointElement 
+} from 'chart.js';
+import { Pie, Bar, Line } from 'react-chartjs-2';
 import ExportModal from '../components/ExportModal';
 
 // Register Chart.js components
-ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
+ChartJS.register(
+  ArcElement, 
+  Tooltip, 
+  Legend, 
+  CategoryScale, 
+  LinearScale, 
+  BarElement, 
+  Title,
+  LineElement,
+  PointElement
+);
 
 export default function FinanceDashboard() {
   const [loading, setLoading] = useState(true);
@@ -29,6 +50,8 @@ export default function FinanceDashboard() {
   const [pieChartType, setPieChartType] = useState('expense'); // 'expense' or 'income'
   // Add state for export modal
   const [showExportModal, setShowExportModal] = useState(false);
+  // Add new state for stock-like chart data
+  const [stockChartData, setStockChartData] = useState(null);
   
   // Format currency with appropriate locale
   const formatCurrency = (amount, currency) => {
@@ -40,7 +63,7 @@ export default function FinanceDashboard() {
   };
 
   // Function to prepare chart data based on transactions and selected wallet
-  const prepareChartData = useCallback((transactions, selectedWalletId = 'all') => {
+  const prepareChartData = useCallback((transactions, selectedWalletId = 'all', chartType = 'expense') => {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
@@ -150,10 +173,10 @@ export default function FinanceDashboard() {
     const expenseCats = Object.values(expensesByCategory).sort((a, b) => b.total - a.total);
     const incomeCats = Object.values(incomesByCategory).sort((a, b) => b.total - a.total);
       
-    // Prepare pie chart data based on currently selected type
+    // Prepare pie chart data based on currently selected type passed as parameter
     let pieData;
     
-    if (pieChartType === 'expense') {
+    if (chartType === 'expense') {
       pieData = {
         labels: expenseCats.map(cat => cat.name),
         datasets: [{
@@ -180,7 +203,93 @@ export default function FinanceDashboard() {
     }
     
     return { barData, pieData };
-  }, [pieChartType]); // Add pieChartType as a dependency
+  }, []);
+
+  // New function to prepare stock-like chart data
+  const prepareStockChartData = useCallback((transactions, walletsList) => {
+    // Get the last 30 days for the chart
+    const dates = [];
+    const now = new Date();
+    for (let i = 30; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(now.getDate() - i);
+      dates.push(date);
+    }
+    
+    // Format dates for display
+    const dateLabels = dates.map(date => 
+      date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })
+    );
+    
+    // Get initial balances from wallets
+    const initialBalances = {};
+    let totalInitialBalance = 0;
+    
+    walletsList.forEach(wallet => {
+      const initialBalance = Number(wallet.initialBalance) || 0;
+      initialBalances[wallet._id] = initialBalance;
+      totalInitialBalance += initialBalance;
+    });
+    
+    if (totalInitialBalance === 0) totalInitialBalance = 1; // Avoid division by zero
+    
+    // Calculate daily balances
+    const dailyBalances = dates.map(date => {
+      const dayStart = new Date(date);
+      dayStart.setHours(0, 0, 0, 0);
+      
+      const dayEnd = new Date(date);
+      dayEnd.setHours(23, 59, 59, 999);
+      
+      // Calculate balance at this date
+      let balance = totalInitialBalance;
+      
+      transactions.forEach(tx => {
+        const txDate = tx.date ? new Date(tx.date) : null;
+        if (!txDate || txDate > dayEnd) return;
+        
+        const amount = Number(tx.amount) || 0;
+        if (txDate <= dayEnd) {
+          if (tx.type === 'income') {
+            balance += amount;
+          } else {
+            balance -= amount;
+          }
+        }
+      });
+      
+      // Calculate percentage compared to initial balance
+      const percentage = (balance / totalInitialBalance * 100).toFixed(2);
+      return percentage;
+    });
+    
+    // Create gradient colors based on performance
+    const performanceChange = dailyBalances[dailyBalances.length - 1] - 100;
+    const gradientColor = performanceChange >= 0 ? 
+      'rgba(46, 204, 113, 0.5)' : 
+      'rgba(231, 76, 60, 0.5)';
+    const borderColor = performanceChange >= 0 ? 
+      'rgba(46, 204, 113, 1)' : 
+      'rgba(231, 76, 60, 1)';
+    
+    return {
+      labels: dateLabels,
+      datasets: [
+        {
+          label: 'Số dư (% so với ban đầu)',
+          data: dailyBalances,
+          borderColor: borderColor,
+          backgroundColor: gradientColor,
+          fill: true,
+          tension: 0.2,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          pointHitRadius: 20,
+        }
+      ],
+      performanceChange
+    };
+  }, []);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -272,9 +381,13 @@ export default function FinanceDashboard() {
         setIncomeByCurrency(inc);
         setExpenseByCurrency(exp);
         
-        // Prepare initial chart data
-        const chartData = prepareChartData(txs);
+        // Prepare initial chart data - pass pieChartType as parameter
+        const chartData = prepareChartData(txs, 'all', pieChartType);
         setChartData(chartData);
+        
+        // Prepare stock chart data
+        const stockData = prepareStockChartData(txs, wallets);
+        setStockChartData(stockData);
       } catch (err) {
         if (err.name === 'AbortError') return;
         console.error(err);
@@ -286,15 +399,21 @@ export default function FinanceDashboard() {
 
     fetchData();
     return () => { ctrl.abort(); };
-  }, [prepareChartData]); // Add prepareChartData as dependency
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prepareChartData, prepareStockChartData]);
 
   // Update chart when wallet selection changes or pie chart type changes
   useEffect(() => {
     if (allTransactionsRef.current.length) {
-      const chartData = prepareChartData(allTransactionsRef.current, selectedWallet);
+      // Pass pieChartType as parameter
+      const chartData = prepareChartData(allTransactionsRef.current, selectedWallet, pieChartType);
       setChartData(chartData);
+      
+      // Also update stock chart when wallet selection changes
+      const stockData = prepareStockChartData(allTransactionsRef.current, wallets);
+      setStockChartData(stockData);
     }
-  }, [selectedWallet, pieChartType, prepareChartData]); // Add prepareChartData as dependency
+  }, [selectedWallet, pieChartType, prepareChartData, prepareStockChartData, wallets]);
 
   // Handle wallet change
   const handleWalletChange = (e) => {
@@ -419,6 +538,60 @@ export default function FinanceDashboard() {
           weight: 'bold'
         }
       },
+    },
+  };
+
+  // Stock chart options
+  const stockOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: {
+        grid: {
+          display: false,
+          drawBorder: false,
+        },
+        ticks: {
+          font: {
+            size: 10,
+          },
+          maxRotation: 0
+        }
+      },
+      y: {
+        position: 'right',
+        grid: {
+          color: 'rgba(0, 0, 0, 0.05)',
+        },
+        ticks: {
+          callback: (value) => `${value}%`,
+          font: {
+            size: 10,
+          }
+        }
+      }
+    },
+    plugins: {
+      legend: {
+        display: false,
+      },
+      title: {
+        display: true,
+        text: 'Biến động số dư (% so với ban đầu)',
+        font: {
+          size: 16,
+          weight: 'bold'
+        }
+      },
+      tooltip: {
+        callbacks: {
+          label: (context) => `Số dư: ${context.raw}% so với ban đầu`
+        }
+      }
+    },
+    interaction: {
+      mode: 'index',
+      intersect: false,
     },
   };
 
@@ -565,6 +738,24 @@ export default function FinanceDashboard() {
           </div>
         </div>
         
+        {/* Stock-like chart */}
+        <div className="fd-stock-chart-container">
+          <div className="fd-stock-chart-header">
+            <div className="fd-stock-chart-title">
+              Biến động số dư theo thời gian
+              {stockChartData && stockChartData.performanceChange && (
+                <span className={`fd-stock-performance ${stockChartData.performanceChange >= 0 ? 'positive' : 'negative'}`}>
+                  {stockChartData.performanceChange >= 0 ? '+' : ''}{stockChartData.performanceChange.toFixed(2)}%
+                </span>
+              )}
+            </div>
+            <div className="fd-stock-chart-period">30 ngày gần nhất</div>
+          </div>
+          <div className="fd-stock-chart">
+            {stockChartData && <Line options={stockOptions} data={stockChartData} height={200} />}
+          </div>
+        </div>
+        
         <div className="fd-charts-container">
           <div className="fd-chart-wrapper fd-bar-chart">
             {chartData.barData && <Bar options={barOptions} data={chartData.barData} />}
@@ -591,7 +782,7 @@ export default function FinanceDashboard() {
           </div>
         </div>
       </div>
-
+      
       <div className="fd-sections">
         <div className="fd-section fd-topcats">
           <div className="fd-section-title">Top danh mục (tháng)</div>

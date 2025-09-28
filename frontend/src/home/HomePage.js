@@ -12,15 +12,15 @@ function HomePage() {
   const navigate = useNavigate();
 
   return (
-    <div>
+    <div className="home-container">
       <Sidebar userName={userName} />
-      <main className="home-main" style={{ marginLeft: 220 }}>
+      <main className="home-main">
         <div className="home-header">
           <span className="home-title">Trang chủ</span>
           <div className="home-actions">
             <button onClick={() => navigate('/transactions')}>+ Ghi chép</button>
             {/* New: button to switch to Group interface */}
-            <button onClick={() => navigate('/group')} style={{ marginLeft: 8 }}>Giao diện nhóm</button>
+            <button onClick={() => navigate('/group')} style={{ marginLeft: 8 }}>Tạo nhóm</button>
           </div>
         </div>
         <div className="home-content">

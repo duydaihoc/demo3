@@ -1,16 +1,27 @@
-.app-layout {
+.home-container {
   display: flex;
-  align-items: stretch;
-  min-height: 100vh; /* ensures sidebar and main span full page */
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .home-main {
   background: #f7fafd;
-  min-height: 100vh;
   flex: 1;
-  padding: 20px 28px;
+  height: 100vh;
+  margin-left: 220px; /* Move margin from inline style to CSS */
+  padding: 20px;
   font-family: 'Roboto', Arial, sans-serif;
   box-sizing: border-box;
+  overflow-y: auto; /* Enable vertical scrolling */
+  overflow-x: hidden; /* Prevent horizontal scrolling */
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
 .home-header {
@@ -55,6 +66,7 @@
   display: grid;
   grid-template-columns: 2fr 1fr;
   gap: 30px;
+  padding-bottom: 40px; /* Add bottom padding for better scrolling experience */
 }
 
 .home-left {
@@ -194,6 +206,7 @@
     grid-template-columns: 1fr;
   }
   .home-main {
-    padding: 30px 12px 10px 12px;
+    padding: 20px;
+    margin-left: 220px;
   }
 }

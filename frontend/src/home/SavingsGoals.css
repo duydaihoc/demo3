@@ -63,6 +63,13 @@
 }
 
 /* Header and action buttons */
+.savings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px; /* Increased from 16px to add more space below header */
+}
+
 .savings-goals-header {
   display: flex;
   justify-content: space-between;
@@ -81,12 +88,13 @@
   color: #fff;
   border: none;
   border-radius: 10px;
-  padding: 8px 16px;
+  padding: 10px 18px; /* Increased horizontal padding for more space around text */
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
   box-shadow: 0 8px 16px rgba(42, 82, 152, 0.12);
   transition: transform 0.2s, box-shadow 0.2s;
+  letter-spacing: 0.5px; /* Added letter spacing to spread out text */
 }
 
 .add-goal-btn:hover {
@@ -98,7 +106,8 @@
 .goals-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 20px;
+  gap: 30px; /* Increased from 20px to add more space between cards */
+  margin-top: 8px; /* Added margin-top for extra spacing from header */
 }
 
 /* Goal card - bank card style */
@@ -114,6 +123,7 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  margin-bottom: 6px; /* Added small margin at bottom for extra breathing room */
 }
 
 .goal-card:hover {
@@ -223,7 +233,7 @@
   padding: 12px;
   background: rgba(0, 0, 0, 0.25);
   display: flex;
-  justify-content: flex-end;
+  justify-content: center; /* Changed from flex-end to center */
   gap: 8px;
   opacity: 0;
   transform: translateY(100%);
@@ -235,6 +245,19 @@
   transform: translateY(0);
 }
 
+/* Make the button container itself adjust left a bit */
+.goal-card-actions::before {
+  content: "";
+  flex: 0.2; /* Creates some empty space on the right side, pushing buttons left */
+}
+
+/* Create corresponding empty space on the left for balance */
+.goal-card-actions::after {
+  content: "";
+  flex: 0; /* No space on the left side */
+}
+
+/* Button styling (unchanged) */
 .goal-action-btn {
   border: none;
   background: rgba(255, 255, 255, 0.15);
@@ -596,7 +619,220 @@
   to { opacity: 1; transform: translateY(0);}
 }
 
-/* Responsive design */
+/* New color selector styles */
+.color-selector {
+  position: relative;
+}
+
+.color-preview {
+  width: 100%;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 10px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+}
+
+.color-preview:hover {
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.2);
+}
+
+.color-hex {
+  background: rgba(255, 255, 255, 0.8);
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.color-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.color-option {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+}
+
+.color-option:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.color-option.selected {
+  box-shadow: 0 0 0 3px #fff, 0 0 0 5px rgba(42, 82, 152, 0.8);
+}
+
+.color-option.custom-color {
+  background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: bold;
+  color: #555;
+}
+
+.color-picker-container {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #fff;
+  padding: 15px;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  margin-top: 10px;
+  transition: all 0.3s ease;
+}
+
+.color-picker-container::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  transform: translateX(-50%) rotate(45deg);
+  box-shadow: -3px -3px 5px rgba(0, 0, 0, 0.04);
+}
+
+.color-picker {
+  width: 200px !important;
+  height: 200px !important;
+}
+
+.close-picker-btn {
+  width: 100%;
+  padding: 10px;
+  margin-top: 10px;
+  background: linear-gradient(90deg, #2a5298, #4ecdc4);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.close-picker-btn:hover {
+  box-shadow: 0 5px 15px rgba(42, 82, 152, 0.2);
+}
+
+/* Toast notification styles */
+.sg-toast {
+  position: fixed;
+  z-index: 9999;
+  top: 32px;
+  right: 32px;
+  left: auto;
+  bottom: auto;
+  transform: none;
+  min-width: 220px;
+  max-width: 90vw;
+  padding: 14px 32px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  background: #2a5298;
+  box-shadow: 0 8px 32px rgba(42,82,152,0.18);
+  animation: sg-toast-fadein 0.3s;
+  text-align: center;
+  pointer-events: none;
+}
+.sg-toast.success {
+  background: linear-gradient(90deg, #2a5298, #4ecdc4);
+}
+.sg-toast.error {
+  background: #e74c3c;
+}
+
+@keyframes sg-toast-fadein {
+  from { opacity: 0; transform: translateY(-30px);}
+  to { opacity: 1; transform: translateY(0);}
+}
+
+/* Modal backdrop for delete confirm */
+.sg-modal-backdrop {
+  position: fixed;
+  z-index: 9998;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sg-modal {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(42,82,152,0.18);
+  padding: 28px 32px 20px 32px;
+  min-width: 320px;
+  max-width: 90vw;
+  animation: sg-modal-fadein 0.2s;
+}
+@keyframes sg-modal-fadein {
+  from { opacity: 0; transform: scale(0.95);}
+  to { opacity: 1; transform: scale(1);}
+}
+.sg-modal-title {
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: #2a5298;
+  margin-bottom: 12px;
+}
+.sg-modal-content {
+  font-size: 1rem;
+  margin-bottom: 18px;
+  color: #333;
+}
+.sg-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.sg-modal .cancel-btn {
+  background: #f0f0f0;
+  color: #333;
+  border: none;
+  padding: 8px 18px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sg-modal .cancel-btn:hover {
+  background: #e0e0e0;
+}
+.sg-modal .delete-btn {
+  background: #e74c3c;
+  color: #fff;
+  border: none;
+  padding: 8px 18px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sg-modal .delete-btn:hover {
+  background: #c0392b;
+}
+
+/* Responsive adjustments */
 @media (max-width: 900px) {
   .goal-form,
   .goal-deposit-container {

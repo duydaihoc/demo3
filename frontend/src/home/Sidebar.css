@@ -33,40 +33,57 @@
   margin: 0;
   width: 100%;
   position: relative;
-  overflow: hidden; /* Thêm để giới hạn hiệu ứng bên trong sidebar */
+  overflow: visible;
 }
 
 .sidebar-menu li {
   width: 100%;
-  margin-bottom: 20px;
+  margin-bottom: 30px; /* Tăng khoảng cách giữa các menu item */
+  position: relative;
+  z-index: 1; /* Base z-index for inactive items */
+}
+
+/* Active items should appear above others */
+.sidebar-menu li:has(a.active),
+.sidebar-menu li:has(.sidebar-settings-btn.active) {
+  z-index: 2;
 }
 
 /* Links (existing) */
 .sidebar-menu a {
   display: block;
-  width: calc(100% - 40px); /* Giới hạn chiều rộng bên trong sidebar */
+  width: calc(100% - 40px); 
   margin: 0 auto;
-  padding: 12px 20px;
+  padding: 14px 24px; /* Tăng padding để nội dung có nhiều không gian hơn */
   color: #fff;
   text-decoration: none;
-  font-size: 1.1rem;
+  font-size: 1.15rem; /* Tăng nhẹ kích thước font */
+  font-weight: 500; /* Thêm độ đậm nhẹ */
   border-radius: 8px;
   transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
   position: relative;
   box-sizing: border-box;
+  letter-spacing: 0.3px; /* Tăng khoảng cách chữ để dễ đọc hơn */
 }
 
+/* Hover state - adjusted to prevent overlap issues */
 .sidebar-menu a:hover {
   background: rgba(255,255,255,0.15);
   transform: translateX(8px);
+  z-index: 5; /* Ensure hover is above other items */
 }
 
+/* Active state - ensure it has higher stacking order and distinct style */
 .sidebar-menu a.active {
   background: rgba(255,255,255,0.18);
   color: #4ecdc4;
   font-weight: bold;
+  z-index: 10; /* Active items should be above hover effects */
+  position: relative; /* Create stacking context */
+  transform: none; /* Prevent transform conflicts with hover */
 }
 
+/* Active indicator */
 .sidebar-menu a.active::after {
   content: '';
   display: block;
@@ -79,72 +96,70 @@
   border-radius: 2px;
   box-shadow: 0 2px 8px rgba(42,82,152,0.15);
   animation: underlineSlide 0.4s;
-  z-index: 1;
+  z-index: 11; /* Above the active item itself */
 }
 
-@keyframes underlineSlide {
-  from { width: 0; opacity: 0; }
-  to { width: 100%; opacity: 1; }
+/* Prevent hover effect on active items to avoid visual conflicts */
+.sidebar-menu a.active:hover {
+  transform: none;
+  background: rgba(255,255,255,0.18); /* Keep the same background */
 }
 
-/* New: settings toggle button (match link appearance) */
+/* Settings button */
 .sidebar-settings-btn {
   display: block;
   width: calc(100% - 40px);
   margin: 0 auto;
-  padding: 12px 20px;
+  padding: 14px 24px; /* Tăng padding để khớp với menu items */
   color: #fff;
   background: transparent;
   border: none;
   text-align: left;
-  font-size: 1.1rem;
+  font-size: 1.15rem; /* Tăng nhẹ kích thước font */
+  font-weight: 500; /* Thêm độ đậm nhẹ */
   border-radius: 8px;
   cursor: pointer;
   transition: background 0.2s, transform 0.2s;
   box-sizing: border-box;
+  position: relative;
+  letter-spacing: 0.3px; /* Tăng khoảng cách chữ để dễ đọc hơn */
 }
 
-/* caret */
-.sidebar-settings-btn .caret {
-  float: right;
-  opacity: 0.9;
-  margin-left: 6px;
-}
-
-/* hover / active */
+/* Settings hover state */
 .sidebar-settings-btn:hover {
   background: rgba(255,255,255,0.12);
   transform: translateX(8px);
+  z-index: 5;
 }
+
+/* Active settings state */
 .sidebar-settings-btn.active {
   background: rgba(255,255,255,0.18);
   color: #4ecdc4;
   font-weight: bold;
-}
-.sidebar-settings-btn.active::after {
-  content: '';
-  display:block;
-  position:absolute;
-  left:10px;
-  right:10px;
-  bottom:8px;
-  height:3px;
-  background: linear-gradient(90deg, #4ecdc4, #2a5298);
-  border-radius:2px;
-  box-shadow:0 2px 8px rgba(42,82,152,0.15);
+  z-index: 10;
+  transform: none;
 }
 
-/* Submenu styling */
+/* Prevent hover effect on active settings */
+.sidebar-settings-btn.active:hover {
+  transform: none;
+  background: rgba(255,255,255,0.18);
+}
+
+/* Submenu styling - ensure proper stacking */
 .sidebar-submenu {
   list-style: disc;
-  padding-left: 44px; /* indent for bullets */
-  margin: 8px 0 0 0;
+  padding-left: 50px; /* Tăng lề trái để submenu thụt vào nhiều hơn */
+  margin: 12px 0 0 0; /* Tăng margin-top để cách menu chính ra */
   color: #fff;
-  font-size: 0.98rem;
+  font-size: 1rem;
+  position: relative;
+  z-index: 15; /* Higher than active items to ensure visibility */
 }
 
 .sidebar-submenu li {
-  margin: 8px 0;
+  margin: 12px 0; /* Tăng khoảng cách giữa các submenu items */
   position: relative;
 }
 

@@ -51,6 +51,10 @@ const SavingsGoalSchema = new Schema({
     type: Schema.Types.ObjectId,
     ref: 'Wallet',
   },
+  color: {
+    type: String,
+    default: '#2a5298' // Default blue color
+  },
   contributions: [ContributionSchema],
   createdAt: {
     type: Date,

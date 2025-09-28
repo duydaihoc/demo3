@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './SavingsGoals.css';
+import { HexColorPicker } from 'react-colorful';
 
 function SavingsGoals() {
   const [goals, setGoals] = useState([]);
@@ -18,12 +19,18 @@ function SavingsGoals() {
     color: '#2a5298'
   });
   
+  // Add state for color picker visibility
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  
   const [depositData, setDepositData] = useState({
     amount: '',
     walletId: '',
     note: ''
   });
   
+  const [notification, setNotification] = useState({ message: '', type: '' }); // type: 'success' | 'error'
+  const [deleteConfirm, setDeleteConfirm] = useState({ open: false, goal: null });
+
   // Fetch goals and wallets on component mount
   useEffect(() => {
     fetchGoals();
@@ -37,6 +44,23 @@ function SavingsGoals() {
       ...prev,
       [name]: value
     }));
+  };
+  
+  // New function to handle color change from the color picker
+  const handleColorChange = (newColor) => {
+    setGoalData(prev => ({
+      ...prev,
+      color: newColor
+    }));
+  };
+  
+  // New function to handle predefined color selection
+  const selectPredefinedColor = (colorValue) => {
+    setGoalData(prev => ({
+      ...prev,
+      color: colorValue
+    }));
+    setShowColorPicker(false);
   };
   
   const handleDepositInputChange = (e) => {
@@ -105,11 +129,11 @@ function SavingsGoals() {
       
       setUiMode('list');
       await fetchGoals();
-      alert('Đã tạo mục tiêu thành công!');
+      showNotification('Đã tạo mục tiêu thành công!', 'success');
        
     } catch (error) {
       console.error('Error creating goal:', error);
-      alert(`Lỗi: ${error.message || 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.'}`);
+      showNotification(error.message || 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.', 'error');
     } finally {
       setLoading(prev => ({ ...prev, goals: false }));
     }
@@ -225,15 +249,13 @@ function SavingsGoals() {
       if (!res.ok) {
         throw new Error(body.message || 'Lỗi khi cập nhật mục tiêu');
       }
-
-      // success -> refresh
-      alert('Cập nhật mục tiêu thành công');
+      showNotification('Cập nhật mục tiêu thành công', 'success');
       setUiMode('list');
       setSelectedGoal(null);
       await fetchGoals();
     } catch (err) {
       console.error('Update error:', err);
-      alert(err.message || 'Lỗi khi cập nhật mục tiêu');
+      showNotification(err.message || 'Lỗi khi cập nhật mục tiêu', 'error');
     } finally {
       setLoading(prev => ({ ...prev, goals: false }));
     }
@@ -241,35 +263,35 @@ function SavingsGoals() {
 
   const handleDepositSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!depositData.walletId) {
-      return alert('Vui lòng chọn ví để rút tiền.');
+      showNotification('Vui lòng chọn ví để rút tiền.', 'error');
+      return;
     }
-    
+
     const amount = Number(depositData.amount);
     if (isNaN(amount) || amount <= 0) {
-      return alert('Vui lòng nhập số tiền hợp lệ (> 0).');
+      showNotification('Vui lòng nhập số tiền hợp lệ (> 0).', 'error');
+      return;
     }
 
     try {
       const token = localStorage.getItem('token');
-      
+
       // Check wallet balance
       const selectedWallet = wallets.find(w => w._id === depositData.walletId);
       if (!selectedWallet) {
-        return alert('Không tìm thấy thông tin ví.');
-      }
-      
-      const walletBalance = selectedWallet.balance || selectedWallet.initialBalance || 0;
-      if (walletBalance < amount) {
-        return alert(`Số dư trong ví không đủ. Số dư hiện có: ${formatCurrency(walletBalance)}`);
-      }
-
-      // Confirm deposit
-      if (!window.confirm(`Xác nhận nạp ${formatCurrency(amount)} từ ví ${selectedWallet.name} vào mục tiêu ${selectedGoal.name}?`)) {
+        showNotification('Không tìm thấy thông tin ví.', 'error');
         return;
       }
 
+      const walletBalance = selectedWallet.balance || selectedWallet.initialBalance || 0;
+      if (walletBalance < amount) {
+        showNotification(`Số dư trong ví không đủ. Số dư hiện có: ${formatCurrency(walletBalance)}`, 'error');
+        return;
+      }
+
+      // Không hỏi xác nhận, thực hiện luôn
       // Make deposit request
       const response = await fetch(`http://localhost:5000/api/savings/${selectedGoal._id}/deposit`, {
         method: 'POST',
@@ -289,43 +311,19 @@ function SavingsGoals() {
         throw new Error(data.message || 'Không thể thực hiện giao dịch');
       }
 
-      // The backend now correctly updates the wallet balance, so we don't need
-      // to make a separate API call to update the wallet
-
-      // Update UI
-      alert('Nạp tiền thành công!');
+      // Thông báo thành công bằng toast
+      showNotification('Nạp tiền thành công!', 'success');
       setDepositData({ amount: '', walletId: '', note: '' });
       setUiMode('list');
       setSelectedGoal(null);
-      
+
       // Refresh data
       fetchGoals();
       fetchWallets();
-      
+
     } catch (error) {
       console.error('Deposit error:', error);
-      alert(error.message || 'Có lỗi xảy ra khi nạp tiền');
-    }
-  };
-
-  const deleteGoal = async (goal) => {
-    if (!goal || !goal._id) return;
-    if (!window.confirm(`Bạn có chắc chắn muốn xóa mục tiêu "${goal.name}"?`)) return;
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/api/savings/${goal._id}`, {
-        method: 'DELETE',
-        headers: {
-          ...(token && { 'Authorization': `Bearer ${token}` })
-        }
-      });
-      const body = await res.json().catch(()=> ({}));
-      if (!res.ok) throw new Error(body.message || 'Xóa thất bại');
-      alert('Đã xóa mục tiêu');
-      await fetchGoals();
-    } catch (err) {
-      console.error('Delete error:', err);
-      alert(err.message || 'Lỗi khi xóa mục tiêu');
+      showNotification(error.message || 'Có lỗi xảy ra khi nạp tiền', 'error');
     }
   };
 
@@ -352,19 +350,87 @@ function SavingsGoals() {
     return diffDays > 0 ? diffDays : 0;
   };
 
-  // Color options for the goal
+  // Color options for the goal - expanded with more options
   const colorOptions = [
     { value: '#2a5298', label: 'Xanh đậm' },
     { value: '#4ecdc4', label: 'Xanh lá' },
     { value: '#ff6b6b', label: 'Đỏ' },
     { value: '#ffa502', label: 'Cam' },
-    { value: '#6c5ce7', label: 'Tím' }
+    { value: '#6c5ce7', label: 'Tím' },
+    { value: '#1abc9c', label: 'Xanh ngọc' },
+    { value: '#3498db', label: 'Xanh dương' },
+    { value: '#9b59b6', label: 'Tím hoa cà' },
+    { value: '#f1c40f', label: 'Vàng' },
+    { value: '#e67e22', label: 'Cam đậm' },
+    { value: '#e74c3c', label: 'Đỏ tươi' },
+    { value: '#2c3e50', label: 'Xám đậm' },
+    { value: '#27ae60', label: 'Lá cây' },
+    { value: '#16a085', label: 'Xanh rêu' }
   ];
+
+  // Helper to show notification
+  const showNotification = (message, type = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification({ message: '', type: '' }), 2500);
+  };
+
+  const handleDeleteGoal = async () => {
+    const goal = deleteConfirm.goal;
+    if (!goal || !goal._id) return;
+    setDeleteConfirm({ open: false, goal: null });
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:5000/api/savings/${goal._id}`, {
+        method: 'DELETE',
+        headers: {
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        }
+      });
+      const body = await res.json().catch(()=> ({}));
+      if (!res.ok) throw new Error(body.message || 'Xóa thất bại');
+      showNotification('Đã xóa mục tiêu', 'success');
+      await fetchGoals();
+    } catch (err) {
+      showNotification(err.message || 'Lỗi khi xóa mục tiêu', 'error');
+    }
+  };
+
+  // UI notification component
+  const Notification = ({ message, type }) => (
+    message ? (
+      <div className={`sg-toast ${type}`}>{message}</div>
+    ) : null
+  );
+
+  // Delete confirmation modal
+  const DeleteConfirmModal = ({ open, goal, onCancel, onConfirm }) => (
+    open ? (
+      <div className="sg-modal-backdrop">
+        <div className="sg-modal">
+          <div className="sg-modal-title">Xác nhận xóa</div>
+          <div className="sg-modal-content">
+            Bạn có chắc chắn muốn xóa mục tiêu <b>{goal?.name}</b>?
+          </div>
+          <div className="sg-modal-actions">
+            <button className="cancel-btn" onClick={onCancel}>Hủy</button>
+            <button className="delete-btn" onClick={onConfirm}>Xóa</button>
+          </div>
+        </div>
+      </div>
+    ) : null
+  );
 
   // Display the add goal button for empty state
   if (uiMode === 'list' && goals.length === 0) {
     return (
       <div className="savings-container">
+        <Notification {...notification} />
+        <DeleteConfirmModal
+          open={deleteConfirm.open}
+          goal={deleteConfirm.goal}
+          onCancel={() => setDeleteConfirm({ open: false, goal: null })}
+          onConfirm={handleDeleteGoal}
+        />
         <div className="savings-header">
           <h2 className="savings-title">Mục tiêu tiết kiệm</h2>
         </div>
@@ -383,6 +449,13 @@ function SavingsGoals() {
   if (uiMode === 'create') {
     return (
       <div className="savings-container">
+        <Notification {...notification} />
+        <DeleteConfirmModal
+          open={deleteConfirm.open}
+          goal={deleteConfirm.goal}
+          onCancel={() => setDeleteConfirm({ open: false, goal: null })}
+          onConfirm={handleDeleteGoal}
+        />
         <div className="savings-header">
           <h2 className="savings-title">Tạo mục tiêu tiết kiệm</h2>
         </div>
@@ -464,19 +537,56 @@ function SavingsGoals() {
               </div>
               
               <div className="form-group">
-                <label htmlFor="color">Màu sắc</label>
-                <select
-                  id="color"
-                  name="color"
-                  value={goalData.color}
-                  onChange={handleGoalInputChange}
-                >
-                  {colorOptions.map((color) => (
-                    <option key={color.value} value={color.value}>
-                      {color.label}
-                    </option>
-                  ))}
-                </select>
+                <label>Màu sắc</label>
+                
+                {/* Color selector interface */}
+                <div className="color-selector">
+                  <div 
+                    className="color-preview" 
+                    style={{ backgroundColor: goalData.color }}
+                    onClick={() => setShowColorPicker(!showColorPicker)}
+                  >
+                    <span className="color-hex">{goalData.color}</span>
+                  </div>
+                  
+                  {/* Predefined color palette */}
+                  <div className="color-palette">
+                    {colorOptions.map((color) => (
+                      <div 
+                        key={color.value} 
+                        className={`color-option ${goalData.color === color.value ? 'selected' : ''}`}
+                        style={{ backgroundColor: color.value }}
+                        onClick={() => selectPredefinedColor(color.value)}
+                        title={color.label}
+                      />
+                    ))}
+                    <div 
+                      className="color-option custom-color"
+                      onClick={() => setShowColorPicker(!showColorPicker)}
+                      title="Tùy chỉnh màu"
+                    >
+                      <span>+</span>
+                    </div>
+                  </div>
+                  
+                  {/* Custom color picker */}
+                  {showColorPicker && (
+                    <div className="color-picker-container">
+                      <HexColorPicker 
+                        color={goalData.color} 
+                        onChange={handleColorChange} 
+                        className="color-picker"
+                      />
+                      <button 
+                        type="button" 
+                        className="close-picker-btn"
+                        onClick={() => setShowColorPicker(false)}
+                      >
+                        Đồng ý
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
               
               <div className="form-actions">
@@ -496,6 +606,13 @@ function SavingsGoals() {
   if (uiMode === 'edit' && selectedGoal) {
     return (
       <div className="savings-container">
+        <Notification {...notification} />
+        <DeleteConfirmModal
+          open={deleteConfirm.open}
+          goal={deleteConfirm.goal}
+          onCancel={() => setDeleteConfirm({ open: false, goal: null })}
+          onConfirm={handleDeleteGoal}
+        />
         <div className="savings-header">
           <h2 className="savings-title">Chỉnh sửa mục tiêu</h2>
         </div>
@@ -578,19 +695,56 @@ function SavingsGoals() {
               </div>
               
               <div className="form-group">
-                <label htmlFor="color">Màu sắc</label>
-                <select
-                  id="color"
-                  name="color"
-                  value={goalData.color}
-                  onChange={handleGoalInputChange}
-                >
-                  {colorOptions.map((color) => (
-                    <option key={color.value} value={color.value}>
-                      {color.label}
-                    </option>
-                  ))}
-                </select>
+                <label>Màu sắc</label>
+                
+                {/* Color selector interface */}
+                <div className="color-selector">
+                  <div 
+                    className="color-preview" 
+                    style={{ backgroundColor: goalData.color }}
+                    onClick={() => setShowColorPicker(!showColorPicker)}
+                  >
+                    <span className="color-hex">{goalData.color}</span>
+                  </div>
+                  
+                  {/* Predefined color palette */}
+                  <div className="color-palette">
+                    {colorOptions.map((color) => (
+                      <div 
+                        key={color.value} 
+                        className={`color-option ${goalData.color === color.value ? 'selected' : ''}`}
+                        style={{ backgroundColor: color.value }}
+                        onClick={() => selectPredefinedColor(color.value)}
+                        title={color.label}
+                      />
+                    ))}
+                    <div 
+                      className="color-option custom-color"
+                      onClick={() => setShowColorPicker(!showColorPicker)}
+                      title="Tùy chỉnh màu"
+                    >
+                      <span>+</span>
+                    </div>
+                  </div>
+                  
+                  {/* Custom color picker */}
+                  {showColorPicker && (
+                    <div className="color-picker-container">
+                      <HexColorPicker 
+                        color={goalData.color} 
+                        onChange={handleColorChange} 
+                        className="color-picker"
+                      />
+                      <button 
+                        type="button" 
+                        className="close-picker-btn"
+                        onClick={() => setShowColorPicker(false)}
+                      >
+                        Đồng ý
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
               
               <div className="form-actions">
@@ -611,6 +765,13 @@ function SavingsGoals() {
     const remainingAmount = Math.max(0, (selectedGoal.targetAmount || 0) - (selectedGoal.currentAmount || 0));
     return (
       <div className="savings-container">
+        <Notification {...notification} />
+        <DeleteConfirmModal
+          open={deleteConfirm.open}
+          goal={deleteConfirm.goal}
+          onCancel={() => setDeleteConfirm({ open: false, goal: null })}
+          onConfirm={handleDeleteGoal}
+        />
         <div className="savings-header">
           <h2 className="savings-title">Nạp tiền vào mục tiêu</h2>
         </div>
@@ -723,6 +884,13 @@ function SavingsGoals() {
   // Display the goals list (default view)
   return (
     <div className="savings-container">
+      <Notification {...notification} />
+      <DeleteConfirmModal
+        open={deleteConfirm.open}
+        goal={deleteConfirm.goal}
+        onCancel={() => setDeleteConfirm({ open: false, goal: null })}
+        onConfirm={handleDeleteGoal}
+      />
       <div className="savings-header">
         <h2 className="savings-title">Mục tiêu tiết kiệm</h2>
         <button className="add-goal-btn" onClick={() => setUiMode('create')}>+ Thêm mục tiêu</button>
@@ -774,7 +942,7 @@ function SavingsGoals() {
               <div className="goal-card-actions">
                 <button className="goal-action-btn deposit" onClick={() => openDepositForm(goal)}>Nạp tiền</button>
                 <button className="goal-action-btn edit" onClick={() => openEditForm(goal)}>Sửa</button>
-                <button className="goal-action-btn delete" onClick={() => deleteGoal(goal)}>Xóa</button>
+                <button className="goal-action-btn delete" onClick={() => setDeleteConfirm({ open: true, goal })}>Xóa</button>
               </div>
             </div>
           ))}
@@ -785,7 +953,8 @@ function SavingsGoals() {
 }
 
 export default SavingsGoals;
-             
+
+
 
 
 

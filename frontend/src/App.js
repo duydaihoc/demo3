@@ -22,7 +22,7 @@ function AppRoutes() {
 	const location = useLocation();
 	const [displayLocation, setDisplayLocation] = useState(location);
 	const [transitionStage, setTransitionStage] = useState('idle'); // 'idle' | 'exit' | 'enter'
-	const duration = 700; // total duration in ms
+	const duration = 1200; // tăng tổng thời gian chuyển đổi để khớp với animation trong CSS
 	const half = Math.round(duration / 2);
 
 	useEffect(() => {
