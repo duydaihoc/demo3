@@ -1,0 +1,194 @@
+.group-page {
+  display: flex;
+  min-height: 100vh;
+  padding-left: 220px; /* Space for sidebar instead of margin */
+}
+
+/* Sidebar: fixed position at left edge */
+.group-sidebar {
+  width: 220px;
+  height: 100vh;
+  min-height: 100%;
+  position: fixed; /* Fixed position */
+  left: 0;
+  top: 0;
+  bottom: 0;
+  padding: 40px 0 20px 0;
+  border-radius: 0;
+  overflow-y: auto;
+  box-shadow: 2px 0 10px rgba(42,82,152,0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: linear-gradient(135deg, #2a5298 0%, #4ecdc4 100%);
+  color: #fff;
+  border: none;
+  z-index: 100; /* Ensure sidebar appears above content */
+}
+
+/* Header (group name) centered like main sidebar */
+.gs-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  text-align: center;
+  padding-bottom: 16px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.2);
+  width: 80%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.gs-logo {
+  font-weight: 800;
+  color: #fff;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.gs-sub {
+  font-size: 0.9rem;
+  color: rgba(255,255,255,0.9);
+}
+
+/* Nav - similar to main sidebar */
+.gs-nav {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 0;
+}
+
+/* Style for sidebar-menu list */
+.sidebar-menu {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.sidebar-menu li {
+  width: 100%;
+  margin-bottom: 0;
+}
+
+/* Make items look like main sidebar links */
+.gs-item {
+  display: block;
+  width: calc(100% - 40px);
+  margin: 0 auto 16px auto;
+  padding: 12px 20px;
+  text-align: left;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #fff;
+  font-weight: 600;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s;
+}
+
+/* Match hover style */
+.gs-item:hover {
+  background: rgba(255,255,255,0.15);
+  transform: translateX(8px);
+}
+
+/* Match active style with underline */
+.gs-item.active {
+  background: rgba(255,255,255,0.18);
+  color: #4ecdc4;
+  font-weight: bold;
+  box-shadow: none;
+  position: relative;
+}
+
+/* Replace the cyan accent bar with underline to match main sidebar */
+.gs-item.active::before {
+  content: none; /* Remove previous accent bar */
+}
+
+.gs-item.active::after {
+  content: '';
+  display: block;
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 8px;
+  height: 3px;
+  background: linear-gradient(90deg, #4ecdc4, #2a5298);
+  border-radius: 2px;
+  box-shadow: 0 2px 8px rgba(42,82,152,0.15);
+  animation: underlineSlide 0.4s;
+  z-index: 1;
+}
+
+@keyframes underlineSlide {
+  from { width: 0; opacity: 0; }
+  to { width: 100%; opacity: 1; }
+}
+
+/* Reset the text margin */
+.gs-item.active > span {
+  margin-left: 0;
+}
+
+/* Footer / back button */
+.gs-footer {
+  margin-top: auto;
+  display: flex;
+  justify-content: center;
+  padding-top: 16px;
+  width: 80%;
+  margin-left: auto;
+  margin-right: auto;
+  border-top: 1px solid rgba(255,255,255,0.2);
+}
+
+.gs-back {
+  background: rgba(255,255,255,0.12);
+  border: none;
+  width: calc(100% - 40px);
+  padding: 12px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #fff;
+  font-weight: 600;
+  text-align: center;
+  font-size: 1.1rem;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.gs-back:hover {
+  background: rgba(255,255,255,0.18);
+  transform: translateX(8px);
+}
+
+/* Responsive adjustments */
+@media (max-width: 900px) {
+  .group-page {
+    padding-left: 0; /* Remove padding on small screens */
+  }
+  
+  .group-sidebar {
+    position: relative;
+    width: 100%;
+    height: auto;
+    min-height: auto;
+    padding: 20px 0;
+  }
+  
+  .gs-item.active::after {
+    display: none;
+  }
+}
+  
+  .gs-item.active::after {
+    display: none;
+  }
+

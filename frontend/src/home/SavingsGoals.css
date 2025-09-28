@@ -303,18 +303,25 @@
   color: #333;
 }
 
+/* Updated layout + stacking to prevent preview overlapping form fields */
 .goal-form {
   display: flex;
-  gap: 24px;
+  gap: 32px; /* tăng khoảng cách giữa preview và form fields */
+  align-items: flex-start;
+  flex-wrap: nowrap;
 }
 
+/* Ensure preview has fixed width and sits below inputs */
 .form-preview {
-  flex: 1;
+  flex: 0 0 320px; /* cố định chiều rộng preview */
   display: flex;
   justify-content: center;
   align-items: flex-start;
+  z-index: 0; /* thấp hơn input để tránh chồng lấn */
+  position: relative;
 }
 
+/* preview card sits visually below and cannot cover inputs */
 .goal-card-preview {
   width: 280px;
   height: 180px;
@@ -323,41 +330,38 @@
   color: white;
   position: relative;
   box-shadow: 0 20px 50px rgba(12, 28, 64, 0.25);
+  z-index: 0; /* ensure it's beneath form inputs */
 }
 
+/* form area should be above preview */
 .form-fields {
-  flex: 1.5;
+  flex: 1;
+  min-width: 260px;
+  z-index: 2;
+  position: relative;
 }
 
-.form-group {
-  margin-bottom: 16px;
+/* Make sure inputs/selects/textarea have solid background and higher stacking */
+.form-group input,
+.form-group select,
+.form-group textarea {
+  background: #ffffff; /* solid white to cover anything beneath */
+  position: relative;
+  z-index: 3;
+  border: 1px solid #ddd;
+  box-shadow: none;
+  padding: 14px 12px 10px; /* increase top padding */
 }
 
+/* In case placeholder or label styles overlap, ensure labels are above inputs visually */
 .form-group label {
+  position: relative;
+  z-index: 4;
   display: block;
   margin-bottom: 8px;
   font-weight: 600;
   color: #2a5298;
-}
-
-.form-group input,
-.form-group select,
-.form-group textarea {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  font-size: 1rem;
-  background: #f9f9f9;
-}
-
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
-  outline: none;
-  border-color: #2a5298;
-  box-shadow: 0 0 0 2px rgba(42,82,152,0.1);
-  background: #fff;
+  top: -6px; /* moved label up a bit */
 }
 
 .form-actions {
@@ -600,14 +604,21 @@
   }
   
   .form-preview {
-    margin-bottom: 24px;
+    width: 100%;
+    flex: 0 0 auto;
+    margin-bottom: 16px;
   }
-  
+
   .goal-card-preview,
   .deposit-card {
     width: 100%;
-    max-width: 320px;
+    max-width: 100%;
   }
+
+  .form-group label { top: -2px; }
+  .form-group input,
+  .form-group select,
+  .form-group textarea { padding-bottom: 0px; padding-left: 10px; padding-right:  10px; }
 }
 
 @media (max-width: 600px) {

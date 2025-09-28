@@ -1,8 +1,14 @@
+.app-layout {
+  display: flex;
+  align-items: stretch;
+  min-height: 100vh; /* ensures sidebar and main span full page */
+}
+
 .home-main {
   background: #f7fafd;
   min-height: 100vh;
-  width: calc(100vw - 220px); /* Chỉ chiếm phần còn lại sau sidebar */
-  padding: 0;
+  flex: 1;
+  padding: 20px 28px;
   font-family: 'Roboto', Arial, sans-serif;
   box-sizing: border-box;
 }
@@ -188,6 +194,6 @@
     grid-template-columns: 1fr;
   }
   .home-main {
-    padding: 30px 10px 10px 230px;
+    padding: 30px 12px 10px 12px;
   }
 }

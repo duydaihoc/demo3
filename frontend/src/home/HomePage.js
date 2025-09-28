@@ -19,6 +19,8 @@ function HomePage() {
           <span className="home-title">Trang chủ</span>
           <div className="home-actions">
             <button onClick={() => navigate('/transactions')}>+ Ghi chép</button>
+            {/* New: button to switch to Group interface */}
+            <button onClick={() => navigate('/group')} style={{ marginLeft: 8 }}>Giao diện nhóm</button>
           </div>
         </div>
         <div className="home-content">

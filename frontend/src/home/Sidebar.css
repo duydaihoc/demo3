@@ -1,6 +1,7 @@
 .sidebar {
   width: 220px;
-  height: 100vh;
+  min-height: 100vh; /* đảm bảo chiều cao tối thiểu là 100% viewport */
+  height: 100%; /* kéo dài theo kích thước thực của trang */
   background: linear-gradient(135deg, #2a5298 0%, #4ecdc4 100%);
   color: #fff;
   display: flex;
@@ -11,7 +12,9 @@
   position: fixed;
   left: 0;
   top: 0;
+  bottom: 0; /* đảm bảo sidebar kéo dài đến cuối trang */
   z-index: 10;
+  overflow-y: auto; /* cho phép cuộn nếu nội dung quá dài */
 }
 
 .sidebar-user {

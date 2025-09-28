@@ -1,0 +1,69 @@
+.group-main {
+  padding: 20px;
+  background: #f7fafd;
+  min-height: calc(100vh - 40px);
+  width: auto;
+  box-sizing: border-box;
+  flex: 1; /* chiếm phần còn lại trong .group-page */
+  max-width: calc(100% - 240px); /* dự phòng cho sidebar (width + gap) */
+}
+
+/* Khi không nằm trong .group-page (ví dụ standalone), vẫn giữ kiểu cũ */
+@media (min-width: 1200px) {
+  .group-page .group-main { max-width: calc(100% - 260px); }
+}
+
+/* Responsive: nhỏ xuống thì main lấy full width */
+@media (max-width: 900px) {
+  .group-main {
+    max-width: 100%;
+    padding: 16px;
+    min-height: auto;
+  }
+}
+
+.group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.group-title {
+  color: #2a5298;
+  font-size: 1.6rem;
+  margin: 0;
+}
+
+.group-actions .group-back {
+  background: linear-gradient(90deg, #4ecdc4, #2a5298);
+  color: #fff;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.group-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.group-welcome h2 {
+  margin: 0 0 6px 0;
+  color: #163a5a;
+}
+
+.group-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.group-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 6px 20px rgba(10,30,60,0.06);
+}

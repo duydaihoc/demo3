@@ -79,6 +79,9 @@
   width: 80%;
   margin-left: auto;
   margin-right: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
 }
 
 .form-group input {
@@ -94,6 +97,7 @@
   outline: none;
   box-sizing: border-box;
   height: 52px;
+  order: 2; /* move input after label in visual order */
 }
 
 .form-group input:focus {
@@ -102,28 +106,31 @@
 }
 
 .form-group label {
-  position: absolute;
-  left: 16px;
-  top: 16px;
-  color: #6c757d;
-  background: transparent;
+  position: relative;
+  color: #fff; /* brighter color for more visibility */
   pointer-events: none;
   transition: all 0.2s ease;
   font-size: 1rem;
   padding: 0 4px;
+  margin-bottom: 8px;
+  font-weight: 800; /* heavier weight */
+  order: 1; 
+  text-align: left;
+  align-self: flex-start;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3); /* add shadow for emphasis */
+  letter-spacing: 0.5px; /* better readability */
+  transform: translateY(0); /* ensure no transform initially */
+  background: linear-gradient(90deg, rgba(78, 205, 196, 0.7), rgba(42, 82, 152, 0.7));
+  padding: 4px 10px;
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
 }
 
+/* Remove animations that were positioning the label over the input */
 .form-group input:focus + label,
 .form-group input:not(:placeholder-shown) + label {
-  top: -8px;
-  left: 12px;
-  font-size: 0.75rem;
   color: #4a6cf7;
-  background: #fff;
-  padding: 0 8px;
-  border-radius: 12px;
   font-weight: 500;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 
 /* Hiệu ứng khi hover */

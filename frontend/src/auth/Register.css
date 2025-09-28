@@ -57,11 +57,14 @@
   width: 80%;
   margin-left: auto;
   margin-right: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
 }
 
 .form-group input {
   width: 100%;
-  padding: 14px 12px 14px 12px;
+  padding: 14px 12px;
   border: none;
   border-radius: 8px;
   font-size: 1.1rem;
@@ -70,33 +73,32 @@
   transition: box-shadow 0.3s, background 0.3s;
   box-shadow: 0 2px 8px rgba(42,82,152,0.08);
   outline: none;
-}
-
-.form-group input:focus {
-  background: #e3f6f5;
-  box-shadow: 0 0 15px #4ecdc4, 0 2px 8px rgba(42,82,152,0.15);
+  order: 2; /* move input after label in visual order */
 }
 
 .form-group label {
-  position: absolute;
-  left: 14px;
-  top: 14px;
-  color: #2a5298;
-  background: transparent;
+  position: relative;
+  color: #fff; /* bright color for contrast against dark background */
   pointer-events: none;
   transition: 0.2s;
   font-size: 1rem;
+  margin-bottom: 8px;
+  font-weight: 800; /* make bold */
+  order: 1;
+  text-align: left;
+  align-self: flex-start;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3); /* add shadow for depth */
+  letter-spacing: 0.5px;
+  background: linear-gradient(90deg, rgba(78, 205, 196, 0.7), rgba(42, 82, 152, 0.7)); 
+  padding: 4px 10px;
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
 }
 
+/* Remove animations that were positioning the label over the input */
 .form-group input:focus + label,
 .form-group input:not(:placeholder-shown) + label {
-  top: -12px;
-  left: 8px;
-  font-size: 0.85rem;
   color: #4ecdc4;
-  background: #fff;
-  padding: 0 4px;
-  border-radius: 4px;
 }
 
 .auth-button {
@@ -179,3 +181,4 @@
     transform: scale(1) translateY(0);
   }
 }
+

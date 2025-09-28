@@ -36,3 +36,65 @@
     transform: rotate(360deg);
   }
 }
+
+/* Page flip transition */
+.page-transition {
+  perspective: 1400px;
+  -webkit-perspective: 1400px;
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+  will-change: transform, opacity;
+}
+
+/* default (no animation) */
+.page-transition.idle > * {
+  transform: rotateY(0deg);
+  opacity: 1;
+  transition: none;
+  backface-visibility: hidden;
+}
+
+/* exit: rotate from 0 to 90deg (fold away) */
+.page-transition.exit > * {
+  animation: pageFlipOut 350ms ease-in forwards;
+  transform-origin: left center;
+  backface-visibility: hidden;
+}
+
+/* enter: rotate from -90deg to 0 (unfold in) */
+.page-transition.enter > * {
+  animation: pageFlipIn 350ms ease-out forwards;
+  transform-origin: left center;
+  backface-visibility: hidden;
+}
+
+/* keyframes (match timings used in App.js) */
+@keyframes pageFlipOut {
+  from {
+    transform: rotateY(0deg);
+    opacity: 1;
+  }
+  to {
+    transform: rotateY(90deg);
+    opacity: 0;
+  }
+}
+
+@keyframes pageFlipIn {
+  from {
+    transform: rotateY(-90deg);
+    opacity: 0;
+  }
+  to {
+    transform: rotateY(0deg);
+    opacity: 1;
+  }
+}
+
+/* optional: smoother transform on child elements */
+.page-transition > * {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+}
