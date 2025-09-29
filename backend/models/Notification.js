@@ -14,7 +14,11 @@ const notificationSchema = new mongoose.Schema({
   type: {
     type: String,
     required: true,
-    enum: ['group.invite', 'group.response', 'expense.added', 'expense.updated']
+    enum: [
+      'info', 'alert', 'system',
+      'friend.request', 'friend.response', 'friend.remove',
+      'group.invite', 'group.response'
+    ]
   },
   message: {
     type: String,

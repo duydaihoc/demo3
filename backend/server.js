@@ -18,6 +18,14 @@ const categoryRoutes = require('./routes/Category'); // Import category routes
 const savingsRoutes = require('./routes/SavingsGoal'); // Import savings goal routes
 const groupRoutes = require('./routes/groups'); // Import group routes
 const notificationRoutes = require('./routes/notifications'); // Import notification routes
+const http = require('http');
+let Server = null;
+try {
+  // try to load socket.io if installed
+  Server = require('socket.io').Server;
+} catch (err) {
+  console.warn('socket.io not installed — realtime notifications disabled. To enable, run `npm install socket.io` in backend.');
+}
 
 dotenv.config();
 
@@ -221,6 +229,30 @@ app.use('/api/savings', savingsRoutes);
 app.use('/api/groups', groupRoutes);
 // Mount notification routes
 app.use('/api/notifications', notificationRoutes);
+// Mount friends routes
+app.use('/api/friends', require('./routes/friends')); // <-- added
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// create http server and attach socket.io if available
+const server = http.createServer(app);
+let io = null;
+if (Server) {
+  io = new Server(server, { cors: { origin: '*' } });
+  // expose io to routes via app
+  app.set('io', io);
+
+  io.on('connection', (socket) => {
+    // client should emit 'join' with userId after connecting
+    socket.on('join', (userId) => {
+      if (userId) socket.join(String(userId));
+    });
+
+    socket.on('disconnect', () => { /* no-op */ });
+  });
+
+  const PORT = process.env.PORT || 5000;
+  server.listen(PORT, () => console.log(`Server running on port ${PORT} (with socket.io)`));
+} else {
+  // fallback: run express app without socket.io
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => console.log(`Server running on port ${PORT} (socket.io not available)`));
+}

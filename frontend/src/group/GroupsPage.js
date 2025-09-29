@@ -15,10 +15,84 @@ export default function GroupsPage() {
   // Thêm state mới cho gradient direction
   const [gradientDirection, setGradientDirection] = useState('135deg');
 
+  // notifications state
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+  const [loadingNotifs, setLoadingNotifs] = useState(false);
+
   const API_BASE = 'http://localhost:5000';
 
   const getToken = () => localStorage.getItem('token');
   const getUserId = () => localStorage.getItem('userId');
+
+  // Fetch notifications for current user (robust: try multiple endpoints & shapes)
+  const fetchNotifications = useCallback(async () => {
+    const token = getToken();
+    const userId = getUserId();
+    if (!token) return;
+    setLoadingNotifs(true);
+    try {
+      const tried = [];
+      let res = null;
+      // try standard endpoint
+      try {
+        res = await fetch(`${API_BASE}/api/notifications`, { headers: { Authorization: `Bearer ${token}` } });
+        tried.push('/api/notifications');
+      } catch (e) { res = null; }
+      // fallback: try /api/notifications/list
+      if (!res || !res.ok) {
+        try {
+          res = await fetch(`${API_BASE}/api/notifications/list`, { headers: { Authorization: `Bearer ${token}` } });
+          tried.push('/api/notifications/list');
+        } catch (e) { res = null; }
+      }
+      // fallback: try query by recipient
+      if ((!res || !res.ok) && userId) {
+        try {
+          res = await fetch(`${API_BASE}/api/notifications?recipient=${encodeURIComponent(userId)}`, { headers: { Authorization: `Bearer ${token}` } });
+          tried.push('/api/notifications?recipient=' + userId);
+        } catch (e) { res = null; }
+      }
+
+      if (!res || !res.ok) {
+        setNotifications([]);
+        return;
+      }
+
+      const data = await res.json().catch(() => null);
+      // Accept many shapes: array, { notifications: [...] }, { data: [...] }
+      let arr = [];
+      if (Array.isArray(data)) arr = data;
+      else if (data && Array.isArray(data.notifications)) arr = data.notifications;
+      else if (data && Array.isArray(data.data)) arr = data.data;
+      else arr = [];
+
+      // normalize minimal fields
+      const normalized = arr.map(n => ({
+        _id: n._id || n.id,
+        message: n.message || n.text || '',
+        createdAt: n.createdAt || n.created || n.date,
+        read: !!n.read,
+        raw: n
+      }));
+
+      // sort desc by date
+      normalized.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+      setNotifications(normalized);
+    } catch (e) {
+      console.warn('fetchNotifications error', e);
+      setNotifications([]);
+    } finally {
+      setLoadingNotifs(false);
+    }
+  }, [API_BASE]);
+
+  // Poll notifications periodically
+  useEffect(() => {
+    fetchNotifications();
+    const t = setInterval(fetchNotifications, 8000);
+    return () => clearInterval(t);
+  }, [fetchNotifications]);
 
   const fetchGroups = useCallback(async () => {
     setErrorMsg(null);
@@ -101,7 +175,7 @@ export default function GroupsPage() {
         throw new Error(err && (err.message || err.error) ? (err.message || err.error) : 'Server error');
       }
 
-      const created = await res.json();
+      await res.json();
       // Refresh list
       fetchGroups();
       // Reset form
@@ -234,6 +308,86 @@ export default function GroupsPage() {
           </div>
 
           <div className="header-actions">
+            {/* Notification bell */}
+            <div className="notification-container" style={{ position: 'relative' }}>
+              <button
+                className="notification-bell"
+                onClick={() => { setShowNotifDropdown(v => !v); if (!showNotifDropdown) fetchNotifications(); }}
+                aria-label="Thông báo"
+                title="Thông báo"
+              >
+                🔔
+                {notifications && notifications.filter(n => !n.read).length > 0 && (
+                  <span className="notification-badge">{notifications.filter(n => !n.read).length}</span>
+                )}
+              </button>
+
+              {showNotifDropdown && (
+                <div className="notification-dropdown" role="menu" aria-label="Notifications">
+                  <div className="notification-header">
+                    <h3>Thông báo</h3>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <button
+                        className="mark-all-read"
+                        onClick={async () => {
+                          // mark all read locally and try backend call
+                          setNotifications(prev => prev.map(p => ({ ...p, read: true })));
+                          try {
+                            const token = getToken();
+                            if (token) await fetch(`${API_BASE}/api/notifications/mark-read`, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                              body: JSON.stringify({ all: true })
+                            });
+                          } catch (e) { /* ignore */ }
+                        }}
+                      >
+                        Đánh dấu đã đọc
+                      </button>
+                      <button
+                        className="mark-all-read"
+                        onClick={async () => { await fetchNotifications(); }}
+                        title="Làm mới"
+                      >
+                        Làm mới
+                      </button>
+                    </div>
+                  </div>
+                  <div className="notification-list">
+                    {loadingNotifs ? <div className="no-notifications"><p>Đang tải...</p></div> :
+                      (notifications.length === 0 ? (
+                        <div className="no-notifications"><p>Không có thông báo</p></div>
+                      ) : notifications.map(n => (
+                        <div
+                          key={n._id || n.id}
+                          className={`notification-item ${n.read ? '' : 'unread'}`}
+                          onClick={async () => {
+                            // mark single read locally and best-effort backend call
+                            setNotifications(prev => prev.map(x => x._id === n._id ? { ...x, read: true } : x));
+                            try {
+                              const token = getToken();
+                              if (token) await fetch(`${API_BASE}/api/notifications/mark-read`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                                body: JSON.stringify({ id: n._id })
+                              });
+                            } catch (e) { /* ignore */ }
+                            // minimal action: show alert; replace with navigation if desired
+                            alert(n.message || 'Bạn có thông báo mới');
+                          }}
+                        >
+                          <div className="notification-content">
+                            <p>{n.message}</p>
+                            <div className="notification-time">{new Date(n.createdAt || n.created || n.date).toLocaleString()}</div>
+                          </div>
+                          {!n.read && <div className="unread-indicator" />}
+                        </div>
+                      )))
+                    }
+                  </div>
+                </div>
+              )}
+            </div>
             <button className="create-group-btn" onClick={() => setShowCreateModal(true)}>+ Tạo nhóm mới</button>
           </div>
         </header>
@@ -409,4 +563,6 @@ export default function GroupsPage() {
     </div>
   );
 }
-      
+                            
+
+

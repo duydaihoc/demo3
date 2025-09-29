@@ -9,6 +9,7 @@ export default function GroupSidebar({ active = 'overview' }) {
   const items = [
     { id: 'home', label: 'Trang chủ', route: '/group' },
     { id: 'groups', label: 'Nhóm', route: '/groups' },
+    { id: 'friends', label: 'Bạn bè', route: '/friends' }, // mới
     { id: 'activity', label: 'Hoạt động', route: '/activity' },
     { id: 'settings', label: 'Cài đặt', route: '/settings' },
   ];

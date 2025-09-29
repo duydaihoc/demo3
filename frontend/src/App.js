@@ -15,6 +15,7 @@ import AdminWalletsPage from './admin/AdminWalletsPage';
 import AdminTransactionsPage from './admin/AdminTransactionsPage'; // <-- new import
 import GroupHome from './group/GroupHome';
 import GroupsPage from './group/GroupsPage'; // <-- new import
+import GroupFriends from './group/GroupFriends'; // <-- NEW
 
 import { useEffect, useState } from 'react';
 
@@ -65,7 +66,6 @@ function AppRoutes() {
 				<Route path="/login" element={<Login />} />
 				<Route path="/register" element={<Register />} />
 				<Route path="/home" element={<HomePage />} />
-				<Route path="/groups" element={<GroupsPage />} /> {/* Route cho trang Nhóm */}
 				<Route path="/transactions" element={<TransactionsPage />} />
 				<Route path="/settings" element={<SettingsPage />} />
 				<Route path="/admin" element={<AdminPage />} />
@@ -76,17 +76,79 @@ function AppRoutes() {
 				<Route path="/admin/categories" element={<AdminCategoriesPage />} /> {/* Add new route */}
 				<Route path="/admin/transactions" element={<AdminTransactionsPage />} /> {/* Add new route */}
 				<Route path="/group" element={<GroupHome />} /> {/* Route for GroupHome */}
+				<Route path="/groups" element={<GroupsPage />} /> {/* Route cho trang Nhóm */}
+				<Route path="/friends" element={<GroupFriends />} /> {/* Route cho trang Bạn bè */}
 			</Routes>
 		</div>
 	);
 }
 
+// mount polling notification in top-level App (fallback if socket.io-client not installed)
 function App() {
-  return (
-    <Router>
-	  <AppRoutes />
-    </Router>
-  );
+	useEffect(() => {
+		const token = localStorage.getItem('token');
+		const userId = localStorage.getItem('userId');
+		if (!userId) return;
+
+		let stopped = false;
+		let lastSeenIds = new Set();
+
+		const normalizeList = (data) => {
+			if (!data) return [];
+			if (Array.isArray(data)) return data;
+			if (data.notifications && Array.isArray(data.notifications)) return data.notifications;
+			if (data.data && Array.isArray(data.data)) return data.data;
+			return [];
+		};
+
+		const checkNotifications = async () => {
+			try {
+				let res = await fetch('http://localhost:5000/api/notifications', {
+					headers: token ? { Authorization: `Bearer ${token}` } : {}
+				});
+				if (!res.ok) {
+					// try alternate endpoint
+					try {
+						res = await fetch('http://localhost:5000/api/notifications/list', {
+							headers: token ? { Authorization: `Bearer ${token}` } : {}
+						});
+					} catch (e) { res = null; }
+				}
+				if (!res) return;
+				const data = await res.json().catch(() => null);
+				const arr = normalizeList(data);
+				const newNotifs = arr.filter(n => !lastSeenIds.has(String(n._id || n.id)));
+				if (newNotifs.length > 0) {
+					newNotifs.forEach(n => {
+						try {
+							const msg = n && (n.message || n.text) ? (n.message || n.text) : 'Bạn có thông báo mới';
+							alert(msg);
+						} catch (e) { /* ignore */ }
+					});
+					arr.forEach(n => lastSeenIds.add(String(n._id || n.id)));
+				}
+			} catch (err) {
+				console.warn('Notification poll error', err);
+			}
+		};
+
+		// initial check and then interval
+		checkNotifications();
+		const interval = setInterval(() => {
+			if (!stopped) checkNotifications();
+		}, 8000);
+
+		return () => {
+			stopped = true;
+			clearInterval(interval);
+		};
+	}, []);
+
+	return (
+		<Router>
+			<AppRoutes />
+		</Router>
+	);
 }
 
 export default App;
