@@ -7,11 +7,11 @@ export default function GroupSidebar({ active = 'overview' }) {
   const [selected, setSelected] = useState(active);
 
   const items = [
-    { id: 'overview', label: 'Tổng quan' },
-    { id: 'members', label: 'Thành viên' },
-    { id: 'events', label: 'Sự kiện' },
-    { id: 'files', label: 'Tài liệu' },
-    { id: 'settings', label: 'Cài đặt' },
+    { id: 'home', label: 'Trang chủ', route: '/group' },
+    { id: 'friends', label: 'Bạn bè', route: '/friends' },
+    { id: 'groups', label: 'Nhóm', route: '/groups' },
+    { id: 'activity', label: 'Hoạt động', route: '/activity' },
+    { id: 'settings', label: 'Cài đặt', route: '/settings' },
   ];
 
   return (
@@ -27,8 +27,12 @@ export default function GroupSidebar({ active = 'overview' }) {
             <li key={it.id}>
               <button
                 className={`gs-item ${selected === it.id ? 'active' : ''}`}
-                onClick={() => setSelected(it.id)}
+                onClick={() => {
+                  setSelected(it.id);
+                  if (it.route) navigate(it.route);
+                }}
                 aria-pressed={selected === it.id}
+                aria-label={it.label}
               >
                 {it.label}
               </button>

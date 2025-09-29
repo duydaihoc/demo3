@@ -13,7 +13,7 @@ import {
   LineElement,
   PointElement 
 } from 'chart.js';
-import { Pie, Bar, Line } from 'react-chartjs-2';
+import { Pie, Bar } from 'react-chartjs-2';
 import ExportModal from '../components/ExportModal';
 
 // Register Chart.js components
@@ -205,7 +205,7 @@ export default function FinanceDashboard() {
     return { barData, pieData };
   }, []);
 
-  // New function to prepare stock-like chart data
+  // New function to prepare column chart data for income/expense
   const prepareStockChartData = useCallback((transactions, walletsList) => {
     // Get the last 30 days for the chart
     const dates = [];
@@ -221,73 +221,63 @@ export default function FinanceDashboard() {
       date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })
     );
     
-    // Get initial balances from wallets
-    const initialBalances = {};
-    let totalInitialBalance = 0;
+    // Calculate daily income and expense
+    const dailyIncome = Array(dates.length).fill(0);
+    const dailyExpense = Array(dates.length).fill(0);
     
-    walletsList.forEach(wallet => {
-      const initialBalance = Number(wallet.initialBalance) || 0;
-      initialBalances[wallet._id] = initialBalance;
-      totalInitialBalance += initialBalance;
-    });
-    
-    if (totalInitialBalance === 0) totalInitialBalance = 1; // Avoid division by zero
-    
-    // Calculate daily balances
-    const dailyBalances = dates.map(date => {
-      const dayStart = new Date(date);
-      dayStart.setHours(0, 0, 0, 0);
+    transactions.forEach(tx => {
+      const txDate = tx.date ? new Date(tx.date) : null;
+      if (!txDate) return;
       
-      const dayEnd = new Date(date);
-      dayEnd.setHours(23, 59, 59, 999);
+      // Find the index of this date in our dates array
+      const dayIndex = dates.findIndex(date => 
+        date.getDate() === txDate.getDate() && 
+        date.getMonth() === txDate.getMonth() && 
+        date.getFullYear() === txDate.getFullYear()
+      );
       
-      // Calculate balance at this date
-      let balance = totalInitialBalance;
-      
-      transactions.forEach(tx => {
-        const txDate = tx.date ? new Date(tx.date) : null;
-        if (!txDate || txDate > dayEnd) return;
-        
+      if (dayIndex !== -1) {
         const amount = Number(tx.amount) || 0;
-        if (txDate <= dayEnd) {
-          if (tx.type === 'income') {
-            balance += amount;
-          } else {
-            balance -= amount;
-          }
+        if (tx.type === 'income') {
+          dailyIncome[dayIndex] += amount;
+        } else {
+          dailyExpense[dayIndex] += amount;
         }
-      });
-      
-      // Calculate percentage compared to initial balance
-      const percentage = (balance / totalInitialBalance * 100).toFixed(2);
-      return percentage;
+      }
     });
     
-    // Create gradient colors based on performance
-    const performanceChange = dailyBalances[dailyBalances.length - 1] - 100;
-    const gradientColor = performanceChange >= 0 ? 
-      'rgba(46, 204, 113, 0.5)' : 
-      'rgba(231, 76, 60, 0.5)';
-    const borderColor = performanceChange >= 0 ? 
-      'rgba(46, 204, 113, 1)' : 
-      'rgba(231, 76, 60, 1)';
+    // Convert expenses to negative values for the chart
+    const negativeExpenses = dailyExpense.map(val => -val);
+    
+    // Calculate total volume for reference
+    let totalIncome = dailyIncome.reduce((sum, val) => sum + val, 0);
+    let totalExpense = dailyExpense.reduce((sum, val) => sum + val, 0);
+    let netChange = totalIncome - totalExpense;
+    let percentChange = totalIncome > 0 ? (netChange / totalIncome * 100).toFixed(2) : 0;
     
     return {
       labels: dateLabels,
       datasets: [
         {
-          label: 'Số dư (% so với ban đầu)',
-          data: dailyBalances,
-          borderColor: borderColor,
-          backgroundColor: gradientColor,
-          fill: true,
-          tension: 0.2,
-          pointRadius: 0,
-          pointHoverRadius: 5,
-          pointHitRadius: 20,
+          label: 'Thu nhập',
+          data: dailyIncome,
+          backgroundColor: 'rgba(46, 204, 113, 0.7)',
+          borderColor: 'rgba(46, 204, 113, 1)',
+          borderWidth: 1,
+          borderRadius: 4,
+          borderSkipped: false,
+        },
+        {
+          label: 'Chi tiêu',
+          data: negativeExpenses,
+          backgroundColor: 'rgba(231, 76, 60, 0.7)',
+          borderColor: 'rgba(231, 76, 60, 1)',
+          borderWidth: 1,
+          borderRadius: 4,
+          borderSkipped: false,
         }
       ],
-      performanceChange
+      performanceChange: percentChange
     };
   }, []);
 
@@ -541,7 +531,7 @@ export default function FinanceDashboard() {
     },
   };
 
-  // Stock chart options
+  // Stock chart options - updated for column chart
   const stockOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -559,12 +549,11 @@ export default function FinanceDashboard() {
         }
       },
       y: {
-        position: 'right',
         grid: {
           color: 'rgba(0, 0, 0, 0.05)',
         },
         ticks: {
-          callback: (value) => `${value}%`,
+          callback: (value) => `${Math.abs(value).toLocaleString('vi-VN')}₫`,
           font: {
             size: 10,
           }
@@ -573,11 +562,12 @@ export default function FinanceDashboard() {
     },
     plugins: {
       legend: {
-        display: false,
+        display: true,
+        position: 'top',
       },
       title: {
         display: true,
-        text: 'Biến động số dư (% so với ban đầu)',
+        text: 'Biến động số dư theo thời gian',
         font: {
           size: 16,
           weight: 'bold'
@@ -585,7 +575,11 @@ export default function FinanceDashboard() {
       },
       tooltip: {
         callbacks: {
-          label: (context) => `Số dư: ${context.raw}% so với ban đầu`
+          label: (context) => {
+            const value = context.raw;
+            const formattedValue = Math.abs(value).toLocaleString('vi-VN') + '₫';
+            return `${context.dataset.label}: ${formattedValue}`;
+          }
         }
       }
     },
@@ -738,21 +732,21 @@ export default function FinanceDashboard() {
           </div>
         </div>
         
-        {/* Stock-like chart */}
+        {/* Stock-like chart - now a column chart */}
         <div className="fd-stock-chart-container">
           <div className="fd-stock-chart-header">
             <div className="fd-stock-chart-title">
               Biến động số dư theo thời gian
               {stockChartData && stockChartData.performanceChange && (
                 <span className={`fd-stock-performance ${stockChartData.performanceChange >= 0 ? 'positive' : 'negative'}`}>
-                  {stockChartData.performanceChange >= 0 ? '+' : ''}{stockChartData.performanceChange.toFixed(2)}%
+                  {stockChartData.performanceChange >= 0 ? '+' : ''}{stockChartData.performanceChange}%
                 </span>
               )}
             </div>
             <div className="fd-stock-chart-period">30 ngày gần nhất</div>
           </div>
           <div className="fd-stock-chart">
-            {stockChartData && <Line options={stockOptions} data={stockChartData} height={200} />}
+            {stockChartData && <Bar options={stockOptions} data={stockChartData} height={200} />}
           </div>
         </div>
         
@@ -863,6 +857,7 @@ export default function FinanceDashboard() {
     </div>
   );
 }
+
 
 
 

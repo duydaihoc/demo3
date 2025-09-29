@@ -422,7 +422,16 @@ function TransactionsPage() {
   return (
     <div>
       <Sidebar userName={userName} />
-      <main className="transactions-main" style={{ marginLeft: 220 }}>
+      <main
+        className="transactions-main"
+        style={{
+          marginLeft: 220,
+          height: '100vh',          // fill viewport height
+          overflowY: 'auto',       // enable vertical scrolling
+          boxSizing: 'border-box', // include padding in height calculations
+          padding: '24px'          // keep spacing consistent with other pages
+        }}
+      >
         <div className="transactions-header">
           <span className="transactions-title">Giao dịch</span>
           <div className="transactions-date">

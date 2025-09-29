@@ -14,6 +14,7 @@ import AdminCategoriesPage from './admin/AdminCategoriesPage'; // Import new com
 import AdminWalletsPage from './admin/AdminWalletsPage';
 import AdminTransactionsPage from './admin/AdminTransactionsPage'; // <-- new import
 import GroupHome from './group/GroupHome';
+import FriendsPage from './group/FriendsPage';
 
 import { useEffect, useState } from 'react';
 
@@ -64,6 +65,7 @@ function AppRoutes() {
 				<Route path="/login" element={<Login />} />
 				<Route path="/register" element={<Register />} />
 				<Route path="/home" element={<HomePage />} />
+				<Route path="/friends" element={<FriendsPage />} />
 				<Route path="/transactions" element={<TransactionsPage />} />
 				<Route path="/settings" element={<SettingsPage />} />
 				<Route path="/admin" element={<AdminPage />} />

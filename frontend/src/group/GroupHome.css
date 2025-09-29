@@ -1,16 +1,31 @@
 .group-main {
   padding: 20px;
   background: #f7fafd;
-  min-height: calc(100vh - 40px);
-  width: auto;
+  min-height: 100vh; /* Minimum height */
+  height: auto; /* Allow growing with content */
+  width: 100%; /* Set to 100% to take full available width */
   box-sizing: border-box;
   flex: 1; /* chiếm phần còn lại trong .group-page */
-  max-width: calc(100% - 240px); /* dự phòng cho sidebar (width + gap) */
+  /* Remove max-width restriction that was causing the issue */
 }
 
 /* Khi không nằm trong .group-page (ví dụ standalone), vẫn giữ kiểu cũ */
 @media (min-width: 1200px) {
-  .group-page .group-main { max-width: calc(100% - 260px); }
+  .group-page .group-main { 
+    /* Remove max-width restriction */
+    width: 100%;
+  }
+}
+
+/* Ensure group-page sets up the correct layout */
+.group-page {
+  display: flex;
+  min-height: 100vh;
+  height: auto;
+  padding-left: 220px; /* Space for sidebar */
+  overflow-x: hidden;
+  width: 100%; /* Ensure full width of viewport */
+  box-sizing: border-box; /* Include padding in width calculation */
 }
 
 /* Responsive: nhỏ xuống thì main lấy full width */
@@ -18,7 +33,8 @@
   .group-main {
     max-width: 100%;
     padding: 16px;
-    min-height: auto;
+    min-height: auto; /* Remove minimum height restriction */
+    height: auto; /* Allow content to determine height */
   }
 }
 
@@ -44,10 +60,25 @@
   cursor: pointer;
 }
 
+/* Add styles for proper scrolling with large content */
+body {
+  overflow-y: auto; /* Ensure body allows scrolling */
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+html {
+  scroll-behavior: smooth; /* For smoother scrolling */
+}
+
+/* Ensure content can expand to accommodate large children */
 .group-content {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  height: auto; /* Allow expanding with content */
+  min-height: 0; /* Remove min-height restrictions */
 }
 
 .group-welcome h2 {

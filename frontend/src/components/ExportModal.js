@@ -127,6 +127,28 @@ function ExportModal({
         categoryMap[String(c._id)] = c.name || c._id;
       });
 
+      // Calculate monthly summary for better financial analysis
+      const summary = {
+        income: 0,
+        expense: 0,
+        currencies: {}
+      };
+      
+      monthTxs.forEach(tx => {
+        const amount = Number(tx.amount) || 0;
+        const currency = (tx.wallet && tx.wallet.currency) || (tx.currency) || 'VND';
+        
+        if (tx.type === 'income') {
+          summary.income += amount;
+          summary.currencies[currency] = summary.currencies[currency] || { income: 0, expense: 0 };
+          summary.currencies[currency].income += amount;
+        } else {
+          summary.expense += amount;
+          summary.currencies[currency] = summary.currencies[currency] || { income: 0, expense: 0 };
+          summary.currencies[currency].expense += amount;
+        }
+      });
+      
       // For CSV cell escaping, using a more direct approach without formatCurrency
       const escapeCell = (cell) => {
         if (cell === null || cell === undefined) return '""';
@@ -150,11 +172,8 @@ function ExportModal({
       // Metadata section (user info) - Enhanced with profile data
       sections.push([['## Thông tin người dùng']]);
       sections.push([['Tên đầy đủ', userProfile.name || userProfile.fullName || 'N/A']]);
-      // Tên người dùng: prefer explicit username, otherwise derived local-part from email
       sections.push([['Tên người dùng', displayUsername || 'N/A']]);
-      // Keep email as a separate field
       sections.push([['Email', userProfile.email || 'N/A']]);
-      
       sections.push([['Vai trò', userProfile.role || 'User']]);
       sections.push([['ID', userProfile.id || userProfile._id || 'N/A']]);
       sections.push([[]]);
@@ -229,28 +248,6 @@ function ExportModal({
         sections.push([[date, title, amount, type, walletName, categoryName, currency, note]]);
       });
 
-      // Calculate monthly summary for better financial analysis
-      const summary = {
-        income: 0,
-        expense: 0,
-        currencies: {}
-      };
-      
-      monthTxs.forEach(tx => {
-        const amount = Number(tx.amount) || 0;
-        const currency = (tx.wallet && tx.wallet.currency) || (tx.currency) || 'VND';
-        
-        if (tx.type === 'income') {
-          summary.income += amount;
-          summary.currencies[currency] = summary.currencies[currency] || { income: 0, expense: 0 };
-          summary.currencies[currency].income += amount;
-        } else {
-          summary.expense += amount;
-          summary.currencies[currency] = summary.currencies[currency] || { income: 0, expense: 0 };
-          summary.currencies[currency].expense += amount;
-        }
-      });
-      
       // Add summary section
       sections.push([[]]);
       sections.push([['## Tổng kết tháng']]);
@@ -280,7 +277,14 @@ function ExportModal({
       });
 
       // Add UTF-8 BOM for Excel compatibility with Vietnamese characters
-      const csvContent = '\uFEFF' + csvLines.join('\n'); 
+      const csvContent = '\uFEFF' + csvLines.join('\n');
+
+      // Create a better filename with user info
+      const safeName = (displayUsername || userProfile.email || userProfile.name || 'user')
+        .replace(/\s+/g, '_')
+        .replace(/[^a-zA-Z0-9_-]/g, '');
+      
+      const filename = `bao-cao-tai-chinh-${safeName}-${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
 
       // For CSV export, create download
       if (format === 'csv') {
@@ -288,158 +292,136 @@ function ExportModal({
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         
-        // Create a better filename with user info - use computed displayUsername first, then email/name
-        const safeName = (displayUsername || userProfile.email || userProfile.name || 'user')
-          .replace(/\s+/g, '_')
-          .replace(/[^a-zA-Z0-9_-]/g, '');
-        const filename = `bao-cao-tai-chinh-${safeName}-${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}.csv`;
-        
         link.href = url;
-        link.setAttribute('download', filename);
+        link.setAttribute('download', `${filename}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
-      } else {
-        // Other export formats (handled as before)
-        switch (format) {
-          case 'excel':
-            alert('Tính năng xuất Excel sẽ sớm được hỗ trợ!');
-            break;
-
-          case 'pdf':
-            alert('Tính năng xuất PDF sẽ sớm được hỗ trợ!');
-            break;
-
-          case 'print':
-            // keep existing print behavior (fallback)
-            {
-                  const printWindow = window.open('', '_blank');
-                  if (!printWindow) {
-                    alert('Vui lòng cho phép mở cửa sổ pop-up để sử dụng tính năng này.');
-                    return;
-                  }
-
-                  // Title depends on single-wallet vs all-wallets
-                  const walletTitle = selectedWallet !== 'all' 
-                    ? wallets.find(w => String(w._id) === selectedWallet)?.name || 'Ví đã chọn'
-                    : 'Tất cả ví';
-
-                  const title = `Báo cáo giao dịch - ${walletTitle} - Tháng ${now.getMonth() + 1}/${now.getFullYear()}`;
-
-                  // Helper: build rows HTML for a list of transactions
-                  const buildTableHtml = (txList) => {
-                    if (!txList || txList.length === 0) return '<div class="no-data">Không có giao dịch</div>';
-                    const headers = ['Ngày', 'Tiêu đề', 'Ví', 'Danh mục', 'Loại', 'Số tiền', 'Tiền tệ', 'Ghi chú'];
-                    const headerHtml = `<thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>`;
-                    const bodyHtml = `<tbody>${txList.map(tx => {
-                      const date = tx.date ? (new Date(tx.date)).toLocaleString() : '';
-                      const titleRow = tx.title || tx.description || '';
-                      const wName = (tx.wallet && typeof tx.wallet !== 'string') ? (tx.wallet.name || '') : (walletMap[String(tx.wallet)] || tx.wallet || '');
-                      const catName = tx.category && (typeof tx.category !== 'string') ? (tx.category.name || '') : (categoryMap[String(tx.category)] || tx.category || '');
-                      const typeRow = tx.type || '';
-                      const amount = tx.amount != null ? Number(tx.amount).toLocaleString() : '';
-                      const currency = (tx.wallet && tx.wallet.currency) || (tx.currency) || '';
-                      const note = includeDetails ? (tx.note || tx.description || '') : '';
-                      return `<tr>
-                        <td>${date}</td>
-                        <td>${titleRow}</td>
-                        <td>${wName}</td>
-                        <td>${catName}</td>
-                        <td>${typeRow === 'income' ? 'Thu nhập' : 'Chi tiêu'}</td>
-                        <td class="${typeRow === 'income' ? 'income' : 'expense'}">${amount} ${currency}</td>
-                        <td>${currency}</td>
-                        <td>${note}</td>
-                      </tr>`;
-                    }).join('')}</tbody>`;
-                    return `<table border="0" cellpadding="0" cellspacing="0">${headerHtml}${bodyHtml}</table>`;
-                  };
-
-                  // If printing all wallets, build per-wallet sections
-                  let bodySections = '';
-                  if (selectedWallet === 'all') {
-                    // combined "All wallets" table
-                    bodySections += `<h2>Tất cả giao dịch (Tháng)</h2>${buildTableHtml(monthTxs)}`;
-
-                    // group monthTxs by wallet id (including unknown)
-                    const grouped = {};
-                    monthTxs.forEach(tx => {
-                      const wid = (tx.wallet && (typeof tx.wallet === 'string' ? tx.wallet : (tx.wallet._id || tx.wallet))) || 'unknown';
-                      grouped[wid] = grouped[wid] || [];
-                      grouped[wid].push(tx);
-                    });
-
-                    // ensure we show wallets in user's wallet order, then any unknowns
-                    const walletOrder = (wallets || []).map(w => String(w._id));
-                    const shown = new Set();
-                    walletOrder.forEach(wid => {
-                      const txsFor = grouped[wid] || [];
-                      shown.add(wid);
-                      const wName = wallets.find(w => String(w._id) === wid)?.name || wid;
-                      bodySections += `<h3>Ví: ${wName} — ${txsFor.length} giao dịch</h3>${buildTableHtml(txsFor)}`;
-                    });
-
-                    // remaining groups (unknown or wallets outside user's list)
-                    Object.keys(grouped).forEach(wid => {
-                      if (shown.has(wid)) return;
-                      const txsFor = grouped[wid];
-                      const wName = walletMap[wid] || 'Không xác định';
-                      bodySections += `<h3>Ví: ${wName} — ${txsFor.length} giao dịch</h3>${buildTableHtml(txsFor)}`;
-                    });
-                  } else {
-                    // single wallet: reuse monthTxs (already filtered)
-                    bodySections = `<h2>${walletTitle} — Giao dịch trong tháng</h2>${buildTableHtml(monthTxs)}`;
-                  }
-
-                  const htmlContent = `
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                      <title>${title}</title>
-                      <style>
-                        body { font-family: Arial, sans-serif; margin: 20px; }
-                        h1 { color: #2a5298; margin-bottom: 8px; }
-                        h2 { color: #1f2937; margin-top: 18px; margin-bottom: 8px; }
-                        h3 { color: #374151; margin-top: 12px; margin-bottom: 6px; font-weight: 700; }
-                        table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
-                        th { background: #f8fafc; color: #334155; text-align: left; padding: 8px; border-bottom: 1px solid #e2e8f0; }
-                        td { padding: 8px; border-bottom: 1px solid #e6edf3; vertical-align: top; }
-                        .income { color: #10b981; }
-                        .expense { color: #ef4444; }
-                        .report-info { margin-bottom: 12px; }
-                        .no-data { color: #6b7280; padding: 12px 0; }
-                        @media print { .no-print { display: none; } body { margin: 0; padding: 12px; } }
-                      </style>
-                    </head>
-                    <body>
-                      <div class="no-print" style="text-align: right; margin-bottom: 12px;">
-                        <button onclick="window.print()">In báo cáo</button>
-                        <button onclick="window.close()">Đóng</button>
-                      </div>
-                      <h1>${title}</h1>
-                      <div class="report-info">
-                        <div><strong>Người xuất:</strong> ${displayUsername || userProfile.name || ''} ${userProfile.email ? `(${userProfile.email})` : ''}</div>
-                        <div><strong>Kỳ báo cáo:</strong> ${now.getMonth() + 1}/${now.getFullYear()}</div>
-                        <div><strong>Số giao dịch (tháng):</strong> ${monthTxs.length}</div>
-                        <div><strong>Ngày xuất:</strong> ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}</div>
-                      </div>
-                      ${bodySections}
-                      <div style="margin-top: 24px; font-size: 0.9em; color: #64748b; text-align: center;">
-                        © ${new Date().getFullYear()} Báo cáo tài chính cá nhân
-                      </div>
-                      <script>window.onload = function() { setTimeout(() => window.print(), 500); }</script>
-                    </body>
-                    </html>
-                  `;
-                  printWindow.document.open();
-                  printWindow.document.write(htmlContent);
-                  printWindow.document.close();
-                 }
-                 break;
-
-          default:
-            throw new Error(`Định dạng "${format}" không được hỗ trợ.`);
+      } else if (format === 'print') {
+        // Print functionality (keep existing implementation)
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+          alert('Vui lòng cho phép mở cửa sổ pop-up để sử dụng tính năng này.');
+          return;
         }
+
+        // Title depends on single-wallet vs all-wallets
+        const walletTitle = selectedWallet !== 'all' 
+          ? wallets.find(w => String(w._id) === selectedWallet)?.name || 'Ví đã chọn'
+          : 'Tất cả ví';
+
+        const title = `Báo cáo giao dịch - ${walletTitle} - Tháng ${now.getMonth() + 1}/${now.getFullYear()}`;
+
+        // Helper: build rows HTML for a list of transactions
+        const buildTableHtml = (txList) => {
+          if (!txList || txList.length === 0) return '<div class="no-data">Không có giao dịch</div>';
+          const headers = ['Ngày', 'Tiêu đề', 'Ví', 'Danh mục', 'Loại', 'Số tiền', 'Tiền tệ', 'Ghi chú'];
+          const headerHtml = `<thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>`;
+          const bodyHtml = `<tbody>${txList.map(tx => {
+            const date = tx.date ? (new Date(tx.date)).toLocaleString() : '';
+            const titleRow = tx.title || tx.description || '';
+            const wName = (tx.wallet && typeof tx.wallet !== 'string') ? (tx.wallet.name || '') : (walletMap[String(tx.wallet)] || tx.wallet || '');
+            const catName = tx.category && (typeof tx.category !== 'string') ? (tx.category.name || '') : (categoryMap[String(tx.category)] || tx.category || '');
+            const typeRow = tx.type || '';
+            const amount = tx.amount != null ? Number(tx.amount).toLocaleString() : '';
+            const currency = (tx.wallet && tx.wallet.currency) || (tx.currency) || '';
+            const note = includeDetails ? (tx.note || tx.description || '') : '';
+            return `<tr>
+              <td>${date}</td>
+              <td>${titleRow}</td>
+              <td>${wName}</td>
+              <td>${catName}</td>
+              <td>${typeRow === 'income' ? 'Thu nhập' : 'Chi tiêu'}</td>
+              <td class="${typeRow === 'income' ? 'income' : 'expense'}">${amount} ${currency}</td>
+              <td>${currency}</td>
+              <td>${note}</td>
+            </tr>`;
+          }).join('')}</tbody>`;
+          return `<table border="0" cellpadding="0" cellspacing="0">${headerHtml}${bodyHtml}</table>`;
+        };
+
+        // If printing all wallets, build per-wallet sections
+        let bodySections = '';
+        if (selectedWallet === 'all') {
+          // combined "All wallets" table
+          bodySections += `<h2>Tất cả giao dịch (Tháng)</h2>${buildTableHtml(monthTxs)}`;
+
+          // group monthTxs by wallet id (including unknown)
+          const grouped = {};
+          monthTxs.forEach(tx => {
+            const wid = (tx.wallet && (typeof tx.wallet === 'string' ? tx.wallet : (tx.wallet._id || tx.wallet))) || 'unknown';
+            grouped[wid] = grouped[wid] || [];
+            grouped[wid].push(tx);
+          });
+
+          // ensure we show wallets in user's wallet order, then any unknowns
+          const walletOrder = (wallets || []).map(w => String(w._id));
+          const shown = new Set();
+          walletOrder.forEach(wid => {
+            const txsFor = grouped[wid] || [];
+            shown.add(wid);
+            const wName = wallets.find(w => String(w._id) === wid)?.name || wid;
+            bodySections += `<h3>Ví: ${wName} — ${txsFor.length} giao dịch</h3>${buildTableHtml(txsFor)}`;
+          });
+
+          // remaining groups (unknown or wallets outside user's list)
+          Object.keys(grouped).forEach(wid => {
+            if (shown.has(wid)) return;
+            const txsFor = grouped[wid];
+            const wName = walletMap[wid] || 'Không xác định';
+            bodySections += `<h3>Ví: ${wName} — ${txsFor.length} giao dịch</h3>${buildTableHtml(txsFor)}`;
+          });
+        } else {
+          // single wallet: reuse monthTxs (already filtered)
+          bodySections = `<h2>${walletTitle} — Giao dịch trong tháng</h2>${buildTableHtml(monthTxs)}`;
+        }
+
+        const htmlContent = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>${title}</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 20px; }
+              h1 { color: #2a5298; margin-bottom: 8px; }
+              h2 { color: #1f2937; margin-top: 18px; margin-bottom: 8px; }
+              h3 { color: #374151; margin-top: 12px; margin-bottom: 6px; font-weight: 700; }
+              table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+              th { background: #f8fafc; color: #334155; text-align: left; padding: 8px; border-bottom: 1px solid #e2e8f0; }
+              td { padding: 8px; border-bottom: 1px solid #e6edf3; vertical-align: top; }
+              .income { color: #10b981; }
+              .expense { color: #ef4444; }
+              .report-info { margin-bottom: 12px; }
+              .no-data { color: #6b7280; padding: 12px 0; }
+              @media print { .no-print { display: none; } body { margin: 0; padding: 12px; } }
+            </style>
+          </head>
+          <body>
+            <div class="no-print" style="text-align: right; margin-bottom: 12px;">
+              <button onclick="window.print()">In báo cáo</button>
+              <button onclick="window.close()">Đóng</button>
+            </div>
+            <h1>${title}</h1>
+            <div class="report-info">
+              <div><strong>Người xuất:</strong> ${displayUsername || userProfile.name || ''} ${userProfile.email ? `(${userProfile.email})` : ''}</div>
+              <div><strong>Kỳ báo cáo:</strong> ${now.getMonth() + 1}/${now.getFullYear()}</div>
+              <div><strong>Số giao dịch (tháng):</strong> ${monthTxs.length}</div>
+              <div><strong>Ngày xuất:</strong> ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}</div>
+            </div>
+            ${bodySections}
+            <div style="margin-top: 24px; font-size: 0.9em; color: #64748b; text-align: center;">
+              © ${new Date().getFullYear()} Báo cáo tài chính cá nhân
+            </div>
+            <script>window.onload = function() { setTimeout(() => window.print(), 500); }</script>
+          </body>
+          </html>
+        `;
+        printWindow.document.open();
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+      } else {
+        throw new Error(`Định dạng "${format}" không được hỗ trợ.`);
       }
     } catch (err) {
       console.error('Export failed', err);
@@ -510,40 +492,6 @@ function ExportModal({
                 </div>
               </label>
               
-              <label className={`export-format-option ${exportFormat === 'excel' ? 'selected' : ''}`}>
-                <input 
-                  type="radio" 
-                  name="format" 
-                  value="excel" 
-                  checked={exportFormat === 'excel'}
-                  onChange={() => setExportFormat('excel')}
-                />
-                <div className="format-icon">
-                  <span className="material-icon">📊</span>
-                </div>
-                <div className="format-info">
-                  <div className="format-name">Excel</div>
-                  <div className="format-desc">Tệp Excel .xlsx với định dạng đẹp</div>
-                </div>
-              </label>
-              
-              <label className={`export-format-option ${exportFormat === 'pdf' ? 'selected' : ''}`}>
-                <input 
-                  type="radio" 
-                  name="format" 
-                  value="pdf" 
-                  checked={exportFormat === 'pdf'}
-                  onChange={() => setExportFormat('pdf')}
-                />
-                <div className="format-icon">
-                  <span className="material-icon">📑</span>
-                </div>
-                <div className="format-info">
-                  <div className="format-name">PDF</div>
-                  <div className="format-desc">Tài liệu PDF dễ chia sẻ và in ấn</div>
-                </div>
-              </label>
-              
               <label className={`export-format-option ${exportFormat === 'print' ? 'selected' : ''}`}>
                 <input 
                   type="radio" 
@@ -589,5 +537,6 @@ function ExportModal({
 }
 
 export default ExportModal;
+                    
 
 
