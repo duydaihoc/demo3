@@ -16,6 +16,8 @@ const walletRoutes = require('./routes/wallet'); // Import wallet routes
 const transactionRoutes = require('./routes/transactions'); // Import transaction routes
 const categoryRoutes = require('./routes/Category'); // Import category routes
 const savingsRoutes = require('./routes/SavingsGoal'); // Import savings goal routes
+const groupRoutes = require('./routes/groups'); // Import group routes
+const notificationRoutes = require('./routes/notifications'); // Import notification routes
 
 dotenv.config();
 
@@ -215,6 +217,10 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/categories', categoryRoutes);
 // Mount savings goal routes
 app.use('/api/savings', savingsRoutes);
+// Mount group routes
+app.use('/api/groups', groupRoutes);
+// Mount notification routes
+app.use('/api/notifications', notificationRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

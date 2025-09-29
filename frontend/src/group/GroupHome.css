@@ -7,6 +7,9 @@
   box-sizing: border-box;
   flex: 1; /* chiếm phần còn lại trong .group-page */
   /* Remove max-width restriction that was causing the issue */
+
+  /* ensure main is shifted right when sidebar is fixed/sticky (adjust 260px to match your sidebar width) */
+  
 }
 
 /* Khi không nằm trong .group-page (ví dụ standalone), vẫn giữ kiểu cũ */
@@ -22,7 +25,7 @@
   display: flex;
   min-height: 100vh;
   height: auto;
-  padding-left: 220px; /* Space for sidebar */
+  /* no container padding: sidebar and main handled by flex / main margin */
   overflow-x: hidden;
   width: 100%; /* Ensure full width of viewport */
   box-sizing: border-box; /* Include padding in width calculation */
@@ -30,12 +33,16 @@
 
 /* Responsive: nhỏ xuống thì main lấy full width */
 @media (max-width: 900px) {
-  .group-main {
-    max-width: 100%;
-    padding: 16px;
-    min-height: auto; /* Remove minimum height restriction */
-    height: auto; /* Allow content to determine height */
+  .group-page {
+    flex-direction: column;
   }
+   .group-main {
+     max-width: 100%;
+     padding: 16px;
+     min-height: auto; /* Remove minimum height restriction */
+     height: auto; /* Allow content to determine height */
+     margin-left: 0; /* remove left offset on small screens */
+   }
 }
 
 .group-header {
