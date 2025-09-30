@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './GroupSidebar.css';
 
@@ -14,7 +14,7 @@ export default function GroupSidebar({ active = 'overview' }) {
   const API_BASE = 'http://localhost:5000';
   const getToken = () => localStorage.getItem('token');
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
     const token = getToken();
     if (!token) return;
     setLoadingNotifs(true);
@@ -40,13 +40,13 @@ export default function GroupSidebar({ active = 'overview' }) {
     } finally {
       setLoadingNotifs(false);
     }
-  };
+  }, [API_BASE]);
 
   useEffect(() => {
     fetchNotifications();
     const iv = setInterval(fetchNotifications, 8000);
     return () => clearInterval(iv);
-  }, []);
+  }, [fetchNotifications]);
 
   const markNotificationRead = async (id) => {
     const token = getToken();

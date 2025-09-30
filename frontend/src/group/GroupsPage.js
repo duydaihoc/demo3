@@ -20,7 +20,6 @@ export default function GroupsPage() {
   const API_BASE = 'http://localhost:5000';
 
   const getToken = () => localStorage.getItem('token');
-  const getUserId = () => localStorage.getItem('userId');
 
   const fetchGroups = useCallback(async () => {
     setErrorMsg(null);
