@@ -121,8 +121,8 @@ function App() {
 				if (newNotifs.length > 0) {
 					newNotifs.forEach(n => {
 						try {
-							const msg = n && (n.message || n.text) ? (n.message || n.text) : 'Bạn có thông báo mới';
-							alert(msg);
+							// do not show blocking alert; log instead so UI remains non-blocking
+							console.log('New notification:', n && (n.message || n.text) ? (n.message || n.text) : 'Bạn có thông báo mới');
 						} catch (e) { /* ignore */ }
 					});
 					arr.forEach(n => lastSeenIds.add(String(n._id || n.id)));

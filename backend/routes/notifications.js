@@ -2,21 +2,25 @@ const express = require('express');
 const router = express.Router();
 const Notification = require('../models/Notification');
 const { auth } = require('../middleware/auth');
+const mongoose = require('mongoose');
 
-// GET /api/notifications?userId=...
+// GET /api/notifications
+// optional query: userId (if admin/debug); otherwise use authenticated user
 router.get('/', auth, async (req, res) => {
   try {
-    const { userId } = req.query;
-    if (!userId) return res.status(400).json({ message: 'userId required' });
+    let { userId } = req.query;
+    if (!userId) {
+      // use authenticated user
+      if (!req.user || !req.user._id) return res.status(401).json({ message: 'Authentication required' });
+      userId = String(req.user._id);
+    }
 
-    // Validate ObjectId format
-    const mongoose = require('mongoose');
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       console.log(`Invalid ObjectId format: ${userId}`);
       return res.json([]); // Return empty array instead of error
     }
 
-    const notifs = await Notification.find({ recipient: userId }).sort({ createdAt: -1 }).limit(100);
+    const notifs = await Notification.find({ recipient: userId }).sort({ createdAt: -1 }).limit(200);
     res.json(notifs);
   } catch (err) {
     console.error(err);
@@ -26,6 +30,7 @@ router.get('/', auth, async (req, res) => {
 
 // POST /api/notifications
 // body: { recipient, sender?, type, message, data? }
+// keep public for internal use; optionally it can be protected
 router.post('/', async (req, res) => {
   try {
     const { recipient, sender, type, message, data } = req.body;
@@ -40,11 +45,25 @@ router.post('/', async (req, res) => {
 });
 
 // POST /api/notifications/:id/mark-read
-router.post('/:id/mark-read', async (req, res) => {
+// only recipient can mark their notification as read
+router.post('/:id/mark-read', auth, async (req, res) => {
   try {
     const { id } = req.params;
-    const notif = await Notification.findByIdAndUpdate(id, { read: true, readAt: new Date() }, { new: true });
+    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ message: 'Invalid notification id' });
+
+    const notif = await Notification.findById(id);
     if (!notif) return res.status(404).json({ message: 'Notification not found' });
+
+    // ensure requester is recipient
+    const requesterId = String(req.user._id);
+    if (String(notif.recipient) !== requesterId) {
+      return res.status(403).json({ message: 'Not authorized to mark this notification' });
+    }
+
+    notif.read = true;
+    notif.readAt = new Date();
+    await notif.save();
+
     res.json(notif);
   } catch (err) {
     console.error(err);
@@ -52,17 +71,13 @@ router.post('/:id/mark-read', async (req, res) => {
   }
 });
 
-// POST /api/notifications/mark-all-read?userId=...
+// POST /api/notifications/mark-all-read
+// marks all unread notifications for authenticated user as read
 router.post('/mark-all-read', auth, async (req, res) => {
   try {
-    const { userId } = req.query;
-    if (!userId) return res.status(400).json({ message: 'userId required' });
-
-    // Validate ObjectId format
-    const mongoose = require('mongoose');
+    const userId = String(req.user._id);
     if (!mongoose.Types.ObjectId.isValid(userId)) {
-      console.log(`Invalid ObjectId format: ${userId}`);
-      return res.json({ message: 'Invalid userId format' });
+      return res.status(400).json({ message: 'Invalid userId format' });
     }
 
     await Notification.updateMany({ recipient: userId, read: false }, { read: true, readAt: new Date() });

@@ -14,6 +14,9 @@ export default function GroupFriends() {
   const API_BASE = 'http://localhost:5000';
   const token = localStorage.getItem('token');
 
+  const getToken = () => localStorage.getItem('token');
+  const getUserId = () => localStorage.getItem('userId');
+
   // --- Thay thế fetchCurrentUser: thử /api/friends/list trước rồi các endpoint khác ---
   const fetchCurrentUser = async () => {
     if (!token) return;
@@ -105,7 +108,7 @@ export default function GroupFriends() {
     }
   };
 
-  // poll requests on mount
+  // poll requests on mount (notifications handled in sidebar)
   useEffect(() => {
     fetchRequests();
     fetchCurrentUser();

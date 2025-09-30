@@ -171,6 +171,140 @@
   transform: translateX(8px);
 }
 
+/* Sidebar notification styles */
+.gs-notif {
+  margin-top: 12px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  position: relative;
+  /* ensure dropdown is positioned relative to viewport, not clipped */
+  z-index: 200;
+}
+.gs-notif-bell {
+  background: rgba(255,255,255,0.06);
+  border: none;
+  color: #fff;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  cursor: pointer;
+  position: relative; /* for proper badge placement */
+}
+.gs-notif-bell:hover { background: rgba(255,255,255,0.12); }
+
+/* badge positioned near bell (inside the sidebar area) */
+.gs-notif-badge {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  background: #ff4258;
+  color: #fff;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+}
+
+/* Place dropdown to the right of the fixed sidebar so it doesn't overlap content */
+.gs-notif-dropdown {
+  position: fixed;
+  left: calc(220px + 16px); /* sidebar width + small gap */
+  top: 80px; /* adjust as needed to sit under header */
+  width: 340px;
+  max-height: 420px;
+  background: #fff;
+  color: #0f172a;
+  border-radius: 8px;
+  box-shadow: 0 12px 40px rgba(2,6,23,0.18);
+  overflow: hidden;
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ensure on small screens dropdown anchors inside flow */
+@media (max-width: 900px) {
+  .gs-notif-dropdown {
+    position: absolute;
+    left: 8px;
+    top: calc(100% + 8px);
+    width: calc(100% - 16px);
+  }
+}
+
+.gs-notif-header {
+  display:flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.gs-notif-action {
+  background: none;
+  border: none;
+  color: #1b74e4;
+  cursor: pointer;
+  margin-left: 8px;
+}
+
+/* list with comfortable paddings, wrapping messages */
+.gs-notif-list {
+  overflow-y: auto;
+  max-height: 360px;
+  padding: 6px;
+}
+
+/* nicer scrollbar */
+.gs-notif-list::-webkit-scrollbar { width: 8px; }
+.gs-notif-list::-webkit-scrollbar-thumb {
+  background: rgba(15,23,42,0.08);
+  border-radius: 6px;
+}
+.gs-notif-list::-webkit-scrollbar-track { background: transparent; }
+
+.gs-notif-empty { padding: 14px; color: #64748b; text-align: center; }
+
+/* each item: allow message wrap, spacing, and hover */
+.gs-notif-item {
+  padding: 12px;
+  border-bottom: 1px solid #f3f4f6;
+  cursor: pointer;
+  display: block;
+  background: transparent;
+  transition: background 0.12s;
+}
+.gs-notif-item:hover { background: #f8fafc; }
+
+.gs-notif-item.unread { background: #eef9ff; }
+
+.gs-notif-msg {
+  font-size: 13px;
+  margin-bottom: 6px;
+  line-height: 1.35;
+  word-break: break-word;
+  white-space: normal; /* allow wrap */
+}
+
+.gs-notif-time {
+  font-size: 11px;
+  color: #64748b;
+  display: block;
+}
+
+/* small optimization: ensure dropdown doesn't cover sidebar controls */
+.gs-header .gs-notif { margin-top: 8px; }
+
 /* Responsive adjustments */
 @media (max-width: 900px) {
   .group-page {

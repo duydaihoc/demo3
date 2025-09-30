@@ -42,155 +42,6 @@
   gap: 16px;
 }
 
-/* Notification Bell */
-.notification-container {
-  position: relative;
-}
-
-.notification-bell {
-  background: none;
-  border: none;
-  cursor: pointer;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #444;
-  position: relative;
-  transition: background-color 0.2s;
-}
-
-.notification-bell:hover {
-  background-color: #e4e6eb;
-}
-
-.notification-badge {
-  position: absolute;
-  top: 0px;
-  right: 0px;
-  background-color: #e41e3f;
-  color: white;
-  border-radius: 50%;
-  width: 18px;
-  height: 18px;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-}
-
-/* Notification Dropdown */
-.notification-dropdown {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  width: 320px;
-  max-height: 400px;
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  z-index: 100;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.notification-header {
-  padding: 12px 16px;
-  border-bottom: 1px solid #e4e6eb;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.notification-header h3 {
-  margin: 0;
-  font-size: 16px;
-  color: #1a1a1a;
-}
-
-.mark-all-read {
-  background: none;
-  border: none;
-  color: #1b74e4;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  padding: 0;
-}
-
-.mark-all-read:hover {
-  text-decoration: underline;
-}
-
-.notification-list {
-  overflow-y: auto;
-  max-height: 350px;
-}
-
-.notification-item {
-  padding: 12px 16px;
-  border-bottom: 1px solid #f0f2f5;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  transition: background-color 0.2s;
-  position: relative;
-}
-
-.notification-item:last-child {
-  border-bottom: none;
-}
-
-.notification-item:hover {
-  background-color: #f5f6f7;
-}
-
-.notification-item.unread {
-  background-color: #e7f3ff;
-}
-
-.notification-item.unread:hover {
-  background-color: #dbeeff;
-}
-
-.notification-content {
-  flex: 1;
-}
-
-.notification-content p {
-  margin: 0 0 4px 0;
-  font-size: 14px;
-  color: #1a1a1a;
-}
-
-.notification-time {
-  font-size: 12px;
-  color: #65676b;
-}
-
-.unread-indicator {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: #1b74e4;
-  margin-left: 8px;
-}
-
-.no-notifications {
-  padding: 24px 16px;
-  text-align: center;
-  color: #65676b;
-}
-
-.no-notifications p {
-  margin: 0;
-  font-size: 14px;
-}
-
 /* Create group button */
 .create-group-btn {
   background-color: #1b74e4;
@@ -921,6 +772,152 @@
   align-items: center;
   justify-content: center;
 }
+
+.color-picker .swatch:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15), inset 0 0 0 1px rgba(0,0,0,0.1);
+}
+
+.color-picker .swatch.selected {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2), inset 0 0 0 1px rgba(0,0,0,0.15);
+}
+
+.swatch-check {
+  font-size: 16px;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+}
+
+.color-hint {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+/* Direction selector */
+.direction-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.direction-btn {
+  background: white;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.direction-btn:hover {
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+
+.direction-btn.selected {
+  border-color: #0ea5e9;
+  background: #f0f9ff;
+}
+
+.direction-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  display: block;
+}
+
+/* Card Preview */
+.card-preview-container h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: #475569;
+}
+
+.bank-card-preview {
+  color: white;
+  border-radius: 16px;
+  padding: 20px;
+  height: 220px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+              0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.bank-card-preview:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+/* Form actions */
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.cancel-btn {
+  background: white;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancel-btn:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.create-btn {
+  background: #0ea5e9;
+  border: none;
+  color: white;
+  border-radius: 8px;
+  padding: 10px 24px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.create-btn:hover:not(:disabled) {
+  background: #0284c7;
+}
+
+.create-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Responsive adjustment */
+@media (max-width: 768px) {
+  .card-design-container {
+    grid-template-columns: 1fr;
+  }
+  
+  .bank-card-preview {
+    height: 180px;
+  }
+}
+  
 
 .color-picker .swatch:hover {
   transform: translateY(-4px);
