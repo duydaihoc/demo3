@@ -46,30 +46,55 @@ function AdminGroupsPage() {
         }
         const data = await res.json().catch(() => null);
         const arr = normalize(data);
+
+        // Helper: robust member count extraction
+        const getMembersCount = (g) => {
+          if (!g) return 0;
+          // if members is an array
+          if (Array.isArray(g.members)) return g.members.filter(Boolean).length;
+          // if members present nested under different keys
+          if (Array.isArray(g.members?.data)) return g.members.data.length;
+          if (Array.isArray(g.members?.items)) return g.members.items.length;
+          // numeric fields
+          if (typeof g.memberCount === 'number') return g.memberCount;
+          if (typeof g.membersCount === 'number') return g.membersCount;
+          if (typeof g.countMembers === 'number') return g.countMembers;
+          if (typeof g.members_count === 'number') return g.members_count;
+          // if members is object map
+          if (typeof g.members === 'object' && g.members !== null) {
+            try { return Object.keys(g.members).length; } catch(e){ /* ignore */ }
+          }
+          // if raw has members info
+          if (g.raw && Array.isArray(g.raw.members)) return g.raw.members.filter(Boolean).length;
+          if (g.raw && typeof g.raw.memberCount === 'number') return g.raw.memberCount;
+          // fallback: 0
+          return 0;
+        };
+
         // normalize each group for owner and members
         const normalized = arr.map(g => {
           const owner = (g.owner && (typeof g.owner === 'object')) ? (g.owner.name || g.owner.email || g.owner._id) : (g.owner || g.createdBy || null);
-          const membersCount = Array.isArray(g.members) ? g.members.length : (g.memberCount || 0);
-          return {
-            _id: g._id || g.id,
-            name: g.name || 'Không tên',
-            owner,
-            membersCount,
-            createdAt: g.createdAt || g.created || g.updatedAt || null,
-            raw: g
-          };
-        });
-        setGroups(normalized);
-        setLoading(false);
-        return;
-      } catch (e) {
-        lastErr = e;
-      }
-    }
+          const membersCount = getMembersCount(g);
+           return {
+             _id: g._id || g.id,
+             name: g.name || 'Không tên',
+             owner,
+             membersCount,
+             createdAt: g.createdAt || g.created || g.updatedAt || null,
+             raw: g
+           };
+         });
+         setGroups(normalized);
+         setLoading(false);
+         return;
+       } catch (e) {
+         lastErr = e;
+       }
+     }
 
-    setError(lastErr ? String(lastErr.message || lastErr) : 'Không thể lấy dữ liệu');
-    setLoading(false);
-  }, [API_BASE]);
+     setError(lastErr ? String(lastErr.message || lastErr) : 'Không thể lấy dữ liệu');
+     setLoading(false);
+   }, [API_BASE]);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
