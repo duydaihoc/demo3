@@ -1,0 +1,156 @@
+.group-manage-page {
+  padding: 32px;
+  background: #f7f8fb;
+  min-height: 100vh;
+}
+.group-manage-page h1 {
+  font-size: 2rem;
+  color: #1b74e4;
+  margin-bottom: 18px;
+}
+.gm-loading, .gm-error {
+  color: #b91c1c;
+  padding: 18px;
+}
+.gm-content h2 {
+  font-size: 1.3rem;
+  color: #0f3550;
+}
+.gm-content p {
+  color: #64748b;
+  margin-bottom: 16px;
+}
+.gm-members h3 {
+  margin-top: 24px;
+  color: #1b74e4;
+}
+.gm-members ul {
+  list-style: none;
+  padding: 0;
+}
+.gm-members li {
+  padding: 6px 0;
+  color: #0f3550;
+}
+.gm-group-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+}
+.gm-owner {
+  margin-top: 8px;
+  color: #1b74e4;
+}
+.gm-owner-label {
+  color: #e91e63;
+  font-weight: bold;
+  margin-left: 8px;
+}
+.gm-edit-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.gm-btn {
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-right: 8px;
+  margin-bottom: 4px;
+  transition: background 0.2s;
+}
+.gm-btn.edit { background: #1b74e4; color: #fff; }
+.gm-btn.save { background: #42b72a; color: #fff; }
+.gm-btn.cancel { background: #e4e6eb; color: #0f3550; }
+.gm-btn.remove { background: #f8d7da; color: #b91c1c; }
+.gm-btn.delete { background: #e91e63; color: #fff; }
+.gm-btn.add {
+  background: #00a86b;
+  color: #fff;
+  border-radius: 8px;
+  padding: 8px 14px;
+}
+.gm-btn:disabled { opacity: 0.7; cursor: not-allowed; }
+
+.gm-edit-input {
+  font-size: 1.2rem;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  margin-bottom: 8px;
+}
+
+.gm-edit-color {
+  margin: 18px 0 24px 0;
+  display: flex;
+  gap: 32px;
+}
+.gm-color-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.gm-color-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  box-shadow: 0 2px 6px rgba(2,6,23,0.06);
+}
+.gm-color-swatch.selected {
+  outline: 2px solid #1b74e4;
+}
+.gm-color-check {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  color: #fff;
+  font-weight: bold;
+  font-size: 16px;
+}
+.gm-direction-picker {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.gm-direction-btn {
+  background: #e4e6eb;
+  color: #0f3550;
+  border-radius: 8px;
+  border: none;
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.gm-direction-btn.selected {
+  background: #1b74e4;
+  color: #fff;
+}
+.gm-delete-group {
+  margin-top: 32px;
+}
+
+.gm-add-member {
+  display: block;
+  max-width: 520px;
+}
+.gm-add-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+.gm-add-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}

@@ -1,0 +1,57 @@
+.group-member-page {
+  padding: 32px;
+  background: #f7f8fb;
+  min-height: 100vh;
+}
+.group-member-page h1 {
+  font-size: 2rem;
+  color: #0f3550;
+  margin-bottom: 18px;
+}
+.gm-loading, .gm-error {
+  color: #b91c1c;
+  padding: 18px;
+}
+.gm-content h2 {
+  font-size: 1.3rem;
+  color: #1b74e4;
+}
+.gm-content p {
+  color: #64748b;
+  margin-bottom: 16px;
+}
+.gm-members h3 {
+  margin-top: 24px;
+  color: #0f3550;
+}
+.gm-members ul {
+  list-style: none;
+  padding: 0;
+}
+.gm-members li {
+  padding: 6px 0;
+  color: #1b74e4;
+}
+.gm-owner-label {
+  color: #e91e63;
+  font-weight: bold;
+  margin-left: 8px;
+}
+.gm-leave-group {
+  margin-top: 32px;
+}
+.gm-btn.leave {
+  background: #e91e63;
+  color: #fff;
+  border-radius: 8px;
+  border: none;
+  padding: 10px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.gm-btn.leave:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}

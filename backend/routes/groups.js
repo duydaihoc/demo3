@@ -261,4 +261,159 @@ router.post('/:groupId/respond', auth, async (req, res) => {
   }
 });
 
+// POST /api/groups/:groupId/remove-member
+// owner: xóa thành viên bất kỳ; member: tự rời nhóm
+router.post('/:groupId/remove-member', auth, async (req, res) => {
+  try {
+    console.log('REMOVE MEMBER request (raw)', { groupId: req.params.groupId, body: req.body, user: req.user && req.user._id });
+    const { groupId } = req.params;
+    const rawMember = req.body && req.body.memberId;
+    if (!groupId || (typeof rawMember === 'undefined' || rawMember === null)) {
+      return res.status(400).json({ message: 'groupId and memberId required' });
+    }
+
+    // Normalize member identifier: accept string id, email, or object { _id, id, email }
+    let targetId = null;
+    let targetEmail = null;
+    if (typeof rawMember === 'object') {
+      if (rawMember._id) targetId = String(rawMember._id);
+      else if (rawMember.id) targetId = String(rawMember.id);
+      if (rawMember.email) targetEmail = String(rawMember.email).toLowerCase().trim();
+    } else {
+      const s = String(rawMember);
+      if (s.includes('@')) targetEmail = s.toLowerCase().trim();
+      else targetId = s;
+    }
+    console.log('REMOVE MEMBER normalized', { targetId, targetEmail });
+ 
+    const group = await Group.findById(groupId);
+    if (!group) return res.status(404).json({ message: 'Group not found' });
+ 
+    const isOwner = String(group.owner) === String(req.user._id);
+ 
+    // Permission check:
+    // - owner can remove any member
+    // - non-owner can remove only themself (either by id or by email)
+    if (!isOwner) {
+      let allowed = false;
+      if (targetId && String(req.user._id) === String(targetId)) allowed = true;
+      if (!allowed && targetEmail && req.user.email && String(req.user.email).toLowerCase().trim() === targetEmail) allowed = true;
+      if (!allowed) return res.status(403).json({ message: 'Bạn chỉ có thể rời nhóm của mình' });
+    }
+ 
+    // Find member by user id or email (members may store user ObjectId or only email)
+    const idx = group.members.findIndex(m => {
+      // normalize stored member user id/email
+      const mUserId = m.user && (m.user._id ? String(m.user._id) : String(m.user));
+      const mEmail = m.email && String(m.email).toLowerCase();
+      if (targetId && mUserId && String(mUserId) === String(targetId)) return true;
+      if (targetEmail && mEmail && mEmail === targetEmail) return true;
+      return false;
+    });
+    if (idx === -1) return res.status(404).json({ message: 'Thành viên không tồn tại trong nhóm' });
+ 
+    // Prevent deleting the owner
+    const memberAtIdx = group.members[idx];
+    const memberUserId = memberAtIdx && memberAtIdx.user && (memberAtIdx.user._id ? String(memberAtIdx.user._id) : String(memberAtIdx.user));
+    if (String(group.owner) === String(memberUserId)) {
+      return res.status(400).json({ message: 'Không thể xóa chủ nhóm' });
+    }
+ 
+    group.members.splice(idx, 1);
+    await group.save();
+ 
+    // Trả về group mới
+    const populated = await Group.findById(group._id)
+      .populate('owner', 'name email')
+      .populate('members.user', 'name email');
+    const obj = populated.toObject ? populated.toObject() : populated;
+    if (obj.color && typeof obj.color === 'string') {
+      try { obj.color = JSON.parse(obj.color); } catch (e) { /* ignore */ }
+    }
+    res.json(obj);
+  } catch (err) {
+    console.error('Groups remove-member error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+ 
+// GET /api/groups/:groupId - Get group by ID
+router.get('/:groupId', auth, async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    if (!groupId) return res.status(400).json({ message: 'groupId required' });
+
+    const group = await Group.findById(groupId)
+      .populate('owner', 'name email')
+      .populate('members.user', 'name email');
+    if (!group) return res.status(404).json({ message: 'Group not found' });
+
+    // parse color if stored as string
+    const obj = group.toObject ? group.toObject() : group;
+    if (obj.color && typeof obj.color === 'string') {
+      try { obj.color = JSON.parse(obj.color); } catch (e) { /* ignore */ }
+    }
+    res.json(obj);
+  } catch (err) {
+    console.error('Groups GET /:groupId error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// PUT /api/groups/:groupId - Owner update group name/color
+router.put('/:groupId', auth, async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const { name, color } = req.body;
+    if (!groupId) return res.status(400).json({ message: 'groupId required' });
+
+    const group = await Group.findById(groupId);
+    if (!group) return res.status(404).json({ message: 'Group not found' });
+
+    // Only owner can update
+    if (String(group.owner) !== String(req.user._id)) {
+      return res.status(403).json({ message: 'Chỉ chủ nhóm mới được sửa nhóm' });
+    }
+
+    if (name) group.name = name;
+    if (color) group.color = typeof color === 'object' ? JSON.stringify(color) : color;
+    await group.save();
+
+    const populated = await Group.findById(group._id)
+      .populate('owner', 'name email')
+      .populate('members.user', 'name email');
+    // parse color if needed
+    const obj = populated.toObject ? populated.toObject() : populated;
+    if (obj.color && typeof obj.color === 'string') {
+      try { obj.color = JSON.parse(obj.color); } catch (e) { /* ignore */ }
+    }
+    res.json(obj);
+  } catch (err) {
+    console.error('Groups PUT error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// DELETE /api/groups/:groupId - Owner xóa nhóm
+router.delete('/:groupId', auth, async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    if (!groupId) return res.status(400).json({ message: 'groupId required' });
+
+    const group = await Group.findById(groupId);
+    if (!group) return res.status(404).json({ message: 'Group not found' });
+
+    // Chỉ owner được xóa nhóm
+    if (String(group.owner) !== String(req.user._id)) {
+      return res.status(403).json({ message: 'Chỉ chủ nhóm mới được xóa nhóm' });
+    }
+
+    await group.deleteOne();
+    res.json({ message: 'Đã xóa nhóm' });
+  } catch (err) {
+    console.error('Groups DELETE error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
 module.exports = router;

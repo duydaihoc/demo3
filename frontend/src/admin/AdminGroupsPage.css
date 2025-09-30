@@ -1,0 +1,93 @@
+.admin-groups-page {
+  padding: 28px 32px;
+  min-height: 100vh;
+  box-sizing: border-box;
+  margin-left: 220px; /* match admin layout with sidebar */
+}
+
+.admin-groups-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+.admin-groups-header h1 {
+  margin: 0;
+  color: #07203a;
+  font-size: 22px;
+}
+.admin-groups-actions .refresh-btn {
+  background: #1b74e4;
+  color: #fff;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.admin-groups-actions .refresh-btn:hover { opacity: 0.95; }
+
+.admin-groups-loading,
+.admin-groups-error {
+  margin: 12px 0;
+  padding: 12px;
+  border-radius: 8px;
+}
+.admin-groups-loading { background: #f0f7ff; color: #1b74e4; }
+.admin-groups-error { background: #fff1f2; color: #b91c1c; }
+
+.admin-groups-table-wrap {
+  overflow-x: auto;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(2,6,23,0.06);
+  padding: 12px;
+}
+
+.admin-groups-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+.admin-groups-table thead th {
+  text-align: left;
+  padding: 12px 14px;
+  background: #f3fbff;
+  color: #0f3550;
+  font-weight: 700;
+  border-bottom: 1px solid #e8f7f6;
+}
+.admin-groups-table tbody td {
+  padding: 12px 14px;
+  border-bottom: 1px solid #f1f5f7;
+  color: #113141;
+  vertical-align: middle;
+}
+.admin-groups-table tbody tr:hover td {
+  background: rgba(30,64,175,0.02);
+}
+.admin-groups-table .muted { text-align: center; color: #6b7280; padding: 18px; }
+
+.g-actions .view-btn,
+.g-actions .manage-btn,
+.g-actions button {
+  margin-right: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+}
+.view-btn {
+  background: #e7f3ff;
+  color: #1b74e4;
+}
+.manage-btn {
+  background: #f3f6fb;
+  color: #0f3550;
+}
+
+/* responsive */
+@media (max-width: 900px) {
+  .admin-groups-page { margin-left: 0; padding: 16px; }
+  .admin-groups-table { min-width: 620px; }
+}

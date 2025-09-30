@@ -890,7 +890,6 @@
 
 .create-btn {
   background: #0ea5e9;
-  border: none;
   color: white;
   border-radius: 8px;
   padding: 10px 24px;
@@ -909,157 +908,491 @@
   cursor: not-allowed;
 }
 
-/* Responsive adjustment */
-@media (max-width: 768px) {
-  .card-design-container {
-    grid-template-columns: 1fr;
-  }
-  
-  .bank-card-preview {
-    height: 180px;
-  }
-}
-.color-picker .swatch:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15), inset 0 0 0 1px rgba(0,0,0,0.1);
-}
-
-.color-picker .swatch.selected {
-  transform: translateY(-4px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2), inset 0 0 0 1px rgba(0,0,0,0.15);
-}
-
-.swatch-check {
-  font-size: 16px;
-  color: white;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.4);
-}
-
-.color-hint {
-  margin-top: 12px;
-  font-size: 13px;
-  color: #64748b;
-}
-
-/* Direction selector */
-.direction-selector {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.direction-btn {
-  background: white;
-  border: 1px solid #cbd5e1;
+/* Friends selection list in create group modal */
+.create-group-form .friends-select-list {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid #e6eef2;
   border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.direction-btn:hover {
-  border-color: #94a3b8;
-  background: #f8fafc;
-}
-
-.direction-btn.selected {
-  border-color: #0ea5e9;
-  background: #f0f9ff;
-}
-
-.direction-icon {
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
-  display: block;
-}
-
-/* Card Preview */
-.card-preview-container h4 {
-  margin: 0 0 12px 0;
-  font-size: 14px;
-  color: #475569;
-}
-
-.bank-card-preview {
-  color: white;
-  border-radius: 16px;
-  padding: 20px;
-  height: 220px;
-  position: relative;
-  overflow: hidden;
+  padding: 8px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
-              0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  transition: transform 0.3s, box-shadow 0.3s;
+  gap: 6px;
+  background: #fff;
 }
 
-.bank-card-preview:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+.create-group-form .friend-row {
+  display: grid;
+  grid-template-columns: 24px 44px 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.12s, transform 0.06s;
+  border: 1px solid transparent;
+}
+.create-group-form .friend-row:hover {
+  background: #f7fbfd;
+  transform: translateY(-1px);
 }
 
-/* Form actions */
-.form-actions {
+.create-group-form .friend-row.selected {
+  background: linear-gradient(90deg, rgba(27,116,228,0.06), rgba(30,64,175,0.03));
+  border: 1px solid rgba(27,116,228,0.12);
+}
+
+.create-group-form .friend-row input.friend-checkbox {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  justify-self: center;
+}
+
+.create-group-form .friend-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: #1b74e4;
+  color: #fff;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:700;
+  font-size:16px;
+  box-shadow: 0 4px 12px rgba(2,6,23,0.06);
+}
+
+.create-group-form .friend-meta {
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+.create-group-form .friend-name {
+  font-weight:700;
+  color:#0f3550;
+}
+.create-group-form .friend-email {
+  font-size:13px;
+  color:#64748b;
+  white-space: nowrap;
+}
+
+/* reduce extra spacing on small screens */
+@media (max-width: 520px) {
+  .create-group-form .friend-row { grid-template-columns: 24px 36px 1fr; gap:8px; padding:8px; }
+  .create-group-form .friend-avatar { width:36px; height:36px; font-size:14px; border-radius:6px; }
+}
+
+/* Step 2: Invite Actions in Create Group Modal */
+.create-group-invite .invite-actions {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid #e2e8f0;
+  margin-top: 12px;
+}
+
+/* make "Bỏ qua" less prominent */
+.create-group-invite .cancel-btn {
+  background: #f3f6fb;
+  color: #0f3550;
+}
+
+/* success/error message */
+.create-group-invite .muted { color: #64748b; }
+
+.create-group-invite .friends-invite-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.friend-search-input-modal {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid #d6e6ee;
+  border-radius: 8px;
+  font-size: 14px;
+}
+.friends-invite-actions { display:flex; gap:8px; align-items:center; }
+
+/* ===== Invite Friends UI Redesign ===== */
+.create-group-invite {
+  padding: 24px;
+}
+
+.invite-header {
+  margin-bottom: 20px;
+}
+
+.invite-header h3 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.invite-subtitle {
+  margin: 0;
+  color: #65676b;
+  font-size: 14px;
+}
+
+/* Search and actions */
+.friend-search-container {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.search-input-wrapper {
+  flex: 1;
+  position: relative;
+  min-width: 200px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #8696a0;
+  font-size: 14px;
+}
+
+.friend-search-input {
+  width: 100%;
+  padding: 12px 12px 12px 36px;
+  border: 1px solid #dde6ed;
+  border-radius: 30px;
+  font-size: 14px;
+  transition: all 0.2s;
+  background: white;
+}
+
+.friend-search-input:focus {
+  border-color: #1b74e4;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(27, 116, 228, 0.1);
+}
+
+.search-clear-btn {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #e4e6eb;
+  border: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  color: #65676b;
+}
+
+/* Action buttons */
+.friends-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.action-btn {
+  background: #1b74e4;
+  color: white;
+  border: none;
+  border-radius: 30px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.action-btn:hover {
+  background: #166fe5;
+}
+
+.action-btn.secondary {
+  background: #e4e6eb;
+  color: #050505;
+}
+
+.action-btn.secondary:hover {
+  background: #d8dadf;
+}
+
+/* Selection counter */
+.selection-summary {
+  margin-bottom: 16px;
+}
+
+.selection-counter {
+  display: inline-flex;
+  align-items: center;
+  background: #e7f3ff;
+  border-radius: 30px;
+  padding: 4px 12px;
+}
+
+.counter-number {
+  font-weight: 600;
+  color: #1b74e4;
+  margin-right: 4px;
+}
+
+.counter-text {
+  color: #1b74e4;
+  font-size: 14px;
+}
+
+/* Friend cards grid */
+.friends-grid-container {
+  margin-bottom: 20px;
+  min-height: 200px;
+  max-height: 360px;
+  overflow-y: auto;
+  border: 1px solid #ebedf0;
+  border-radius: 8px;
+  background: white;
+}
+
+.friends-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  padding: 16px;
+}
+
+/* Empty and loading states */
+.friends-loading, .friends-empty {
+  height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #65676b;
+  text-align: center;
+  padding: 20px;
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e4e6eb;
+  border-top-color: #1b74e4;
+  border-radius: 50%;
+  margin-bottom: 16px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.empty-icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+}
+
+.clear-search-btn {
+  margin-top: 12px;
+  background: none;
+  border: none;
+  color: #1b74e4;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+/* Friend card */
+.friend-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #ebedf0;
+  transition: all 0.2s;
+  cursor: pointer;
+  position: relative;
+  background: white;
+}
+
+.friend-card:hover {
+  border-color: #dde6ed;
+  background: #f7f8fa;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.friend-card.selected {
+  border-color: #1b74e4;
+  background: #f0f7ff;
+}
+
+.friend-card-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.friend-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.friend-card-name {
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.friend-card-email {
+  font-size: 12px;
+  color: #65676b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Checkbox styling */
+.friend-card-select {
+  position: relative;
+  width: 22px;
+  height: 22px;
+}
+
+.friend-checkbox {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0;
+  width: 0;
+}
+
+.checkmark {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 22px;
+  width: 22px;
+  background-color: #fff;
+  border: 2px solid #dde6ed;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.friend-card.selected .checkmark {
+  background-color: #1b74e4;
+  border-color: #1b74e4;
+}
+
+.checkmark:after {
+  content: "";
+  position: absolute;
+  display: none;
+  left: 7px;
+  top: 3px;
+  width: 5px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.friend-card.selected .checkmark:after {
+  display: block;
+}
+
+/* Invite actions */
+.invite-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid #ebedf0;
 }
 
 .cancel-btn {
   background: white;
-  border: 1px solid #cbd5e1;
-  color: #475569;
+  border: 1px solid #dde6ed;
   border-radius: 8px;
-  padding: 10px 16px;
-  font-weight: 600;
+  color: #65676b;
+  padding: 8px 16px;
   font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .cancel-btn:hover {
-  background: #f8fafc;
-  border-color: #94a3b8;
+  background: #f7f8fa;
+  border-color: #c0c7cd;
 }
 
-.create-btn {
-  background: #0ea5e9;
-  border: none;
+.invite-btn {
+  background: #1b74e4;
   color: white;
+  border: none;
   border-radius: 8px;
-  padding: 10px 24px;
-  font-weight: 600;
+  padding: 8px 24px;
   font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
 }
 
-.create-btn:hover:not(:disabled) {
-  background: #0284c7;
+.invite-btn:hover:not(:disabled) {
+  background: #166fe5;
 }
 
-.create-btn:disabled {
-  opacity: 0.7;
+.invite-btn:disabled {
+  background: #e4e6eb;
+  color: #BCC0C4;
   cursor: not-allowed;
 }
 
-/* Responsive adjustment */
-@media (max-width: 768px) {
-  .card-design-container {
+.invite-result {
+  margin-top: 16px;
+  padding: 12px;
+  background: #e7f3ff;
+  border-radius: 8px;
+  color: #1b74e4;
+  font-size: 14px;
+  text-align: center;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .friends-grid {
     grid-template-columns: 1fr;
   }
   
-  .bank-card-preview {
-    height: 180px;
+  .friend-search-container {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .friends-actions {
+    justify-content: space-between;
+  }
+  
+  .action-btn {
+    flex: 1;
   }
 }

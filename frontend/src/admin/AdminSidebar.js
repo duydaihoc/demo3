@@ -6,6 +6,7 @@ function AdminSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const [usersOpen, setUsersOpen] = useState(false);
+  const [groupsOpen, setGroupsOpen] = useState(false);
 
   useEffect(() => {
     // Nếu đang ở trong users/wallets/categories/transactions thì auto mở submenu
@@ -15,6 +16,11 @@ function AdminSidebar() {
       location.pathname.startsWith('/admin/categories') ||
       location.pathname.startsWith('/admin/transactions');
     setUsersOpen(shouldOpen);
+    // auto open groups submenu when in groups or groups activity
+    const groupsShouldOpen =
+      location.pathname.startsWith('/admin/groups') ||
+      location.pathname.startsWith('/admin/groups/activity');
+    setGroupsOpen(groupsShouldOpen);
   }, [location.pathname]);
 
   const handleLogout = (e) => {
@@ -31,11 +37,21 @@ function AdminSidebar() {
     navigate('/admin/users');
   };
 
+  const handleGroupsToggle = (e) => {
+    e && e.preventDefault();
+    setGroupsOpen((s) => !s);
+    // navigate to groups main page when toggling open (keeps behaviour consistent)
+    navigate('/admin/groups');
+  };
+
   const parentActive =
     location.pathname.startsWith('/admin/users') ||
     location.pathname.startsWith('/admin/wallets') ||
     location.pathname.startsWith('/admin/categories') ||
     location.pathname.startsWith('/admin/transactions');
+
+  const groupsParentActive =
+    location.pathname.startsWith('/admin/groups') || location.pathname.startsWith('/admin/groups/activity');
 
   return (
     <nav className="admin-sidebar">
@@ -95,13 +111,42 @@ function AdminSidebar() {
         </li>
 
         <li>
-          <Link
-            to="/admin/groups"
-            className={location.pathname === '/admin/groups' ? 'active' : ''}
+          <button
+            className={`admin-parent-btn ${groupsParentActive ? 'active' : ''}`}
+            onClick={handleGroupsToggle}
+            aria-expanded={groupsOpen}
+            style={{
+              width: '100%',
+              padding: '12px 32px',
+              background: 'none',
+              border: 'none',
+              color: 'inherit',
+              fontSize: '1.08rem',
+              textAlign: 'left',
+              cursor: 'pointer',
+              borderRadius: '8px 0 0 8px',
+              fontWeight: 500,
+              position: 'relative'
+            }}
           >
             👥 Quản lý nhóm
-          </Link>
+            <span className={`chev ${groupsOpen ? 'open' : ''}`} aria-hidden>▾</span>
+          </button>
+
+          <ul className={`admin-submenu ${groupsOpen ? 'open' : ''}`}>
+            <li>
+              <Link to="/admin/groups" className={location.pathname === '/admin/groups' ? 'active' : ''}>
+                📋 Tất cả nhóm
+              </Link>
+            </li>
+            <li>
+              <Link to="/admin/groups/activity" className={location.pathname === '/admin/groups/activity' ? 'active' : ''}>
+                ⚡ Hoạt động
+              </Link>
+            </li>
+          </ul>
         </li>
+
         <li>
           <Link
             to="/admin/families"
