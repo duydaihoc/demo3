@@ -1,4 +1,4 @@
-.group-page {
+.groups-page {
   display: flex;
   min-height: 100vh; /* Minimum height */
   height: auto; /* Allow growing beyond viewport */
@@ -307,7 +307,7 @@
 
 /* Responsive adjustments */
 @media (max-width: 900px) {
-  .group-page {
+  .groups-page {
     padding-left: 0; /* Remove padding on small screens */
     flex-direction: column; /* Stack sidebar and content */
   }

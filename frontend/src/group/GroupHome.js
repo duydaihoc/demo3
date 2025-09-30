@@ -9,14 +9,17 @@ export default function GroupHome() {
 
   return (
     // wrap page content so sidebar and main content sit side-by-side
-    <div className="group-page">
+    <div className="groups-page">
       <GroupSidebar /> {/* inserted sidebar */}
 
-      <main className="group-main">
-        <header className="group-header">
-          <h1 className="group-title">Giao diện Nhóm</h1>
-          <div className="group-actions">
-            <button className="group-back" onClick={() => navigate('/home')}>← Trở về</button>
+      <main className="groups-main" role="main">
+        <header className="groups-header">
+          <div>
+            <h1>Giao diện Nhóm</h1>
+            <p className="subtitle">Tổng quan và nhanh chóng truy cập các chức năng nhóm</p>
+          </div>
+          <div className="header-actions">
+            <button className="create-group-btn" onClick={() => navigate('/home')}>← Trở về</button>
           </div>
         </header>
 
