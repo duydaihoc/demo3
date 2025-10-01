@@ -402,19 +402,37 @@ export default function GroupsPage() {
 
 									<div className="bank-actions">
 										{role === 'owner' ? (
-											<button
-												className="wc-btn"
-												onClick={() => navigate(`/groups/manage/${group._id || group.id}`)}
-											>
-												Quản lý nhóm
-											</button>
+											<>
+												<button
+													className="wc-btn"
+													onClick={() => navigate(`/groups/manage/${group._id || group.id}`)}
+												>
+													Quản lý nhóm
+												</button>
+												<button
+													className="wc-btn"
+													onClick={() => navigate(`/groups/activity/${group._id || group.id}`)}
+													title="Xem hoạt động nhóm"
+												>
+													Hoạt động
+												</button>
+											</>
 										) : (
-											<button
-												className="wc-btn"
-												onClick={() => navigate(`/groups/member/${group._id || group.id}`)}
-											>
-												Vào thẻ
-											</button>
+											<>
+												<button
+													className="wc-btn"
+													onClick={() => navigate(`/groups/member/${group._id || group.id}`)}
+												>
+													Vào thẻ
+												</button>
+												<button
+													className="wc-btn"
+													onClick={() => navigate(`/groups/activity/${group._id || group.id}`)}
+													title="Xem hoạt động nhóm"
+												>
+													Hoạt động
+												</button>
+											</>
 										)}
 									</div>
 								</div>

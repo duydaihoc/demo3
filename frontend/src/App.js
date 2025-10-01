@@ -18,6 +18,7 @@ import GroupsPage from './group/GroupsPage'; // <-- new import
 import GroupFriends from './group/GroupFriends'; // <-- NEW
 import GroupManagePage from './group/GroupManagePage';
 import GroupMemberPage from './group/GroupMemberPage';
+import GroupActivityPage from './group/GroupActivityPage'; // <-- new
 
 import { useEffect, useState } from 'react';
 
@@ -82,6 +83,7 @@ function AppRoutes() {
 				<Route path="/friends" element={<GroupFriends />} /> {/* Route cho trang Bạn bè */}
 				<Route path="/groups/manage/:groupId" element={<GroupManagePage />} />
 				<Route path="/groups/member/:groupId" element={<GroupMemberPage />} />
+				<Route path="/groups/activity/:groupId" element={<GroupActivityPage />} />
 			</Routes>
 		</div>
 	);
