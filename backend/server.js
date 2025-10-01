@@ -223,10 +223,12 @@ app.use('/api/wallets', walletRoutes);
 app.use('/api/transactions', transactionRoutes);
 // Mount category routes
 app.use('/api/categories', categoryRoutes);
-// Mount savings goal routes
-app.use('/api/savings', savingsRoutes);
 // Mount group routes
 app.use('/api/groups', groupRoutes);
+
+// Mount group transactions routes (must come after groupRoutes mounting so group routes unaffected)
+app.use('/api/groups', require('./routes/groupTransactions')); // routes in groupTransactions.js use '/:groupId/transactions'
+
 // Mount notification routes
 app.use('/api/notifications', notificationRoutes);
 // Mount friends routes

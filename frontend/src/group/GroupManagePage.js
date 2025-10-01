@@ -16,6 +16,8 @@ export default function GroupManagePage() {
 	const [error, setError] = useState('');
 	const [removingMemberId, setRemovingMemberId] = useState(null);
 	const [deleting, setDeleting] = useState(false);
+	// NEW: modal state for delete confirmation
+	const [showDeleteModal, setShowDeleteModal] = useState(false);
 	// add-member UI state
 	const [showAddMember, setShowAddMember] = useState(false);
 	const [newMemberEmail, setNewMemberEmail] = useState('');
@@ -26,6 +28,11 @@ export default function GroupManagePage() {
 	const [friendsList, setFriendsList] = useState([]);
 	const [loadingFriends, setLoadingFriends] = useState(false);
 	const [selectedFriends, setSelectedFriends] = useState([]);
+
+	// NEW: transactions + loading + debts
+	const [txs, setTxs] = useState([]);
+	const [loadingTxs, setLoadingTxs] = useState(false);
+	const [txError, setTxError] = useState('');
 
 	const API_BASE = 'http://localhost:5000';
 	const token = localStorage.getItem('token');
@@ -40,6 +47,16 @@ export default function GroupManagePage() {
 			if (!t) return '';
 			const payload = JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
 			return payload.id || payload._id || payload.userId || '';
+		} catch (e) { return ''; }
+	};
+
+	// NEW: helper to get current user's email from token (used in computeDebts)
+	const getMyEmail = () => {
+		try {
+			const t = token;
+			if (!t) return '';
+			const payload = JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+			return (payload.email || '').toLowerCase().trim();
 		} catch (e) { return ''; }
 	};
 
@@ -145,10 +162,16 @@ export default function GroupManagePage() {
 		}
 	};
 
-	// Xóa nhóm
+	// Xóa nhóm -> chỉ mở modal (trước đây gọi window.confirm trực tiếp)
 	const handleDeleteGroup = async () => {
 		if (!groupId || !token) return;
-		if (!window.confirm('Bạn có chắc muốn xóa nhóm này?')) return;
+		// open confirmation modal
+		setShowDeleteModal(true);
+	};
+
+	// Thực sự xóa khi người dùng xác nhận
+	const handleConfirmDelete = async () => {
+		if (!groupId || !token) return;
 		setDeleting(true);
 		try {
 			const res = await fetch(`${API_BASE}/api/groups/${groupId}`, {
@@ -156,14 +179,19 @@ export default function GroupManagePage() {
 				headers: { Authorization: `Bearer ${token}` }
 			});
 			if (!res.ok) {
-				alert('Không thể xóa nhóm');
+				const err = await res.json().catch(() => null);
+				alert((err && err.message) ? err.message : 'Không thể xóa nhóm');
 				setDeleting(false);
+				setShowDeleteModal(false);
 				return;
 			}
+			// success: close modal and navigate away
+			setShowDeleteModal(false);
 			alert('Đã xóa nhóm');
 			navigate('/groups');
 		} catch (e) {
-			alert('Lỗi mạng');
+			console.error('handleConfirmDelete error', e);
+			alert('Lỗi mạng khi xóa nhóm');
 		} finally {
 			setDeleting(false);
 		}
@@ -367,6 +395,87 @@ export default function GroupManagePage() {
 		}
 	};
 
+	// fetch transactions for group
+	const fetchTxs = async () => {
+		if (!groupId || !token) return;
+		setLoadingTxs(true);
+		setTxError('');
+		try {
+			const res = await fetch(`${API_BASE}/api/groups/${groupId}/transactions`, {
+				headers: { Authorization: `Bearer ${token}` }
+			});
+			if (!res.ok) { setTxs([]); setTxError('Không thể tải giao dịch'); setLoadingTxs(false); return; }
+			const data = await res.json();
+			setTxs(Array.isArray(data) ? data : []);
+		} catch (e) {
+			console.warn('fetchTxs', e);
+			setTxError('Lỗi mạng khi tải giao dịch');
+			setTxs([]);
+		} finally {
+			setLoadingTxs(false);
+		}
+	};
+
+	useEffect(() => {
+		// when group changes, load transactions
+		if (groupId && token) fetchTxs();
+		// eslint-disable-next-line
+	}, [groupId]);
+
+	// compute debts lists
+	const computeDebts = () => {
+		const myId = getMyId();
+		const myEmail = getMyEmail();
+		const owesMe = []; // participants in txs where I am payer and not settled
+		const iOwe = []; // entries where I am participant and not settled
+
+		for (const tx of txs) {
+			// payer id normalized
+			const payerId = tx.payer && (tx.payer._id || tx.payer);
+			// participants array
+			if (Array.isArray(tx.participants)) {
+				for (const p of tx.participants) {
+					const partUserId = p.user && (p.user._id || p.user);
+					const partEmail = (p.email || '').toLowerCase();
+					if (String(payerId) === String(myId)) {
+						// I paid, others owe me
+						if (!p.settled) {
+							owesMe.push({ tx, participant: p });
+						}
+					}
+					// I owe others?
+					if (!p.settled && ((partUserId && String(partUserId) === String(myId)) || (partEmail && myEmail && partEmail === myEmail))) {
+						iOwe.push({ tx, participant: p });
+					}
+				}
+			}
+		}
+		return { owesMe, iOwe };
+	};
+
+	// settle handler: if actor is payer and marking someone else settled, pass userId; otherwise participant marks themselves
+	const handleSettle = async (txId, participantUserId = null) => {
+		if (!token || !groupId || !txId) return;
+		try {
+			const body = participantUserId ? { userId: participantUserId } : {};
+			const res = await fetch(`${API_BASE}/api/groups/${groupId}/transactions/${txId}/settle`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+				body: Object.keys(body).length ? JSON.stringify(body) : undefined
+			});
+			if (!res.ok) {
+				const err = await res.json().catch(() => null);
+				alert((err && err.message) ? err.message : 'Không thể đánh dấu đã thanh toán');
+				return;
+			}
+			// refresh txs
+			await fetchTxs();
+		} catch (e) {
+			console.warn('handleSettle', e);
+			alert('Lỗi mạng khi đánh dấu thanh toán');
+		}
+	};
+
 	// Inside the render method, update the layout structure for a banking-style interface:
 	return (
 		<div className="groups-page">
@@ -392,10 +501,35 @@ export default function GroupManagePage() {
 									<i className="fas fa-layer-group"></i>
 									{group.name}
 								</h2>
-								{isOwner && !editing && (
-									<button className="gm-btn primary" onClick={() => setEditing(true)}>
-										<i className="fas fa-edit"></i> Quản lý nhóm
-									</button>
+								{/* Actions: edit is owner-only, transactions available to all members when not editing */}
+								{!editing && (
+									<div style={{display:'flex', gap:8, alignItems:'center'}}>
+										{isOwner && (
+											<>
+												<button className="gm-btn primary" onClick={() => setEditing(true)}>
+													<i className="fas fa-edit"></i> Quản lý nhóm
+												</button>
+												{/* NEW: quick delete button for owner in header */}
+												<button
+													className="gm-btn danger"
+													onClick={handleDeleteGroup}
+													disabled={deleting}
+													style={{ display: 'inline-flex', alignItems: 'center' }}
+													title="Xóa nhóm"
+												>
+													<i className="fas fa-trash-alt"></i>
+													<span style={{marginLeft:8}}>{deleting ? 'Đang xóa...' : 'Xóa nhóm'}</span>
+												</button>
+											</>
+										)}
+										<button
+											className="gm-btn outline"
+											onClick={() => navigate(`/groups/${groupId}/transactions`)}
+											style={{background:'transparent', border:'1px solid rgba(26,59,93,0.08)', color:'#1a3b5d'}}
+										>
+											<i className="fas fa-exchange-alt"></i> Giao dịch
+										</button>
+									</div>
 								)}
 							</div>
 							
@@ -810,6 +944,106 @@ export default function GroupManagePage() {
 								</>
 							)}
 							
+							{/* NEW: Group Activity Card */}
+							<div className="gm-card gm-full-width">
+								<div className="gm-card-header">
+									<h2 className="gm-card-title"><i className="fas fa-stream"></i> Hoạt động nhóm</h2>
+									<button className="gm-btn secondary" onClick={fetchTxs}>Làm mới</button>
+								</div>
+								<div className="gm-card-body">
+									{loadingTxs ? (
+										<div className="gm-loading-inline"><i className="fas fa-spinner fa-spin"></i> Đang tải hoạt động...</div>
+									) : txError ? (
+										<div className="gm-error">{txError}</div>
+									) : txs.length === 0 ? (
+										<div className="gm-empty-state">Chưa có hoạt động nào</div>
+									) : (
+										<ul className="gm-members-list">
+											{txs.slice(0, 8).map(tx => (
+												<li key={tx._id} className="gm-member-item">
+													<div style={{flex:1}}>
+														<div style={{fontWeight:700}}>{tx.title || 'Giao dịch'}</div>
+														<div style={{fontSize:12, color:'#64748b'}}>{tx.payer ? (tx.payer.name || tx.payer.email) : 'Người trả'} • {new Date(tx.date || tx.createdAt).toLocaleString()}</div>
+														{tx.description && <div style={{marginTop:6,color:'#334155'}}>{tx.description}</div>}
+													</div>
+													<div style={{textAlign:'right'}}>
+														<div style={{fontWeight:800}}>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(tx.amount || 0)}</div>
+														{tx.perPerson && tx.participants && <div style={{fontSize:12,color:'#64748b'}}>{tx.participants.length} người</div>}
+													</div>
+												</li>
+											))}
+										</ul>
+									)}
+								</div>
+							</div>
+
+							{/* NEW: Debts Card */}
+							<div className="gm-card gm-full-width">
+								<div className="gm-card-header">
+									<h2 className="gm-card-title"><i className="fas fa-hand-holding-usd"></i> Công nợ</h2>
+								</div>
+								<div className="gm-card-body">
+									{loadingTxs ? (
+										<div className="gm-loading-inline">Đang tải...</div>
+									) : (
+										(() => {
+											const { owesMe, iOwe } = computeDebts();
+											return (
+												<>
+													<h3 style={{marginTop:0}}>Người nợ bạn</h3>
+													{owesMe.length === 0 ? <div className="gm-empty-state-text">Không có ai nợ bạn</div> : (
+														<ul className="gm-members-list">
+															{owesMe.map((entry, i) => {
+																const p = entry.participant;
+																const name = p.user ? (p.user.name || p.user.email) : (p.email || 'Người dùng');
+																return (
+																	<li key={i} className="gm-member-item">
+																		<div style={{flex:1}}>
+																			<div className="gm-member-name">{name}</div>
+																			<div className="gm-member-email">Giao dịch: {entry.tx.title || 'Không tiêu đề'}</div>
+																		</div>
+																		<div style={{textAlign:'right'}}>
+																			<div style={{fontWeight:700}}>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(p.shareAmount || 0)}</div>
+																			{/* payer (me) can mark as received */}
+																			<button className="gm-btn success" onClick={() => handleSettle(entry.tx._id, (p.user && (p.user._id || p.user)) || null)}>Đã nhận</button>
+																		</div>
+																	</li>
+																);
+															})}
+														</ul>
+													)}
+
+													<hr style={{margin:'16px 0',borderColor:'#e8eef5'}} />
+
+													<h3>Mình nợ người</h3>
+													{iOwe.length === 0 ? <div className="gm-empty-state-text">Bạn không nợ ai</div> : (
+														<ul className="gm-members-list">
+															{iOwe.map((entry, i) => {
+																const payer = entry.tx.payer;
+																const payerName = payer ? (payer.name || payer.email) : 'Người trả';
+																const p = entry.participant;
+																return (
+																	<li key={i} className="gm-member-item">
+																		<div style={{flex:1}}>
+																			<div className="gm-member-name">{payerName}</div>
+																			<div className="gm-member-email">Giao dịch: {entry.tx.title || 'Không tiêu đề'}</div>
+																		</div>
+																		<div style={{textAlign:'right'}}>
+																			<div style={{fontWeight:700}}>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(p.shareAmount || 0)}</div>
+																			<button className="gm-btn primary" onClick={() => handleSettle(entry.tx._id)}>Đã trả</button>
+																		</div>
+																	</li>
+																);
+															})}
+														</ul>
+													)}
+												</>
+											);
+										})()
+									)}
+								</div>
+							</div>
+
 							{/* Danger Zone - Banking Style (only for owner) */}
 							{isOwner && !editing && (
 								<div className="gm-card gm-full-width">
@@ -833,18 +1067,52 @@ export default function GroupManagePage() {
 												disabled={deleting}
 											>
 												{deleting ? (
-													<><i className="fas fa-spinner fa-spin"></i> Đang xóa...</>
+													<span><i className="fas fa-spinner fa-spin"></i> Đang xóa...</span>
 												) : (
-													<><i className="fas fa-trash-alt"></i> Xóa vĩnh viễn</>
+													<span><i className="fas fa-trash-alt"></i> Xóa vĩnh viễn</span>
 												)}
 											</button>
 										</div>
 									</div>
 								</div>
 							)}
+
+				{/* DELETE CONFIRMATION MODAL */}
+				{showDeleteModal && (
+					<div style={{
+						position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', display:'flex',
+						alignItems:'center', justifyContent:'center', zIndex:2000
+					}}>
+						<div style={{width:420, background:'#fff', borderRadius:12, overflow:'hidden', boxShadow:'0 12px 40px rgba(0,0,0,0.3)'}}>
+							<div style={{padding:18, borderBottom:'1px solid #eee'}}>
+								<h3 style={{margin:0}}>Xác nhận xóa nhóm</h3>
+							</div>
+							<div style={{padding:18}}>
+								<p>Bạn chắc chắn muốn xóa nhóm <strong>{group?.name}</strong>? Hành động này không thể hoàn tác.</p>
+								<div style={{display:'flex', justifyContent:'flex-end', gap:10, marginTop:12}}>
+									<button
+										className="gm-btn secondary"
+										onClick={() => setShowDeleteModal(false)}
+										disabled={deleting}
+									>
+										Hủy
+									</button>
+									<button
+										className="gm-btn danger"
+										onClick={handleConfirmDelete}
+										disabled={deleting}
+									>
+										{deleting ? 'Đang xóa...' : 'Xóa nhóm'}
+									</button>
+								</div>
+							</div>
+						</div>
+					</div>
+				)}
 						</div>
 					</>
 				)}
+
 			</main>
 		</div>
 	);

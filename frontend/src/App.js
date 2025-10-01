@@ -14,11 +14,12 @@ import AdminCategoriesPage from './admin/AdminCategoriesPage'; // Import new com
 import AdminWalletsPage from './admin/AdminWalletsPage';
 import AdminTransactionsPage from './admin/AdminTransactionsPage'; // <-- new import
 import GroupHome from './group/GroupHome';
-import GroupsPage from './group/GroupsPage'; // <-- new import
-import GroupFriends from './group/GroupFriends'; // <-- NEW
+import GroupsPage from './group/GroupsPage';
+import GroupFriends from './group/GroupFriends';
+import GroupActivity from './group/GroupActivity';
+import GroupTransactions from './group/GroupTransactions'; // <-- new import
 import GroupManagePage from './group/GroupManagePage';
 import GroupMemberPage from './group/GroupMemberPage';
-import GroupActivityPage from './group/GroupActivityPage'; // <-- new
 
 import { useEffect, useState } from 'react';
 
@@ -81,9 +82,10 @@ function AppRoutes() {
 				<Route path="/group" element={<GroupHome />} /> {/* Route for GroupHome */}
 				<Route path="/groups" element={<GroupsPage />} /> {/* Route cho trang Nhóm */}
 				<Route path="/friends" element={<GroupFriends />} /> {/* Route cho trang Bạn bè */}
+				<Route path="/activity" element={<GroupActivity />} /> {/* Route cho trang Hoạt động */}
+				<Route path="/groups/:groupId/transactions" element={<GroupTransactions />} /> {/* Group transactions */}
 				<Route path="/groups/manage/:groupId" element={<GroupManagePage />} />
 				<Route path="/groups/member/:groupId" element={<GroupMemberPage />} />
-				<Route path="/groups/activity/:groupId" element={<GroupActivityPage />} />
 			</Routes>
 		</div>
 	);

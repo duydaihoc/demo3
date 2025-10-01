@@ -8,29 +8,34 @@ const notificationSchema = new mongoose.Schema({
   },
   sender: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
+    ref: 'User'
   },
   type: {
     type: String,
     required: true,
     enum: [
-      'info', 'alert', 'system',
       'friend.request', 'friend.response', 'friend.remove',
-      'group.invite', 'group.response'
+      'group.invite', 'group.added', 'group.response', 
+      'group.transaction', 'group.transaction.settle',
+      'group.transaction.created', 
+      'group.transaction.debt',
+      'group.transaction.settled',
+      'group.transaction.debt.paid'
     ]
   },
   message: {
     type: String,
     required: true
   },
-  data: {
-    type: mongoose.Schema.Types.Mixed,
-    default: {}
-  },
   read: {
     type: Boolean,
     default: false
+  },
+  readAt: {
+    type: Date
+  },
+  data: {
+    type: mongoose.Schema.Types.Mixed
   }
 }, {
   timestamps: true

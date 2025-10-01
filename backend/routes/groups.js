@@ -109,8 +109,8 @@ router.post('/', auth, async (req, res) => {
           await Notification.create({
             recipient: member.user,
             sender: creator._id,
-            type: 'group.invite',
-            message: `Bạn được mời tham gia nhóm "${name}"`,
+            type: 'group.added', // Đổi từ group.invite thành group.added
+            message: `Bạn đã được thêm vào nhóm "${name}"`, // Thay đổi nội dung
             data: { groupId: group._id }
           });
         } catch (notifErr) {
@@ -168,8 +168,8 @@ router.post('/:groupId/invite', auth, async (req, res) => {
         await Notification.create({
           recipient: user._id,
           sender: inviterId || req.user._id,
-          type: 'group.invite',
-          message: `Bạn được mời tham gia nhóm "${group.name}"`,
+          type: 'group.added', // Đổi từ group.invite thành group.added
+          message: `Bạn đã được thêm vào nhóm "${group.name}"`, // Thay đổi nội dung
           data: { groupId: group._id }
         });
       } catch (notifErr) {

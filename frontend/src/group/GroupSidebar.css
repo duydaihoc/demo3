@@ -1,23 +1,23 @@
 .groups-page {
   display: flex;
-  min-height: 100vh; /* Minimum height */
-  height: auto; /* Allow growing beyond viewport */
-  padding-left: 220px; /* Space for sidebar instead of margin */
-  overflow-x: hidden; /* Prevent horizontal scrolling */
+  min-height: 100vh;
+  height: auto;
+  padding-left: 220px;
+  overflow-x: hidden;
 }
 
 /* Sidebar: fixed position at left edge */
 .group-sidebar {
   width: 220px;
-  height: 100%; /* Was 100vh, change to 100% */
+  height: 100%;
   min-height: 100vh;
-  position: fixed; /* Keep fixed position */
+  position: fixed;
   left: 0;
   top: 0;
   bottom: 0;
   padding: 40px 0 20px 0;
   border-radius: 0;
-  overflow-y: auto; /* Allow scrolling within sidebar */
+  overflow-y: auto;
   box-shadow: 2px 0 10px rgba(42,82,152,0.08);
   display: flex;
   flex-direction: column;
@@ -25,7 +25,7 @@
   background: linear-gradient(135deg, #2a5298 0%, #4ecdc4 100%);
   color: #fff;
   border: none;
-  z-index: 100; /* Ensure sidebar appears above content */
+  z-index: 100;
 }
 
 /* Header (group name) centered like main sidebar */
@@ -112,7 +112,7 @@
 
 /* Replace the cyan accent bar with underline to match main sidebar */
 .gs-item.active::before {
-  content: none; /* Remove previous accent bar */
+  content: none;
 }
 
 .gs-item.active::after {
@@ -171,30 +171,26 @@
   transform: translateX(8px);
 }
 
-/* Sidebar notification styles */
-.gs-notif {
-  margin-top: 12px;
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  position: relative;
-  /* ensure dropdown is positioned relative to viewport, not clipped */
-  z-index: 200;
+/* Responsive adjustments */
+@media (max-width: 900px) {
+  .groups-page {
+    padding-left: 0;
+    flex-direction: column;
+  }
+  
+  .group-sidebar {
+    position: relative;
+    width: 100%;
+    height: auto;
+    min-height: auto;
+    padding: 20px 0;
+  }
+  
+  .gs-item.active::after {
+    display: none;
+  }
 }
-.gs-notif-bell {
-  background: rgba(255,255,255,0.06);
-  border: none;
-  color: #fff;
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  cursor: pointer;
-  position: relative; /* for proper badge placement */
-}
+  
 .gs-notif-bell:hover { background: rgba(255,255,255,0.12); }
 
 /* badge positioned near bell (inside the sidebar area) */

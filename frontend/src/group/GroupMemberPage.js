@@ -7,6 +7,10 @@ export default function GroupMemberPage() {
 	const { groupId } = useParams();
 	const navigate = useNavigate();
 	const [group, setGroup] = useState(null);
+	// NEW: transactions + loading + debts
+	const [txs, setTxs] = useState([]);
+	const [loadingTxs, setLoadingTxs] = useState(false);
+	const [txError, setTxError] = useState('');
 	const [loading, setLoading] = useState(true);
 	const [leaving, setLeaving] = useState(false);
 
@@ -27,17 +31,36 @@ export default function GroupMemberPage() {
 
 	const isOwner = group && String(getOwnerId(group)) === String(getMyId());
 	
-	useEffect(() => {
-		if (!groupId || !token) return;
-		setLoading(true);
-		fetch(`${API_BASE}/api/groups/${groupId}`, {
-			headers: { Authorization: `Bearer ${token}` }
-		})
-			.then(res => res.json())
-			.then(data => { setGroup(data); setLoading(false); })
-			.catch(() => setLoading(false));
-	}, [groupId, token]);
+	const getMyEmail = () => {
+		try {
+			const t = token;
+			if (!t) return '';
+			const payload = JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+			return (payload.email || '').toLowerCase();
+		} catch (e) { return ''; }
+	};
 
+	const fetchTxs = async () => {
+		if (!groupId || !token) return;
+		setLoadingTxs(true);
+		setTxError('');
+		try {
+			const res = await fetch(`${API_BASE}/api/groups/${groupId}/transactions`, {
+				headers: { Authorization: `Bearer ${token}` }
+			});
+			if (!res.ok) { setTxs([]); setTxError('Không thể tải giao dịch'); setLoadingTxs(false); return; }
+			const data = await res.json();
+			setTxs(Array.isArray(data) ? data : []);
+		} catch (e) {
+			console.warn('fetchTxs', e);
+			setTxError('Lỗi mạng khi tải giao dịch');
+			setTxs([]);
+		} finally {
+			setLoadingTxs(false);
+		}
+	};
+
+	// NEW: allow leaving group (used by "Rời nhóm" button)
 	const handleLeaveGroup = async () => {
 		if (!groupId || !token) return;
 		if (!window.confirm('Bạn có chắc muốn rời nhóm này?')) return;
@@ -50,19 +73,80 @@ export default function GroupMemberPage() {
 				body: JSON.stringify({ memberId: myId })
 			});
 			if (!res.ok) {
-				alert('Không thể rời nhóm');
+				const err = await res.json().catch(()=>null);
+				alert((err && err.message) ? err.message : 'Không thể rời nhóm');
 				setLeaving(false);
 				return;
 			}
 			alert('Bạn đã rời nhóm');
 			navigate('/groups');
 		} catch (e) {
+			console.warn('handleLeaveGroup error', e);
 			alert('Lỗi mạng');
 		} finally {
 			setLeaving(false);
 		}
 	};
-	
+
+	useEffect(() => {
+		if (!groupId || !token) return;
+		setLoading(true);
+		fetch(`${API_BASE}/api/groups/${groupId}`, {
+			headers: { Authorization: `Bearer ${token}` }
+		})
+			.then(res => res.json())
+			.then(data => { setGroup(data); setLoading(false); })
+			.catch(() => setLoading(false));
+
+		// also load txs
+		fetchTxs();
+		// eslint-disable-next-line
+	}, [groupId, token]);
+
+	const computeDebts = () => {
+		const myId = getMyId();
+		const myEmail = getMyEmail();
+		const owesMe = [];
+		const iOwe = [];
+		for (const tx of txs) {
+			const payerId = tx.payer && (tx.payer._id || tx.payer);
+			if (Array.isArray(tx.participants)) {
+				for (const p of tx.participants) {
+					const partUserId = p.user && (p.user._id || p.user);
+					const partEmail = (p.email || '').toLowerCase();
+					if (String(payerId) === String(myId)) {
+						if (!p.settled) owesMe.push({ tx, participant: p });
+					}
+					if (!p.settled && ((partUserId && String(partUserId) === String(myId)) || (partEmail && myEmail && partEmail === myEmail))) {
+						iOwe.push({ tx, participant: p });
+					}
+				}
+			}
+		}
+		return { owesMe, iOwe };
+	};
+
+	const handleSettle = async (txId, participantUserId = null) => {
+		if (!token || !groupId || !txId) return;
+		try {
+			const body = participantUserId ? { userId: participantUserId } : {};
+			const res = await fetch(`${API_BASE}/api/groups/${groupId}/transactions/${txId}/settle`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+				body: Object.keys(body).length ? JSON.stringify(body) : undefined
+			});
+			if (!res.ok) {
+				const err = await res.json().catch(() => null);
+				alert((err && err.message) ? err.message : 'Không thể đánh dấu đã thanh toán');
+				return;
+			}
+			await fetchTxs();
+		} catch (e) {
+			console.warn('handleSettle', e);
+			alert('Lỗi mạng khi đánh dấu thanh toán');
+		}
+	};
+
 	// Format date for display
 	const formatDate = (dateString) => {
 		if (!dateString) return '';
@@ -124,14 +208,24 @@ export default function GroupMemberPage() {
 									{group.name}
 								</h2>
 								
-								{isOwner && (
-									<button 
-										className="gm-btn primary"
-										onClick={() => navigate(`/groups/${groupId}/manage`)}
+								{/* Show actions: quản lý chỉ owner, giao dịch cho mọi thành viên */}
+								<div style={{display:'flex', gap:8, alignItems:'center'}}>
+									{isOwner && (
+										<button 
+											className="gm-btn primary"
+											onClick={() => navigate(`/groups/${groupId}/manage`)}
+										>
+											<i className="fas fa-cogs"></i> Quản lý nhóm
+										</button>
+									)}
+									<button
+										className="gm-btn outline"
+										onClick={() => navigate(`/groups/${groupId}/transactions`)}
+										style={{background:'transparent', border:'1px solid rgba(26,59,93,0.08)', color:'#1a3b5d'}}
 									>
-										<i className="fas fa-cogs"></i> Quản lý nhóm
+										<i className="fas fa-exchange-alt"></i> Giao dịch
 									</button>
-								)}
+								</div>
 							</div>
 							
 							<div className="gm-dashboard-stats">
@@ -286,6 +380,96 @@ export default function GroupMemberPage() {
 									)}
 								</div>
 							</div>
+
+							{/* NEW: Activity card */}
+							<div className="gm-card" style={{gridColumn: "1 / -1"}}>
+								<div className="gm-card-header">
+									<h2 className="gm-card-title"><i className="fas fa-stream"></i> Hoạt động nhóm</h2>
+									<button className="gm-btn secondary" onClick={fetchTxs}>Làm mới</button>
+								</div>
+								<div className="gm-card-body">
+									{loadingTxs ? <div className="gm-loading-inline">Đang tải hoạt động...</div> :
+										txError ? <div className="gm-error">{txError}</div> :
+										txs.length === 0 ? <div className="gm-empty-state-text">Chưa có hoạt động</div> :
+										<ul className="gm-members-list">
+											{txs.slice(0,8).map(tx => (
+												<li key={tx._id} className="gm-member-item">
+													<div style={{flex:1}}>
+														<div style={{fontWeight:700}}>{tx.title || 'Giao dịch'}</div>
+														<div style={{fontSize:12, color:'#64748b'}}>{tx.payer ? (tx.payer.name || tx.payer.email) : 'Người trả'} • {new Date(tx.date || tx.createdAt).toLocaleString()}</div>
+													</div>
+													<div style={{textAlign:'right'}}>
+														<div style={{fontWeight:800}}>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(tx.amount || 0)}</div>
+													</div>
+												</li>
+											))}
+										</ul>
+									}
+								</div>
+							</div>
+
+							{/* NEW: Debts card */}
+							<div className="gm-card" style={{gridColumn: "1 / -1"}}>
+								<div className="gm-card-header">
+									<h2 className="gm-card-title"><i className="fas fa-hand-holding-usd"></i> Công nợ</h2>
+								</div>
+								<div className="gm-card-body">
+									{loadingTxs ? <div className="gm-loading-inline">Đang tải...</div> : (() => {
+										const { owesMe, iOwe } = computeDebts();
+										return (
+											<>
+												<h3 style={{marginTop:0}}>Người nợ bạn</h3>
+												{owesMe.length === 0 ? <div className="gm-empty-state-text">Không có ai nợ bạn</div> :
+													<ul className="gm-members-list">
+														{owesMe.map((entry,i) => {
+															const p = entry.participant;
+															const name = p.user ? (p.user.name || p.user.email) : (p.email || 'Người dùng');
+															return (
+																<li key={i} className="gm-member-item">
+																	<div style={{flex:1}}>
+																		<div className="gm-member-name">{name}</div>
+																		<div className="gm-member-email">Giao dịch: {entry.tx.title || 'Không tiêu đề'}</div>
+																	</div>
+																	<div style={{textAlign:'right'}}>
+																		<div style={{fontWeight:700}}>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(p.shareAmount || 0)}</div>
+																		<button className="gm-btn success" onClick={() => handleSettle(entry.tx._id, (p.user && (p.user._id || p.user)) || null)}>Đã nhận</button>
+																	</div>
+																</li>
+															);
+														})}
+													</ul>
+												}
+
+												<hr style={{margin:'16px 0',borderColor:'#e8eef5'}} />
+
+												<h3>Mình nợ người</h3>
+												{iOwe.length === 0 ? <div className="gm-empty-state-text">Bạn không nợ ai</div> :
+													<ul className="gm-members-list">
+														{iOwe.map((entry,i) => {
+															const payer = entry.tx.payer;
+															const payerName = payer ? (payer.name || payer.email) : 'Người trả';
+															const p = entry.participant;
+															return (
+																<li key={i} className="gm-member-item">
+																	<div style={{flex:1}}>
+																		<div className="gm-member-name">{payerName}</div>
+																		<div className="gm-member-email">Giao dịch: {entry.tx.title || 'Không tiêu đề'}</div>
+																	</div>
+																	<div style={{textAlign:'right'}}>
+																		<div style={{fontWeight:700}}>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(p.shareAmount || 0)}</div>
+																		<button className="gm-btn primary" onClick={() => handleSettle(entry.tx._id)}>Đã trả</button>
+																	</div>
+																</li>
+															);
+														})}
+													</ul>
+												}
+											</>
+										);
+									})()}
+								</div>
+							</div>
+
 						</div>
 					</>
 				)}
@@ -293,4 +477,4 @@ export default function GroupMemberPage() {
 		</div>
 	);
 }
-									
+
