@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './GroupSidebar.css';
 
@@ -13,6 +13,44 @@ export default function GroupSidebar({ active = 'overview' }) {
     { id: 'activity', label: 'Hoạt động', route: '/activity' },
     { id: 'settings', label: 'Cài đặt', route: '/settings' },
   ];
+
+  // Keep .groups-main height in sync on resize (UI-only)
+  useEffect(() => {
+    const resizeHandler = () => {
+      const main = document.querySelector('.groups-main');
+      if (!main) return;
+      // ensure main is at least viewport height so internal scroll behaves consistently
+      main.style.minHeight = '100vh';
+      // on mobile, CSS media query will handle layout
+    };
+    window.addEventListener('resize', resizeHandler);
+    // initial run
+    resizeHandler();
+    return () => window.removeEventListener('resize', resizeHandler);
+  }, []);
+
+  const handleNav = (it) => {
+    setSelected(it.id);
+    if (it.route) {
+      navigate(it.route);
+      // UI: after navigation, ensure the group content scroll container is at top
+      // small timeout to allow route swap / DOM update
+      setTimeout(() => {
+        const main = document.querySelector('.groups-main');
+        if (main) {
+          try {
+            main.scrollTo({ top: 0, behavior: 'smooth' });
+          } catch (e) {
+            // fallback
+            main.scrollTop = 0;
+          }
+        } else {
+          // fallback to window scroll
+          try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch(e){ window.scrollTo(0,0); }
+        }
+      }, 60);
+    }
+  };
 
   return (
     <aside className="group-sidebar" aria-label="Sidebar nhóm">
@@ -43,10 +81,7 @@ export default function GroupSidebar({ active = 'overview' }) {
             <li key={it.id}>
               <button
                 className={`gs-item ${selected === it.id ? 'active' : ''}`}
-                onClick={() => {
-                  setSelected(it.id);
-                  if (it.route) navigate(it.route);
-                }}
+                onClick={() => handleNav(it)}
                 aria-pressed={selected === it.id}
                 aria-label={it.label}
               >

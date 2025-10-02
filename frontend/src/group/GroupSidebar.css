@@ -271,7 +271,50 @@
   transform: translateX(8px);
 }
 
-/* Responsive adjustments */
+/* Ensure the main content area next to the fixed sidebar is a viewport-height scroll container.
+   This makes /groups, /friends, /activity (and other group pages using .groups-main) scroll
+   independently to match the page size. */
+.groups-main {
+  /* keep layout consistent with sidebar padding */
+  margin-left: 220px; /* matches sidebar width */
+  box-sizing: border-box;
+  width: calc(100% - 220px);
+  min-height: 100vh;
+  height: calc(100vh); /* full viewport height */
+  overflow-y: auto; /* enable scrolling within main area */
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch; /* smooth momentum on iOS */
+  scroll-behavior: smooth;
+  padding: 24px;
+  background: transparent; /* allow page specific backgrounds to show */
+}
+
+/* If a page has a top header inside .groups-main, you may want to account for it:
+   using max-height allows the header inside to remain visible while content scrolls.
+   If your header is sticky inside .groups-main, the inner scroll will work as expected. */
+.groups-main .inner-scroll {
+  max-height: calc(100vh - 80px); /* adjust 80px if your page has a taller header */
+  overflow-y: auto;
+}
+
+/* Optional: nicer scrollbar for modern browsers */
+.groups-main::-webkit-scrollbar { width: 10px; }
+.groups-main::-webkit-scrollbar-thumb {
+  background: rgba(15,23,42,0.08);
+  border-radius: 8px;
+}
+.groups-main::-webkit-scrollbar-track { background: transparent; }
+
+/* Mobile: when sidebar becomes relative, remove left margin */
+@media (max-width: 900px) {
+  .groups-main {
+    margin-left: 0;
+    width: 100%;
+    height: auto;
+    min-height: auto;
+  }
+}
+
 @media (max-width: 900px) {
   .groups-page {
     padding-left: 0;
