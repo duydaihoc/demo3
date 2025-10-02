@@ -6,9 +6,7 @@ import './GroupsPage.css';
 export default function GroupsPage() {
 	const navigate = useNavigate();
 	const [showCreateModal, setShowCreateModal] = useState(false);
-	// modal step: 1 = create group details, 2 = invite friends
 	const [modalStep, setModalStep] = useState(1);
-	// created group returned from backend (populated)
 	const [createdGroup, setCreatedGroup] = useState(null);
 	const [groupName, setGroupName] = useState('');
 	const [groupDescription, setGroupDescription] = useState('');
@@ -16,20 +14,58 @@ export default function GroupsPage() {
 	const [loadingGroups, setLoadingGroups] = useState(false);
 	const [creating, setCreating] = useState(false);
 	const [errorMsg, setErrorMsg] = useState(null);
-	// allow selecting multiple colors
 	const [chosenColors, setChosenColors] = useState(['#4CAF50']);
-	// Thêm state mới cho gradient direction
 	const [gradientDirection, setGradientDirection] = useState('135deg');
 
 	// friends selection for group creation
 	const [friendsList, setFriendsList] = useState([]);
 	const [loadingFriends, setLoadingFriends] = useState(false);
-	const [selectedFriendEmails, setSelectedFriendEmails] = useState([]); // store emails to send to backend (lowercased)
-	// search/filter in invite step
+	const [selectedFriendEmails, setSelectedFriendEmails] = useState([]);
 	const [friendSearch, setFriendSearch] = useState('');
+	
+	// Các state mới cho trang được cải tiến
+	// eslint-disable-next-line no-unused-vars
+	const [activeGroups, setActiveGroups] = useState([]);
+	const [recentGroups, setRecentGroups] = useState([]);
+	const [pinnedGroups, setPinnedGroups] = useState([]);
+	const [groupStats, setGroupStats] = useState({
+		total: 0,
+		active: 0,
+		ownerCount: 0,
+		memberCount: 0
+	});
+
+	const [inviteSending, setInviteSending] = useState(false);
+	const [inviteResult, setInviteResult] = useState(null);
 
 	const API_BASE = 'http://localhost:5000';
 	const getToken = () => localStorage.getItem('token');
+
+	// Add the missing fetchFriendsList function
+	const fetchFriendsList = useCallback(async () => {
+		const token = getToken();
+		if (!token) return;
+
+		setLoadingFriends(true);
+		try {
+			const res = await fetch(`${API_BASE}/api/friends/list`, {
+				headers: { Authorization: `Bearer ${token}` }
+			});
+			if (!res.ok) {
+				setFriendsList([]);
+				return;
+			}
+			const data = await res.json();
+			// Normalize the data structure
+			const friends = Array.isArray(data) ? data : [];
+			setFriendsList(friends);
+		} catch (err) {
+			console.error('Error fetching friends list:', err);
+			setFriendsList([]);
+		} finally {
+			setLoadingFriends(false);
+		}
+	}, [API_BASE]); // Include API_BASE in dependencies
 
 	const fetchGroups = useCallback(async () => {
 		setErrorMsg(null);
@@ -57,6 +93,34 @@ export default function GroupsPage() {
 			}
 			const data = await res.json();
 			setGroups(data || []);
+
+			// Xử lý dữ liệu cho các phần mới
+			const ownerGroups = data.filter(g => isOwner(g));
+			const memberGroups = data.filter(g => !isOwner(g));
+			
+			// Các nhóm gần đây (dựa trên updateAt hoặc createdAt)
+			const sorted = [...data].sort((a, b) => {
+				const dateA = new Date(a.updatedAt || a.createdAt);
+				const dateB = new Date(b.updatedAt || b.createdAt);
+				return dateB - dateA;
+			});
+			setRecentGroups(sorted.slice(0, 5));
+			
+			// Giả định active groups là các nhóm có giao dịch gần đây hoặc nhiều thành viên
+			const active = data.filter(g => (g.members && g.members.length > 3) || g.lastTransaction);
+			setActiveGroups(active.slice(0, 6));
+			
+			// Tính toán các thống kê
+			setGroupStats({
+				total: data.length,
+				active: active.length,
+				ownerCount: ownerGroups.length,
+				memberCount: memberGroups.length
+			});
+			
+			// Giả định pinned groups là các nhóm đầu tiên (hoặc implement pinned functionality)
+			setPinnedGroups(data.slice(0, 3));
+			
 		} catch (err) {
 			console.error('fetchGroups error', err);
 			setErrorMsg(err.message || 'Lỗi khi tải nhóm');
@@ -69,32 +133,44 @@ export default function GroupsPage() {
 		fetchGroups();
 	}, [fetchGroups]);
 
-	// Fetch friends (used when opening create modal)
-	const fetchFriendsList = useCallback(async () => {
-		const token = getToken();
-		if (!token) return;
-		setLoadingFriends(true);
+	// Thêm helper function để kiểm tra nếu user là owner
+	const isOwner = (group) => {
+		const token = localStorage.getItem('token');
+		if (!token || !group || !group.owner) return false;
 		try {
-			const res = await fetch(`${API_BASE}/api/friends/list`, {
-				headers: { Authorization: `Bearer ${token}` }
-			});
-			if (!res.ok) { setFriendsList([]); return; }
-			const data = await res.json().catch(() => []);
-			const arr = Array.isArray(data) ? data : (data && Array.isArray(data.data) ? data.data : []);
-			// normalize emails to lowercase/trim to avoid mismatch issues
-			const normalized = arr.map(u => ({
-				id: u.id || u._id,
-				name: u.name || u.email || 'Người dùng',
-				email: (u.email || '').toLowerCase().trim()
-			}));
-			setFriendsList(normalized);
-		} catch (e) {
-			console.warn('fetchFriendsList error', e);
-			setFriendsList([]);
-		} finally {
-			setLoadingFriends(false);
-		}
-	}, [API_BASE]);
+			const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+			const myId = payload.id || payload._id || payload.userId || '';
+			const ownerId = typeof group.owner === 'object' ? (group.owner._id || group.owner.id) : group.owner;
+			return String(myId) === String(ownerId);
+		} catch (e) { return false; }
+	};
+
+	// Helper: lấy tên hiển thị cho chủ nhóm
+	const getOwnerDisplayName = (group) => {
+		if (!group || !group.owner) return 'Không xác định';
+		if (typeof group.owner === 'object') return group.owner.name || group.owner.email || 'Chủ nhóm';
+		return 'Chủ nhóm';
+	};
+
+	// Helper: định dạng thời gian tương đối
+	const getRelativeTimeString = (date) => {
+		if (!date) return '';
+		
+		const now = new Date();
+		const past = new Date(date);
+		const diffMs = now - past;
+		const diffSec = Math.round(diffMs / 1000);
+		const diffMin = Math.round(diffSec / 60);
+		const diffHour = Math.round(diffMin / 60);
+		const diffDay = Math.round(diffHour / 24);
+		
+		if (diffSec < 60) return 'Vừa xong';
+		if (diffMin < 60) return `${diffMin} phút trước`;
+		if (diffHour < 24) return `${diffHour} giờ trước`;
+		if (diffDay < 30) return `${diffDay} ngày trước`;
+		
+		return past.toLocaleDateString('vi-VN');
+	};
 
 	// more robust toggle using Set and normalized email
 	const toggleFriendSelection = (emailRaw) => {
@@ -175,8 +251,6 @@ export default function GroupsPage() {
 	};
 
 	// Step 2: invite selected friends into createdGroup
-	const [inviteSending, setInviteSending] = useState(false);
-	const [inviteResult, setInviteResult] = useState(null);
 	const sendInvitesToGroup = async () => {
 		if (!createdGroup || !createdGroup._id) {
 			setInviteResult('Không có group hợp lệ để mời');
@@ -344,11 +418,12 @@ export default function GroupsPage() {
 	return (
 		<div className="groups-page">
 			<GroupSidebar active="groups" />
+			
 			<main className="groups-main" role="main">
 				<header className="groups-header">
 					<div>
 						<h1>Nhóm</h1>
-						<p className="subtitle">Quản lý và xem các nhóm của bạn</p>
+						<p className="subtitle">Quản lý và tham gia nhóm chi tiêu</p>
 					</div>
 
 					<div className="header-actions">
@@ -356,75 +431,219 @@ export default function GroupsPage() {
 							className="create-group-btn"
 							onClick={() => { setShowCreateModal(true); fetchFriendsList(); }}
 						>
-							+ Tạo nhóm mới
+							<i className="fas fa-plus-circle"></i> Tạo nhóm mới
 						</button>
 					</div>
 				</header>
 
 				{errorMsg && (
-					<div style={{ marginBottom: 12, color: '#b91c1c' }}>{errorMsg}</div>
+					<div className="groups-error-alert">
+						<i className="fas fa-exclamation-circle"></i> {errorMsg}
+					</div>
 				)}
 
-				<section className="groups-card-container">
-					{loadingGroups ? (
-						<div className="loading-groups"><p>Đang tải danh sách nhóm...</p></div>
-					) : groups.length > 0 ? (
-						groups.map(group => {
-							const role = getRole(group);
-							return (
-								<div key={group._id || group.id || group.id} className="group-card-v2 bank-card" style={{ background: getCardBackground(group) }}>
-									<div className="wc-bg-shape wc-bg-a" />
-									<div className="wc-bg-shape wc-bg-b" />
+				{/* Bảng điều khiển thống kê */}
+				<section className="groups-dashboard">
+					<div className="groups-stat-card">
+						<div className="stat-value">{groupStats.total}</div>
+						<div className="stat-label">Tổng số nhóm</div>
+						<i className="fas fa-layer-group stat-icon"></i>
+					</div>
+					<div className="groups-stat-card">
+						<div className="stat-value">{groupStats.ownerCount}</div>
+						<div className="stat-label">Nhóm quản lý</div>
+						<i className="fas fa-user-shield stat-icon"></i>
+					</div>
+					<div className="groups-stat-card">
+						<div className="stat-value">{groupStats.memberCount}</div>
+						<div className="stat-label">Nhóm tham gia</div>
+						<i className="fas fa-users stat-icon"></i>
+					</div>
+					<div className="groups-stat-card">
+						<div className="stat-value">{groupStats.active}</div>
+						<div className="stat-label">Nhóm hoạt động</div>
+						<i className="fas fa-chart-line stat-icon"></i>
+					</div>
+				</section>
 
-									<div className="bank-top" aria-hidden>
-										<div className="card-chip-small" />
-										<div className="card-number">•••• {String(group._id || group.id || '').slice(-6)}</div>
-									</div>
-
-									<div className="bank-balance" role="img" aria-label={`Tổng chi tiêu ${group.totalExpense || 0}`}>
-										<div className="balance-value">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(group.totalExpense || 0)}</div>
-										<div className="balance-sub">Tổng chi tiêu nhóm</div>
-									</div>
-
-									<div className="bank-meta">
-										<div className="bank-name">{group.name}</div>
-
-										<div className="bank-owner">
-											<div className="owner-avatar" title={(group.owner && (group.owner.name || group.owner.email)) || 'Chủ nhóm'}>
-												{group.owner && (group.owner.name ? group.owner.name.split(' ').map(n => n[0]).slice(0,2).join('') : String(group.owner).slice(0,2)).toUpperCase()}
+				{/* Phần nhóm ghim */}
+				{pinnedGroups.length > 0 && (
+					<section className="groups-section">
+						<div className="section-header">
+							<h2 className="section-title"><i className="fas fa-thumbtack"></i> Nhóm ghim</h2>
+						</div>
+						<div className="pinned-groups-grid">
+							{pinnedGroups.map(group => (
+								<div 
+									key={group._id || group.id} 
+									className="pinned-group-card"
+									onClick={() => navigate(`/groups/${isOwner(group) ? 'manage' : 'member'}/${group._id || group.id}`)}
+									style={{ background: getCardBackground(group) }}
+								>
+									<div className="pg-content">
+										<h3 className="pg-name">{group.name}</h3>
+										<div className="pg-meta">
+											<div className="pg-members">
+												<i className="fas fa-users"></i> {(group.members && group.members.length) || 0} thành viên
 											</div>
-											<div className="owner-info">
-												<div className="owner-name">{(group.owner && (group.owner.name || group.owner.email)) || 'Bạn'}</div>
-												<div className="owner-members">{(group.members && group.members.length) || 0} thành viên</div>
+											<div className="pg-role">
+												{isOwner(group) ? (
+													<span className="role-badge owner"><i className="fas fa-crown"></i> Quản trị viên</span>
+												) : (
+													<span className="role-badge member"><i className="fas fa-user"></i> Thành viên</span>
+												)}
 											</div>
 										</div>
 									</div>
-
-									<div className="bank-actions">
-										{role === 'owner' ? (
-											<button
-												className="wc-btn"
-												onClick={() => navigate(`/groups/manage/${group._id || group.id}`)}
-											>
-												Quản lý nhóm
-											</button>
-										) : (
-											<button
-												className="wc-btn"
-												onClick={() => navigate(`/groups/member/${group._id || group.id}`)}
-											>
-												Vào thẻ
-											</button>
-										)}
-									</div>
 								</div>
-							);
-						})
+							))}
+						</div>
+					</section>
+				)}
+
+				{/* Nhóm gần đây */}
+				{recentGroups.length > 0 && (
+					<section className="groups-section">
+						<div className="section-header">
+							<h2 className="section-title"><i className="fas fa-history"></i> Nhóm gần đây</h2>
+							<div className="section-actions">
+								<button className="section-action-btn" onClick={fetchGroups}>
+									<i className="fas fa-sync-alt"></i> Làm mới
+								</button>
+							</div>
+						</div>
+
+						<div className="recent-groups-list">
+							{recentGroups.map(group => {
+								const updatedAt = group.updatedAt || group.createdAt;
+								
+								return (
+									<div key={group._id || group.id} className="recent-group-item">
+										<div 
+											className="rg-avatar" 
+											style={{ background: getCardBackground(group) }}
+										>
+											{(group.name || '?')[0].toUpperCase()}
+										</div>
+										<div className="rg-info">
+											<div className="rg-name">{group.name}</div>
+											<div className="rg-time">{getRelativeTimeString(updatedAt)}</div>
+										</div>
+										<div className="rg-members">
+											<i className="fas fa-users"></i> {(group.members && group.members.length) || 0}
+										</div>
+										<div className="rg-actions">
+											<button 
+												className="rg-btn"
+												onClick={() => navigate(`/groups/${isOwner(group) ? 'manage' : 'member'}/${group._id || group.id}`)}
+											>
+												{isOwner(group) ? 'Quản lý' : 'Xem'}
+											</button>
+										</div>
+									</div>
+								);
+							})}
+						</div>
+					</section>
+				)}
+
+				{/* Tất cả nhóm - Card Grid */}
+				<section className="groups-section">
+					<div className="section-header">
+						<h2 className="section-title"><i className="fas fa-th-large"></i> Tất cả nhóm của bạn</h2>
+					</div>
+
+					{loadingGroups ? (
+						<div className="groups-loading">
+							<div className="loading-spinner"></div>
+							<p>Đang tải danh sách nhóm...</p>
+						</div>
+					) : groups.length > 0 ? (
+						<div className="groups-card-container">
+							{groups.map(group => {
+								const role = getRole(group);
+								return (
+									<div key={group._id || group.id || group.id} className="group-card-v2 bank-card" style={{ background: getCardBackground(group) }}>
+										<div className="wc-bg-shape wc-bg-a" />
+										<div className="wc-bg-shape wc-bg-b" />
+
+										<div className="bank-top" aria-hidden>
+											<div className="card-chip-small" />
+											<div className="card-number">•••• {String(group._id || group.id || '').slice(-6)}</div>
+										</div>
+
+										<div className="bank-balance" role="img" aria-label={`Tổng chi tiêu ${group.totalExpense || 0}`}>
+											<div className="balance-value">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(group.totalExpense || 0)}</div>
+											<div className="balance-sub">Tổng chi tiêu nhóm</div>
+										</div>
+
+										<div className="bank-meta">
+											<div className="bank-name">{group.name}</div>
+
+											<div className="bank-owner">
+												<div className="owner-avatar" title={getOwnerDisplayName(group)}>
+													{group.owner && (group.owner.name ? group.owner.name.split(' ').map(n => n[0]).slice(0,2).join('') : String(group.owner).slice(0,2)).toUpperCase()}
+												</div>
+												<div className="owner-info">
+													<div className="owner-name">{getOwnerDisplayName(group)}</div>
+													<div className="owner-members">{(group.members && group.members.length) || 0} thành viên</div>
+												</div>
+											</div>
+										</div>
+
+										<div className="bank-actions">
+											{role === 'owner' ? (
+												<>
+													<button
+														className="wc-btn"
+														onClick={() => navigate(`/groups/manage/${group._id || group.id}`)}
+													>
+														<i className="fas fa-cog"></i> Quản lý
+													</button>
+													<button 
+														className="wc-btn"
+														onClick={() => navigate(`/groups/${group._id || group.id}/transactions`)}
+													>
+														<i className="fas fa-exchange-alt"></i> Giao dịch
+													</button>
+												</>
+											) : (
+												<>
+													<button
+														className="wc-btn"
+														onClick={() => navigate(`/groups/member/${group._id || group.id}`)}
+													>
+														<i className="fas fa-eye"></i> Xem
+													</button>
+													<button
+														className="wc-btn"
+														onClick={() => navigate(`/groups/${group._id || group.id}/transactions`)}
+													>
+														<i className="fas fa-exchange-alt"></i> Giao dịch
+													</button>
+												</>
+											)}
+										</div>
+									</div>
+								);
+							})}
+						</div>
 					) : (
-						<div className="no-groups"><p>Bạn chưa tham gia nhóm nào. Hãy tạo nhóm mới!</p></div>
+						<div className="no-groups">
+							<div className="empty-icon"><i className="fas fa-users-slash"></i></div>
+							<h3>Chưa có nhóm nào</h3>
+							<p>Bạn chưa tham gia nhóm nào. Hãy tạo một nhóm mới để bắt đầu!</p>
+							<button 
+								className="create-group-btn"
+								onClick={() => { setShowCreateModal(true); fetchFriendsList(); }}
+							>
+								<i className="fas fa-plus-circle"></i> Tạo nhóm mới
+							</button>
+						</div>
 					)}
 				</section>
 
+				{/* Modal tạo nhóm (giữ nguyên code modal) */}
 				{showCreateModal && (
 					<div className="modal-overlay">
 						<div className="modal card-styled-modal create-group-modal">
@@ -461,7 +680,7 @@ export default function GroupsPage() {
 										/>
 									</div>
 
-									{/* color/design UI kept unchanged */}
+									{/* color/design UI */}
 									<div className="form-group">
 										<label>Thiết kế thẻ nhóm</label>
 										<div className="card-design-container">
@@ -511,7 +730,7 @@ export default function GroupsPage() {
 												</div>
 											</div>
 											
-											{/* Xem trước thẻ cải tiến */}
+											{/* Xem trước thẻ */}
 											<div className="card-preview-container">
 												<h4>Xem trước thẻ</h4>
 												<div className="bank-card-preview" style={{ background: buildPreviewBg(chosenColors) }}>
@@ -542,7 +761,7 @@ export default function GroupsPage() {
 									<div className="form-actions">
 										<button type="button" className="cancel-btn" onClick={() => { setShowCreateModal(false); setModalStep(1); }}>Hủy</button>
 										<button type="submit" className="create-btn" disabled={creating}>
-											{creating ? 'Đang tạo...' : 'Tạo nhóm'}
+											{creating ? <><i className="fas fa-spinner fa-spin"></i> Đang tạo...</> : <><i className="fas fa-check"></i> Tạo nhóm</>}
 										</button>
 									</div>
 								</form>

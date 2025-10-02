@@ -270,33 +270,82 @@ export default function GroupFriends() {
             <p className="subtitle">Quản lý danh sách bạn bè và lời mời kết bạn</p>
           </div>
         </header>
+        
+        {/* Thẻ thống kê ở đầu trang */}
+        <div className="friends-stats">
+          <div className="stat-card">
+            <div className="stat-card-bg"></div>
+            <div className="stat-icon"><i className="fas fa-user-friends"></i></div>
+            <div className="stat-content">
+              <div className="stat-value">{friends.length}</div>
+              <div className="stat-label">Bạn bè</div>
+            </div>
+          </div>
+          
+          <div className="stat-card">
+            <div className="stat-card-bg"></div>
+            <div className="stat-icon"><i className="fas fa-envelope"></i></div>
+            <div className="stat-content">
+              <div className="stat-value">{incomingRequests.length}</div>
+              <div className="stat-label">Lời mời đang chờ</div>
+            </div>
+          </div>
+          
+          <div className="stat-card">
+            <div className="stat-card-bg"></div>
+            <div className="stat-icon"><i className="fas fa-search"></i></div>
+            <div className="stat-content">
+              <div className="stat-value">{results.length}</div>
+              <div className="stat-label">Kết quả tìm kiếm</div>
+            </div>
+          </div>
+        </div>
 
         <section className="friends-container">
           <div className="friends-panel">
             <div className="friends-card">
-              <h2>Tìm và kết bạn</h2>
+              <h2><i className="fas fa-user-plus"></i> Tìm và kết bạn</h2>
 
-              {/* Friends list */}
+              {/* Friends list with better layout */}
               <div className="friends-list">
-                <h3>Danh sách bạn bè</h3>
+                <div className="friends-list-header">
+                  <h3><i className="fas fa-users"></i> Danh sách bạn bè</h3>
+                  <div className="friends-count">{friends.length} người</div>
+                </div>
+                
                 {friends.length === 0 ? (
-                  <p className="muted">Bạn chưa có bạn bè</p>
-                ) : (
-                  friends.map(f => (
-                    <div key={f.id || f.email} className="friend-item">
-                      <div className="friend-meta">
-                        <div className="friend-name">{f.name || 'Thành viên'}</div>
-                        <div className="friend-email">{f.email || ''}</div>
-                      </div>
-                     <div className="friend-actions">
-                       <button className="remove-btn" onClick={() => handleRemoveFriend(f.id || f._id || f.email)}>Xóa</button>
-                     </div>
+                  <div className="empty-state">
+                    <div className="empty-state-icon">
+                      <i className="fas fa-user-friends"></i>
                     </div>
-                  ))
+                    <div className="empty-state-text">Bạn chưa có bạn bè</div>
+                    <div className="empty-state-subtext">Tìm kiếm và kết bạn để bắt đầu kết nối</div>
+                  </div>
+                ) : (
+                  <div className="friends-grid">
+                    {friends.map(f => {
+                      const initial = (f.name || f.email || '?')[0].toUpperCase();
+                      return (
+                        <div key={f.id || f.email} className="friend-item">
+                          <div className="friend-avatar">{initial}</div>
+                          <div className="friend-meta">
+                            <div className="friend-name">{f.name || 'Thành viên'}</div>
+                            <div className="friend-email">{f.email || ''}</div>
+                          </div>
+                          <div className="friend-actions">
+                            <button className="remove-btn" onClick={() => handleRemoveFriend(f.id || f._id || f.email)} title="Xóa bạn bè">
+                              <i className="fas fa-times"></i>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
 
               <form className="friend-search" onSubmit={handleSearch}>
+                <i className="fas fa-search search-icon"></i>
                 <input
                   type="email"
                   placeholder="Nhập email tìm kiếm..."
@@ -305,22 +354,32 @@ export default function GroupFriends() {
                   className="friend-search-input"
                 />
                 <button type="submit" className="friend-search-btn" disabled={searching}>
-                  {searching ? 'Đang tìm...' : 'Tìm'}
+                  <i className="fas fa-search"></i> {searching ? 'Đang tìm...' : 'Tìm kiếm'}
                 </button>
               </form>
 
               <div className="search-results-list">
                 {results.length === 0 ? (
-                  <p className="muted">Không có kết quả. Thử email khác.</p>
+                  searchEmail ? (
+                    <div className="muted">
+                      <i className="fas fa-search"></i>
+                      Không có kết quả. Thử email khác.
+                    </div>
+                  ) : null
                 ) : (
                   results.map(u => {
                     const key = u._id || u.email;
                     const status = reqState[key] || 'idle';
+                    const initial = (u.name || u.email || '?')[0].toUpperCase();
+                    
                     return (
                       <div key={key} className="search-result-item friend-card">
                         <div className="user-info">
-                          <div className="user-name">{u.name || 'Người dùng'}</div>
-                          <div className="user-email">{u.email}</div>
+                          <div className="user-avatar">{initial}</div>
+                          <div className="user-details">
+                            <div className="user-name">{u.name || 'Người dùng'}</div>
+                            <div className="user-email">{u.email}</div>
+                          </div>
                         </div>
                         <div className="user-action">
                           <button
@@ -333,11 +392,11 @@ export default function GroupFriends() {
                             onClick={() => sendFriendRequest(u)}
                             disabled={status === 'sent' || status === 'friends' || status === 'sending'}
                           >
-                            {status === 'idle' && 'Kết bạn'}
-                            {status === 'sending' && 'Đang gửi...'}
-                            {status === 'sent' && 'Đã gửi'}
-                            {status === 'error' && 'Lỗi, thử lại'}
-                            {status === 'friends' && 'Bạn bè'}
+                            {status === 'idle' && <><i className="fas fa-user-plus"></i> Kết bạn</>}
+                            {status === 'sending' && <><i className="fas fa-spinner fa-spin"></i> Đang gửi...</>}
+                            {status === 'sent' && <><i className="fas fa-check"></i> Đã gửi</>}
+                            {status === 'error' && <><i className="fas fa-exclamation-triangle"></i> Lỗi, thử lại</>}
+                            {status === 'friends' && <><i className="fas fa-user-check"></i> Bạn bè</>}
                           </button>
                         </div>
                       </div>
@@ -345,30 +404,53 @@ export default function GroupFriends() {
                   })
                 )}
               </div>
-
             </div>
           </div>
 
           <aside className="friends-side">
             <div className="friends-info">
-              <h3>Lời mời</h3>
+              <h3>
+                <i className="fas fa-bell"></i> Lời mời kết bạn
+                {incomingRequests.length > 0 && (
+                  <span className="notifications-badge">{incomingRequests.length}</span>
+                )}
+              </h3>
+              
               {loadingRequests ? (
-                <p className="muted">Đang tải...</p>
+                <div className="requests-loading">
+                  <i className="fas fa-spinner fa-spin"></i>
+                  <span>Đang tải...</span>
+                </div>
               ) : incomingRequests.length === 0 ? (
-                <p className="muted">Không có lời mời mới</p>
+                <div className="requests-empty">
+                  <i className="fas fa-bell-slash"></i>
+                  <span>Không có lời mời mới</span>
+                </div>
               ) : (
                 <div className="incoming-requests">
                   {incomingRequests.map(req => {
                     const reqName = req.sender ? (req.sender.name || req.sender.email) : (req.recipientEmail || 'Người dùng');
+                    const initial = reqName[0].toUpperCase();
+                    
                     return (
                       <div className="req-item" key={req._id || req.id}>
-                        <div className="req-from">
-                          <div className="req-name">{reqName}</div>
-                          <div className="req-meta">{new Date(req.createdAt || req.created).toLocaleString()}</div>
+                        <div className="req-user-info">
+                          <div className="req-avatar">{initial}</div>
+                          <div className="req-from">
+                            <div className="req-name">{reqName}</div>
+                            <div className="req-meta">
+                              <i className="far fa-clock"></i>
+                              {new Date(req.createdAt || req.created).toLocaleString()}
+                            </div>
+                          </div>
                         </div>
                         <div className="req-actions">
-                          <button className="accept-btn" onClick={() => handleRespond(req._id || req.id, true)}>Chấp nhận</button>
-                          <button className="reject-btn" onClick={() => handleRespond(req._id || req.id, false)}>Từ chối</button>
+                          <button className="accept-btn" onClick={() => handleRespond(req._id || req.id, true)}>
+                            <i className="fas fa-check"></i> Chấp nhận
+                          </button>
+                          <button className="reject-btn" onClick={() => handleRespond(req._id || req.id, false)}>
+                            <i className="fas fa-times"></i> Từ chối
+                          </button>
                         </div>
                       </div>
                     );

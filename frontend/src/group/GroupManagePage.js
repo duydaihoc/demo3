@@ -197,20 +197,56 @@ export default function GroupManagePage() {
 		}
 	};
 
-	// Add member action (owner only)
+	// Add member action (owner only) -- thay thế để kiểm tra user tồn tại và chưa có trong nhóm
 	const handleAddMember = async () => {
 		setAddMemberError('');
 		setAddMemberSuccess('');
-		if (!newMemberEmail || !newMemberEmail.trim()) {
+		const email = (newMemberEmail || '').trim().toLowerCase();
+		if (!email) {
 			setAddMemberError('Vui lòng nhập email.');
+			return;
+		}
+		if (!group) {
+			setAddMemberError('Thông tin nhóm chưa tải xong.');
 			return;
 		}
 		setAddingMember(true);
 		try {
+			// 1) kiểm tra user tồn tại (sử dụng endpoint search-users hiện có)
+			const chkRes = await fetch(`${API_BASE}/api/groups/search-users?email=${encodeURIComponent(email)}`, {
+				headers: token ? { Authorization: `Bearer ${token}` } : {}
+			});
+			if (!chkRes.ok) {
+				// lỗi khi kiểm tra server
+				setAddMemberError('Lỗi khi kiểm tra người dùng');
+				return;
+			}
+			const users = await chkRes.json().catch(() => []);
+			if (!Array.isArray(users) || users.length === 0) {
+				setAddMemberError('Người dùng không tồn tại');
+				return;
+			}
+			const foundUser = users[0];
+			const foundUserId = foundUser._id || foundUser.id || null;
+
+			// 2) kiểm tra đã là thành viên trong nhóm chưa (so sánh bằng userId hoặc email)
+			const already = Array.isArray(group.members) && group.members.some(m => {
+				const mUserId = m.user && (m.user._id ? m.user._id : m.user);
+				const mEmail = (m.email || '').toLowerCase().trim();
+				if (mUserId && foundUserId && String(mUserId) === String(foundUserId)) return true;
+				if (mEmail && mEmail === email) return true;
+				return false;
+			});
+			if (already) {
+				setAddMemberError('Người dùng đã tồn tại trong nhóm');
+				return;
+			}
+
+			// 3) tiến hành invite (server sẽ thêm user đã tồn tại bằng userId nếu có)
 			const res = await fetch(`${API_BASE}/api/groups/${encodeURIComponent(groupId)}/invite`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-				body: JSON.stringify({ email: newMemberEmail.trim().toLowerCase() })
+				body: JSON.stringify({ email })
 			});
 			const body = await res.json().catch(() => null);
 			if (!res.ok) {
@@ -218,10 +254,11 @@ export default function GroupManagePage() {
 				setAddMemberError(msg);
 				return;
 			}
-			setAddMemberSuccess('Đã gửi lời mời');
+
+			// success
+			setAddMemberSuccess('Đã thêm/lời mời đã được gửi tới người dùng');
 			setNewMemberEmail('');
-			setShowAddMember(false);
-			// refresh group to reflect new invited member
+			// reload group để cập nhật danh sách thành viên
 			await refreshGroup();
 		} catch (e) {
 			console.error('handleAddMember error', e);
