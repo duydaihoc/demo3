@@ -264,11 +264,11 @@ router.post('/:groupId/transactions/:txId/settle', auth, async (req, res) => {
       }
 
       // 1. Thông báo cho người trả tiền (payer) biết ai đó đã trả nợ
-      const notif = await Notification.create({
+      await Notification.create({
         recipient: tx.payer,
         sender: actor._id,
         type: 'group.transaction.settled',
-        message: `${actor.name || actor.email || participantName} đã hoàn trả ${formattedAmount} đồng cho giao dịch "${tx.title || 'Không tiêu đề'}"`,
+        message: `${participantName} đã hoàn trả ${formattedAmount} đồng cho giao dịch "${tx.title || 'Không tiêu đề'}"`,
         data: { 
           transactionId: tx._id, 
           groupId,
@@ -277,19 +277,25 @@ router.post('/:groupId/transactions/:txId/settle', auth, async (req, res) => {
           description: tx.description,
           category: tx.category,
           categoryName,
-          receivedPayment: true // đánh dấu là người nhận thanh toán
+          receivedPayment: true
         }
       });
       const io = req.app.get('io');
-      if (io) io.to(String(tx.payer)).emit('notification', notif);
+      if (io) io.to(String(tx.payer)).emit('notification', {
+        recipient: tx.payer,
+        sender: actor._id,
+        type: 'group.transaction.settled',
+        message: `${participantName} đã hoàn trả ${formattedAmount} đồng cho giao dịch "${tx.title || 'Không tiêu đề'}"`,
+        data: { transactionId: tx._id, groupId, amount: participant.shareAmount }
+      });
 
-      // 2. Thông báo cho người nợ tiền biết họ đã trả nợ xong
-      if (participant.user && String(participant.user) !== String(actor._id)) {
+      // 2. Thông báo cho người nợ biết họ đã hoàn trả (dù họ không tự bấm)
+      if (participant.user) {
         await Notification.create({
           recipient: participant.user,
-          sender: actor._id,
+          sender: tx.payer,
           type: 'group.transaction.debt.paid',
-          message: `Bạn đã thanh toán khoản nợ ${formattedAmount} đồng cho giao dịch "${tx.title || 'Không tiêu đề'}"`,
+          message: `Bạn đã hoàn trả ${formattedAmount} đồng cho giao dịch "${tx.title || 'Không tiêu đề'}"`,
           data: { 
             transactionId: tx._id, 
             groupId,
@@ -299,10 +305,16 @@ router.post('/:groupId/transactions/:txId/settle', auth, async (req, res) => {
             description: tx.description,
             category: tx.category,
             categoryName,
-            debtPaid: true // đánh dấu là người trả nợ
+            debtPaid: true
           }
         });
-        if (io) io.to(String(participant.user)).emit('notification', notif);
+        if (io) io.to(String(participant.user)).emit('notification', {
+          recipient: participant.user,
+          sender: tx.payer,
+          type: 'group.transaction.debt.paid',
+          message: `Bạn đã hoàn trả ${formattedAmount} đồng cho giao dịch "${tx.title || 'Không tiêu đề'}"`,
+          data: { transactionId: tx._id, groupId, amount: participant.shareAmount }
+        });
       }
     } catch (e) {
       console.warn('notify on settle failed', e && e.message);

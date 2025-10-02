@@ -219,9 +219,9 @@ export default function GroupMemberPage() {
 										</button>
 									)}
 									<button
-										className="gm-btn outline"
+										className="gm-btn primary"
 										onClick={() => navigate(`/groups/${groupId}/transactions`)}
-										style={{background:'transparent', border:'1px solid rgba(26,59,93,0.08)', color:'#1a3b5d'}}
+										style={{background:'#0ea5e9', border:'none', color:'white'}}
 									>
 										<i className="fas fa-exchange-alt"></i> Giao dịch
 									</button>
@@ -381,8 +381,8 @@ export default function GroupMemberPage() {
 								</div>
 							</div>
 
-							{/* NEW: Activity card */}
-							<div className="gm-card" style={{gridColumn: "1 / -1"}}>
+							{/* NEW: Activity card - Thay đổi gridColumn */}
+							<div className="gm-card" style={{gridColumn: "1 / span 1"}}>
 								<div className="gm-card-header">
 									<h2 className="gm-card-title"><i className="fas fa-stream"></i> Hoạt động nhóm</h2>
 									<button className="gm-btn secondary" onClick={fetchTxs}>Làm mới</button>
@@ -408,16 +408,63 @@ export default function GroupMemberPage() {
 								</div>
 							</div>
 
-							{/* NEW: Debts card */}
-							<div className="gm-card" style={{gridColumn: "1 / -1"}}>
+							{/* NEW: Debts card - Thay đổi gridColumn */}
+							<div className="gm-card" style={{gridColumn: "2 / -1"}}>
 								<div className="gm-card-header">
 									<h2 className="gm-card-title"><i className="fas fa-hand-holding-usd"></i> Công nợ</h2>
 								</div>
 								<div className="gm-card-body">
 									{loadingTxs ? <div className="gm-loading-inline">Đang tải...</div> : (() => {
 										const { owesMe, iOwe } = computeDebts();
+										
+										// Tính tổng tiền người khác nợ mình
+										const totalOwedToMe = owesMe.reduce((total, entry) => {
+											return total + (entry.participant.shareAmount || 0);
+										}, 0);
+										
+										// Tính tổng tiền mình nợ người khác
+										const totalIowe = iOwe.reduce((total, entry) => {
+											return total + (entry.participant.shareAmount || 0);
+										}, 0);
+										
+										// Tính toán chênh lệch công nợ
+										const netBalance = totalOwedToMe - totalIowe;
+										
 										return (
 											<>
+												{/* Thêm card tổng hợp công nợ */}
+												<div className="gm-debt-summary">
+													<div className="gm-debt-summary-cards">
+														<div className="gm-debt-summary-card income">
+															<div className="gm-debt-summary-label">
+																<i className="fas fa-arrow-circle-down"></i> Người nợ bạn
+															</div>
+															<div className="gm-debt-summary-amount">
+																{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(totalOwedToMe)}
+															</div>
+														</div>
+														<div className="gm-debt-summary-card expense">
+															<div className="gm-debt-summary-label">
+																<i className="fas fa-arrow-circle-up"></i> Bạn nợ người
+															</div>
+															<div className="gm-debt-summary-amount">
+																{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(totalIowe)}
+															</div>
+														</div>
+														<div className={`gm-debt-summary-card balance ${netBalance >= 0 ? 'positive' : 'negative'}`}>
+															<div className="gm-debt-summary-label">
+																<i className={`fas ${netBalance >= 0 ? 'fa-plus-circle' : 'fa-minus-circle'}`}></i> Chênh lệch
+															</div>
+															<div className="gm-debt-summary-amount">
+																{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Math.abs(netBalance))}
+																<div className="gm-debt-summary-direction">
+																	{netBalance > 0 ? 'Bạn nhận về' : netBalance < 0 ? 'Bạn cần trả' : 'Bằng nhau'}
+																</div>
+															</div>
+														</div>
+													</div>
+													<hr style={{margin:'20px 0',borderColor:'#e8eef5'}} />
+												</div>
 												<h3 style={{marginTop:0}}>Người nợ bạn</h3>
 												{owesMe.length === 0 ? <div className="gm-empty-state-text">Không có ai nợ bạn</div> :
 													<ul className="gm-members-list">

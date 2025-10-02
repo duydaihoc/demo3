@@ -62,9 +62,11 @@
   box-shadow: 0 12px 40px rgba(7,22,37,0.06);
 }
 
-/* scrolling container */
+/* scrolling container - thêm max-height và overflow-y */
 .admin-tx-table-scroll {
   overflow-x: auto;
+  overflow-y: auto;
+  max-height: 500px; /* chiều cao cố định để kích hoạt cuộn */
   border-radius: 8px;
 }
 
@@ -82,6 +84,9 @@
   color: #0f2940;
   font-weight: 700;
   border-bottom: 1px solid #eef6f8;
+  position: sticky; /* giữ header cố định khi cuộn */
+  top: 0;
+  z-index: 10; /* đảm bảo header hiển thị trên cùng */
 }
 .admin-tx-table tbody td {
   padding: 12px 14px;

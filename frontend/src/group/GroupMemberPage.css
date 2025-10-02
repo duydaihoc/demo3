@@ -448,3 +448,90 @@
   font-size: 1.05rem;
   margin-bottom: 20px;
 }
+
+/* Thêm style cho các card tổng hợp công nợ */
+.gm-debt-summary {
+  margin-bottom: 16px;
+}
+
+.gm-debt-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.gm-debt-summary-card {
+  padding: 16px;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.gm-debt-summary-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.gm-debt-summary-card.income {
+  background: #ecfdf5;
+  border: 1px solid #d1fae5;
+}
+
+.gm-debt-summary-card.expense {
+  background: #fff7ed;
+  border: 1px solid #ffedd5;
+}
+
+.gm-debt-summary-card.balance {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+}
+
+.gm-debt-summary-card.balance.positive {
+  background: #ecfdf5;
+  border: 1px solid #d1fae5;
+}
+
+.gm-debt-summary-card.balance.negative {
+  background: #fef2f2;
+  border: 1px solid #fee2e2;
+}
+
+.gm-debt-summary-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #475569;
+  font-weight: 500;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+
+.gm-debt-summary-amount {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.gm-debt-summary-direction {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+.gm-debt-summary-card.income .gm-debt-summary-label i {
+  color: #10b981;
+}
+
+.gm-debt-summary-card.expense .gm-debt-summary-label i {
+  color: #f97316;
+}
+
+.gm-debt-summary-card.balance.positive .gm-debt-summary-label i {
+  color: #10b981;
+}
+
+.gm-debt-summary-card.balance.negative .gm-debt-summary-label i {
+  color: #ef4444;
+}

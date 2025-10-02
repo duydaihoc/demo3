@@ -82,8 +82,11 @@ export default function GroupTransactions() {
       });
       if (!res.ok) return;
       const data = await res.json();
-      // Lọc lấy danh mục chi tiêu (expense)
-      const expenseCategories = data.filter(cat => cat.type === 'expense');
+      // Lọc lấy danh mục chi tiêu (expense) VÀ chỉ lấy danh mục của hệ thống và admin
+      const expenseCategories = data.filter(cat => 
+        cat.type === 'expense' && 
+        (cat.createdBy === 'system' || cat.createdBy === 'admin')
+      );
       setCategories(expenseCategories);
       // Chọn danh mục đầu tiên mặc định
       if (expenseCategories.length > 0) {
@@ -321,27 +324,23 @@ export default function GroupTransactions() {
               />
 
               {/* Thêm trường chọn danh mục */}
-              <label>Danh mục</label>
-              <select
-                value={selectedCategory}
-                onChange={e => setSelectedCategory(e.target.value)}
-                required
-                className="gt-category-select"
-                disabled={loadingCategories}
-              >
-                {loadingCategories ? (
-                  <option value="">Đang tải...</option>
-                ) : (
-                  <>
-                    <option value="">-- Chọn danh mục --</option>
-                    {categories.map(cat => (
-                      <option key={cat._id} value={cat._id}>
-                        {cat.icon} {cat.name}
-                      </option>
-                    ))}
-                  </>
-                )}
-              </select>
+              <div className="gt-form-group">
+                <label>Danh mục</label>
+                <select 
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  required
+                  className="category-selector" // Thêm class này để áp dụng style cuộn
+                  disabled={loadingCategories}
+                >
+                  <option value="">-- Chọn danh mục --</option>
+                  {categories.map(cat => (
+                    <option key={cat._id} value={cat._id}>
+                      {cat.icon} {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
               <div className="gt-paying-for-section">
                 <label>Bạn trả dùm cho ai?</label>
@@ -579,4 +578,4 @@ export default function GroupTransactions() {
     </div>
   );
 }
-                        
+     

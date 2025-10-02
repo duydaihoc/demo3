@@ -1,196 +1,206 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import AdminSidebar from './AdminSidebar';
 import './AdminCategories.css';
 
 function AdminCategoriesPage() {
-  const [systemCategories, setSystemCategories] = useState([]);
-  const [userCategories, setUserCategories] = useState([]);
+  const navigate = useNavigate();
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [currentCategory, setCurrentCategory] = useState(null);
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    type: 'expense',
-    icon: '❓'
-  });
+  
+  // Form states
+  const [formName, setFormName] = useState('');
+  const [formDescription, setFormDescription] = useState('');
+  const [formType, setFormType] = useState('expense');
+  const [formIcon, setFormIcon] = useState('💰');
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
+  
+  // Filters
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [creatorFilter, setCreatorFilter] = useState('all');
 
-  // Fetch categories on component mount
-  useEffect(() => {
-    fetchCategories();
-  }, []);
+  const API_BASE = 'http://localhost:5000';
+  const token = localStorage.getItem('token');
 
-  // Fetch categories from API and separate them into system and user categories
-  const fetchCategories = async () => {
+  const fetchCategories = useCallback(async () => {
     setLoading(true);
+    setError(null);
+    
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/categories');
-      if (!response.ok) {
-        throw new Error('Failed to fetch categories');
-      }
-      const data = await response.json();
-      
-      // Separate categories into system and user categories
-      // System categories include both system-created and admin-created categories
-      const systemCats = data.filter(cat => cat.createdBy === 'system' || cat.createdBy === 'admin');
-      let userCats = data.filter(cat => cat.createdBy === 'user');
-      
-      // For admin view: fetch users to map owner id -> owner name
-      // so we can show creator name instead of raw id.
-      let userMap = {};
-      if (token) {
-        try {
-          const usersRes = await fetch('http://localhost:5000/api/admin/users', {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (usersRes.ok) {
-            const usersData = await usersRes.json();
-            userMap = (usersData || []).reduce((m, u) => {
-              m[String(u._id)] = u.name || u.email || 'Người dùng';
-              return m;
-            }, {});
-          }
-        } catch (err) {
-          console.warn('Could not fetch users for owner name mapping', err);
-        }
-      }
-
-      // Attach ownerName to user categories for display
-      userCats = userCats.map(cat => {
-        const ownerId = cat.owner && (typeof cat.owner === 'string' ? cat.owner : (cat.owner._id || cat.owner.id));
-        const ownerName = ownerId ? (userMap[ownerId] || (ownerId.substring ? ownerId.substring(0,10) + '...' : ownerId)) : (cat.creatorName || 'Người dùng');
-        return { ...cat, ownerName, ownerId };
+      const res = await fetch(`${API_BASE}/api/categories`, {
+        headers: { Authorization: `Bearer ${token}` }
       });
       
-      setSystemCategories(systemCats);
-      setUserCategories(userCats);
-      setError(null);
+      if (!res.ok) {
+        throw new Error(`HTTP error ${res.status}`);
+      }
+      
+      const data = await res.json();
+      setCategories(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Error fetching categories:', err);
-      setError('Không thể tải danh mục. Vui lòng thử lại sau.');
+      setError('Không thể tải danh sách danh mục');
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
-  // Handle form input change
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
+  useEffect(() => {
+    const role = localStorage.getItem('role');
+    if (!token || role !== 'admin') {
+      navigate('/login');
+    } else {
+      fetchCategories();
+    }
+  }, [navigate, fetchCategories, token]);
 
-  // Open add category modal
-  const handleAddClick = () => {
-    setFormData({
-      name: '',
-      description: '',
-      type: 'expense',
-      icon: '❓'
-    });
-    setShowAddModal(true);
-  };
-
-  // Open edit category modal
-  const handleEditClick = (category) => {
-    setCurrentCategory(category);
-    setFormData({
-      name: category.name,
-      description: category.description || '',
-      type: category.type,
-      icon: category.icon
-    });
-    setShowEditModal(true);
-  };
-
-  // Add category
-  const handleAddSubmit = async (e) => {
+  const handleAddCategory = async (e) => {
     e.preventDefault();
+    if (!formName.trim()) {
+      setFormError('Tên danh mục không được để trống');
+      return;
+    }
+    
+    setSaving(true);
+    setFormError('');
+    
     try {
-      const response = await fetch('http://localhost:5000/api/categories', {
+      const res = await fetch(`${API_BASE}/api/categories`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
-          ...formData,
-          owner: null, // Ensure system category
-          createdBy: 'admin', // Mark as created by admin
-          creatorName: 'Quản trị viên' // Correct admin name
-        }),
+          name: formName.trim(),
+          description: formDescription.trim(),
+          type: formType,
+          icon: formIcon
+        })
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to add category');
+      
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || `HTTP error ${res.status}`);
       }
-
+      
+      await fetchCategories();
       setShowAddModal(false);
-      fetchCategories(); // Refresh categories
-      alert('Danh mục đã được thêm thành công');
+      resetForm();
     } catch (err) {
-      console.error('Error adding category:', err);
-      alert(`Lỗi: ${err.message}`);
+      setFormError(err.message || 'Lỗi khi tạo danh mục');
+    } finally {
+      setSaving(false);
     }
   };
 
-  // Edit category
-  const handleEditSubmit = async (e) => {
+  const handleEditCategory = async (e) => {
     e.preventDefault();
+    if (!formName.trim() || !currentCategory) {
+      setFormError('Tên danh mục không được để trống');
+      return;
+    }
+    
+    setSaving(true);
+    setFormError('');
+    
     try {
-      const response = await fetch(`http://localhost:5000/api/categories/${currentCategory._id}`, {
+      const res = await fetch(`${API_BASE}/api/categories/${currentCategory._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          name: formName.trim(),
+          description: formDescription.trim(),
+          type: formType,
+          icon: formIcon
+        })
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to update category');
+      
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || `HTTP error ${res.status}`);
       }
-
+      
+      await fetchCategories();
       setShowEditModal(false);
-      fetchCategories(); // Refresh categories
-      alert('Danh mục đã được cập nhật thành công');
+      resetForm();
     } catch (err) {
-      console.error('Error updating category:', err);
-      alert(`Lỗi: ${err.message}`);
+      setFormError(err.message || 'Lỗi khi cập nhật danh mục');
+    } finally {
+      setSaving(false);
     }
   };
 
-  // Delete category
-  const handleDelete = async (categoryId) => {
-    if (!window.confirm('Bạn có chắc muốn xóa danh mục này không?')) {
+  const handleDeleteCategory = async (id) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa danh mục này?')) {
       return;
     }
     
     try {
-      const response = await fetch(`http://localhost:5000/api/categories/${categoryId}`, {
+      const res = await fetch(`${API_BASE}/api/categories/${id}`, {
         method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to delete category');
+      
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || `HTTP error ${res.status}`);
       }
-
-      fetchCategories(); // Refresh categories
-      alert('Danh mục đã được xóa thành công');
+      
+      await fetchCategories();
     } catch (err) {
-      console.error('Error deleting category:', err);
-      alert(`Lỗi: ${err.message}`);
+      alert(err.message || 'Lỗi khi xóa danh mục');
     }
   };
 
-  // Modal close handler
-  const handleCloseModal = () => {
-    setShowAddModal(false);
-    setShowEditModal(false);
+  const openEditModal = (category) => {
+    setCurrentCategory(category);
+    setFormName(category.name || '');
+    setFormDescription(category.description || '');
+    setFormType(category.type || 'expense');
+    setFormIcon(category.icon || '💰');
+    setFormError('');
+    setShowEditModal(true);
   };
+
+  const resetForm = () => {
+    setFormName('');
+    setFormDescription('');
+    setFormType('expense');
+    setFormIcon('💰');
+    setFormError('');
+    setCurrentCategory(null);
+  };
+
+  const handleOpenAddModal = () => {
+    resetForm();
+    setShowAddModal(true);
+  };
+
+  const emojiOptions = ['💰', '🍔', '🚗', '📝', '🛍️', '🎮', '💊', '📚', '🏠', '🐱', '🎁', '💵', '🏆', '📈', '🏷️', '🎫', '📋', '🏦', '💻', '🔑'];
+
+  // Filter categories
+  const filteredCategories = categories.filter(cat => {
+    if (typeFilter !== 'all' && cat.type !== typeFilter) return false;
+    
+    if (creatorFilter === 'system' && cat.createdBy !== 'system') return false;
+    if (creatorFilter === 'admin' && cat.createdBy !== 'admin') return false;
+    if (creatorFilter === 'user' && cat.createdBy !== 'user') return false;
+    
+    return true;
+  });
+
+  // Group categories by system and user
+  const systemCategories = filteredCategories.filter(cat => cat.createdBy === 'system');
+  const userCategories = filteredCategories.filter(cat => cat.createdBy !== 'system');
 
   return (
     <div className="admin-layout">
@@ -198,262 +208,362 @@ function AdminCategoriesPage() {
       <div className="admin-content">
         <div className="admin-cat-page">
           <h1 className="admin-page-title">Quản lý danh mục</h1>
-          
-          {loading ? (
-            <div className="admin-loading">Đang tải danh mục...</div>
-          ) : error ? (
-            <div className="admin-error">{error}</div>
-          ) : (
-            <>
-              {/* System Categories Section - Updated title to reflect admin categories */}
-              <div className="admin-section system-section">
-                <div className="admin-section-header">
-                  <div className="header-left">
-                    <span className="icon-wrapper system-icon">🔧</span>
-                    <h2 className="section-title">Danh mục hệ thống & quản trị viên</h2>
-                    <span className="category-count">{systemCategories.length}</span>
-                  </div>
-                  <button className="add-btn" onClick={handleAddClick}>+ Thêm danh mục mới</button>
-                </div>
-                
-                {systemCategories.length === 0 ? (
-                  <div className="empty-state">Không có danh mục nào.</div>
-                ) : (
-                  <div className="table-container">
-                    <table className="admin-table system-table">
-                      <thead>
-                        <tr>
-                          <th className="icon-col">Icon</th>
-                          <th className="name-col">Tên</th>
-                          <th className="desc-col">Mô tả</th>
-                          <th className="type-col">Loại</th>
-                          <th className="creator-col">Người tạo</th>
-                          <th className="actions-col">Thao tác</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {systemCategories.map(category => (
-                          <tr key={category._id}>
-                            <td className="icon-cell">{category.icon}</td>
-                            <td>{category.name}</td>
-                            <td>{category.description || <span className="empty-text">Không có mô tả</span>}</td>
-                            <td>
-                              <span className={`type-badge ${category.type}`}>
-                                {category.type === 'income' ? 'Thu nhập' : 'Chi tiêu'}
-                              </span>
-                            </td>
-                            <td>
-                              <span className={`creator-badge ${category.createdBy}`}>
-                                {category.creatorName || (
-                                  category.createdBy === 'admin' ? 'Quản trị viên' : 
-                                  category.createdBy === 'system' ? 'Hệ thống' : 
-                                  'Người dùng'
-                                )}
-                              </span>
-                            </td>
-                            <td>
-                              <div className="action-buttons">
-                                <button className="edit-btn" onClick={() => handleEditClick(category)}>Sửa</button>
-                                <button className="delete-btn" onClick={() => handleDelete(category._id)}>Xóa</button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
 
-              {/* User Categories Section - Updated title to reflect only user categories */}
-              <div className="admin-section user-section">
-                <div className="admin-section-header">
-                  <div className="header-left">
-                    <span className="icon-wrapper user-icon">👤</span>
-                    <h2 className="section-title">Danh mục người dùng tạo</h2>
-                    <span className="category-count">{userCategories.length}</span>
-                  </div>
+          {/* Filters and actions */}
+          <div className="admin-section">
+            <div className="admin-section-header">
+              <div className="header-left">
+                <div className="icon-wrapper">
+                  <i className="fas fa-filter"></i>
+                </div>
+                <h2 className="section-title">Bộ lọc</h2>
+              </div>
+              <button className="add-btn" onClick={handleOpenAddModal}>
+                <i className="fas fa-plus"></i> Thêm danh mục
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', gap: '20px', marginTop: '20px' }}>
+              <div>
+                <label style={{ marginRight: '10px', fontWeight: '500' }}>Loại:</label>
+                <select 
+                  value={typeFilter} 
+                  onChange={(e) => setTypeFilter(e.target.value)}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: '4px',
+                    border: '1px solid #ddd'
+                  }}
+                >
+                  <option value="all">Tất cả</option>
+                  <option value="expense">Chi tiêu</option>
+                  <option value="income">Thu nhập</option>
+                </select>
+              </div>
+              
+              <div>
+                <label style={{ marginRight: '10px', fontWeight: '500' }}>Người tạo:</label>
+                <select 
+                  value={creatorFilter} 
+                  onChange={(e) => setCreatorFilter(e.target.value)}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: '4px',
+                    border: '1px solid #ddd'
+                  }}
+                >
+                  <option value="all">Tất cả</option>
+                  <option value="system">Hệ thống</option>
+                  <option value="admin">Quản trị viên</option>
+                  <option value="user">Người dùng</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* System Categories */}
+          <div className="admin-section system-section">
+            <div className="admin-section-header">
+              <div className="header-left">
+                <div className="icon-wrapper system-icon">
+                  <i className="fas fa-cog"></i>
+                </div>
+                <h2 className="section-title">Danh mục hệ thống</h2>
+                <span className="category-count">{systemCategories.length}</span>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="admin-loading">
+                <i className="fas fa-spinner fa-spin"></i> Đang tải...
+              </div>
+            ) : error ? (
+              <div className="admin-error">{error}</div>
+            ) : (
+              <div className="table-container">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Icon</th>
+                      <th>Tên</th>
+                      <th>Loại</th>
+                      <th>Mô tả</th>
+                      <th>Hành động</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {systemCategories.length === 0 ? (
+                      <tr>
+                        <td colSpan="5" className="empty-text">Không có danh mục hệ thống nào</td>
+                      </tr>
+                    ) : (
+                      systemCategories.map(category => (
+                        <tr key={category._id}>
+                          <td className="icon-cell">{category.icon || '💰'}</td>
+                          <td>{category.name}</td>
+                          <td>
+                            <span className={`type-badge ${category.type}`}>
+                              {category.type === 'expense' ? 'Chi tiêu' : 'Thu nhập'}
+                            </span>
+                          </td>
+                          <td>{category.description || '-'}</td>
+                          <td className="action-buttons">
+                            <button className="edit-btn" onClick={() => openEditModal(category)}>
+                              <i className="fas fa-edit"></i> Sửa
+                            </button>
+                            <button 
+                              className="delete-btn" 
+                              onClick={() => handleDeleteCategory(category._id)}
+                              disabled={category.createdBy === 'system'}
+                              title={category.createdBy === 'system' ? "Không thể xóa danh mục hệ thống" : ""}
+                              style={category.createdBy === 'system' ? {opacity: 0.5, cursor: 'not-allowed'} : {}}
+                            >
+                              <i className="fas fa-trash-alt"></i> Xóa
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* User Categories */}
+          <div className="admin-section user-section">
+            <div className="admin-section-header">
+              <div className="header-left">
+                <div className="icon-wrapper user-icon">
+                  <i className="fas fa-user"></i>
+                </div>
+                <h2 className="section-title">Danh mục người dùng</h2>
+                <span className="category-count">{userCategories.length}</span>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="admin-loading">
+                <i className="fas fa-spinner fa-spin"></i> Đang tải...
+              </div>
+            ) : error ? (
+              <div className="admin-error">{error}</div>
+            ) : (
+              <div className="table-container">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Icon</th>
+                      <th>Tên</th>
+                      <th>Loại</th>
+                      <th>Người tạo</th>
+                      <th>Mô tả</th>
+                      <th>Hành động</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {userCategories.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="empty-text">Không có danh mục người dùng nào</td>
+                      </tr>
+                    ) : (
+                      userCategories.map(category => (
+                        <tr key={category._id}>
+                          <td className="icon-cell">{category.icon || '💰'}</td>
+                          <td>{category.name}</td>
+                          <td>
+                            <span className={`type-badge ${category.type}`}>
+                              {category.type === 'expense' ? 'Chi tiêu' : 'Thu nhập'}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={`creator-badge ${category.createdBy || 'user'}`}>
+                              {category.createdBy === 'admin' ? 'Quản trị viên' : 
+                               category.createdBy === 'system' ? 'Hệ thống' : 'Người dùng'}
+                            </span>
+                          </td>
+                          <td>{category.description || '-'}</td>
+                          <td className="action-buttons">
+                            <button className="edit-btn" onClick={() => openEditModal(category)}>
+                              <i className="fas fa-edit"></i> Sửa
+                            </button>
+                            <button className="delete-btn" onClick={() => handleDeleteCategory(category._id)}>
+                              <i className="fas fa-trash-alt"></i> Xóa
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Add Category Modal */}
+          {showAddModal && (
+            <div className="modal-overlay">
+              <div className="modal">
+                <div className="modal-header">
+                  <h3>Thêm danh mục mới</h3>
+                  <button className="close-btn" onClick={() => setShowAddModal(false)}>&times;</button>
                 </div>
                 
-                {userCategories.length === 0 ? (
-                  <div className="empty-state">Không có danh mục nào.</div>
-                ) : (
-                  <div className="table-container">
-                    <table className="admin-table user-table">
-                      <thead>
-                        <tr>
-                          <th className="icon-col">Icon</th>
-                          <th className="name-col">Tên</th>
-                          <th className="desc-col">Mô tả</th>
-                          <th className="type-col">Loại</th>
-                          <th className="creator-col">Người tạo</th>
-                          <th className="user-id-col">ID người dùng</th>
-                          <th className="actions-col">Thao tác</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {userCategories.map(category => (
-                          <tr key={category._id}>
-                            <td className="icon-cell">{category.icon}</td>
-                            <td>{category.name}</td>
-                            <td>{category.description || <span className="empty-text">Không có mô tả</span>}</td>
-                            <td>
-                              <span className={`type-badge ${category.type}`}>
-                                {category.type === 'income' ? 'Thu nhập' : 'Chi tiêu'}
-                              </span>
-                            </td>
-                            <td>
-                              <span className={`creator-badge ${category.createdBy}`}>
-                                {category.creatorName || 'Người dùng'}
-                              </span>
-                            </td>
-                            <td className="user-id-cell">
-                              {category.owner ? (
-                                <div className="user-id-wrapper">
-                                  <span className="user-name">
-                                    {category.ownerName || (typeof category.owner === 'object' ? (category.owner._id || '').substring(0,10) + '...' : (String(category.owner).substring(0,10) + '...'))}
-                                  </span>
-                                  <button
-                                    className="copy-btn"
-                                    onClick={() => {
-                                      const idToCopy = category.ownerId || (typeof category.owner === 'object' ? (category.owner._id || category.owner.id || '') : (category.owner || ''));
-                                      if (idToCopy) {
-                                        navigator.clipboard.writeText(idToCopy);
-                                        alert('Đã sao chép ID: ' + idToCopy);
-                                      }
-                                    }}
-                                  >
-                                    📋
-                                  </button>
-                                </div>
-                              ) : (
-                                <span className="empty-text">Hệ thống</span>
-                              )}
-                            </td>
-                            <td>
-                              <div className="action-buttons">
-                                <button className="edit-btn" onClick={() => handleEditClick(category)}>Sửa</button>
-                                <button className="delete-btn" onClick={() => handleDelete(category._id)}>Xóa</button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                <form className="modal-form" onSubmit={handleAddCategory}>
+                  {formError && <div style={{color: 'red', marginBottom: '15px'}}>{formError}</div>}
+                  
+                  <div className="form-group">
+                    <label>Tên danh mục</label>
+                    <input 
+                      type="text" 
+                      value={formName}
+                      onChange={(e) => setFormName(e.target.value)}
+                      placeholder="Nhập tên danh mục"
+                      required
+                    />
                   </div>
-                )}
+                  
+                  <div className="form-group">
+                    <label>Mô tả</label>
+                    <input 
+                      type="text" 
+                      value={formDescription}
+                      onChange={(e) => setFormDescription(e.target.value)}
+                      placeholder="Nhập mô tả (tùy chọn)"
+                    />
+                  </div>
+                  
+                  <div className="form-group">
+                    <label>Loại</label>
+                    <select 
+                      value={formType}
+                      onChange={(e) => setFormType(e.target.value)}
+                    >
+                      <option value="expense">Chi tiêu</option>
+                      <option value="income">Thu nhập</option>
+                    </select>
+                  </div>
+                  
+                  <div className="form-group">
+                    <label>Biểu tượng</label>
+                    <input 
+                      type="text"
+                      className="emoji-input"
+                      value={formIcon}
+                      onChange={(e) => setFormIcon(e.target.value)}
+                      maxLength="2"
+                    />
+                    <div className="emoji-preview">{formIcon}</div>
+                    
+                    <div className="emoji-picker">
+                      {emojiOptions.map(emoji => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          className="emoji-swatch"
+                          onClick={() => setFormIcon(emoji)}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="modal-actions">
+                    <button type="button" className="cancel-btn" onClick={() => setShowAddModal(false)}>Hủy</button>
+                    <button type="submit" className="submit-btn" disabled={saving}>
+                      {saving ? 'Đang lưu...' : 'Thêm danh mục'}
+                    </button>
+                  </div>
+                </form>
               </div>
-            </>
+            </div>
+          )}
+
+          {/* Edit Category Modal */}
+          {showEditModal && (
+            <div className="modal-overlay">
+              <div className="modal">
+                <div className="modal-header">
+                  <h3>Chỉnh sửa danh mục</h3>
+                  <button className="close-btn" onClick={() => setShowEditModal(false)}>&times;</button>
+                </div>
+                
+                <form className="modal-form" onSubmit={handleEditCategory}>
+                  {formError && <div style={{color: 'red', marginBottom: '15px'}}>{formError}</div>}
+                  
+                  <div className="form-group">
+                    <label>Tên danh mục</label>
+                    <input 
+                      type="text" 
+                      value={formName}
+                      onChange={(e) => setFormName(e.target.value)}
+                      placeholder="Nhập tên danh mục"
+                      required
+                    />
+                  </div>
+                  
+                  <div className="form-group">
+                    <label>Mô tả</label>
+                    <input 
+                      type="text" 
+                      value={formDescription}
+                      onChange={(e) => setFormDescription(e.target.value)}
+                      placeholder="Nhập mô tả (tùy chọn)"
+                    />
+                  </div>
+                  
+                  <div className="form-group">
+                    <label>Loại</label>
+                    <select 
+                      value={formType}
+                      onChange={(e) => setFormType(e.target.value)}
+                      disabled={currentCategory?.createdBy === 'system'}
+                    >
+                      <option value="expense">Chi tiêu</option>
+                      <option value="income">Thu nhập</option>
+                    </select>
+                  </div>
+                  
+                  <div className="form-group">
+                    <label>Biểu tượng</label>
+                    <input 
+                      type="text"
+                      className="emoji-input"
+                      value={formIcon}
+                      onChange={(e) => setFormIcon(e.target.value)}
+                      maxLength="2"
+                    />
+                    <div className="emoji-preview">{formIcon}</div>
+                    
+                    <div className="emoji-picker">
+                      {emojiOptions.map(emoji => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          className="emoji-swatch"
+                          onClick={() => setFormIcon(emoji)}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="modal-actions">
+                    <button type="button" className="cancel-btn" onClick={() => setShowEditModal(false)}>Hủy</button>
+                    <button type="submit" className="submit-btn" disabled={saving}>
+                      {saving ? 'Đang lưu...' : 'Cập nhật'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
           )}
         </div>
       </div>
-
-      {/* Add Category Modal */}
-      {showAddModal && (
-        <div className="modal-overlay">
-          <div className="modal modal-large">
-            <div className="modal-header">
-              <h3>Thêm danh mục mới</h3>
-              <button className="close-btn" onClick={handleCloseModal}>×</button>
-            </div>
-            <form className="modal-body modal-grid" onSubmit={handleAddSubmit}>
-              <div className="col">
-                <div className="field">
-                  <label>Tên danh mục</label>
-                  <input type="text" name="name" value={formData.name} onChange={handleInputChange} required />
-                </div>
-                <div className="field">
-                  <label>Mô tả</label>
-                  <textarea name="description" value={formData.description} onChange={handleInputChange} rows="4" />
-                </div>
-                <div className="field">
-                  <label>Loại</label>
-                  <div className="type-toggle">
-                    <button type="button" className={formData.type === 'expense' ? 'active' : ''} onClick={() => setFormData(prev => ({ ...prev, type: 'expense' }))}>Chi tiêu</button>
-                    <button type="button" className={formData.type === 'income' ? 'active' : ''} onClick={() => setFormData(prev => ({ ...prev, type: 'income' }))}>Thu nhập</button>
-                  </div>
-                </div>
-              </div>
-              <div className="col">
-                <div className="field">
-                  <label>Icon (emoji)</label>
-                  <div className="emoji-row">
-                    <input type="text" name="icon" value={formData.icon} onChange={handleInputChange} maxLength="2" className="emoji-input" />
-                    <div className="emoji-preview large">{formData.icon}</div>
-                  </div>
-                </div>
-                <div className="field">
-                  <label>Chọn nhanh</label>
-                  <div className="emoji-picker">
-                    {['💸','🍔','🚌','🏠','🎁','💼','💡','🎯','💰','⚽'].map(e => (
-                      <button key={e} type="button" className="emoji-swatch" onClick={() => setFormData(prev => ({ ...prev, icon: e }))}>{e}</button>
-                    ))}
-                  </div>
-                </div>
-                <div className="modal-actions right">
-                  <button type="submit" className="primary-btn">Thêm danh mục</button>
-                  <button type="button" className="secondary-btn" onClick={handleCloseModal}>Hủy</button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Category Modal */}
-      {showEditModal && currentCategory && (
-        <div className="modal-overlay">
-          <div className="modal modal-large">
-            <div className="modal-header">
-              <h3>Chỉnh sửa danh mục</h3>
-              <button className="close-btn" onClick={handleCloseModal}>×</button>
-            </div>
-            <form className="modal-body modal-grid" onSubmit={handleEditSubmit}>
-              <div className="col">
-                <div className="field">
-                  <label>Tên danh mục</label>
-                  <input type="text" name="name" value={formData.name} onChange={handleInputChange} required />
-                </div>
-                <div className="field">
-                  <label>Mô tả</label>
-                  <textarea name="description" value={formData.description} onChange={handleInputChange} rows="4" />
-                </div>
-                <div className="field">
-                  <label>Loại</label>
-                  <div className="type-toggle">
-                    <button type="button" className={formData.type === 'expense' ? 'active' : ''} onClick={() => setFormData(prev => ({ ...prev, type: 'expense' }))}>Chi tiêu</button>
-                    <button type="button" className={formData.type === 'income' ? 'active' : ''} onClick={() => setFormData(prev => ({ ...prev, type: 'income' }))}>Thu nhập</button>
-                  </div>
-                </div>
-              </div>
-              <div className="col">
-                <div className="field">
-                  <label>Icon (emoji)</label>
-                  <div className="emoji-row">
-                    <input type="text" name="icon" value={formData.icon} onChange={handleInputChange} maxLength="2" className="emoji-input" />
-                    <div className="emoji-preview large">{formData.icon}</div>
-                  </div>
-                </div>
-                <div className="field">
-                  <label>Chọn nhanh</label>
-                  <div className="emoji-picker">
-                    {['💸','🍔','🚌','🏠','🎁','💼','💡','🎯','💰','⚽'].map(e => (
-                      <button key={e} type="button" className="emoji-swatch" onClick={() => setFormData(prev => ({ ...prev, icon: e }))}>{e}</button>
-                    ))}
-                  </div>
-                </div>
-                <div className="modal-actions right">
-                  <button type="submit" className="primary-btn">Cập nhật</button>
-                  <button type="button" className="secondary-btn" onClick={handleCloseModal}>Hủy</button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
 export default AdminCategoriesPage;
-              

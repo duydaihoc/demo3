@@ -413,6 +413,49 @@
   margin-top: 10px;
 }
 
+/* Thêm cuộn cho dropdown danh mục */
+.gt-form-select {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* Hoặc nếu danh mục được hiển thị trong một container cụ thể */
+.category-selector {
+  max-height: 200px;
+  overflow-y: auto;
+  border-radius: 8px;
+}
+
+/* Đảm bảo dropdown hiển thị phía trên các phần tử khác khi cuộn */
+.gt-form-group select,
+.category-selector select {
+  position: relative;
+  z-index: 10;
+}
+
+/* Style cho thanh cuộn */
+.gt-form-select::-webkit-scrollbar,
+.category-selector::-webkit-scrollbar {
+  width: 8px;
+}
+
+.gt-form-select::-webkit-scrollbar-track,
+.category-selector::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 8px;
+}
+
+.gt-form-select::-webkit-scrollbar-thumb,
+.category-selector::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 8px;
+}
+
+.gt-form-select::-webkit-scrollbar-thumb:hover,
+.category-selector::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
 /* Responsive */
 @media (max-width: 900px) {
   .gt-grid { grid-template-columns: 1fr; }
