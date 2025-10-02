@@ -223,6 +223,8 @@ app.use('/api/wallets', walletRoutes);
 app.use('/api/transactions', transactionRoutes);
 // Mount category routes
 app.use('/api/categories', categoryRoutes);
+// Mount savings goals routes so frontend can POST/GET /api/savings
+app.use('/api/savings', savingsRoutes);
 // Mount group routes
 app.use('/api/groups', groupRoutes);
 
