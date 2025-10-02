@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import './Login.css';
-import { FaExclamationCircle, FaCheckCircle } from 'react-icons/fa';
+import { FaExclamationCircle, FaCheckCircle, FaUser, FaLock, FaSignInAlt } from 'react-icons/fa';
 
 function Login() {
   const [email, setEmail] = useState('');
@@ -44,50 +44,98 @@ function Login() {
 
   return (
     <div className="auth-container">
-      <div className="auth-form">
-        <h2>Đăng nhập</h2>
-        <form onSubmit={handleSubmit} autoComplete="off">
-          <div className="form-group">
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              placeholder=" "
-              autoComplete="off"
-              className="auth-input"
-            />
-            <label>Email</label>
-          </div>
-          <div className="form-group">
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              placeholder=" "
-              autoComplete="new-password"
-              className="auth-input"
-            />
-            <label>Mật khẩu</label>
-          </div>
-          {error && (
-            <div className="error-message">
-              <FaExclamationCircle className="error-icon" />
-              <span>{error}</span>
+      <div className="auth-wrapper">
+        <div className="auth-card">
+          <div className="auth-brand">
+            <div className="logo">
+              <div className="logo-icon">
+                <div className="coin-stack">
+                  <div className="coin coin-1"></div>
+                  <div className="coin coin-2"></div>
+                  <div className="coin coin-3"></div>
+                </div>
+                <div className="wallet"></div>
+              </div>
             </div>
-          )}
-          {success && (
-            <div className="success-message">
-              <FaCheckCircle className="success-icon" />
-              <span>{success}</span>
+            <h1>MoneyWise</h1>
+            <p className="tagline">Quản lý chi tiêu thông minh</p>
+          </div>
+          
+          <div className="auth-content">
+            <h2 className="auth-title">Đăng nhập</h2>
+            <p className="auth-subtitle">Vui lòng đăng nhập để tiếp tục</p>
+            
+            {error && (
+              <div className="alert alert-danger">
+                <FaExclamationCircle />
+                <span>{error}</span>
+              </div>
+            )}
+            
+            {success && (
+              <div className="alert alert-success">
+                <FaCheckCircle />
+                <span>{success}</span>
+              </div>
+            )}
+            
+            <form onSubmit={handleSubmit} className="auth-form">
+              <div className="form-group">
+                <div className="input-icon">
+                  <FaUser />
+                </div>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  placeholder="Email"
+                  className="form-control"
+                />
+              </div>
+              
+              <div className="form-group">
+                <div className="input-icon">
+                  <FaLock />
+                </div>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  placeholder="Mật khẩu"
+                  className="form-control"
+                />
+              </div>
+              
+              <div className="form-options">
+                <div className="form-remember">
+                  <input type="checkbox" id="remember" />
+                  <label htmlFor="remember">Ghi nhớ đăng nhập</label>
+                </div>
+                <a href="#forgot" className="forgot-link">Quên mật khẩu?</a>
+              </div>
+              
+              <button type="submit" className="btn-submit" disabled={loading}>
+                {loading ? (
+                  <span className="btn-spinner"></span>
+                ) : (
+                  <>
+                    <FaSignInAlt /> Đăng nhập
+                  </>
+                )}
+              </button>
+            </form>
+            
+            <div className="auth-alt">
+              <p>Chưa có tài khoản? <a href="/register">Đăng ký ngay</a></p>
             </div>
-          )}
-          <button type="submit" className="auth-button" disabled={loading}>
-            {loading ? 'Đang xử lý...' : 'Đăng nhập'}
-          </button>
-        </form>
-        <p>Chưa có tài khoản? <a href="/register">Đăng ký</a></p>
+          </div>
+        </div>
+        
+        <div className="auth-footer">
+          <p>&copy; {new Date().getFullYear()} MoneyWise. All rights reserved.</p>
+        </div>
       </div>
     </div>
   );

@@ -16,6 +16,22 @@ export default function GroupSidebar({ active = 'overview' }) {
 
   return (
     <aside className="group-sidebar" aria-label="Sidebar nhóm">
+      {/* Add logo component at the top */}
+      <div className="sidebar-logo">
+        <div className="logo-icon">
+          <div className="coin-stack">
+            <div className="coin coin-1"></div>
+            <div className="coin coin-2"></div>
+            <div className="coin coin-3"></div>
+          </div>
+          <div className="wallet"></div>
+        </div>
+        <div className="logo-text">
+          <span className="text-primary">Quản lý</span>
+          <span className="text-secondary">Chi tiêu</span>
+        </div>
+      </div>
+      
       <div className="gs-header">
         <div className="gs-logo">NHÓM</div>
         <div className="gs-sub">Quản lý nhóm</div>
