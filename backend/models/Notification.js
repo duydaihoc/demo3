@@ -21,7 +21,8 @@ const notificationSchema = new mongoose.Schema({
       'group.transaction.debt',
       'group.transaction.settled',
       'group.transaction.debt.paid',
-      'group.transaction.updated', 'group.transaction.deleted', 'group.transaction.removed'
+      'group.transaction.updated', 'group.transaction.deleted', 'group.transaction.removed',
+      'group.transaction.edited' // Add new notification type for editors
     ]
   },
   message: {

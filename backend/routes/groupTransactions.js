@@ -518,6 +518,52 @@ router.put('/:groupId/transactions/:txId', auth, async (req, res) => {
           } catch (e) { console.warn('Failed to notify participant about amount change', e); }
         }
       }
+
+      // After handling removed participants and changed participants,
+      // Add notification for the user who edited the transaction
+      try {
+        // Get category name if available
+        let categoryName = '';
+        if (transaction.category) {
+          try {
+            const cat = await Category.findById(transaction.category).lean();
+            if (cat) categoryName = cat.name;
+          } catch (e) { /* ignore */ }
+        }
+        
+        // Create notification for the editor (user who made the changes)
+        await Notification.create({
+          recipient: req.user._id, // The editor receives their own notification
+          sender: req.user._id,
+          type: 'group.transaction.edited',
+          message: `Bạn đã chỉnh sửa giao dịch "${transaction.title}" trong nhóm`,
+          data: {
+            transactionId: transaction._id,
+            groupId,
+            title: transaction.title,
+            amount: transaction.amount,
+            category: transaction.category,
+            categoryName,
+            editedAt: new Date(),
+            participantsCount: transaction.participants ? transaction.participants.length : 0,
+            changes: {
+              removedCount: removedParticipants.length,
+              changedCount: changedParticipants.length
+            }
+          }
+        });
+
+        // Send real-time notification if socket.io is available
+        const io = req.app.get('io');
+        if (io) {
+          io.to(String(req.user._id)).emit('notification', {
+            type: 'group.transaction.edited',
+            message: `Bạn đã chỉnh sửa giao dịch "${transaction.title}" trong nhóm`
+          });
+        }
+      } catch (e) {
+        console.warn('Failed to notify editor about their own changes', e);
+      }
     };
     
     // Run notifications in background
@@ -601,6 +647,34 @@ router.delete('/:groupId/transactions/:txId', auth, async (req, res) => {
       } catch (e) { 
         console.warn('Failed to notify participant about transaction deletion', e);
       }
+    }
+
+    // After notifying unsettled participants
+    // Notify the deleting user as well
+    try {
+      await Notification.create({
+        recipient: req.user._id,
+        sender: req.user._id,
+        type: 'group.transaction.deleted',
+        message: `Bạn đã xóa giao dịch "${title}" trong nhóm`,
+        data: {
+          previousTransactionId: txId,
+          groupId,
+          title,
+          deletedAt: new Date()
+        }
+      });
+      
+      // Send real-time notification if socket.io is available
+      const io = req.app.get('io');
+      if (io) {
+        io.to(String(req.user._id)).emit('notification', {
+          type: 'group.transaction.deleted',
+          message: `Bạn đã xóa giao dịch "${title}" trong nhóm`
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to notify deleter about their own action', e);
     }
     
     res.json({ message: 'Transaction deleted successfully' });

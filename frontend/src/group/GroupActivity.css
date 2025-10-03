@@ -207,6 +207,11 @@
   border-left: 4px solid #f44336;
 }
 
+/* Styling for transaction edit notifications */
+.activity-item.edited {
+  border-left: 4px solid #6366f1; /* A distinct indigo color for self-edits */
+}
+
 .activity-icon {
   background-color: #f0f2f5;
   width: 40px;

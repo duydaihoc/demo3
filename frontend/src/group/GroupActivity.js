@@ -113,8 +113,9 @@ export default function GroupActivity() {
     if (type.includes('friend')) return '👥';
     if (type.includes('group.transaction.debt')) return '💸';
     if (type.includes('group.transaction.settled') || type.includes('group.transaction.debt.paid')) return '✅';
-    if (type.includes('group.transaction.updated')) return '🔄'; // New icon for updates
-    if (type.includes('group.transaction.deleted')) return '🗑️'; // New icon for deletions
+    if (type.includes('group.transaction.updated')) return '🔄';
+    if (type.includes('group.transaction.edited')) return '✏️'; // New icon for self-edits
+    if (type.includes('group.transaction.deleted')) return '🗑️';
     if (type.includes('group.transaction')) return '💰';
     if (type.includes('group')) return '👨‍👩‍👧‍👦';
     if (type.includes('invite')) return '✉️';
@@ -129,6 +130,11 @@ export default function GroupActivity() {
 
   const isTransactionDeletedNotification = (type) => {
     return type && type.includes('transaction.deleted');
+  };
+
+  // Add a handler for the new transaction edited notification type
+  const isTransactionEditedNotification = (type) => {
+    return type && type.includes('transaction.edited');
   };
 
   // Hiển thị thông báo chi tiết khi được chọn
@@ -372,6 +378,7 @@ export default function GroupActivity() {
                                 ${isDebtNotification(notif.type) ? 'debt' : ''} 
                                 ${isSettledNotification(notif.type) ? 'settled' : ''}
                                 ${isTransactionUpdatedNotification(notif.type) ? 'updated' : ''}
+                                ${isTransactionEditedNotification(notif.type) ? 'edited' : ''} 
                                 ${isTransactionDeletedNotification(notif.type) ? 'deleted' : ''}`}
                     onClick={() => handleNotificationClick(notif)}
                   >
