@@ -346,12 +346,30 @@ export default function GroupTransactions() {
       if (isSelected) {
         return prev.filter(m => !(m.id === member.id || m.email === member.email));
       } else {
+        // When adding a member, check if they were in the original transaction
+        // and preserve their settled status if so
+        const existingTxParticipant = editingTx?.participants?.find(p => 
+          (p.user && member.id && (p.user._id === member.id || p.user === member.id)) ||
+          (p.email && member.email && p.email.toLowerCase() === member.email.toLowerCase())
+        );
+        
         return [...prev, { 
           ...member, 
-          settled: false,  // New members are not settled by default
+          settled: existingTxParticipant ? existingTxParticipant.settled : false,
           shareAmount: editAmount ? Number(editAmount) : 0 // Use current edit amount
         }];
       }
+    });
+  };
+
+  // Toggle settled status of a participant in edit mode
+  const toggleParticipantSettled = (participantIndex) => {
+    setEditSelectedMembers(prev => {
+      return prev.map((member, idx) => 
+        idx === participantIndex 
+          ? { ...member, settled: !member.settled }
+          : member
+      );
     });
   };
 
@@ -625,142 +643,144 @@ export default function GroupTransactions() {
             ) : txs.length === 0 ? (
               <div className="gm-empty-state">Chưa có giao dịch</div>
             ) : (
-              <ul className="gt-list">
-                {txs.map(tx => {
-                  const isPayer = isUserPayer(tx);
-                  const isParticipant = isUserParticipant(tx);
-                  const category = tx.category ? getCategoryById(tx.category._id || tx.category) : { name: 'Không có', icon: '📝' };
-                  const isPayingFor = isPayingForOthers(tx);
-                  const isCreator = isUserCreator(tx);
-                  
-                  // Kiểm tra xem người dùng đang đăng nhập có phải là người đã nhận được "trả dùm" không
-                  const userParticipation = currentUser && tx.participants ? 
-                    tx.participants.find(p => 
-                      (p.user && String(p.user._id || p.user) === String(currentUser.id)) || 
-                      (p.email && currentUser.email && p.email.toLowerCase() === currentUser.email.toLowerCase())
-                    ) : null;
-                  
-                  const userSettled = userParticipation ? userParticipation.settled : false;
-                  
-                  return (
-                    <li key={tx._id || tx.id} className={`gt-item ${isPayer ? 'i-paid' : ''} ${isParticipant ? 'i-participate' : ''}`}>
-                      <div className="gt-item-header">
-                        <div className="gt-title-section">
-                          <div className="gt-category-badge">{category.icon} {category.name}</div>
-                          <div className="gt-title">{tx.title || 'Giao dịch'}</div>
+              <div className="gt-list-container">
+                <ul className="gt-list">
+                  {txs.map(tx => {
+                    const isPayer = isUserPayer(tx);
+                    const isParticipant = isUserParticipant(tx);
+                    const category = tx.category ? getCategoryById(tx.category._id || tx.category) : { name: 'Không có', icon: '📝' };
+                    const isPayingFor = isPayingForOthers(tx);
+                    const isCreator = isUserCreator(tx);
+                    
+                    // Kiểm tra xem người dùng đang đăng nhập có phải là người đã nhận được "trả dùm" không
+                    const userParticipation = currentUser && tx.participants ? 
+                      tx.participants.find(p => 
+                        (p.user && String(p.user._id || p.user) === String(currentUser.id)) || 
+                        (p.email && currentUser.email && p.email.toLowerCase() === currentUser.email.toLowerCase())
+                      ) : null;
+                    
+                    const userSettled = userParticipation ? userParticipation.settled : false;
+                    
+                    return (
+                      <li key={tx._id || tx.id} className={`gt-item ${isPayer ? 'i-paid' : ''} ${isParticipant ? 'i-participate' : ''}`}>
+                        <div className="gt-item-header">
+                          <div className="gt-title-section">
+                            <div className="gt-category-badge">{category.icon} {category.name}</div>
+                            <div className="gt-title">{tx.title || 'Giao dịch'}</div>
+                          </div>
+                          <div className="gt-amount">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(tx.amount || 0)}</div>
                         </div>
-                        <div className="gt-amount">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(tx.amount || 0)}</div>
-                      </div>
 
-                      <div className="gt-item-body">
-                        <div className="gt-meta">
-                          <div className="gt-payer">
-                            <span className="gt-label">Người trả:</span> 
-                            <strong>{tx.payer ? (tx.payer.name || tx.payer.email || 'Người trả') : 'Chưa xác định'}</strong>
-                            {isPayer && <span className="gt-current-user-badge">Bạn</span>}
+                        <div className="gt-item-body">
+                          <div className="gt-meta">
+                            <div className="gt-payer">
+                              <span className="gt-label">Người trả:</span> 
+                              <strong>{tx.payer ? (tx.payer.name || tx.payer.email || 'Người trả') : 'Chưa xác định'}</strong>
+                              {isPayer && <span className="gt-current-user-badge">Bạn</span>}
+                            </div>
+                            
+                            <div className="gt-date">
+                              {new Date(tx.date || tx.createdAt || tx.created).toLocaleString()}
+                            </div>
                           </div>
                           
-                          <div className="gt-date">
-                            {new Date(tx.date || tx.createdAt || tx.created).toLocaleString()}
-                          </div>
+                          {/* Add edit/delete buttons for transaction creator */}
+                          {isCreator && (
+                            <div className="gt-creator-actions">
+                              <button 
+                                className="gt-edit-btn"
+                                onClick={() => handleEditTransaction(tx)}
+                                title="Sửa giao dịch"
+                              >
+                                <i className="fas fa-edit"></i> Sửa
+                              </button>
+                              <button 
+                                className="gt-delete-btn"
+                                onClick={() => handleDeleteClick(tx)}
+                                title="Xóa giao dịch"
+                              >
+                                <i className="fas fa-trash-alt"></i> Xóa
+                              </button>
+                            </div>
+                          )}
+                          
+                          {tx.description && (
+                            <div className="gt-description">{tx.description}</div>
+                          )}
+                          
+                          {isPayingFor && (
+                            <div className="gt-participants">
+                              <div className="gt-participants-header">
+                                <div className="gt-label">Trả dùm cho:</div>
+                                {isPayer && <div className="gt-per-person-badge">Mỗi người: {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format((tx.participants && tx.participants.length > 0) ? (tx.amount / tx.participants.length) : 0)}</div>}
+                              </div>
+                              <ul className="gt-participants-list">
+                                {Array.isArray(tx.participants) && tx.participants.map((p, i) => {
+                                  const isCurrentUserParticipant = currentUser && 
+                                    ((p.user && String(p.user._id || p.user) === String(currentUser.id)) || 
+                                     (p.email && currentUser.email && p.email.toLowerCase() === currentUser.email.toLowerCase()));
+                                  
+                                  return (
+                                    <li key={i} className={`gt-participant ${p.settled ? 'settled' : 'pending'} ${isCurrentUserParticipant ? 'current-user' : ''}`}>
+                                      <div className="gt-participant-info">
+                                        <div className="gt-participant-name">
+                                          {p.user ? (p.user.name || p.user.email) : (p.email || 'Unknown')}
+                                          {isCurrentUserParticipant && <span className="gt-current-user-badge">Bạn</span>}
+                                        </div>
+                                        <div className="gt-participant-amount">
+                                          {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(p.shareAmount || 0)}
+                                        </div>
+                                      </div>
+                                      
+                                      <div className={`gt-participant-status ${p.settled ? 'settled' : 'pending'}`}>
+                                        {p.settled ? (
+                                          <span className="gt-status-settled">Đã thanh toán</span>
+                                        ) : isCurrentUserParticipant ? (
+                                          <button 
+                                            className="gt-settle-btn"
+                                            onClick={() => handleSettle(tx._id || tx.id)}
+                                          >
+                                            Đánh dấu đã trả
+                                          </button>
+                                        ) : isPayer ? (
+                                          <button 
+                                            className="gt-settle-btn"
+                                            onClick={() => handleSettle(tx._id || tx.id, p.user ? (p.user._id || p.user) : null)}
+                                          >
+                                            Đánh dấu đã nhận
+                                          </button>
+                                        ) : (
+                                          <span className="gt-status-pending">Chưa thanh toán</span>
+                                        )}
+                                      </div>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            </div>
+                          )}
+                          
+                          {/* Hiển thị công nợ nếu người dùng là participant */}
+                          {isParticipant && !userSettled && (
+                            <div className="gt-debt-notice">
+                              <div className="gt-debt-message">
+                                Bạn nợ <strong>{tx.payer ? (tx.payer.name || tx.payer.email || 'Người trả') : 'Chưa xác định'}</strong>: 
+                                <span className="gt-debt-amount">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(userParticipation ? userParticipation.shareAmount : 0)}</span>
+                              </div>
+                              <button 
+                                className="gt-settle-btn"
+                                onClick={() => handleSettle(tx._id || tx.id)}
+                              >
+                                Đánh dấu đã trả
+                              </button>
+                            </div>
+                          )}
                         </div>
-                        
-                        {/* Add edit/delete buttons for transaction creator */}
-                        {isCreator && (
-                          <div className="gt-creator-actions">
-                            <button 
-                              className="gt-edit-btn"
-                              onClick={() => handleEditTransaction(tx)}
-                              title="Sửa giao dịch"
-                            >
-                              <i className="fas fa-edit"></i> Sửa
-                            </button>
-                            <button 
-                              className="gt-delete-btn"
-                              onClick={() => handleDeleteClick(tx)}
-                              title="Xóa giao dịch"
-                            >
-                              <i className="fas fa-trash-alt"></i> Xóa
-                            </button>
-                          </div>
-                        )}
-                        
-                        {tx.description && (
-                          <div className="gt-description">{tx.description}</div>
-                        )}
-                        
-                        {isPayingFor && (
-                          <div className="gt-participants">
-                            <div className="gt-participants-header">
-                              <div className="gt-label">Trả dùm cho:</div>
-                              {isPayer && <div className="gt-per-person-badge">Mỗi người: {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format((tx.participants && tx.participants.length > 0) ? (tx.amount / tx.participants.length) : 0)}</div>}
-                            </div>
-                            <ul className="gt-participants-list">
-                              {Array.isArray(tx.participants) && tx.participants.map((p, i) => {
-                                const isCurrentUserParticipant = currentUser && 
-                                  ((p.user && String(p.user._id || p.user) === String(currentUser.id)) || 
-                                   (p.email && currentUser.email && p.email.toLowerCase() === currentUser.email.toLowerCase()));
-                                
-                                return (
-                                  <li key={i} className={`gt-participant ${p.settled ? 'settled' : 'pending'} ${isCurrentUserParticipant ? 'current-user' : ''}`}>
-                                    <div className="gt-participant-info">
-                                      <div className="gt-participant-name">
-                                        {p.user ? (p.user.name || p.user.email) : (p.email || 'Unknown')}
-                                        {isCurrentUserParticipant && <span className="gt-current-user-badge">Bạn</span>}
-                                      </div>
-                                      <div className="gt-participant-amount">
-                                        {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(p.shareAmount || 0)}
-                                      </div>
-                                    </div>
-                                    
-                                    <div className={`gt-participant-status ${p.settled ? 'settled' : 'pending'}`}>
-                                      {p.settled ? (
-                                        <span className="gt-status-settled">Đã thanh toán</span>
-                                      ) : isCurrentUserParticipant ? (
-                                        <button 
-                                          className="gt-settle-btn"
-                                          onClick={() => handleSettle(tx._id || tx.id)}
-                                        >
-                                          Đánh dấu đã trả
-                                        </button>
-                                      ) : isPayer ? (
-                                        <button 
-                                          className="gt-settle-btn"
-                                          onClick={() => handleSettle(tx._id || tx.id, p.user ? (p.user._id || p.user) : null)}
-                                        >
-                                          Đánh dấu đã nhận
-                                        </button>
-                                      ) : (
-                                        <span className="gt-status-pending">Chưa thanh toán</span>
-                                      )}
-                                    </div>
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          </div>
-                        )}
-                        
-                        {/* Hiển thị công nợ nếu người dùng là participant */}
-                        {isParticipant && !userSettled && (
-                          <div className="gt-debt-notice">
-                            <div className="gt-debt-message">
-                              Bạn nợ <strong>{tx.payer ? (tx.payer.name || tx.payer.email || 'Người trả') : 'Chưa xác định'}</strong>: 
-                              <span className="gt-debt-amount">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(userParticipation ? userParticipation.shareAmount : 0)}</span>
-                            </div>
-                            <button 
-                              className="gt-settle-btn"
-                              onClick={() => handleSettle(tx._id || tx.id)}
-                            >
-                              Đánh dấu đã trả
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
             )}
           </section>
         </div>
@@ -877,6 +897,35 @@ export default function GroupTransactions() {
                     placeholder="Thêm mô tả chi tiết (tùy chọn)"
                   />
                 </div>
+
+                {/* New section to show selected members and allow toggling their settled status */}
+                {editSelectedMembers.length > 0 && (
+                  <div className="gt-form-group">
+                    <label>Thành viên đã chọn</label>
+                    <div className="gt-selected-members-list">
+                      {editSelectedMembers.map((member, idx) => (
+                        <div key={idx} className="gt-selected-member">
+                          <div className="gt-selected-member-info">
+                            <div className="gt-selected-member-name">{member.name || member.email}</div>
+                            <div className="gt-selected-member-amount">
+                              {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(editAmount || 0)}
+                            </div>
+                          </div>
+                          <div className="gt-selected-member-actions">
+                            <button
+                              type="button"
+                              className={`gt-toggle-settled ${member.settled ? 'settled' : 'unsettled'}`}
+                              onClick={() => toggleParticipantSettled(idx)}
+                              title={member.settled ? 'Đánh dấu chưa thanh toán' : 'Đánh dấu đã thanh toán'}
+                            >
+                              {member.settled ? 'Đã thanh toán' : 'Chưa thanh toán'}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
               
               <div className="gt-modal-footer">

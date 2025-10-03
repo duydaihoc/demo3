@@ -29,6 +29,17 @@ const normalizeParticipantsInput = async (arr = []) => {
   return out;
 };
 
+// Helper function to get group name for notifications
+const getGroupNameForNotification = async (groupId) => {
+  try {
+    const group = await Group.findById(groupId).select('name').lean();
+    return group ? group.name : null;
+  } catch (e) {
+    console.warn('Failed to get group name for notification', e);
+    return null;
+  }
+};
+
 // POST /api/groups/:groupId/transactions
 // body: { payerId (optional, default auth), amount, perPerson(boolean), participants: [{email|userId}], title, description, category }
 router.post('/:groupId/transactions', auth, async (req, res) => {
@@ -169,6 +180,29 @@ router.post('/:groupId/transactions', auth, async (req, res) => {
       });
     } catch (e) {
       console.warn('notify payer on transaction creation failed', e && e.message);
+    }
+
+    // Include group name in creator's notification
+    const groupName = await getGroupNameForNotification(groupId);
+    
+    // Notify creator about their own action
+    try {
+      await Notification.create({
+        recipient: req.user._id,
+        sender: req.user._id,
+        type: 'group.transaction.created',
+        message: `Bạn đã tạo giao dịch "${title}" trong nhóm ${groupName || ''}`,
+        data: {
+          transactionId: tx._id,
+          groupId,
+          groupName,
+          title,
+          amount: totalAmount,
+          category
+        }
+      });
+    } catch (e) {
+      console.warn('Failed to create notification for transaction creator', e);
     }
 
     // return populated transaction
@@ -368,6 +402,8 @@ router.put('/:groupId/transactions/:txId', auth, async (req, res) => {
     
     // Update participants and recalculate if needed
     let totalAmount = amount;
+    let participantsBuilt = []; // Define participantsBuilt here at the top level of the function
+    
     if (participants && Array.isArray(participants)) {
       // Normalize participants input
       const normalizedParticipants = await normalizeParticipantsInput(participants);
@@ -377,26 +413,48 @@ router.put('/:groupId/transactions/:txId', auth, async (req, res) => {
         totalAmount = amount * normalizedParticipants.length;
       }
       
+      // Create map of original participants for quick lookup
+      const originalParticipantsMap = new Map();
+      originalParticipants.forEach(op => {
+        const key = op.user ? String(op.user) : (op.email ? op.email.toLowerCase() : null);
+        if (key) originalParticipantsMap.set(key, op);
+      });
+      
       // Map participants with shareAmount
-      const participantsBuilt = normalizedParticipants.map(p => {
+      participantsBuilt = normalizedParticipants.map(p => {
         const share = perPerson ? amount : (normalizedParticipants.length > 0 ? totalAmount / normalizedParticipants.length : 0);
         
-        // Try to preserve settled status if participant existed before
-        const existingParticipant = transaction.participants.find(ep => 
-          (ep.user && p.user && String(ep.user) === String(p.user)) || 
-          (ep.email && p.email && ep.email.toLowerCase() === p.email.toLowerCase())
-        );
+        // Try to find existing participant
+        const key = p.user ? String(p.user) : (p.email ? p.email.toLowerCase() : null);
+        const existingParticipant = key ? originalParticipantsMap.get(key) : null;
+        
+        // Check if this is a previously removed participant being added back
+        const isReadded = key && existingParticipant === undefined;
+        
+        // Check if this is an existing participant with changed settled status
+        const wasSettled = existingParticipant && existingParticipant.settled;
+        const nowSettled = p.settled || false;
+        const settledStatusChanged = existingParticipant && wasSettled !== nowSettled;
         
         return {
           user: p.user,
           email: p.email,
           shareAmount: Number(Number(share).toFixed(2)),
-          settled: existingParticipant ? existingParticipant.settled : false,
-          settledAt: existingParticipant ? existingParticipant.settledAt : undefined
+          settled: p.settled || false, // Allow explicitly setting settled status
+          settledAt: p.settled ? (existingParticipant?.settledAt || new Date()) : undefined,
+          isReadded,
+          settledStatusChanged,
+          previouslySettled: wasSettled,
+          name: p.name || existingParticipant?.name || ''
         };
       });
       
-      transaction.participants = participantsBuilt;
+      // Remove temporary tracking properties before saving
+      transaction.participants = participantsBuilt.map(p => {
+        // Create a clean copy without our tracking fields
+        const { isReadded, settledStatusChanged, previouslySettled, ...cleanParticipant } = p;
+        return cleanParticipant;
+      });
     }
     
     // Update amount if provided or recalculated
@@ -409,6 +467,9 @@ router.put('/:groupId/transactions/:txId', auth, async (req, res) => {
     transaction.updatedAt = new Date();
     
     await transaction.save();
+    
+    // Add group name to notifications
+    const groupName = await getGroupNameForNotification(groupId);
     
     // Send notifications to participants that were changed or removed
     const notifyParticipantChanges = async () => {
@@ -433,9 +494,19 @@ router.put('/:groupId/transactions/:txId', auth, async (req, res) => {
         return current && current.shareAmount !== op.shareAmount && !op.settled;
       });
       
-      // Find payer info
+      // Find re-added participants - here's where we need participantsBuilt
+      const readdedParticipants = participantsBuilt ? participantsBuilt.filter(p => p.isReadded) : [];
+      
+      // Find participants with changed settlement status (from settled to unsettled)
+      const unsettledParticipants = participantsBuilt ? participantsBuilt.filter(p => 
+        p.settledStatusChanged && p.previouslySettled && !p.settled
+      ) : [];
+      
+      // Get necessary info for notifications
       const payer = await User.findById(transaction.payer).select('name email').lean();
       const payerName = payer ? (payer.name || payer.email) : 'Người trả';
+      const group = await Group.findById(groupId).select('name').lean();
+      const groupName = group ? group.name : 'nhóm';
       
       // Get category name if available
       let categoryName = '';
@@ -454,13 +525,13 @@ router.put('/:groupId/transactions/:txId', auth, async (req, res) => {
               recipient: removed.user,
               sender: req.user._id,
               type: 'group.transaction.removed',
-              message: `Bạn đã được gỡ khỏi giao dịch "${transaction.title}" trong nhóm`,
+              message: `${req.user.name || 'Người dùng'} đã loại bỏ bạn khỏi giao dịch "${transaction.title}" trong nhóm ${groupName || 'của bạn'}`,
               data: {
                 transactionId: transaction._id,
                 groupId,
-                previousAmount: removed.shareAmount,
+                groupName,
                 title: transaction.title,
-                updatedBy: req.user._id
+                previousAmount: removed.shareAmount
               }
             });
           } catch (e) { console.warn('Failed to notify removed participant', e); }
@@ -519,8 +590,94 @@ router.put('/:groupId/transactions/:txId', auth, async (req, res) => {
         }
       }
 
-      // After handling removed participants and changed participants,
-      // Add notification for the user who edited the transaction
+      // Notify re-added participants
+      for (const readded of readdedParticipants) {
+        if (readded.user) {
+          try {
+            await Notification.create({
+              recipient: readded.user,
+              sender: req.user._id,
+              type: 'group.transaction.debt',
+              message: `${req.user.name || 'Người dùng'} đã thêm bạn vào giao dịch "${transaction.title}" trong nhóm ${groupName || 'của bạn'}`,
+              data: {
+                transactionId: transaction._id,
+                groupId,
+                shareAmount: readded.shareAmount,
+                title: transaction.title,
+                updatedBy: req.user._id,
+                payer: { _id: transaction.payer, name: payerName },
+                category: transaction.category,
+                categoryName,
+                readdedToTransaction: true
+              }
+            });
+            
+            const io = req.app.get('io');
+            if (io) io.to(String(readded.user)).emit('notification', {
+              type: 'group.transaction.debt',
+              message: `${req.user.name || 'Người dùng'} đã thêm bạn vào giao dịch "${transaction.title}" trong nhóm ${groupName || 'của bạn'}`
+            });
+          } catch (e) { console.warn('Failed to notify re-added participant', e); }
+        }
+      }
+      
+      // Notify participants whose settlement status changed from settled to unsettled
+      for (const unsettled of unsettledParticipants) {
+        if (unsettled.user) {
+          try {
+            await Notification.create({
+              recipient: unsettled.user,
+              sender: req.user._id,
+              type: 'group.transaction.unsettled',
+              message: `${req.user.name || 'Người dùng'} đã đánh dấu lại khoản nợ ${unsettled.shareAmount.toLocaleString('vi-VN')}đ của bạn là "Chưa thanh toán" trong giao dịch "${transaction.title}"`,
+              data: {
+                transactionId: transaction._id,
+                groupId,
+                shareAmount: unsettled.shareAmount,
+                title: transaction.title,
+                updatedBy: req.user._id,
+                payer: { _id: transaction.payer, name: payerName },
+                category: transaction.category,
+                categoryName,
+                statusChangedToUnsettled: true
+              }
+            });
+            
+            // Also notify the payer about this status change
+            await Notification.create({
+              recipient: transaction.payer,
+              sender: req.user._id,
+              type: 'group.transaction.status_changed',
+              message: `Khoản nợ của ${unsettled.name || unsettled.email || 'thành viên'} (${unsettled.shareAmount.toLocaleString('vi-VN')}đ) trong giao dịch "${transaction.title}" đã được đánh dấu lại là "Chưa thanh toán"`,
+              data: {
+                transactionId: transaction._id,
+                groupId,
+                shareAmount: unsettled.shareAmount,
+                title: transaction.title,
+                updatedBy: req.user._id,
+                participant: unsettled.user
+              }
+            });
+            
+            const io = req.app.get('io');
+            if (io) {
+              io.to(String(unsettled.user)).emit('notification', {
+                type: 'group.transaction.unsettled',
+                message: `Khoản nợ của bạn trong giao dịch "${transaction.title}" đã được đánh dấu lại là "Chưa thanh toán"`,
+              });
+              
+              if (transaction.payer) {
+                io.to(String(transaction.payer)).emit('notification', {
+                  type: 'group.transaction.status_changed',
+                  message: `Khoản nợ trong giao dịch "${transaction.title}" đã được đánh dấu lại là "Chưa thanh toán"`,
+                });
+              }
+            }
+          } catch (e) { console.warn('Failed to notify unsettled participant', e); }
+        }
+      }
+      
+      // Notify editor (as before)
       try {
         // Get category name if available
         let categoryName = '';

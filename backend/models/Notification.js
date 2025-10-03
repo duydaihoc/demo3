@@ -14,15 +14,13 @@ const notificationSchema = new mongoose.Schema({
     type: String,
     required: true,
     enum: [
-      'friend.request', 'friend.response', 'friend.remove',
-      'group.invite', 'group.added', 'group.response', 
-      'group.transaction', 'group.transaction.settle',
-      'group.transaction.created', 
-      'group.transaction.debt',
-      'group.transaction.settled',
-      'group.transaction.debt.paid',
+      'friend.request', 'friend.accept', 'friend.reject',
+      'group.invite', 'group.join', 'group.leave', 'group.added', 'group.response',
+      'group.transaction', 'group.transaction.debt', 'group.transaction.settled', 
+      'group.transaction.debt.paid', 'group.transaction.created',
       'group.transaction.updated', 'group.transaction.deleted', 'group.transaction.removed',
-      'group.transaction.edited' // Add new notification type for editors
+      'group.transaction.edited',
+      'group.transaction.unsettled', 'group.transaction.status_changed'
     ]
   },
   message: {

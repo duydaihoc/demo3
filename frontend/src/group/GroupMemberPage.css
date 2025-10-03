@@ -3,16 +3,38 @@
   display: flex;
   width: 100%;
   min-height: 100vh;
+  overflow: hidden; /* Prevent outer container from scrolling */
 }
 
 .group-member-page {
   flex: 1;
   padding: 24px 32px;
   background: #f5f7fa;
-  min-height: 100vh;
+  height: 100vh; /* Set fixed height to viewport */
   width: 100%;
   max-width: 100%;
   font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  overflow-y: auto; /* Enable vertical scrolling */
+  overflow-x: hidden; /* Prevent horizontal scrolling */
+}
+
+/* Make scrollbars consistent across browsers */
+.group-member-page::-webkit-scrollbar {
+  width: 10px;
+}
+
+.group-member-page::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.group-member-page::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.group-member-page::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 
 .group-member-page h1 {
@@ -203,6 +225,8 @@
 .gm-card-body {
   color: #556575;
   padding: 24px;
+  max-height: 60vh; /* Limit height for very tall content */
+  overflow-y: auto; /* Allow scrolling within cards if needed */
 }
 
 /* Banking-style loading and errors */
@@ -274,6 +298,28 @@
   list-style: none;
   padding: 0;
   margin: 0;
+  max-height: 50vh; /* Limit height for very long lists */
+  overflow-y: auto; /* Enable scrolling if content exceeds height */
+  scrollbar-width: thin; /* For Firefox */
+  scrollbar-color: #c1c1c1 #f1f1f1; /* For Firefox */
+}
+
+.gm-members-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.gm-members-list::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.gm-members-list::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.gm-members-list::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 
 .gm-member-item {
@@ -534,4 +580,9 @@
 
 .gm-debt-summary-card.balance.negative .gm-debt-summary-label i {
   color: #ef4444;
+}
+
+/* Add space at the bottom of the content for better scrolling */
+.gm-layout {
+  padding-bottom: 40px; /* Add space at the bottom */
 }

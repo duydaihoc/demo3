@@ -176,9 +176,19 @@ export default function GroupActivity() {
     const data = notification.data || {};
     
     if (isTransactionNotification(notification.type)) {
+      // Group information display - always show which group this relates to
+      const groupContext = (
+        <div className="tx-group-context">
+          <strong>Nhóm:</strong> {data.groupName || (data.groupId ? `Nhóm #${data.groupId.substring(0,6)}...` : 'Không xác định')}
+        </div>
+      );
+      
       // Base transaction details rendering
       const baseDetails = (
         <div className="transaction-details">
+          {/* Group context is always shown first */}
+          {groupContext}
+          
           {data.title && (
             <div className="tx-title">
               <strong>Tiêu đề:</strong> {data.title}
@@ -194,6 +204,26 @@ export default function GroupActivity() {
           {data.category && data.categoryName && (
             <div className="tx-category">
               <strong>Danh mục:</strong> {data.categoryName}
+            </div>
+          )}
+          
+          {/* Add special content for debt payment */}
+          {isSettledNotification(notification.type) && (
+            <div className="tx-settled">
+              <div className="settled-info">
+                <i className="fas fa-check-circle"></i>
+                <span>{data.payerName ? `${data.payerName} đã thanh toán khoản nợ từ` : 'Khoản nợ đã được thanh toán từ'} giao dịch "{data.title || 'Không tiêu đề'}"</span>
+              </div>
+              {data.shareAmount && (
+                <div className="settled-amount">
+                  <strong>Số tiền đã thanh toán:</strong> {formatCurrency(data.shareAmount)}
+                </div>
+              )}
+              {data.settledAt && (
+                <div className="settled-time">
+                  Thanh toán lúc: {new Date(data.settledAt).toLocaleString()}
+                </div>
+              )}
             </div>
           )}
           
@@ -277,7 +307,7 @@ export default function GroupActivity() {
 
           <div className="tx-actions">
             <button className="action-btn view" onClick={() => window.open(`/groups/${data.groupId}/transactions`, '_blank')}>
-              Xem giao dịch
+              Xem giao dịch trong nhóm
             </button>
           </div>
         </div>
@@ -289,6 +319,7 @@ export default function GroupActivity() {
     return null;
   };
 
+  // Enhanced notification card rendering to always show group context
   return (
     <div className="groups-page">
       <GroupSidebar active="activity" />
@@ -390,6 +421,13 @@ export default function GroupActivity() {
                       <div className="activity-meta">
                         <span className="activity-time">{formatTime(notif.createdAt)}</span>
                         
+                        {/* Display group name if available */}
+                        {notif.data && notif.data.groupName && (
+                          <span className="activity-group">
+                            <i className="fas fa-users"></i> {notif.data.groupName}
+                          </span>
+                        )}
+                        
                         {/* Show old → new amount for updates */}
                         {isTransactionUpdatedNotification(notif.type) && notif.data && (
                           <span className={`activity-amount-change ${notif.data.difference > 0 ? 'increased' : 'decreased'}`}>
@@ -434,6 +472,12 @@ export default function GroupActivity() {
                        isTransactionNotification(selectedNotif.type) ? 'Giao dịch' :
                        (selectedNotif.type || 'Thông báo')}
                     </div>
+                    {/* Show group context here too if available */}
+                    {selectedNotif.data && selectedNotif.data.groupName && (
+                      <div className="detail-group">
+                        <i className="fas fa-users"></i> {selectedNotif.data.groupName}
+                      </div>
+                    )}
                     <div className="detail-time">{new Date(selectedNotif.createdAt).toLocaleString()}</div>
                   </div>
                   <div className="detail-message">{selectedNotif.message}</div>
@@ -452,7 +496,7 @@ export default function GroupActivity() {
                         className="detail-action view-tx"
                         onClick={() => window.open(`/groups/${selectedNotif.data.groupId}/transactions`, '_blank')}
                       >
-                        Xem trang giao dịch
+                        Xem trong nhóm
                       </button>
                     )}
                   </div>

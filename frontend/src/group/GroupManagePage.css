@@ -3,16 +3,19 @@
   display: flex;
   width: 100%;
   min-height: 100vh;
+  overflow: hidden; /* Prevent outer container from scrolling */
 }
 
 .group-manage-page {
   flex: 1;
   padding: 24px 32px;
   background: #f5f7fa;
-  min-height: 100vh;
+  height: 100vh; /* Set fixed height to viewport */
   width: 100%;
   max-width: 100%;
   font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  overflow-y: auto; /* Enable vertical scrolling */
+  overflow-x: hidden; /* Prevent horizontal scrolling */
 }
 
 .group-manage-page h1 {
@@ -118,6 +121,7 @@
   grid-template-columns: 1fr 1fr;
   gap: 28px;
   width: 100%;
+  padding-bottom: 40px; /* Add space at the bottom */
 }
 
 /* For larger screens, use 3 columns layout */
@@ -203,6 +207,8 @@
 .gm-card-body {
   color: #556575;
   padding: 24px;
+  max-height: 70vh; /* Limit height for very tall content */
+  overflow-y: auto; /* Allow scrolling within cards if needed */
 }
 
 /* Banking-style loading and errors */
@@ -327,6 +333,10 @@
   list-style: none;
   padding: 0;
   margin: 0;
+  max-height: 60vh;
+  overflow-y: auto;
+  scrollbar-width: thin; /* For Firefox */
+  scrollbar-color: #c1c1c1 #f1f1f1; /* For Firefox */
 }
 
 .gm-member-item {
@@ -888,4 +898,55 @@
 
 .gm-debt-summary-card.balance.negative .gm-debt-summary-label i {
   color: #ef4444;
+}
+
+/* Make scrollbars consistent across browsers */
+.group-manage-page::-webkit-scrollbar {
+  width: 10px;
+}
+
+.group-manage-page::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.group-manage-page::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.group-manage-page::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Ensure all content sections scroll properly */
+.gm-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+  width: 100%;
+  padding-bottom: 40px; /* Add space at the bottom */
+}
+
+/* Make card bodies scroll if they get too tall */
+.gm-card-body {
+  color: #556575;
+  padding: 24px;
+  max-height: 70vh; /* Limit height for very tall content */
+  overflow-y: auto; /* Allow scrolling within cards if needed */
+}
+
+/* Add scrolling to specific sections that might get long */
+.gm-members-list, 
+.gm-friends-grid {
+  max-height: 60vh;
+  overflow-y: auto;
+  scrollbar-width: thin; /* For Firefox */
+  scrollbar-color: #c1c1c1 #f1f1f1; /* For Firefox */
+}
+
+/* Update modal styling for better scrolling */
+.modal-overlay {
+  overflow-y: auto;
+  padding: 40px 0;
 }

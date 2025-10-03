@@ -25,10 +25,31 @@
 
 /* form card */
 .gt-form-card, .gt-list-card {
-  background:white;
-  border-radius:12px;
-  padding:16px;
-  box-shadow:0 4px 12px rgba(0,0,0,0.05);
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Make the list card have a fixed max height */
+.gt-list-card {
+  max-height: 80vh; /* Limit height to 80% of viewport height */
+  overflow: hidden; /* Hide overflow for container */
+}
+
+.gt-list-card h2 {
+  margin-top: 0;
+  margin-bottom: 16px;
+  flex-shrink: 0; /* Prevent header from shrinking */
+}
+
+/* Add a scrollable container for the transactions list */
+.gt-list-container {
+  overflow-y: auto; /* Enable vertical scrolling */
+  flex-grow: 1; /* Fill remaining space */
+  padding-right: 8px; /* Add space for scrollbar */
 }
 
 .gt-form label { display:block; margin-top:10px; font-weight:600; color:#334155; }
@@ -660,6 +681,71 @@
 
 .gt-warning li {
   margin-bottom: 4px;
+}
+
+/* Selected members list in edit modal */
+.gt-selected-members-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-top: 8px;
+}
+
+.gt-selected-member {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f2f5;
+}
+
+.gt-selected-member:last-child {
+  border-bottom: none;
+}
+
+.gt-selected-member-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gt-selected-member-name {
+  font-weight: 600;
+  color: #334155;
+}
+
+.gt-selected-member-amount {
+  font-size: 0.9rem;
+  color: #64748b;
+}
+
+.gt-toggle-settled {
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.gt-toggle-settled.settled {
+  background: #ecfdf5;
+  color: #065f46;
+}
+
+.gt-toggle-settled.settled:hover {
+  background: #d1fae5;
+}
+
+.gt-toggle-settled.unsettled {
+  background: #fff1f2;
+  color: #881337;
+}
+
+.gt-toggle-settled.unsettled:hover {
+  background: #fee2e2;
 }
 
 /* Responsive */
