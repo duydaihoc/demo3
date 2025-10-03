@@ -55,40 +55,155 @@ router.delete('/users/:id', isAdmin, async (req, res) => {
   }
 });
 
-// GET /api/admin/groups
-// Requires auth and admin role. Returns all groups with owner info and members count.
+// GET /api/admin/groups - Admin endpoint to get all groups with detailed information
 router.get('/groups', auth, async (req, res) => {
   try {
+    // Verify admin role
     if (!req.user || req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Forbidden: admin only' });
+      return res.status(403).json({ message: 'Admin access required' });
     }
 
+    // Fetch all groups with populated information
     const groups = await Group.find({})
       .populate('owner', 'name email')
       .populate('members.user', 'name email')
+      .populate('createdBy', 'name email')
       .sort({ createdAt: -1 });
 
-    const out = groups.map(g => {
-      const obj = g.toObject ? g.toObject() : g;
-      // try parse color if stored as JSON string
-      if (obj.color && typeof obj.color === 'string') {
-        try { obj.color = JSON.parse(obj.color); } catch (e) { /* ignore */ }
+    // Transform and enhance the data for admin view
+    const enhancedGroups = groups.map(group => {
+      // Convert to plain object to avoid mongoose document immutability
+      const g = group.toObject();
+      
+      // Parse color if it's stored as a string
+      if (g.color && typeof g.color === 'string') {
+        try {
+          g.color = JSON.parse(g.color);
+        } catch (e) {
+          // Keep as string if not valid JSON
+        }
       }
-      const owner = (obj.owner && (obj.owner.name || obj.owner.email)) ? (obj.owner.name || obj.owner.email) : (obj.owner || null);
-      const membersCount = Array.isArray(obj.members) ? obj.members.length : (obj.memberCount || 0);
+
+      // Add calculated fields for admin display
       return {
-        _id: obj._id || obj.id,
-        name: obj.name || '',
-        owner,
-        membersCount,
-        createdAt: obj.createdAt || obj.created || null,
-        raw: obj
+        ...g,
+        memberCount: g.members ? g.members.length : 0,
+        activeMembers: g.members ? g.members.filter(m => !m.invited).length : 0,
+        pendingMembers: g.members ? g.members.filter(m => m.invited).length : 0,
+        creatorName: g.createdBy ? (g.createdBy.name || g.createdBy.email) : 'Unknown',
+        creatorEmail: g.createdBy ? g.createdBy.email : '',
+        ownerName: g.owner ? (g.owner.name || g.owner.email) : 'Unknown',
+        ownerEmail: g.owner ? g.owner.email : ''
       };
     });
 
-    res.json(out);
+    res.json(enhancedGroups);
   } catch (err) {
-    console.error('Admin groups error:', err);
+    console.error('Admin groups fetch error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// POST /api/admin/groups/:groupId/delete - Admin endpoint to delete any group
+router.post('/groups/:groupId/delete', auth, async (req, res) => {
+  try {
+    // Verify admin role
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    const { groupId } = req.params;
+    if (!groupId) return res.status(400).json({ message: 'Group ID required' });
+
+    const group = await Group.findById(groupId);
+    if (!group) return res.status(404).json({ message: 'Group not found' });
+
+    // Log the admin action
+    console.log(`Admin ${req.user.email} deleted group: ${group.name} (${groupId})`);
+
+    // Delete the group
+    await group.deleteOne();
+
+    res.json({ message: 'Group deleted successfully', groupId });
+  } catch (err) {
+    console.error('Admin group delete error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// GET /api/admin/groups/:groupId - Admin endpoint to get group by ID
+router.get('/groups/:groupId', auth, async (req, res) => {
+  try {
+    // Verify admin role
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    const { groupId } = req.params;
+    if (!groupId) return res.status(400).json({ message: 'Group ID required' });
+    
+    const group = await Group.findById(groupId)
+      .populate('owner', 'name email')
+      .populate('members.user', 'name email')
+      .populate('createdBy', 'name email');
+      
+    if (!group) return res.status(404).json({ message: 'Group not found' });
+
+    // Transform and enhance the data for admin view
+    const g = group.toObject();
+    
+    // Parse color if it's stored as a string
+    if (g.color && typeof g.color === 'string') {
+      try {
+        g.color = JSON.parse(g.color);
+      } catch (e) {
+        // Keep as string if not valid JSON
+      }
+    }
+
+    // Add calculated fields for admin display
+    const activeMembers = g.members ? g.members.filter(m => !m.invited).length : 0;
+    const pendingMembers = g.members ? g.members.filter(m => m.invited).length : 0;
+    
+    const enhancedGroup = {
+      ...g,
+      activeMembers,
+      pendingMembers,
+      creatorName: g.createdBy ? (g.createdBy.name || g.createdBy.email) : 'Unknown',
+      creatorEmail: g.createdBy ? g.createdBy.email : '',
+      ownerName: g.owner ? (g.owner.name || g.owner.email) : 'Unknown',
+      ownerEmail: g.owner ? g.owner.email : ''
+    };
+
+    res.json(enhancedGroup);
+  } catch (err) {
+    console.error('Admin group fetch error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// GET /api/admin/groups/:groupId/transactions - Admin endpoint to get transactions for a group
+router.get('/groups/:groupId/transactions', auth, async (req, res) => {
+  try {
+    // Verify admin role
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    const { groupId } = req.params;
+    if (!groupId) return res.status(400).json({ message: 'Group ID required' });
+    
+    // Import models if not already imported at top of file
+    const GroupTransaction = require('../models/GroupTransaction');
+    
+    const transactions = await GroupTransaction.find({ group: groupId })
+      .populate('createdBy', 'name email')
+      .populate('category')
+      .sort({ date: -1, createdAt: -1 });
+      
+    res.json(transactions);
+  } catch (err) {
+    console.error('Admin group transactions fetch error:', err);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });

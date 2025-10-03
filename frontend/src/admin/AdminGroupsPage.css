@@ -46,7 +46,7 @@
 .admin-groups-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 760px;
+  min-width: 900px; /* Wider to accommodate more columns */
 }
 .admin-groups-table thead th {
   text-align: left;
@@ -84,6 +84,66 @@
 .manage-btn {
   background: #f3f6fb;
   color: #0f3550;
+}
+.g-actions .delete-btn {
+  background: #fee2e2;
+  color: #b91c1c;
+  margin-right: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.g-actions .delete-btn:hover {
+  background: #fecaca;
+}
+
+.g-actions .edit-btn {
+  background: #e7f3ff;
+  color: #1b74e4;
+  margin-right: 8px;
+}
+
+/* Confirm delete modal styling */
+.admin-confirm-content h3 {
+  color: #b91c1c;
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.warning-text {
+  color: #b91c1c;
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.confirm-delete {
+  background: #b91c1c;
+}
+
+.confirm-delete:hover {
+  background: #991b1b;
+}
+
+/* Status indicators for member counts */
+.g-members, .g-active-members, .g-pending-members {
+  font-weight: 600;
+}
+
+.g-active-members {
+  color: #059669;
+}
+
+.g-pending-members {
+  color: #d97706;
 }
 
 /* responsive */

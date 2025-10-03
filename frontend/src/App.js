@@ -20,6 +20,7 @@ import GroupActivity from './group/GroupActivity';
 import GroupTransactions from './group/GroupTransactions'; // <-- new import
 import GroupManagePage from './group/GroupManagePage';
 import GroupMemberPage from './group/GroupMemberPage';
+import AdminGroupViewPage from './admin/AdminGroupViewPage';
 
 import { useEffect, useState } from 'react';
 
@@ -76,6 +77,7 @@ function AppRoutes() {
 				<Route path="/admin/users" element={<AdminUsersPage />} />
 				<Route path="/admin/wallets" element={<AdminWalletsPage />} />
 				<Route path="/admin/groups" element={<AdminGroupsPage />} />
+				<Route path="/admin/groups/view/:groupId" element={<AdminGroupViewPage />} />
 				<Route path="/admin/families" element={<AdminFamiliesPage />} />
 				<Route path="/admin/categories" element={<AdminCategoriesPage />} /> {/* Add new route */}
 				<Route path="/admin/transactions" element={<AdminTransactionsPage />} /> {/* Add new route */}
