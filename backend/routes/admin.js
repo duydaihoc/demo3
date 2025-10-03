@@ -208,4 +208,131 @@ router.get('/groups/:groupId/transactions', auth, async (req, res) => {
   }
 });
 
+// GET /api/admin/group-transactions - Admin endpoint to get transactions across all groups
+router.get('/group-transactions', auth, async (req, res) => {
+  try {
+    // Verify admin role
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    const {
+      groupId,
+      startDate,
+      endDate,
+      type,
+      minAmount,
+      maxAmount,
+      q: searchQuery,
+      page = 1,
+      limit = 20
+    } = req.query;
+
+    // Build filter query
+    const filter = {};
+    
+    // Filter by group
+    if (groupId) {
+      filter.group = groupId;
+    }
+    
+    // Filter by date range
+    if (startDate || endDate) {
+      filter.date = {};
+      if (startDate) filter.date.$gte = new Date(startDate);
+      if (endDate) {
+        // Set to end of the day for the end date
+        const endDateTime = new Date(endDate);
+        endDateTime.setHours(23, 59, 59, 999);
+        filter.date.$lte = endDateTime;
+      }
+    }
+    
+    // Filter by transaction type
+    if (type) {
+      filter.type = type;
+    }
+    
+    // Filter by amount range
+    if (minAmount || maxAmount) {
+      filter.amount = {};
+      if (minAmount) filter.amount.$gte = parseFloat(minAmount);
+      if (maxAmount) filter.amount.$lte = parseFloat(maxAmount);
+    }
+    
+    // Search in title or description
+    if (searchQuery) {
+      filter.$or = [
+        { title: { $regex: searchQuery, $options: 'i' } },
+        { description: { $regex: searchQuery, $options: 'i' } }
+      ];
+    }
+    
+    // Import model if not already imported
+    const GroupTransaction = require('../models/GroupTransaction');
+
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    // Execute query with pagination - improved populate to get more group info
+    const transactions = await GroupTransaction.find(filter)
+      .populate({
+        path: 'group',
+        select: 'name description owner members createdAt', // Get more fields
+        populate: {
+          path: 'owner',
+          select: 'name email'
+        }
+      })
+      .populate('category', 'name icon')
+      .populate('createdBy', 'name email')
+      .sort({ date: -1, createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+    
+    // Get total count for pagination
+    const total = await GroupTransaction.countDocuments(filter);
+    
+    res.json({
+      transactions,
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit)
+    });
+  } catch (err) {
+    console.error('Admin group transactions fetch error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// GET /api/admin/group-transactions/:id - Get single transaction by ID
+router.get('/group-transactions/:id', auth, async (req, res) => {
+  try {
+    // Verify admin role
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    const { id } = req.params;
+    if (!id) return res.status(400).json({ message: 'Transaction ID required' });
+    
+    // Import model if not already imported
+    const GroupTransaction = require('../models/GroupTransaction');
+    
+    const transaction = await GroupTransaction.findById(id)
+      .populate('group', 'name')
+      .populate('category', 'name icon')
+      .populate('createdBy', 'name email');
+      
+    if (!transaction) {
+      return res.status(404).json({ message: 'Transaction not found' });
+    }
+    
+    res.json(transaction);
+  } catch (err) {
+    console.error('Admin transaction fetch error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
 module.exports = router;

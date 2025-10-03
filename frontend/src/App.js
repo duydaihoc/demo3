@@ -13,6 +13,7 @@ import AdminFamiliesPage from './admin/AdminFamiliesPage';
 import AdminCategoriesPage from './admin/AdminCategoriesPage'; // Import new component
 import AdminWalletsPage from './admin/AdminWalletsPage';
 import AdminTransactionsPage from './admin/AdminTransactionsPage'; // <-- new import
+import AdminGroupTransactionsPage from './admin/AdminGroupTransactionsPage';
 import GroupHome from './group/GroupHome';
 import GroupsPage from './group/GroupsPage';
 import GroupFriends from './group/GroupFriends';
@@ -78,6 +79,7 @@ function AppRoutes() {
 				<Route path="/admin/wallets" element={<AdminWalletsPage />} />
 				<Route path="/admin/groups" element={<AdminGroupsPage />} />
 				<Route path="/admin/groups/view/:groupId" element={<AdminGroupViewPage />} />
+				<Route path="/admin/groups/transition-group" element={<AdminGroupTransactionsPage />} />
 				<Route path="/admin/families" element={<AdminFamiliesPage />} />
 				<Route path="/admin/categories" element={<AdminCategoriesPage />} /> {/* Add new route */}
 				<Route path="/admin/transactions" element={<AdminTransactionsPage />} /> {/* Add new route */}

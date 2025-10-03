@@ -20,7 +20,8 @@ const notificationSchema = new mongoose.Schema({
       'group.transaction.created', 
       'group.transaction.debt',
       'group.transaction.settled',
-      'group.transaction.debt.paid'
+      'group.transaction.debt.paid',
+      'group.transaction.updated', 'group.transaction.deleted', 'group.transaction.removed'
     ]
   },
   message: {

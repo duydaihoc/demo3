@@ -113,11 +113,22 @@ export default function GroupActivity() {
     if (type.includes('friend')) return '👥';
     if (type.includes('group.transaction.debt')) return '💸';
     if (type.includes('group.transaction.settled') || type.includes('group.transaction.debt.paid')) return '✅';
+    if (type.includes('group.transaction.updated')) return '🔄'; // New icon for updates
+    if (type.includes('group.transaction.deleted')) return '🗑️'; // New icon for deletions
     if (type.includes('group.transaction')) return '💰';
     if (type.includes('group')) return '👨‍👩‍👧‍👦';
     if (type.includes('invite')) return '✉️';
     if (type.includes('response')) return '✅';
     return '🔔';
+  };
+
+  // Add new notification type checks
+  const isTransactionUpdatedNotification = (type) => {
+    return type && type.includes('transaction.updated');
+  };
+
+  const isTransactionDeletedNotification = (type) => {
+    return type && type.includes('transaction.deleted');
   };
 
   // Hiển thị thông báo chi tiết khi được chọn
@@ -159,7 +170,8 @@ export default function GroupActivity() {
     const data = notification.data || {};
     
     if (isTransactionNotification(notification.type)) {
-      return (
+      // Base transaction details rendering
+      const baseDetails = (
         <div className="transaction-details">
           {data.title && (
             <div className="tx-title">
@@ -179,7 +191,58 @@ export default function GroupActivity() {
             </div>
           )}
           
-          {data.shareAmount && (
+          {/* Add special content for updated transactions */}
+          {isTransactionUpdatedNotification(notification.type) && data.previousAmount && data.newAmount && (
+            <div className="tx-amount-change">
+              <strong>Thay đổi:</strong> 
+              <div className="amount-comparison">
+                <span className="old-amount">{formatCurrency(data.previousAmount)}</span>
+                <span className="arrow">→</span>
+                <span className={`new-amount ${data.difference > 0 ? 'increased' : data.difference < 0 ? 'decreased' : ''}`}>
+                  {formatCurrency(data.newAmount)}
+                </span>
+              </div>
+              
+              {data.difference && (
+                <div className={`difference ${data.difference > 0 ? 'negative' : 'positive'}`}>
+                  {data.difference > 0 ? (
+                    <><span className="diff-icon">▲</span> Tăng {formatCurrency(data.difference)}</>
+                  ) : (
+                    <><span className="diff-icon">▼</span> Giảm {formatCurrency(Math.abs(data.difference))}</>
+                  )}
+                </div>
+              )}
+              
+              <div className="update-info">
+                Cập nhật bởi: {data.userName || 'Người dùng'}
+              </div>
+            </div>
+          )}
+          
+          {/* Add special content for deleted transactions */}
+          {isTransactionDeletedNotification(notification.type) && (
+            <div className="tx-deleted">
+              <div className="deleted-info">
+                <i className="fas fa-trash-alt"></i>
+                <span>Giao dịch đã bị xóa, khoản nợ của bạn đã được hủy</span>
+              </div>
+              {data.amount && (
+                <div className="deleted-amount">
+                  <strong>Số tiền nợ đã hủy:</strong> {formatCurrency(data.amount)}
+                </div>
+              )}
+              {data.userName && (
+                <div className="deleted-by">
+                  Xóa bởi: {data.userName}
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* Regular transaction amount display */}
+          {!isTransactionDeletedNotification(notification.type) && 
+           !isTransactionUpdatedNotification(notification.type) && 
+           data.shareAmount && (
             <div className="tx-amount">
               <strong>{isDebtNotification(notification.type) ? "Số tiền nợ:" : "Số tiền:"}</strong> 
               <span className={isDebtNotification(notification.type) ? "debt-amount" : ""}> 
@@ -213,6 +276,8 @@ export default function GroupActivity() {
           </div>
         </div>
       );
+      
+      return baseDetails;
     }
     
     return null;
@@ -302,7 +367,12 @@ export default function GroupActivity() {
                 {filteredNotifications.map(notif => (
                   <div 
                     key={notif._id} 
-                    className={`activity-item ${notif.read ? '' : 'unread'} ${selectedNotif?._id === notif._id ? 'selected' : ''} ${isTransactionNotification(notif.type) ? 'transaction' : ''} ${isDebtNotification(notif.type) ? 'debt' : ''} ${isSettledNotification(notif.type) ? 'settled' : ''}`}
+                    className={`activity-item ${notif.read ? '' : 'unread'} ${selectedNotif?._id === notif._id ? 'selected' : ''} 
+                                ${isTransactionNotification(notif.type) ? 'transaction' : ''} 
+                                ${isDebtNotification(notif.type) ? 'debt' : ''} 
+                                ${isSettledNotification(notif.type) ? 'settled' : ''}
+                                ${isTransactionUpdatedNotification(notif.type) ? 'updated' : ''}
+                                ${isTransactionDeletedNotification(notif.type) ? 'deleted' : ''}`}
                     onClick={() => handleNotificationClick(notif)}
                   >
                     <div className="activity-icon">
@@ -312,7 +382,25 @@ export default function GroupActivity() {
                       <div className="activity-message">{notif.message}</div>
                       <div className="activity-meta">
                         <span className="activity-time">{formatTime(notif.createdAt)}</span>
-                        {notif.data && notif.data.shareAmount && (
+                        
+                        {/* Show old → new amount for updates */}
+                        {isTransactionUpdatedNotification(notif.type) && notif.data && (
+                          <span className={`activity-amount-change ${notif.data.difference > 0 ? 'increased' : 'decreased'}`}>
+                            {formatCurrency(notif.data.previousAmount || 0)} → {formatCurrency(notif.data.newAmount || 0)}
+                          </span>
+                        )}
+                        
+                        {/* Show cancelled amount for deletions */}
+                        {isTransactionDeletedNotification(notif.type) && notif.data && (
+                          <span className="activity-amount-cancelled">
+                            <i className="fas fa-ban"></i> {formatCurrency(notif.data.amount || 0)}
+                          </span>
+                        )}
+                        
+                        {/* Regular amount display */}
+                        {!isTransactionUpdatedNotification(notif.type) && 
+                         !isTransactionDeletedNotification(notif.type) && 
+                         notif.data && notif.data.shareAmount && (
                           <span className="activity-amount">
                             {formatCurrency(notif.data.shareAmount || notif.data.amount)}
                           </span>

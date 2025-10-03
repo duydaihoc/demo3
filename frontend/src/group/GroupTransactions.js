@@ -34,6 +34,18 @@ export default function GroupTransactions() {
   const [members, setMembers] = useState([]);
   const [selectedMembers, setSelectedMembers] = useState([]);
 
+  // Add state for editing
+  const [editingTx, setEditingTx] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editAmount, setEditAmount] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editCategory, setEditCategory] = useState('');
+  const [editSelectedMembers, setEditSelectedMembers] = useState([]);
+  const [isEditing, setIsEditing] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [txToDelete, setTxToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   // Lấy thông tin người dùng hiện tại
   const getCurrentUser = () => {
     try {
@@ -286,6 +298,163 @@ export default function GroupTransactions() {
     return categories.find(c => c._id === categoryId) || { name: 'Không có', icon: '📝' };
   };
 
+  // Determine if the current user is the creator of a transaction
+  const isUserCreator = (transaction) => {
+    if (!currentUser || !transaction || !transaction.createdBy) return false;
+    
+    // Check if createdBy is a string (ID) or object with _id
+    if (typeof transaction.createdBy === 'object' && transaction.createdBy !== null) {
+      return String(transaction.createdBy._id || transaction.createdBy.id || '') === String(currentUser.id);
+    }
+    
+    return String(transaction.createdBy) === String(currentUser.id);
+  };
+
+  // Start editing a transaction
+  const handleEditTransaction = (tx) => {
+    setEditingTx(tx);
+    setEditTitle(tx.title || '');
+    setEditAmount(tx.perPerson && tx.participants && tx.participants.length > 0 
+      ? String(tx.amount / tx.participants.length) 
+      : String(tx.amount || ''));
+    setEditDescription(tx.description || '');
+    setEditCategory(tx.category && tx.category._id ? tx.category._id : (typeof tx.category === 'string' ? tx.category : ''));
+    
+    // Map participants to the format expected by our UI
+    if (tx.participants && Array.isArray(tx.participants)) {
+      const mappedParticipants = tx.participants.map(p => ({
+        id: p.user ? (p.user._id || p.user) : undefined,
+        email: p.email || (p.user && p.user.email) || '',
+        name: p.user ? (p.user.name || p.user.email || 'Thành viên') : (p.email || 'Thành viên'),
+        settled: p.settled || false,
+        shareAmount: p.shareAmount || 0
+      }));
+      setEditSelectedMembers(mappedParticipants);
+    } else {
+      setEditSelectedMembers([]);
+    }
+    
+    // Show edit modal
+    setIsEditing(true);
+  };
+
+  // Toggle member selection in edit mode
+  const toggleEditMemberSelection = (member) => {
+    setEditSelectedMembers(prev => {
+      const isSelected = prev.some(m => m.id === member.id || m.email === member.email);
+      
+      if (isSelected) {
+        return prev.filter(m => !(m.id === member.id || m.email === member.email));
+      } else {
+        return [...prev, { 
+          ...member, 
+          settled: false,  // New members are not settled by default
+          shareAmount: editAmount ? Number(editAmount) : 0 // Use current edit amount
+        }];
+      }
+    });
+  };
+
+  // Save edited transaction
+  const handleSaveEdit = async () => {
+    if (!editingTx || !editingTx._id) return;
+    
+    if (!editTitle.trim()) {
+      alert('Vui lòng nhập tiêu đề');
+      return;
+    }
+    
+    if (!editAmount || Number(editAmount) <= 0) {
+      alert('Vui lòng nhập số tiền hợp lệ');
+      return;
+    }
+    
+    if (!editCategory) {
+      alert('Vui lòng chọn danh mục');
+      return;
+    }
+
+    try {
+      // Build participants from selected members
+      const participants = editSelectedMembers.map(m => ({
+        user: m.id,
+        email: m.email,
+        settled: m.settled || false,
+        shareAmount: m.shareAmount || Number(editAmount)
+      }));
+      
+      const payload = {
+        title: editTitle,
+        description: editDescription,
+        amount: Number(editAmount),
+        category: editCategory,
+        participants,
+        perPerson: true // We're using per person amount in the edit form
+      };
+      
+      setIsEditing(false); // Close modal during fetch
+      
+      const res = await fetch(`${API_BASE}/api/groups/${groupId}/transactions/${editingTx._id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Lỗi khi cập nhật giao dịch');
+      }
+      
+      // Success - refresh transactions list
+      fetchTxs();
+      alert('Cập nhật giao dịch thành công');
+    } catch (err) {
+      console.error("Error updating transaction:", err);
+      alert(err.message || 'Đã xảy ra lỗi khi cập nhật giao dịch');
+      setIsEditing(true); // Re-open modal to fix issues
+    }
+  };
+
+  // Start delete process
+  const handleDeleteClick = (tx) => {
+    setTxToDelete(tx);
+    setShowDeleteConfirm(true);
+  };
+
+  // Confirm and execute deletion
+  const confirmDelete = async () => {
+    if (!txToDelete || !txToDelete._id) return;
+    
+    try {
+      setIsDeleting(true);
+      
+      const res = await fetch(`${API_BASE}/api/groups/${groupId}/transactions/${txToDelete._id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Lỗi khi xóa giao dịch');
+      }
+      
+      // Success - refresh transactions list
+      fetchTxs();
+      alert('Đã xóa giao dịch thành công');
+      
+    } catch (err) {
+      console.error("Error deleting transaction:", err);
+      alert(err.message || 'Đã xảy ra lỗi khi xóa giao dịch');
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
+      setTxToDelete(null);
+    }
+  };
+
   return (
     <div className="groups-page">
       <GroupSidebar active="groups" />
@@ -460,8 +629,9 @@ export default function GroupTransactions() {
                 {txs.map(tx => {
                   const isPayer = isUserPayer(tx);
                   const isParticipant = isUserParticipant(tx);
-                  const category = tx.category ? getCategoryById(tx.category) : { name: 'Không có', icon: '📝' };
+                  const category = tx.category ? getCategoryById(tx.category._id || tx.category) : { name: 'Không có', icon: '📝' };
                   const isPayingFor = isPayingForOthers(tx);
+                  const isCreator = isUserCreator(tx);
                   
                   // Kiểm tra xem người dùng đang đăng nhập có phải là người đã nhận được "trả dùm" không
                   const userParticipation = currentUser && tx.participants ? 
@@ -494,6 +664,26 @@ export default function GroupTransactions() {
                             {new Date(tx.date || tx.createdAt || tx.created).toLocaleString()}
                           </div>
                         </div>
+                        
+                        {/* Add edit/delete buttons for transaction creator */}
+                        {isCreator && (
+                          <div className="gt-creator-actions">
+                            <button 
+                              className="gt-edit-btn"
+                              onClick={() => handleEditTransaction(tx)}
+                              title="Sửa giao dịch"
+                            >
+                              <i className="fas fa-edit"></i> Sửa
+                            </button>
+                            <button 
+                              className="gt-delete-btn"
+                              onClick={() => handleDeleteClick(tx)}
+                              title="Xóa giao dịch"
+                            >
+                              <i className="fas fa-trash-alt"></i> Xóa
+                            </button>
+                          </div>
+                        )}
                         
                         {tx.description && (
                           <div className="gt-description">{tx.description}</div>
@@ -574,8 +764,168 @@ export default function GroupTransactions() {
             )}
           </section>
         </div>
+        
+        {/* Edit Transaction Modal */}
+        {isEditing && editingTx && (
+          <div className="gt-modal-overlay">
+            <div className="gt-edit-modal">
+              <div className="gt-modal-header">
+                <h3>Sửa giao dịch</h3>
+                <button className="gt-modal-close" onClick={() => setIsEditing(false)}>×</button>
+              </div>
+              
+              <div className="gt-modal-body">
+                <div className="gt-form-group">
+                  <label>Tiêu đề</label>
+                  <input 
+                    type="text"
+                    value={editTitle} 
+                    onChange={e => setEditTitle(e.target.value)} 
+                    placeholder="Ví dụ: Ăn tối"
+                    required
+                  />
+                </div>
+                
+                <div className="gt-form-group">
+                  <label>Số tiền (mỗi người)</label>
+                  <input 
+                    type="number" 
+                    value={editAmount} 
+                    onChange={e => setEditAmount(e.target.value)} 
+                    placeholder="Số tiền cho mỗi người" 
+                    required
+                  />
+                </div>
+
+                <div className="gt-form-group">
+                  <label>Danh mục</label>
+                  <select 
+                    value={editCategory}
+                    onChange={(e) => setEditCategory(e.target.value)}
+                    required
+                    disabled={loadingCategories}
+                  >
+                    <option value="">-- Chọn danh mục --</option>
+                    {categories.map(cat => (
+                      <option key={cat._id} value={cat._id}>
+                        {cat.icon} {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="gt-form-group">
+                  <label>Trả dùm cho ai?</label>
+                  <div className="gt-members-list">
+                    {members.length === 0 ? (
+                      <div className="gt-no-members">Không có thành viên trong nhóm</div>
+                    ) : (
+                      <div className="gt-members-grid">
+                        {members.map(member => {
+                          // Không hiển thị bản thân trong danh sách trả dùm
+                          if (currentUser && (member.id === currentUser.id || member.email === currentUser.email)) {
+                            return null;
+                          }
+
+                          const isSelected = editSelectedMembers.some(m => m.id === member.id || m.email === member.email);
+                          return (
+                            <div 
+                              key={member.id || member.email} 
+                              className={`gt-member-item ${isSelected ? 'selected' : ''}`}
+                              onClick={() => toggleEditMemberSelection(member)}
+                            >
+                              <input 
+                                type="checkbox" 
+                                checked={isSelected}
+                                onChange={() => toggleEditMemberSelection(member)}
+                                id={`edit-member-${member.id || member.email}`}
+                              />
+                              <div className="gt-member-info">
+                                <label htmlFor={`edit-member-${member.id || member.email}`}>
+                                  <div className="gt-member-name">{member.name}</div>
+                                  <div className="gt-member-email">{member.email}</div>
+                                </label>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {editAmount && editSelectedMembers.length > 0 && (
+                  <div className="gt-total-summary">
+                    <div className="gt-amount-calculation">
+                      <div>Mỗi người: {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(editAmount) || 0)}</div>
+                      <div>×</div>
+                      <div>{editSelectedMembers.length} người</div>
+                      <div>=</div>
+                    </div>
+                    <div className="gt-total-preview">
+                      Thành tiền: {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format((Number(editAmount) || 0) * editSelectedMembers.length)}
+                    </div>
+                  </div>
+                )}
+
+                <div className="gt-form-group">
+                  <label>Mô tả</label>
+                  <textarea 
+                    value={editDescription} 
+                    onChange={e => setEditDescription(e.target.value)} 
+                    rows={3} 
+                    placeholder="Thêm mô tả chi tiết (tùy chọn)"
+                  />
+                </div>
+              </div>
+              
+              <div className="gt-modal-footer">
+                <button className="gt-cancel-btn" onClick={() => setIsEditing(false)}>Hủy</button>
+                <button className="gt-save-btn" onClick={handleSaveEdit}>Lưu thay đổi</button>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Delete Confirmation Modal */}
+        {showDeleteConfirm && txToDelete && (
+          <div className="gt-modal-overlay">
+            <div className="gt-confirm-modal">
+              <div className="gt-modal-header">
+                <h3>Xác nhận xóa giao dịch</h3>
+                <button className="gt-modal-close" onClick={() => setShowDeleteConfirm(false)}>×</button>
+              </div>
+              
+              <div className="gt-modal-body">
+                <p className="gt-confirm-message">Bạn có chắc chắn muốn xóa giao dịch <strong>"{txToDelete.title || 'Không tiêu đề'}"</strong> này không?</p>
+                <div className="gt-warning">
+                  <i className="fas fa-exclamation-triangle"></i>
+                  <div>
+                    <p>Lưu ý:</p>
+                    <ul>
+                      <li>Tất cả thông tin giao dịch sẽ bị xóa vĩnh viễn</li>
+                      <li>Các khoản nợ liên quan sẽ được hủy</li>
+                      <li>Thao tác này không thể hoàn tác</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="gt-modal-footer">
+                <button className="gt-cancel-btn" onClick={() => setShowDeleteConfirm(false)}>Hủy</button>
+                <button 
+                  className="gt-confirm-delete-btn" 
+                  onClick={confirmDelete}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? 'Đang xóa...' : 'Xác nhận xóa'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
 }
-     
+

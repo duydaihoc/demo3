@@ -332,6 +332,284 @@ router.post('/:groupId/transactions/:txId/settle', auth, async (req, res) => {
   }
 });
 
+// PUT /api/groups/:groupId/transactions/:txId - Edit transaction
+router.put('/:groupId/transactions/:txId', auth, async (req, res) => {
+  try {
+    const { groupId, txId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(groupId) || !mongoose.Types.ObjectId.isValid(txId)) {
+      return res.status(400).json({ message: 'Invalid ID format' });
+    }
+
+    // Find the transaction
+    const transaction = await GroupTransaction.findById(txId);
+    if (!transaction) {
+      return res.status(404).json({ message: 'Transaction not found' });
+    }
+
+    // Verify the transaction belongs to this group
+    if (String(transaction.group) !== String(groupId)) {
+      return res.status(400).json({ message: 'Transaction does not belong to this group' });
+    }
+
+    // Only the creator can edit
+    if (String(transaction.createdBy) !== String(req.user._id)) {
+      return res.status(403).json({ message: 'Only the creator can edit this transaction' });
+    }
+
+    const { title, description, amount, participants, category, perPerson } = req.body;
+
+    // Update basic fields if provided
+    if (title) transaction.title = title;
+    if (description !== undefined) transaction.description = description;
+    if (category) transaction.category = category;
+    
+    // Keep track of participants that were removed or changed for notifications
+    const originalParticipants = JSON.parse(JSON.stringify(transaction.participants || []));
+    
+    // Update participants and recalculate if needed
+    let totalAmount = amount;
+    if (participants && Array.isArray(participants)) {
+      // Normalize participants input
+      const normalizedParticipants = await normalizeParticipantsInput(participants);
+      
+      // Calculate share amounts
+      if (perPerson && normalizedParticipants.length > 0) {
+        totalAmount = amount * normalizedParticipants.length;
+      }
+      
+      // Map participants with shareAmount
+      const participantsBuilt = normalizedParticipants.map(p => {
+        const share = perPerson ? amount : (normalizedParticipants.length > 0 ? totalAmount / normalizedParticipants.length : 0);
+        
+        // Try to preserve settled status if participant existed before
+        const existingParticipant = transaction.participants.find(ep => 
+          (ep.user && p.user && String(ep.user) === String(p.user)) || 
+          (ep.email && p.email && ep.email.toLowerCase() === p.email.toLowerCase())
+        );
+        
+        return {
+          user: p.user,
+          email: p.email,
+          shareAmount: Number(Number(share).toFixed(2)),
+          settled: existingParticipant ? existingParticipant.settled : false,
+          settledAt: existingParticipant ? existingParticipant.settledAt : undefined
+        };
+      });
+      
+      transaction.participants = participantsBuilt;
+    }
+    
+    // Update amount if provided or recalculated
+    if (amount !== undefined || totalAmount !== undefined) {
+      transaction.amount = Number(Number(totalAmount).toFixed(2));
+      transaction.perPerson = !!perPerson;
+    }
+    
+    // Add updated timestamp
+    transaction.updatedAt = new Date();
+    
+    await transaction.save();
+    
+    // Send notifications to participants that were changed or removed
+    const notifyParticipantChanges = async () => {
+      // Get current participants map for quick lookup
+      const currentParticipantsMap = new Map();
+      transaction.participants.forEach(p => {
+        const key = p.user ? String(p.user) : (p.email ? p.email.toLowerCase() : null);
+        if (key) currentParticipantsMap.set(key, p);
+      });
+      
+      // Find removed participants
+      const removedParticipants = originalParticipants.filter(op => {
+        const key = op.user ? String(op.user) : (op.email ? op.email.toLowerCase() : null);
+        return key && !currentParticipantsMap.has(key);
+      });
+      
+      // Find changed participants (amount changed)
+      const changedParticipants = originalParticipants.filter(op => {
+        const key = op.user ? String(op.user) : (op.email ? op.email.toLowerCase() : null);
+        if (!key) return false;
+        const current = currentParticipantsMap.get(key);
+        return current && current.shareAmount !== op.shareAmount && !op.settled;
+      });
+      
+      // Find payer info
+      const payer = await User.findById(transaction.payer).select('name email').lean();
+      const payerName = payer ? (payer.name || payer.email) : 'Người trả';
+      
+      // Get category name if available
+      let categoryName = '';
+      if (transaction.category) {
+        try {
+          const cat = await Category.findById(transaction.category).lean();
+          if (cat) categoryName = cat.name;
+        } catch (e) { /* ignore */ }
+      }
+      
+      // Notify removed participants
+      for (const removed of removedParticipants) {
+        if (removed.user) {
+          try {
+            await Notification.create({
+              recipient: removed.user,
+              sender: req.user._id,
+              type: 'group.transaction.removed',
+              message: `Bạn đã được gỡ khỏi giao dịch "${transaction.title}" trong nhóm`,
+              data: {
+                transactionId: transaction._id,
+                groupId,
+                previousAmount: removed.shareAmount,
+                title: transaction.title,
+                updatedBy: req.user._id
+              }
+            });
+          } catch (e) { console.warn('Failed to notify removed participant', e); }
+        }
+      }
+      
+      // Notify participants with changed amounts
+      for (const changed of changedParticipants) {
+        if (changed.user) {
+          try {
+            const current = currentParticipantsMap.get(changed.user ? String(changed.user) : changed.email?.toLowerCase());
+            if (!current) continue;
+            
+            const oldAmount = changed.shareAmount;
+            const newAmount = current.shareAmount;
+            const difference = newAmount - oldAmount;
+            
+            // Improved message clarity with visual indicators of increase/decrease
+            let changeMessage = '';
+            if (difference > 0) {
+              changeMessage = `Khoản nợ của bạn đã tăng thêm ${difference.toLocaleString('vi-VN')}đ`;
+            } else if (difference < 0) {
+              changeMessage = `Khoản nợ của bạn đã giảm ${Math.abs(difference).toLocaleString('vi-VN')}đ`;
+            }
+            
+            await Notification.create({
+              recipient: changed.user,
+              sender: req.user._id,
+              type: 'group.transaction.updated',
+              message: `${req.user.name || 'Người dùng'} đã cập nhật giao dịch "${transaction.title}". ${changeMessage} (${oldAmount.toLocaleString('vi-VN')}đ → ${newAmount.toLocaleString('vi-VN')}đ)`,
+              data: {
+                transactionId: transaction._id,
+                groupId,
+                previousAmount: oldAmount,
+                newAmount,
+                difference,
+                title: transaction.title,
+                updatedBy: req.user._id,
+                payer: { _id: transaction.payer, name: payerName },
+                category: transaction.category,
+                categoryName,
+                // Add more data to support rich notification display
+                amountIncreased: difference > 0,
+                amountDecreased: difference < 0
+              }
+            });
+            
+            // Add real-time notification if socket.io is available
+            const io = req.app.get('io');
+            if (io) io.to(String(changed.user)).emit('notification', {
+              type: 'group.transaction.updated',
+              message: `Khoản nợ của bạn trong giao dịch "${transaction.title}" đã thay đổi từ ${oldAmount.toLocaleString('vi-VN')}đ thành ${newAmount.toLocaleString('vi-VN')}đ`,
+            });
+            
+          } catch (e) { console.warn('Failed to notify participant about amount change', e); }
+        }
+      }
+    };
+    
+    // Run notifications in background
+    notifyParticipantChanges().catch(e => console.warn('Error sending notifications after tx update', e));
+    
+    // Return the updated transaction
+    const populatedTx = await GroupTransaction.findById(txId)
+      .populate('payer', 'name email')
+      .populate('participants.user', 'name email')
+      .populate('category', 'name icon')
+      .populate('group', 'name');
+      
+    res.json(populatedTx);
+  } catch (err) {
+    console.error('Edit group transaction error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// DELETE /api/groups/:groupId/transactions/:txId - Delete transaction
+router.delete('/:groupId/transactions/:txId', auth, async (req, res) => {
+  try {
+    const { groupId, txId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(groupId) || !mongoose.Types.ObjectId.isValid(txId)) {
+      return res.status(400).json({ message: 'Invalid ID format' });
+    }
+
+    // Find the transaction
+    const transaction = await GroupTransaction.findById(txId);
+    if (!transaction) {
+      return res.status(404).json({ message: 'Transaction not found' });
+    }
+
+    // Verify the transaction belongs to this group
+    if (String(transaction.group) !== String(groupId)) {
+      return res.status(400).json({ message: 'Transaction does not belong to this group' });
+    }
+
+    // Only the creator can delete
+    if (String(transaction.createdBy) !== String(req.user._id)) {
+      return res.status(403).json({ message: 'Only the creator can delete this transaction' });
+    }
+    
+    // Get information needed for notifications before deleting
+    const title = transaction.title || 'Không tiêu đề';
+    const unsettledParticipants = transaction.participants
+      ? transaction.participants.filter(p => !p.settled && p.user)
+      : [];
+    
+    // Delete the transaction
+    await transaction.deleteOne();
+    
+    // Notify unsettled participants that their debt has been cleared
+    for (const participant of unsettledParticipants) {
+      if (!participant.user) continue;
+      
+      try {
+        await Notification.create({
+          recipient: participant.user,
+          sender: req.user._id,
+          type: 'group.transaction.deleted',
+          message: `${req.user.name || 'Người dùng'} đã xóa giao dịch "${title}". Khoản nợ ${participant.shareAmount.toLocaleString('vi-VN')}đ của bạn đã được hủy.`,
+          data: {
+            previousTransactionId: txId,
+            groupId,
+            amount: participant.shareAmount,
+            title,
+            deletedBy: req.user._id,
+            userName: req.user.name || req.user.email || 'Người dùng',
+            deletedAt: new Date()
+          }
+        });
+        
+        // Add real-time notification
+        const io = req.app.get('io');
+        if (io) io.to(String(participant.user)).emit('notification', {
+          type: 'group.transaction.deleted',
+          message: `Giao dịch "${title}" đã bị xóa, khoản nợ ${participant.shareAmount.toLocaleString('vi-VN')}đ của bạn đã được hủy`,
+        });
+        
+      } catch (e) { 
+        console.warn('Failed to notify participant about transaction deletion', e);
+      }
+    }
+    
+    res.json({ message: 'Transaction deleted successfully' });
+  } catch (err) {
+    console.error('Delete group transaction error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
 // GET /api/categories - get all categories for select dropdown
 router.get('/categories', auth, async (req, res) => {
   try {

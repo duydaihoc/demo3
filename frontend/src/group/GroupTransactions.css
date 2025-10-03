@@ -456,7 +456,224 @@
   background: #a8a8a8;
 }
 
+/* Creator action buttons for edit/delete */
+.gt-creator-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.gt-edit-btn, 
+.gt-delete-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+}
+
+.gt-edit-btn {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.gt-edit-btn:hover {
+  background: #bae6fd;
+}
+
+.gt-delete-btn {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.gt-delete-btn:hover {
+  background: #fecaca;
+}
+
+/* Modal styles */
+.gt-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.gt-edit-modal, .gt-confirm-modal {
+  background: white;
+  border-radius: 10px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+}
+
+.gt-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.gt-modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #0f172a;
+}
+
+.gt-modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #64748b;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.gt-modal-body {
+  padding: 20px;
+}
+
+.gt-form-group {
+  margin-bottom: 16px;
+}
+
+.gt-form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #334155;
+}
+
+.gt-form-group input, .gt-form-group select, .gt-form-group textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 14px;
+  background: #fff;
+}
+
+.gt-form-group input:focus, .gt-form-group select:focus, .gt-form-group textarea:focus {
+  border-color: #3b82f6;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.gt-modal-footer {
+  padding: 16px 20px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.gt-cancel-btn, .gt-save-btn, .gt-confirm-delete-btn {
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+}
+
+.gt-cancel-btn {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.gt-cancel-btn:hover {
+  background: #e2e8f0;
+}
+
+.gt-save-btn {
+  background: #3b82f6;
+  color: white;
+}
+
+.gt-save-btn:hover {
+  background: #2563eb;
+}
+
+.gt-confirm-delete-btn {
+  background: #ef4444;
+  color: white;
+}
+
+.gt-confirm-delete-btn:hover {
+  background: #dc2626;
+}
+
+.gt-confirm-delete-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Delete confirmation specific styles */
+.gt-confirm-message {
+  font-size: 16px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.gt-warning {
+  background: #fff7ed;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.gt-warning i {
+  font-size: 20px;
+  color: #f59e0b;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+.gt-warning p {
+  margin: 0 0 8px 0;
+  font-weight: 600;
+  color: #9a3412;
+}
+
+.gt-warning ul {
+  margin: 0;
+  padding-left: 20px;
+  color: #9a3412;
+}
+
+.gt-warning li {
+  margin-bottom: 4px;
+}
+
 /* Responsive */
 @media (max-width: 900px) {
   .gt-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 600px) {
+  .gt-creator-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .gt-edit-btn, .gt-delete-btn {
+    justify-content: center;
+  }
 }

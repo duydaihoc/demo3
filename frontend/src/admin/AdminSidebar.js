@@ -140,8 +140,8 @@ function AdminSidebar() {
               </Link>
             </li>
             <li>
-              <Link to="/admin/groups/activity" className={location.pathname === '/admin/groups/activity' ? 'active' : ''}>
-                ⚡ Hoạt động
+              <Link to="/admin/groups/transition-group" className={location.pathname === '/admin/groups/transition-group' ? 'active' : ''}>
+                ⚡ giao dịch
               </Link>
             </li>
           </ul>
