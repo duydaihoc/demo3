@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import GroupSidebar from './GroupSidebar';
 import './GroupTransactions.css';
@@ -45,6 +45,18 @@ export default function GroupTransactions() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [txToDelete, setTxToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Add state for optimized debts
+  const [showOptimizeModal, setShowOptimizeModal] = useState(false);
+  const [optimizedTransactions, setOptimizedTransactions] = useState([]);
+  const [loadingOptimized, setLoadingOptimized] = useState(false);
+  const [optimizeError, setOptimizeError] = useState(null);
+  const [settlingOptimized, setSettlingOptimized] = useState(false);
+  const [selectedOptimized, setSelectedOptimized] = useState([]);
+
+  // Add these state variables at the beginning with other useState declarations
+  const [globalMessage, setGlobalMessage] = useState('');
+  const [globalMessageType, setGlobalMessageType] = useState('info');
 
   // Lấy thông tin người dùng hiện tại
   const getCurrentUser = () => {
@@ -128,6 +140,61 @@ export default function GroupTransactions() {
     }
   };
 
+  // Function to fetch optimized transactions
+  const fetchOptimizedTransactions = async () => {
+    setLoadingOptimized(true);
+    setOptimizeError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/groups/${groupId}/optimize-debts`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || 'Failed to optimize debts');
+      }
+      
+      const data = await res.json();
+      setOptimizedTransactions(data.optimizedTransactions || []);
+      
+      // Auto-select all optimized transactions
+      setSelectedOptimized(data.optimizedTransactions.map((_, idx) => idx));
+    } catch (err) {
+      console.error('Error fetching optimized transactions:', err);
+      setOptimizeError(err.message || 'Failed to optimize debts');
+      setOptimizedTransactions([]);
+    } finally {
+      setLoadingOptimized(false);
+    }
+  };
+
+  // Add fetchTransactions function if it doesn't exist
+  const fetchTransactions = useCallback(async () => {
+    if (!groupId) return;
+    
+    setLoadingTxs(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/groups/${groupId}/transactions`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || 'Failed to fetch transactions');
+      }
+      
+      const data = await res.json();
+      setTxs(data || []);
+    } catch (err) {
+      console.error('Error fetching transactions:', err);
+      setError(err.message || 'Failed to fetch transactions');
+    } finally {
+      setLoadingTxs(false);
+    }
+  }, [groupId, token, API_BASE]);
+
+  // Add useEffect to fetch transactions on mount and when groupId changes
   useEffect(() => {
     setCurrentUser(getCurrentUser());
     fetchGroup();
@@ -473,18 +540,96 @@ export default function GroupTransactions() {
     }
   };
 
+  // Function to toggle selection of an optimized transaction
+  const toggleOptimizedSelection = (index) => {
+    setSelectedOptimized(prev => {
+      if (prev.includes(index)) {
+        return prev.filter(idx => idx !== index);
+      } else {
+        return [...prev, index];
+      }
+    });
+  };
+
+  // Function to settle selected optimized transactions
+  const settleSelectedOptimized = async () => {
+    if (selectedOptimized.length === 0) return;
+    
+    setSettlingOptimized(true);
+    try {
+      const transactions = selectedOptimized.map(idx => optimizedTransactions[idx]);
+      
+      const res = await fetch(`${API_BASE}/api/groups/${groupId}/settle-optimized`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ transactions })
+      });
+      
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || 'Failed to settle optimized transactions');
+      }
+      
+      const data = await res.json();
+      
+      // Close modal and refresh transactions
+      setShowOptimizeModal(false);
+      fetchTransactions();
+      
+      // Show success message with the new state setter
+      setGlobalMessage(`Đã thanh toán ${data.settledCount || 0} giao dịch`);
+      setGlobalMessageType('success');
+      
+      // Auto-hide message after a few seconds
+      setTimeout(() => {
+        setGlobalMessage('');
+      }, 5000);
+    } catch (err) {
+      console.error('Error settling optimized transactions:', err);
+      setOptimizeError(err.message || 'Failed to settle optimized transactions');
+    } finally {
+      setSettlingOptimized(false);
+    }
+  };
+  
   return (
     <div className="groups-page">
       <GroupSidebar active="groups" />
       <main className="group-transactions-page">
+        {/* Global message display */}
+        {globalMessage && (
+          <div className={`gt-global-message ${globalMessageType}`}>
+            {globalMessageType === 'success' && <i className="fas fa-check-circle"></i>}
+            {globalMessageType === 'error' && <i className="fas fa-exclamation-circle"></i>}
+            {globalMessage}
+            <button className="gt-message-close" onClick={() => setGlobalMessage('')}>
+              <i className="fas fa-times"></i>
+            </button>
+          </div>
+        )}
+        
         <header className="gt-header">
           <div>
             <h1>Giao dịch nhóm</h1>
             <p className="subtitle">{group ? `Nhóm: ${group.name}` : '...'}</p>
           </div>
-          <div className="gt-actions">
+          <div className="gt-header-actions">
             <button className="gm-btn secondary" onClick={() => navigate(-1)}>← Quay lại</button>
             <button className="gm-btn primary" onClick={fetchTxs}>Làm mới</button>
+            
+            <button
+              className="gt-optimize-btn"
+              onClick={() => {
+                setShowOptimizeModal(true);
+                fetchOptimizedTransactions();
+              }}
+              title="Tối ưu hóa thanh toán"
+            >
+              <i className="fas fa-magic"></i> Tối ưu hóa thanh toán
+            </button>
           </div>
         </header>
 
@@ -969,6 +1114,138 @@ export default function GroupTransactions() {
                 >
                   {isDeleting ? 'Đang xóa...' : 'Xác nhận xóa'}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Optimize Transactions Modal */}
+        {showOptimizeModal && (
+          <div className="gt-modal-overlay">
+            <div className="gt-modal gt-optimize-modal">
+              <div className="gt-modal-header">
+                <h3>Tối ưu hóa thanh toán</h3>
+                <button className="gt-modal-close" onClick={() => setShowOptimizeModal(false)}>
+                  <i className="fas fa-times"></i>
+                </button>
+              </div>
+              
+              <div className="gt-modal-content">
+                {loadingOptimized ? (
+                  <div className="gt-loading-container">
+                    <div className="gt-spinner"></div>
+                    <p>Đang tối ưu hóa thanh toán...</p>
+                  </div>
+                ) : optimizeError ? (
+                  <div className="gt-error-message">
+                    <i className="fas fa-exclamation-triangle"></i>
+                    <p>{optimizeError}</p>
+                    <button className="gt-retry-btn" onClick={fetchOptimizedTransactions}>
+                      Thử lại
+                    </button>
+                  </div>
+                ) : optimizedTransactions.length === 0 ? (
+                  <div className="gt-empty-message">
+                    <i className="fas fa-check-circle"></i>
+                    <p>Không có khoản thanh toán nào cần tối ưu hóa!</p>
+                    <p className="gt-sub-message">Tất cả các khoản nợ đã được thanh toán hoặc không có khoản nợ nào.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="gt-optimize-info">
+                      <p>
+                        <i className="fas fa-info-circle"></i> Hệ thống đã tối ưu hóa các khoản thanh toán trong nhóm.
+                        Thay vì thanh toán riêng lẻ từng giao dịch, bạn có thể sử dụng danh sách tối ưu dưới đây để 
+                        thanh toán với số giao dịch tối thiểu.
+                      </p>
+                      <div className="gt-optimize-stats">
+                        <div className="gt-stat">
+                          <span className="gt-stat-value">{optimizedTransactions.length}</span>
+                          <span className="gt-stat-label">Giao dịch tối ưu</span>
+                        </div>
+                        <div className="gt-stat">
+                          <span className="gt-stat-value">{selectedOptimized.length}</span>
+                          <span className="gt-stat-label">Đã chọn</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="gt-optimized-list">
+                      <div className="gt-optimized-header">
+                        <div className="gt-check-col">
+                          <input 
+                            type="checkbox" 
+                            checked={selectedOptimized.length === optimizedTransactions.length}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedOptimized(optimizedTransactions.map((_, idx) => idx));
+                              } else {
+                                setSelectedOptimized([]);
+                              }
+                            }}
+                          />
+                        </div>
+                        <div className="gt-from-col">Người trả</div>
+                        <div className="gt-to-col">Người nhận</div>
+                        <div className="gt-amount-col">Số tiền</div>
+                      </div>
+                      
+                      {optimizedTransactions.map((tx, idx) => (
+                        <div 
+                          key={idx} 
+                          className={`gt-optimized-item ${selectedOptimized.includes(idx) ? 'selected' : ''}`}
+                          onClick={() => toggleOptimizedSelection(idx)}
+                        >
+                          <div className="gt-check-col">
+                            <input 
+                              type="checkbox" 
+                              checked={selectedOptimized.includes(idx)}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                toggleOptimizedSelection(idx);
+                              }}
+                            />
+                          </div>
+                          <div className="gt-from-col">
+                            <div className="gt-user-name">{tx.from.name || 'Người dùng'}</div>
+                            {tx.from.email && <div className="gt-user-email">{tx.from.email}</div>}
+                          </div>
+                          <div className="gt-to-col">
+                            <div className="gt-user-name">{tx.to.name || 'Người dùng'}</div>
+                            {tx.to.email && <div className="gt-user-email">{tx.to.email}</div>}
+                          </div>
+                          <div className="gt-amount-col">
+                            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(tx.amount)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+              
+              <div className="gt-modal-footer">
+                <button className="gt-cancel-btn" onClick={() => setShowOptimizeModal(false)}>
+                  Đóng
+                </button>
+                
+                {optimizedTransactions.length > 0 && (
+                  <button
+                    className="gt-settle-btn"
+                    onClick={settleSelectedOptimized}
+                    disabled={settlingOptimized || selectedOptimized.length === 0}
+                  >
+                    {settlingOptimized ? (
+                      <>
+                        <i className="fas fa-spinner fa-spin"></i> Đang xử lý...
+                      </>
+                    ) : (
+                      <>
+                        <i className="fas fa-check-circle"></i> Thanh toán {selectedOptimized.length} giao dịch
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
           </div>

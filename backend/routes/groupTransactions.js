@@ -827,4 +827,282 @@ router.get('/categories', auth, async (req, res) => {
   }
 });
 
+// GET /api/groups/:groupId/optimize-debts - Get optimized transactions to settle all debts
+router.get('/:groupId/optimize-debts', auth, async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    
+    // Validate group membership
+    const group = await Group.findById(groupId);
+    if (!group) {
+      return res.status(404).json({ message: 'Group not found' });
+    }
+
+    // Check if user is a member of the group
+    const isUserInGroup = group.members.some(member => 
+      (member.user && String(member.user) === String(req.user._id)) || 
+      (member.email && req.user.email && member.email.toLowerCase() === req.user.email.toLowerCase())
+    );
+
+    if (!isUserInGroup) {
+      return res.status(403).json({ message: 'You are not a member of this group' });
+    }
+
+    // Fetch all unsettled transactions in the group
+    const transactions = await GroupTransaction.find({
+      group: groupId,
+      'participants.settled': false
+    }).populate('payer', 'name email')
+      .populate('participants.user', 'name email')
+      .sort({ date: -1 });
+
+    // Initialize balances map
+    const balances = new Map();
+
+    // Calculate net balance for each user
+    transactions.forEach(tx => {
+      const payerId = String(tx.payer._id || tx.payer);
+      const payerName = tx.payer.name || tx.payer.email || 'Unknown User';
+
+      // Initialize payer balance if needed
+      if (!balances.has(payerId)) {
+        balances.set(payerId, { 
+          id: payerId, 
+          name: payerName, 
+          email: tx.payer.email || null,
+          balance: 0 
+        });
+      }
+
+      tx.participants.forEach(participant => {
+        if (participant.settled) return; // Skip settled debts
+
+        const userId = participant.user ? String(participant.user._id || participant.user) : null;
+        const userEmail = participant.user ? participant.user.email : participant.email;
+        const userName = participant.user ? (participant.user.name || participant.user.email) : participant.email;
+        
+        // Skip if participant is the payer
+        if (userId && userId === payerId) return;
+        
+        // Generate a unique ID for email-only participants
+        const participantId = userId || `email:${userEmail}`;
+        
+        // Initialize participant balance if needed
+        if (!balances.has(participantId)) {
+          balances.set(participantId, { 
+            id: participantId, 
+            name: userName,
+            email: userEmail,
+            balance: 0 
+          });
+        }
+
+        // Update balances: payer gets credit, participant gets debit
+        balances.get(payerId).balance += participant.shareAmount;
+        balances.get(participantId).balance -= participant.shareAmount;
+      });
+    });
+
+    // Convert balances map to array for processing
+    const balanceArray = Array.from(balances.values());
+    
+    // Separate creditors (balance > 0) and debtors (balance < 0)
+    const creditors = balanceArray.filter(user => user.balance > 0)
+      .sort((a, b) => b.balance - a.balance); // Sort in descending order
+    
+    const debtors = balanceArray.filter(user => user.balance < 0)
+      .sort((a, b) => a.balance - b.balance); // Sort in ascending order (most negative first)
+    
+    // Generate optimized transactions
+    const optimizedTransactions = [];
+    
+    // Cash flow minimization algorithm
+    while (debtors.length > 0 && creditors.length > 0) {
+      const debtor = debtors[0];
+      const creditor = creditors[0];
+      
+      // Find the smaller absolute value between the debt and credit
+      const amount = Math.min(Math.abs(debtor.balance), creditor.balance);
+      
+      if (amount > 0) {
+        optimizedTransactions.push({
+          from: {
+            id: debtor.id,
+            name: debtor.name,
+            email: debtor.email
+          },
+          to: {
+            id: creditor.id,
+            name: creditor.name,
+            email: creditor.email
+          },
+          amount
+        });
+      }
+      
+      // Update balances
+      debtor.balance += amount;
+      creditor.balance -= amount;
+      
+      // Remove users with zero balance
+      if (Math.abs(debtor.balance) < 0.01) debtors.shift();
+      if (Math.abs(creditor.balance) < 0.01) creditors.shift();
+    }
+    
+    return res.json({
+      optimizedTransactions,
+      groupId,
+      groupName: group.name,
+      transactionCount: transactions.length,
+      originalTransactionCount: transactions.length,
+      calculatedAt: new Date()
+    });
+  } catch (err) {
+    console.error('Error optimizing debts:', err);
+    return res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// POST /api/groups/:groupId/settle-optimized - Settle debts using optimized transactions
+router.post('/:groupId/settle-optimized', auth, async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const { transactions } = req.body;
+    
+    if (!Array.isArray(transactions) || transactions.length === 0) {
+      return res.status(400).json({ message: 'Valid transactions array required' });
+    }
+
+    const results = [];
+    const settledTransactions = [];
+    
+    // Validate group membership
+    const group = await Group.findById(groupId);
+    if (!group) {
+      return res.status(404).json({ message: 'Group not found' });
+    }
+    
+    // Get group name for notification context
+    let groupName = 'Nhóm không xác định';
+    try {
+      if (group && group.name) {
+        groupName = group.name;
+      }
+    } catch (e) {
+      console.warn('Error getting group name:', e);
+    }
+
+    // Process each optimized transaction
+    for (const tx of transactions) {
+      const { from, to, amount } = tx;
+      
+      if (!from || !to || !amount || amount <= 0) {
+        results.push({ success: false, message: 'Invalid transaction data', transaction: tx });
+        continue;
+      }
+
+      // Find all unsettled transactions where 'from' is a participant and 'to' is the payer
+      const unsettledTxs = await GroupTransaction.find({
+        group: groupId,
+        $or: [
+          { payer: to.id, 'participants.user': from.id, 'participants.settled': false },
+          { payer: to.id, 'participants.email': from.email, 'participants.settled': false }
+        ]
+      }).populate('payer', 'name email');
+      
+      if (unsettledTxs.length === 0) {
+        results.push({ success: false, message: 'No matching unsettled transactions found', transaction: tx });
+        continue;
+      }
+
+      // Mark transactions as settled
+      let totalSettled = 0;
+      for (const unsettledTx of unsettledTxs) {
+        if (totalSettled >= amount) break;
+        
+        const participant = unsettledTx.participants.find(p => {
+          if (p.settled) return false;
+          
+          if (p.user) {
+            return String(p.user) === String(from.id);
+          } else if (p.email && from.email) {
+            return p.email.toLowerCase() === from.email.toLowerCase();
+          }
+          return false;
+        });
+        
+        if (!participant) continue;
+        
+        const remainingToSettle = amount - totalSettled;
+        const toSettleInThisTx = Math.min(participant.shareAmount, remainingToSettle);
+        
+        if (toSettleInThisTx > 0) {
+          participant.settled = true;
+          participant.settledAt = new Date();
+          
+          await unsettledTx.save();
+          totalSettled += toSettleInThisTx;
+          settledTransactions.push(unsettledTx);
+          
+          // Create notifications for both parties
+          try {
+            // Notification for the person who paid (from)
+            if (from.id && !from.id.startsWith('email:')) {
+              await Notification.create({
+                recipient: from.id,
+                sender: req.user._id,
+                type: 'group.transaction.debt.paid',
+                message: `Bạn đã thanh toán khoản nợ ${toSettleInThisTx.toLocaleString('vi-VN')}đ cho "${unsettledTx.title}" trong nhóm "${groupName}"`,
+                data: {
+                  transactionId: unsettledTx._id,
+                  groupId,
+                  groupName,
+                  shareAmount: toSettleInThisTx,
+                  title: unsettledTx.title,
+                  optimized: true,
+                  settledAt: new Date()
+                }
+              });
+            }
+            
+            // Notification for the person who received payment (to)
+            if (to.id && !to.id.startsWith('email:')) {
+              await Notification.create({
+                recipient: to.id,
+                sender: req.user._id,
+                type: 'group.transaction.settled',
+                message: `${from.name || from.email || 'Người dùng'} đã thanh toán khoản nợ ${toSettleInThisTx.toLocaleString('vi-VN')}đ cho "${unsettledTx.title}" trong nhóm "${groupName}"`,
+                data: {
+                  transactionId: unsettledTx._id,
+                  groupId,
+                  groupName,
+                  shareAmount: toSettleInThisTx,
+                  payerId: from.id,
+                  payerName: from.name || from.email || 'Người dùng',
+                  title: unsettledTx.title,
+                  optimized: true,
+                  settledAt: new Date()
+                }
+              });
+            }
+          } catch (e) {
+            console.warn('Error creating notifications for debt settlement:', e);
+          }
+        }
+      }
+      
+      results.push({ success: true, settled: totalSettled, transaction: tx });
+    }
+    
+    res.json({
+      success: true,
+      results,
+      settledCount: settledTransactions.length
+    });
+  } catch (err) {
+    console.error('Error settling optimized debts:', err);
+    return res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
 module.exports = router;
