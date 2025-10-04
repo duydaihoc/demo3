@@ -607,6 +607,137 @@
   margin-right: 8px;
 }
 
+/* Group context in notifications */
+.group-context {
+  background-color: #e0f2fe;
+  color: #0c4a6e;
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+}
+
+.group-context i {
+  font-size: 16px;
+  color: #0284c7;
+}
+
+/* Transaction context in notifications */
+.transaction-context {
+  background-color: #f1f5f9;
+  color: #334155;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.transaction-context > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.transaction-context i {
+  color: #64748b;
+  width: 16px;
+  text-align: center;
+}
+
+/* Settlement context */
+.settlement-context {
+  background-color: #d1fae5;
+  color: #065f46;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settlement-context.unsettled {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+.settled-time {
+  font-size: 13px;
+  color: #059669;
+}
+
+/* Notification action buttons */
+.notification-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.notification-actions button {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.view-group-btn {
+  background-color: #e0f2fe;
+  color: #0c4a6e;
+}
+
+.view-group-btn:hover {
+  background-color: #bae6fd;
+}
+
+.view-transactions-btn {
+  background-color: #f1f5f9;
+  color: #334155;
+}
+
+.view-transactions-btn:hover {
+  background-color: #e2e8f0;
+}
+
+/* Inline badges in notification list */
+.activity-group-badge,
+.activity-transaction-badge,
+.activity-amount-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  margin-left: 6px;
+}
+
+.activity-group-badge {
+  background-color: #e0f2fe;
+  color: #0c4a6e;
+}
+
+.activity-transaction-badge {
+  background-color: #f1f5f9;
+  color: #334155;
+}
+
+.activity-amount-badge {
+  background-color: #ecfdf5;
+  color: #065f46;
+  font-weight: 700;
+}
+
 /* Responsive adjustments */
 @media (max-width: 1024px) {
   .activity-container {

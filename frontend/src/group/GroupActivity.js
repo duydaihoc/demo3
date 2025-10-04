@@ -8,6 +8,9 @@ export default function GroupActivity() {
   const [loadingNotifs, setLoadingNotifs] = useState(false);
   const [filters, setFilters] = useState({ showAll: true, showUnread: false });
   const [selectedNotif, setSelectedNotif] = useState(null);
+  
+  // Add state to cache group names by ID
+  const [groupNamesCache, setGroupNamesCache] = useState({});
 
   const API_BASE = 'http://localhost:5000';
   const getToken = () => localStorage.getItem('token');
@@ -171,23 +174,109 @@ export default function GroupActivity() {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount || 0);
   };
 
+  // New function to fetch group details by ID
+  const fetchGroupNameById = useCallback(async (groupId) => {
+    // Skip if invalid groupId or if we already have the name cached
+    if (!groupId || groupNamesCache[groupId]) return;
+    
+    const token = getToken();
+    if (!token) return;
+    
+    try {
+      const res = await fetch(`${API_BASE}/api/groups/${groupId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (!res.ok) return;
+      
+      const data = await res.json().catch(() => null);
+      if (data && data.name) {
+        // Update cache with the fetched group name
+        setGroupNamesCache(prev => ({
+          ...prev,
+          [groupId]: data.name
+        }));
+      }
+    } catch (e) {
+      console.warn('Error fetching group name:', e);
+    }
+  }, [API_BASE, groupNamesCache]);
+
+  // Enhance useEffect to fetch missing group names
+  useEffect(() => {
+    // Process notifications to find those missing group names
+    notifications.forEach(notif => {
+      const data = notif.data || {};
+      // If notification has groupId but no groupName, fetch the group details
+      if (data.groupId && !data.groupName && !groupNamesCache[data.groupId]) {
+        fetchGroupNameById(data.groupId);
+      }
+    });
+  }, [notifications, fetchGroupNameById, groupNamesCache]);
+
+  // Helper to get group name from notification data or cache
+  const getGroupName = (notification) => {
+    const data = notification?.data || {};
+    // Use groupName from notification data if available
+    if (data.groupName) return data.groupName;
+    // Otherwise use cached group name if available
+    if (data.groupId && groupNamesCache[data.groupId]) return groupNamesCache[data.groupId];
+    // Fall back to showing truncated group ID
+    return data.groupId ? `Nhóm #${data.groupId.substring(0,6)}...` : 'Không xác định';
+  };
+
   // Render thông tin giao dịch
   const renderTransactionDetails = (notification) => {
     const data = notification.data || {};
     
     if (isTransactionNotification(notification.type)) {
-      // Group information display - always show which group this relates to
+      // Make group context more visually prominent
       const groupContext = (
         <div className="tx-group-context">
-          <strong>Nhóm:</strong> {data.groupName || (data.groupId ? `Nhóm #${data.groupId.substring(0,6)}...` : 'Không xác định')}
+          <i className="fas fa-users"></i>
+          <strong>Nhóm:</strong> 
+          <span className="group-name-highlight">
+            {getGroupName(notification)}
+          </span>
         </div>
       );
+      
+      // Show transaction type based on notification type
+      let transactionTypeInfo = null;
+      if (notification.type === 'group.transaction.created') {
+        transactionTypeInfo = (
+          <div className="tx-type tx-created">
+            <i className="fas fa-plus-circle"></i> Giao dịch mới tạo
+          </div>
+        );
+      } else if (isSettledNotification(notification.type)) {
+        transactionTypeInfo = (
+          <div className="tx-type tx-settled">
+            <i className="fas fa-check-circle"></i> Thanh toán khoản nợ
+          </div>
+        );
+      } else if (isTransactionDeletedNotification(notification.type)) {
+        transactionTypeInfo = (
+          <div className="tx-type tx-deleted">
+            <i className="fas fa-trash-alt"></i> Giao dịch đã xóa
+          </div>
+        );
+      } else if (isTransactionEditedNotification(notification.type)) {
+        transactionTypeInfo = (
+          <div className="tx-type tx-edited">
+            <i className="fas fa-edit"></i> Giao dịch đã chỉnh sửa
+          </div>
+        );
+      }
       
       // Base transaction details rendering
       const baseDetails = (
         <div className="transaction-details">
-          {/* Group context is always shown first */}
+          {/* Group context is always shown first and more prominently */}
           {groupContext}
+          
+          {/* Show transaction type */}
+          {transactionTypeInfo}
           
           {data.title && (
             <div className="tx-title">
@@ -404,13 +493,7 @@ export default function GroupActivity() {
                 {filteredNotifications.map(notif => (
                   <div 
                     key={notif._id} 
-                    className={`activity-item ${notif.read ? '' : 'unread'} ${selectedNotif?._id === notif._id ? 'selected' : ''} 
-                                ${isTransactionNotification(notif.type) ? 'transaction' : ''} 
-                                ${isDebtNotification(notif.type) ? 'debt' : ''} 
-                                ${isSettledNotification(notif.type) ? 'settled' : ''}
-                                ${isTransactionUpdatedNotification(notif.type) ? 'updated' : ''}
-                                ${isTransactionEditedNotification(notif.type) ? 'edited' : ''} 
-                                ${isTransactionDeletedNotification(notif.type) ? 'deleted' : ''}`}
+                    className={`activity-item ${notif.read ? '' : 'unread'} ${selectedNotif?._id === notif._id ? 'selected' : ''}`}
                     onClick={() => handleNotificationClick(notif)}
                   >
                     <div className="activity-icon">
@@ -421,33 +504,24 @@ export default function GroupActivity() {
                       <div className="activity-meta">
                         <span className="activity-time">{formatTime(notif.createdAt)}</span>
                         
-                        {/* Display group name if available */}
-                        {notif.data && notif.data.groupName && (
-                          <span className="activity-group">
-                            <i className="fas fa-users"></i> {notif.data.groupName}
+                        {/* Use getGroupName instead of direct access to notif.data.groupName */}
+                        {notif.data && notif.data.groupId && (
+                          <span className="activity-group-badge">
+                            <i className="fas fa-users"></i> {getGroupName(notif)}
                           </span>
                         )}
                         
-                        {/* Show old → new amount for updates */}
-                        {isTransactionUpdatedNotification(notif.type) && notif.data && (
-                          <span className={`activity-amount-change ${notif.data.difference > 0 ? 'increased' : 'decreased'}`}>
-                            {formatCurrency(notif.data.previousAmount || 0)} → {formatCurrency(notif.data.newAmount || 0)}
+                        {/* Show transaction title if available */}
+                        {notif.data && notif.data.title && (
+                          <span className="activity-transaction-badge">
+                            <i className="fas fa-file-invoice"></i> {notif.data.title}
                           </span>
                         )}
                         
-                        {/* Show cancelled amount for deletions */}
-                        {isTransactionDeletedNotification(notif.type) && notif.data && (
-                          <span className="activity-amount-cancelled">
-                            <i className="fas fa-ban"></i> {formatCurrency(notif.data.amount || 0)}
-                          </span>
-                        )}
-                        
-                        {/* Regular amount display */}
-                        {!isTransactionUpdatedNotification(notif.type) && 
-                         !isTransactionDeletedNotification(notif.type) && 
-                         notif.data && notif.data.shareAmount && (
-                          <span className="activity-amount">
-                            {formatCurrency(notif.data.shareAmount || notif.data.amount)}
+                        {/* Show amount if available */}
+                        {notif.data && notif.data.shareAmount && (
+                          <span className="activity-amount-badge">
+                            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(notif.data.shareAmount)}
                           </span>
                         )}
                       </div>
@@ -473,9 +547,9 @@ export default function GroupActivity() {
                        (selectedNotif.type || 'Thông báo')}
                     </div>
                     {/* Show group context here too if available */}
-                    {selectedNotif.data && selectedNotif.data.groupName && (
+                    {selectedNotif.data && selectedNotif.data.groupId && (
                       <div className="detail-group">
-                        <i className="fas fa-users"></i> {selectedNotif.data.groupName}
+                        <i className="fas fa-users"></i> {getGroupName(selectedNotif)}
                       </div>
                     )}
                     <div className="detail-time">{new Date(selectedNotif.createdAt).toLocaleString()}</div>

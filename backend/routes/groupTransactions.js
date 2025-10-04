@@ -29,14 +29,31 @@ const normalizeParticipantsInput = async (arr = []) => {
   return out;
 };
 
+// Helper function to get group name and info for notifications
+const getGroupInfoForNotification = async (groupId) => {
+  try {
+    if (!groupId) return { groupName: null, groupId: null };
+    const group = await Group.findById(groupId).select('name').lean();
+    return { 
+      groupName: group ? group.name : 'Nhóm không xác định', 
+      groupId: groupId 
+    };
+  } catch (e) {
+    console.warn('Failed to get group info for notification', e);
+    return { groupName: 'Nhóm không xác định', groupId: groupId };
+  }
+};
+
 // Helper function to get group name for notifications
 const getGroupNameForNotification = async (groupId) => {
   try {
+    if (!groupId) return 'Nhóm không xác định';
+    const Group = mongoose.model('Group'); // Use mongoose.model to get the Group model dynamically
     const group = await Group.findById(groupId).select('name').lean();
-    return group ? group.name : null;
+    return group ? group.name : 'Nhóm không xác định';
   } catch (e) {
     console.warn('Failed to get group name for notification', e);
-    return null;
+    return 'Nhóm không xác định';
   }
 };
 
@@ -205,6 +222,66 @@ router.post('/:groupId/transactions', auth, async (req, res) => {
       console.warn('Failed to create notification for transaction creator', e);
     }
 
+    // Get group information for the notification
+    let groupName = 'Nhóm không xác định';
+    try {
+      const group = await Group.findById(groupId).select('name').lean();
+      if (group && group.name) {
+        groupName = group.name;
+      }
+    } catch (groupErr) {
+      console.warn('Error fetching group name for notification:', groupErr);
+    }
+    
+    // Notify transaction creator with group context
+    try {
+      await Notification.create({
+        recipient: req.user._id,
+        sender: req.user._id,
+        type: 'group.transaction.created',
+        message: `Bạn đã tạo giao dịch "${title}" trong nhóm "${groupName}"`,
+        data: {
+          transactionId: transaction._id,
+          groupId,
+          groupName,
+          title,
+          amount: totalAmount,
+          category,
+          categoryName: transaction.category ? transaction.category.name : '',
+          categoryIcon: transaction.category ? transaction.category.icon : '',
+        }
+      });
+    } catch (e) {
+      console.warn('Failed to create notification for transaction creator', e);
+    }
+    
+    // Notify debt participants with group context
+    if (Array.isArray(transaction.participants)) {
+      for (const p of transaction.participants) {
+        if (p.user && String(p.user) !== String(req.user._id)) {
+          try {
+            await Notification.create({
+              recipient: p.user,
+              sender: req.user._id,
+              type: 'group.transaction.debt',
+              message: `${req.user.name || 'Người dùng'} đã tạo giao dịch "${title}" trong nhóm "${groupName}" và bạn nợ ${p.shareAmount.toLocaleString('vi-VN')}đ`,
+              data: {
+                transactionId: transaction._id,
+                groupId,
+                groupName,
+                title,
+                shareAmount: p.shareAmount,
+                categoryName: transaction.category ? transaction.category.name : '',
+                categoryIcon: transaction.category ? transaction.category.icon : '',
+              }
+            });
+          } catch (e) {
+            console.warn(`Failed to notify participant ${p.user}:`, e);
+          }
+        }
+      }
+    }
+    
     // return populated transaction
     const populated = await GroupTransaction.findById(tx._id)
       .populate('payer', 'name email')
@@ -629,10 +706,11 @@ router.put('/:groupId/transactions/:txId', auth, async (req, res) => {
               recipient: unsettled.user,
               sender: req.user._id,
               type: 'group.transaction.unsettled',
-              message: `${req.user.name || 'Người dùng'} đã đánh dấu lại khoản nợ ${unsettled.shareAmount.toLocaleString('vi-VN')}đ của bạn là "Chưa thanh toán" trong giao dịch "${transaction.title}"`,
+              message: `${req.user.name || 'Người dùng'} đã đánh dấu lại khoản nợ ${unsettled.shareAmount.toLocaleString('vi-VN')}đ của bạn là "Chưa thanh toán" trong giao dịch "${transaction.title}" của nhóm "${groupName}"`,
               data: {
                 transactionId: transaction._id,
                 groupId,
+                groupName,
                 shareAmount: unsettled.shareAmount,
                 title: transaction.title,
                 updatedBy: req.user._id,
@@ -648,14 +726,16 @@ router.put('/:groupId/transactions/:txId', auth, async (req, res) => {
               recipient: transaction.payer,
               sender: req.user._id,
               type: 'group.transaction.status_changed',
-              message: `Khoản nợ của ${unsettled.name || unsettled.email || 'thành viên'} (${unsettled.shareAmount.toLocaleString('vi-VN')}đ) trong giao dịch "${transaction.title}" đã được đánh dấu lại là "Chưa thanh toán"`,
+              message: `Khoản nợ của ${unsettled.name || unsettled.email || 'thành viên'} (${unsettled.shareAmount.toLocaleString('vi-VN')}đ) trong giao dịch "${transaction.title}" của nhóm "${groupName}" đã được đánh dấu lại là "Chưa thanh toán"`,
               data: {
                 transactionId: transaction._id,
                 groupId,
+                groupName,
                 shareAmount: unsettled.shareAmount,
                 title: transaction.title,
-                updatedBy: req.user._id,
-                participant: unsettled.user
+                participant: unsettled.user,
+                categoryName: transaction.category ? transaction.category.name : '',
+                categoryIcon: transaction.category ? transaction.category.icon : '',
               }
             });
             
