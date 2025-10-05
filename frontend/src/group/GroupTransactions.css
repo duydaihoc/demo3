@@ -1056,3 +1056,202 @@
     opacity: 1;
   }
 }
+
+/* Split type selector styling */
+.split-type-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.split-type-option {
+  flex: 1;
+  min-width: 150px;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.2s;
+}
+
+.split-type-option.selected {
+  background-color: #eff6ff;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.split-type-option input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.split-type-label {
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: #334155;
+}
+
+.split-type-description {
+  font-size: 12px;
+  color: #64748b;
+}
+
+/* Percentage table styling */
+.percentage-table {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.percentage-table-header {
+  display: grid;
+  grid-template-columns: minmax(150px, 2fr) 120px 150px;
+  gap: 8px;
+  background-color: #f1f5f9;
+  padding: 10px 16px;
+  font-weight: 600;
+  color: #334155;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.percentage-table-body {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.percentage-table-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 2fr) 120px 150px;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  align-items: center;
+}
+
+.percentage-table-row:last-child {
+  border-bottom: none;
+}
+
+.percentage-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.percentage-input {
+  width: 70px;
+  padding: 8px;
+  padding-right: 24px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 14px;
+  text-align: right;
+}
+
+.percentage-input:focus {
+  border-color: #3b82f6;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.percentage-input-wrapper.error .percentage-input {
+  border-color: #ef4444;
+}
+
+.percentage-symbol {
+  position: absolute;
+  right: 10px;
+  color: #64748b;
+  pointer-events: none;
+}
+
+.percentage-error {
+  position: absolute;
+  bottom: -20px;
+  left: 0;
+  color: #ef4444;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.percentage-total {
+  margin-left: 10px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.percentage-total.error {
+  background-color: #fee2e2;
+  color: #b91c1c;
+}
+
+.percentage-total.success {
+  background-color: #dcfce7;
+  color: #15803d;
+}
+
+.percentage-error-message {
+  color: #b91c1c;
+  font-size: 14px;
+  margin-bottom: 16px;
+  padding: 8px 12px;
+  background-color: #fee2e2;
+  border-radius: 6px;
+}
+
+.percentage-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+.btn-equalize {
+  background-color: #f8fafc;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-equalize:hover {
+  background-color: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.btn-equalize i {
+  font-size: 12px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .percentage-table-header,
+  .percentage-table-row {
+    grid-template-columns: minmax(100px, 1.5fr) 100px 1fr;
+  }
+  
+  .split-type-option {
+    padding: 10px;
+  }
+  
+  .percentage-input {
+    width: 60px;
+    padding: 6px;
+    padding-right: 20px;
+  }
+}

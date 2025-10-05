@@ -1225,7 +1225,10 @@ export default function GroupTransactions() {
               </div>
               
               <div className="gt-modal-footer">
-                <button className="gt-cancel-btn" onClick={() => setShowOptimizeModal(false)}>
+                <button 
+                  className="gt-cancel-btn" 
+                  onClick={() => setShowOptimizeModal(false)}
+                >
                   Đóng
                 </button>
                 
