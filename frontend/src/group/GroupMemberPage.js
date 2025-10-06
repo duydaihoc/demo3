@@ -110,14 +110,35 @@ export default function GroupMemberPage() {
 		const iOwe = [];
 		for (const tx of txs) {
 			const payerId = tx.payer && (tx.payer._id || tx.payer);
+
+			// determine creator id/email
+			let creatorId = null;
+			let creatorEmail = null;
+			if (tx.createdBy) {
+				if (typeof tx.createdBy === 'object') {
+					creatorId = tx.createdBy._id || tx.createdBy.id || null;
+					creatorEmail = (tx.createdBy.email || '').toLowerCase();
+				} else {
+					const c = String(tx.createdBy);
+					if (c.includes('@')) creatorEmail = c.toLowerCase();
+					else creatorId = c;
+				}
+			}
+
 			if (Array.isArray(tx.participants)) {
 				for (const p of tx.participants) {
 					const partUserId = p.user && (p.user._id || p.user);
 					const partEmail = (p.email || '').toLowerCase();
+
+					const isPartCreator = Boolean(
+						(creatorId && partUserId && String(creatorId) === String(partUserId)) ||
+						(creatorEmail && partEmail && String(creatorEmail) === String(partEmail))
+					);
+
 					if (String(payerId) === String(myId)) {
-						if (!p.settled) owesMe.push({ tx, participant: p });
+						if (!p.settled && !isPartCreator) owesMe.push({ tx, participant: p });
 					}
-					if (!p.settled && ((partUserId && String(partUserId) === String(myId)) || (partEmail && myEmail && partEmail === myEmail))) {
+					if (!p.settled && ((partUserId && String(partUserId) === String(myId)) || (partEmail && myEmail && partEmail === myEmail)) && !isPartCreator) {
 						iOwe.push({ tx, participant: p });
 					}
 				}

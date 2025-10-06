@@ -210,23 +210,6 @@
 }
 
 .gt-title-section {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.gt-category-badge {
-  background: #e0f2fe;
-  color: #0369a1;
-  padding: 4px 8px;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.gt-title {
-  font-weight: 700;
-  color: #0f3550;
   font-size: 16px;
 }
 
@@ -353,13 +336,14 @@
   font-weight: 500;
 }
 
-.gt-current-user-badge {
+.gt-transac.gt-current-user-badge {
   background: #e0f2fe;
   color: #0369a1;
   padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 12px;
+  border-radius: 8px;
+  font-size: 11px;
   font-weight: 500;
+  margin-left: 6px;
 }
 
 .gt-settle-btn {
@@ -1254,4 +1238,221 @@
     padding: 6px;
     padding-right: 20px;
   }
+}
+
+/* Các style mới cho danh sách participants được cải tiến */
+.gt-participants-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.gt-info-badge {
+  background: #e0f2fe;
+  color: #0369a1;
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.gt-info-badge.include-creator {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.gt-info-badge.exclude-creator {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.gt-participant.creator {
+  border-left: 3px solid #fbbf24;
+  background: linear-gradient(90deg, #fffbeb 0%, #ffffff 100%);
+}
+
+.gt-participant-role {
+  font-size: 11px;
+  color: #64748b;
+  margin-bottom: 4px;
+  display: block;
+  font-weight: 500;
+}
+
+.gt-participant-name > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Creator participant styling */
+.gt-participant.creator .gt-participant-role {
+  color: #d97706;
+  font-weight: 600;
+}
+
+/* Improved current user badge */
+.gt-current-user-badge {
+  background: #dbeafe;
+  color: #1d4ed8;
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.gt-creator-badge {
+  background: #fbbf24;
+  color: #92400e;
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Participant amount styling */
+.gt-participant-amount {
+  text-align: right;
+}
+
+.gt-amount-main {
+  font-weight: 700;
+  color: #1f2937;
+  font-size: 14px;
+}
+
+.gt-percentage-info {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+/* Transaction type badge improvements */
+.gt-transaction-type-badge {
+  margin-top: 8px;
+}
+
+.gt-type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.gt-type-badge i {
+  font-size: 12px;
+}
+
+.gt-type-payer {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.gt-type-equal {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.gt-type-percentage {
+  background: #e0f2fe;
+  color: #0c4a6e;
+}
+
+/* Transaction summary improvements */
+.gt-tx-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.gt-participants-count {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #475569;
+  font-weight: 500;
+}
+
+.gt-participants-count i {
+  color: #64748b;
+}
+
+/* Transaction explanation boxes */
+.gt-transaction-explanation {
+  margin: 12px 0;
+}
+
+.gt-explanation-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.gt-explanation-box i {
+  font-size: 16px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.gt-payer-for-others-box {
+  background: #fef3c7;
+  color: #92400e;
+  border-left: 4px solid #f59e0b;
+}
+
+.gt-payer-for-others-box i {
+  color: #d97706;
+}
+
+.gt-equal-split-box {
+  background: #dcfce7;
+  color: #166534;
+  border-left: 4px solid #16a34a;
+}
+
+.gt-equal-split-box i {
+  color: #15803d;
+}
+
+.gt-percentage-split-box {
+  background: #e0f2fe;
+  color: #0c4a6e;
+  border-left: 4px solid #0ea5e9;
+}
+
+.gt-percentage-split-box i {
+  color: #0284c7;
+}
+
+.gt-default-box {
+  background: #f1f5f9;
+  color: #475569;
+  border-left: 4px solid #64748b;
+}
+
+.gt-default-box i {
+  color: #64748b;
+}
+
+.gt-explanation-text {
+  flex: 1;
+}
+
+.gt-explanation-text strong {
+  font-weight: 700;
 }

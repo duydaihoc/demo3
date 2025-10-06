@@ -57,25 +57,51 @@ const getGroupNameForNotification = async (groupId) => {
   }
 };
 
+// Add helper to robustly check transaction <-> group relationship
+function belongsToGroup(tx, gid) {
+	// gid may be ObjectId string
+	if (!tx || !gid) return false;
+	const checkFields = ['group', 'groupId'];
+	for (const f of checkFields) {
+		const val = tx[f];
+		if (!val) continue;
+		// if val is populated object with _id
+		if (typeof val === 'object') {
+			const id = String(val._id || val.id || val);
+			if (id === String(gid)) return true;
+		} else {
+			if (String(val) === String(gid)) return true;
+		}
+	}
+	return false;
+}
+
 // POST /api/groups/:groupId/transactions
-// body: { payerId (optional, default auth), amount, perPerson(boolean), participants: [{email|userId}], title, description, category }
+// body: { payerId (optional, default auth), amount, transactionType, participants: [{email|userId}], percentages: [{user|email, percentage}], title, description, category }
 router.post('/:groupId/transactions', auth, async (req, res) => {
   try {
     const { groupId } = req.params;
-    const { 
-      amount, 
-      perPerson = false, 
-      participants = [], 
-      title = '', 
+    const {
+      amount,
+      transactionType = 'equal_split',
+      participants = [],
+      percentages = [], // for percentage split
+      title = '',
       description = '',
       category
     } = req.body;
-    
+
     // Validate inputs
     if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
       return res.status(400).json({ message: 'Valid amount required' });
     }
-    
+
+    // Validate transaction type (thêm payer_single)
+    const validTypes = ['payer_single', 'payer_for_others', 'equal_split', 'percentage_split'];
+    if (!validTypes.includes(transactionType)) {
+      return res.status(400).json({ message: 'Invalid transaction type' });
+    }
+
     // Get group information for the notification
     let currentGroupName = 'Nhóm không xác định';
     try {
@@ -86,46 +112,172 @@ router.post('/:groupId/transactions', auth, async (req, res) => {
     } catch (groupErr) {
       console.warn('Error fetching group name for notification:', groupErr);
     }
-    
+
     // Build the transaction first before saving
     const builtTransaction = {
       amount: Number(amount),
-      perPerson,
+      transactionType,
       title,
       description,
       date: new Date(),
       group: groupId,
       payer: req.user._id,
       category,
-      createdBy: req.user._id
+      createdBy: req.user._id,
+      creatorIsParticipant: true // Người tạo luôn tham gia
     };
-    
+
     let normalizedParticipants = [];
-    
-    // Process participants for perPerson transactions
+
+    // Process participants based on transaction type
     if (Array.isArray(participants) && participants.length > 0) {
       normalizedParticipants = await normalizeParticipantsInput(participants);
-      
-      // Calculate total amount for perPerson transactions
-      let totalAmount = amount;
-      if (perPerson) {
-        totalAmount = Number(amount) * normalizedParticipants.length;
+
+      // Validate percentages for percentage split
+      if (transactionType === 'percentage_split') {
+        if (!Array.isArray(percentages) || percentages.length === 0) {
+          return res.status(400).json({ message: 'Percentages required for percentage split' });
+        }
+
+        // Validate total percentage is 100%
+        const totalPercentage = percentages.reduce((sum, p) => sum + (Number(p.percentage) || 0), 0);
+        if (Math.abs(totalPercentage - 100) > 0.01) {
+          return res.status(400).json({ message: 'Total percentage must equal 100%' });
+        }
+
+        // Validate each percentage is between 0 and 100
+        for (const p of percentages) {
+          const percentage = Number(p.percentage);
+          if (isNaN(percentage) || percentage < 0 || percentage > 100) {
+            return res.status(400).json({ message: 'Each percentage must be between 0 and 100' });
+          }
+        }
       }
-      
-      // Build participants with shareAmount
-      const shareAmount = perPerson ? Number(amount) : (Number(amount) / normalizedParticipants.length);
-      const participantsBuilt = normalizedParticipants.map(p => ({
-        user: p.user,
-        email: p.email,
-        name: p.name,
-        shareAmount: Number(shareAmount.toFixed(2)),
-        settled: false
-      }));
-      
+
+      // Build participants with shareAmount based on transaction type
+      let participantsBuilt = [];
+
+      if (transactionType === 'payer_for_others') {
+        // Kiểu 1: Người tạo trả giúp, ghi nợ người tham gia
+        participantsBuilt = normalizedParticipants.map(p => ({
+          user: p.user,
+          email: p.email,
+          shareAmount: Number(amount), // Mỗi người nợ toàn bộ số tiền
+          percentage: 0,
+          settled: false
+        }));
+      } else if (transactionType === 'equal_split') {
+        // Kiểu 2: Chia đều cho tất cả người tham gia bao gồm người tạo
+        const totalParticipants = normalizedParticipants.length + 1; // +1 for creator
+        const shareAmount = Number(amount) / totalParticipants;
+
+        // Add creator as participant
+        participantsBuilt.push({
+          user: req.user._id,
+          shareAmount: Number(shareAmount.toFixed(2)),
+          percentage: 0,
+          settled: false
+        });
+
+        // Add other participants
+        participantsBuilt.push(...normalizedParticipants.map(p => ({
+          user: p.user,
+          email: p.email,
+          shareAmount: Number(shareAmount.toFixed(2)),
+          percentage: 0,
+          settled: false
+        })));
+      } else if (transactionType === 'percentage_split') {
+        // Kiểu 3: Chia theo phần trăm
+        // Create map of participants for quick lookup
+        const participantMap = new Map();
+        normalizedParticipants.forEach(p => {
+          const key = p.user ? String(p.user) : (p.email ? p.email.toLowerCase() : null);
+          if (key) participantMap.set(key, p);
+        });
+
+        // Build participants based on percentages
+        for (const percentageData of percentages) {
+          const percentage = Number(percentageData.percentage);
+          const shareAmount = (Number(amount) * percentage) / 100;
+
+          // Find participant
+          let participant = null;
+          if (percentageData.user) {
+            participant = participantMap.get(String(percentageData.user));
+          } else if (percentageData.email) {
+            participant = participantMap.get(percentageData.email.toLowerCase());
+          }
+
+          if (participant) {
+            participantsBuilt.push({
+              user: participant.user,
+              email: participant.email,
+              shareAmount: Number(shareAmount.toFixed(2)),
+              percentage: percentage,
+              settled: false
+            });
+          }
+        }
+
+        // Add creator if not already included and creatorIsParticipant is true
+        if (builtTransaction.creatorIsParticipant) {
+          const creatorPercentage = percentages.find(p =>
+            (p.user && String(p.user) === String(req.user._id)) ||
+            (p.email && p.email.toLowerCase() === req.user.email?.toLowerCase())
+          );
+
+          if (creatorPercentage) {
+            // Creator already included in percentages
+          } else {
+            // Add creator with remaining percentage (should be 0 if total is 100%)
+            participantsBuilt.push({
+              user: req.user._id,
+              shareAmount: 0,
+              percentage: 0,
+              settled: false
+            });
+          }
+        }
+      }
+
       builtTransaction.participants = participantsBuilt;
-      builtTransaction.amount = perPerson ? totalAmount : amount;
+
+      // Store percentages for percentage split
+      if (transactionType === 'percentage_split') {
+        builtTransaction.splitPercentages = percentages.map(p => ({
+          user: p.user,
+          email: p.email,
+          percentage: Number(p.percentage)
+        }));
+      }
+    } else if (transactionType === 'payer_for_others') {
+      // payer_for_others yêu cầu phải có danh sách participants
+      return res.status(400).json({ message: 'Participants required for payer_for_others transaction type' });
+    } else if (transactionType === 'payer_single') {
+      // Trả đơn: giao dịch chỉ dành cho người tạo, không cần participants từ client
+      const participantsBuilt = [{
+        user: req.user._id,
+        email: req.user.email || undefined,
+        shareAmount: Number(amount),
+        percentage: 100,
+        settled: true
+      }];
+      builtTransaction.participants = participantsBuilt;
     }
-    
+
+    // Ensure required fields are present on builtTransaction before saving
+    // (groupId is required by schema; createdBy/payer often expected)
+    builtTransaction.groupId = builtTransaction.groupId || groupId;
+    if (!builtTransaction.createdBy) {
+      // record who created this transaction
+      builtTransaction.createdBy = req.user ? (req.user._id || req.user) : undefined;
+    }
+    if (!builtTransaction.payer) {
+      // default payer to the creator (server-side canonical ref)
+      builtTransaction.payer = req.user ? (req.user._id || req.user) : undefined;
+    }
+
     // Now create and save the transaction
     const newTransaction = new GroupTransaction(builtTransaction);
     const savedTransaction = await newTransaction.save();
@@ -143,6 +295,7 @@ router.post('/:groupId/transactions', auth, async (req, res) => {
           groupName: currentGroupName,
           title,
           amount: savedTransaction.amount,
+          transactionType,
           category,
           categoryName: savedTransaction.category ? savedTransaction.category.name : '',
           categoryIcon: savedTransaction.category ? savedTransaction.category.icon : '',
@@ -151,53 +304,76 @@ router.post('/:groupId/transactions', auth, async (req, res) => {
     } catch (e) {
       console.warn('Failed to create notification for transaction creator', e);
     }
-    
+ 
     // Notify debt participants with group context
+    // Only notify other participants if they exist and are not the creator.
     if (Array.isArray(savedTransaction.participants)) {
       for (const p of savedTransaction.participants) {
-        if (p.user && String(p.user) !== String(req.user._id)) {
-          try {
-            await Notification.create({
-              recipient: p.user,
-              sender: req.user._id,
-              type: 'group.transaction.debt',
-              message: `${req.user.name || 'Người dùng'} đã tạo giao dịch "${title}" trong nhóm "${currentGroupName}" và bạn nợ ${p.shareAmount.toLocaleString('vi-VN')}đ`,
-              data: {
-                transactionId: savedTransaction._id,
-                groupId,
-                groupName: currentGroupName,
-                title,
-                shareAmount: p.shareAmount,
-                categoryName: savedTransaction.category ? savedTransaction.category.name : '',
-                categoryIcon: savedTransaction.category ? savedTransaction.category.icon : '',
-              }
-            });
-          } catch (e) {
-            console.warn(`Failed to notify participant ${p.user}:`, e);
+        // skip notifying the creator (and skip email-only creator entry)
+        if (!p.user) continue;
+        if (String(p.user) === String(req.user._id)) continue;
+
+        try {
+          let message = '';
+          switch (transactionType) {
+            case 'payer_for_others':
+              message = `${req.user.name || 'Người dùng'} đã tạo giao dịch "${title}" trong nhóm "${currentGroupName}" và bạn nợ ${p.shareAmount.toLocaleString('vi-VN')}đ (trả giúp)`;
+              break;
+            case 'equal_split':
+              message = `${req.user.name || 'Người dùng'} đã tạo giao dịch "${title}" trong nhóm "${currentGroupName}" và bạn nợ ${p.shareAmount.toLocaleString('vi-VN')}đ (chia đều)`;
+              break;
+            case 'percentage_split':
+              message = `${req.user.name || 'Người dùng'} đã tạo giao dịch "${title}" trong nhóm "${currentGroupName}" và bạn nợ ${p.shareAmount.toLocaleString('vi-VN')}đ (${p.percentage}% của tổng tiền)`;
+              break;
+            // payer_single đã bị loại trừ vì participant sẽ là creator, nên sẽ không rơi vào đây
+            default:
+              message = `${req.user.name || 'Người dùng'} đã tạo giao dịch "${title}" trong nhóm "${currentGroupName}" và bạn nợ ${p.shareAmount.toLocaleString('vi-VN')}đ`;
           }
+
+          await Notification.create({
+            recipient: p.user,
+            sender: req.user._id,
+            type: 'group.transaction.debt',
+            message,
+            data: {
+              transactionId: savedTransaction._id,
+              groupId,
+              groupName: currentGroupName,
+              title,
+              shareAmount: p.shareAmount,
+              percentage: p.percentage,
+              transactionType,
+              categoryName: savedTransaction.category ? savedTransaction.category.name : '',
+              categoryIcon: savedTransaction.category ? savedTransaction.category.icon : '',
+            }
+          });
+        } catch (e) {
+          console.warn(`Failed to notify participant ${p.user}:`, e);
         }
       }
     }
-    
+ 
     // Return the created transaction
     return res.status(201).json(savedTransaction);
-  } catch (err) {
-    console.error('Create group transaction error:', err);
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
+   } catch (err) {
+     console.error('Create group transaction error:', err);
+     res.status(500).json({ message: 'Server error', error: err.message });
+   }
+ });
+ 
 // GET /api/groups/:groupId/transactions
 router.get('/:groupId/transactions', auth, async (req, res) => {
   try {
     const { groupId } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(groupId)) return res.status(400).json({ message: 'Invalid groupId' });
-
-    const txs = await GroupTransaction.find({ group: groupId })
+    // Query both possible fields: some code paths save as `group` while others use `groupId`.
+    // This makes the endpoint robust and returns all transactions for the group regardless of storage field.
+    const query = { $or: [{ group: groupId }, { groupId: groupId }] };
+    const txs = await GroupTransaction.find(query)
       .sort({ createdAt: -1 })
       .populate('payer', 'name email')
       .populate('participants.user', 'name email')
-      .populate('category', 'name icon'); // Thêm populate cho danh mục
+      .populate('category', 'name icon')
+      .populate('createdBy', 'name email');
 
     res.json(txs);
   } catch (err) {
@@ -218,7 +394,9 @@ router.post('/:groupId/transactions/:txId/settle', auth, async (req, res) => {
 
     const tx = await GroupTransaction.findById(txId);
     if (!tx) return res.status(404).json({ message: 'Transaction not found' });
-    if (String(tx.group) !== String(groupId)) return res.status(400).json({ message: 'Transaction does not belong to group' });
+    if (!belongsToGroup(tx, groupId)) {
+      return res.status(400).json({ message: 'Transaction does not belong to group' });
+    }
 
     // Allow either participant themselves or group owner/payer to mark settlement
     const actor = req.user;
@@ -334,6 +512,137 @@ router.post('/:groupId/transactions/:txId/settle', auth, async (req, res) => {
   }
 });
 
+// POST /api/groups/:groupId/transactions/:txId/paid
+// Mark the currently authenticated user as having paid (settled) their share in a transaction.
+// This is a convenience endpoint so client can call "I've paid" without sending userId.
+router.post('/:groupId/transactions/:txId/paid', auth, async (req, res) => {
+  try {
+    const { groupId, txId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(groupId) || !mongoose.Types.ObjectId.isValid(txId)) {
+      return res.status(400).json({ message: 'Invalid id(s)' });
+    }
+
+    const tx = await GroupTransaction.findById(txId);
+    if (!tx) return res.status(404).json({ message: 'Transaction not found' });
+
+    // allow documents that saved group or groupId field
+    if (String(tx.group) !== String(groupId) && String(tx.groupId || '') !== String(groupId)) {
+      return res.status(400).json({ message: 'Transaction does not belong to group' });
+    }
+
+    const actor = req.user;
+    // find participant record for current user (by user id or email)
+    const idx = tx.participants.findIndex(p => {
+      if (p.user) {
+        return String(p.user) === String(actor._id);
+      }
+      if (p.email && actor.email) {
+        return p.email.toLowerCase() === String(actor.email).toLowerCase();
+      }
+      return false;
+    });
+
+    if (idx === -1) return res.status(404).json({ message: 'You are not a participant in this transaction' });
+
+    // if already settled, return populated transaction
+    if (tx.participants[idx].settled) {
+      const populatedAlready = await GroupTransaction.findById(txId)
+        .populate('payer', 'name email')
+        .populate('participants.user', 'name email')
+        .populate('category', 'name icon');
+      return res.json(populatedAlready);
+    }
+
+    tx.participants[idx].settled = true;
+    tx.participants[idx].settledAt = new Date();
+    await tx.save();
+
+    // Notifications: inform payer and participant
+    try {
+      // participant display name
+      let participantName = actor.name || actor.email || 'Người dùng';
+      // formatted amount (safe fallback)
+      const shareAmount = tx.participants[idx].shareAmount || 0;
+      const formattedAmount = Number(shareAmount).toLocaleString('vi-VN');
+
+      // category name if present
+      let categoryName = '';
+      if (tx.category) {
+        try {
+          const cat = await Category.findById(tx.category).lean();
+          if (cat) categoryName = cat.name;
+        } catch (e) { /* ignore */ }
+      }
+
+      // 1) notify payer
+      if (tx.payer) {
+        await Notification.create({
+          recipient: tx.payer,
+          sender: actor._id,
+          type: 'group.transaction.settled',
+          message: `${participantName} đã hoàn trả ${formattedAmount} đồng cho giao dịch "${tx.title || 'Không tiêu đề'}"`,
+          data: {
+            transactionId: tx._id,
+            groupId,
+            amount: shareAmount,
+            title: tx.title,
+            category: tx.category,
+            categoryName,
+            paidBy: actor._id
+          }
+        });
+        const io = req.app.get('io');
+        if (io) {
+          io.to(String(tx.payer)).emit('notification', {
+            type: 'group.transaction.settled',
+            message: `${participantName} đã hoàn trả ${formattedAmount} đồng cho giao dịch "${tx.title || 'Không tiêu đề'}"`,
+            data: { transactionId: tx._id, groupId, amount: shareAmount }
+          });
+        }
+      }
+
+      // 2) notify participant themselves (confirm)
+      if (actor._id) {
+        await Notification.create({
+          recipient: actor._id,
+          sender: tx.payer || actor._id,
+          type: 'group.transaction.debt.paid',
+          message: `Bạn đã hoàn trả ${formattedAmount} đồng cho giao dịch "${tx.title || 'Không tiêu đề'}"`,
+          data: {
+            transactionId: tx._id,
+            groupId,
+            amount: shareAmount,
+            payerId: tx.payer,
+            title: tx.title,
+            debtPaid: true
+          }
+        });
+        const io = req.app.get('io');
+        if (io) {
+          io.to(String(actor._id)).emit('notification', {
+            type: 'group.transaction.debt.paid',
+            message: `Bạn đã hoàn trả ${formattedAmount} đồng cho giao dịch "${tx.title || 'Không tiêu đề'}"`,
+            data: { transactionId: tx._id, groupId, amount: shareAmount }
+          });
+        }
+      }
+    } catch (notifErr) {
+      console.warn('notify on paid failed', notifErr && notifErr.message);
+    }
+
+    // return updated populated transaction so client can update list immediately
+    const updated = await GroupTransaction.findById(tx._id)
+      .populate('payer', 'name email')
+      .populate('participants.user', 'name email')
+      .populate('category', 'name icon');
+
+    return res.json(updated);
+  } catch (err) {
+    console.error('Mark paid error:', err);
+    return res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
 // PUT /api/groups/:groupId/transactions/:txId - Edit transaction
 router.put('/:groupId/transactions/:txId', auth, async (req, res) => {
   try {
@@ -349,7 +658,7 @@ router.put('/:groupId/transactions/:txId', auth, async (req, res) => {
     }
 
     // Verify the transaction belongs to this group
-    if (String(transaction.group) !== String(groupId)) {
+    if (!belongsToGroup(transaction, groupId)) {
       return res.status(400).json({ message: 'Transaction does not belong to this group' });
     }
 
@@ -726,7 +1035,7 @@ router.delete('/:groupId/transactions/:txId', auth, async (req, res) => {
     }
 
     // Verify the transaction belongs to this group
-    if (String(transaction.group) !== String(groupId)) {
+    if (!belongsToGroup(transaction, groupId)) {
       return res.status(400).json({ message: 'Transaction does not belong to this group' });
     }
 

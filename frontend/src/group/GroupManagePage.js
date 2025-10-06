@@ -467,23 +467,44 @@ export default function GroupManagePage() {
 		const iOwe = []; // entries where I am participant and not settled
 
 		for (const tx of txs) {
-			// payer id normalized
+			// normalize payer id
 			const payerId = tx.payer && (tx.payer._id || tx.payer);
-			// participants array
-			if (Array.isArray(tx.participants)) {
-				for (const p of tx.participants) {
-					const partUserId = p.user && (p.user._id || p.user);
-					const partEmail = (p.email || '').toLowerCase();
-					if (String(payerId) === String(myId)) {
-						// I paid, others owe me
-						if (!p.settled) {
-							owesMe.push({ tx, participant: p });
-						}
+
+			// determine creator id/email for this tx
+			let creatorId = null;
+			let creatorEmail = null;
+			if (tx.createdBy) {
+				if (typeof tx.createdBy === 'object') {
+					creatorId = tx.createdBy._id || tx.createdBy.id || null;
+					creatorEmail = (tx.createdBy.email || '').toLowerCase();
+				} else {
+					const c = String(tx.createdBy);
+					if (c.includes('@')) creatorEmail = c.toLowerCase();
+					else creatorId = c;
+				}
+			}
+
+			if (!Array.isArray(tx.participants)) continue;
+			for (const p of tx.participants) {
+				const partUserId = p.user && (p.user._id || p.user);
+				const partEmail = (p.email || '').toLowerCase();
+
+				// detect if this participant is the creator (by id or email)
+				const isPartCreator = Boolean(
+					(creatorId && partUserId && String(creatorId) === String(partUserId)) ||
+					(creatorEmail && partEmail && String(creatorEmail) === String(partEmail))
+				);
+
+				// If I am the payer, others owe me — but skip the creator (creator should not be considered debtor)
+				if (String(payerId) === String(myId)) {
+					if (!p.settled && !isPartCreator) {
+						owesMe.push({ tx, participant: p });
 					}
-					// I owe others?
-					if (!p.settled && ((partUserId && String(partUserId) === String(myId)) || (partEmail && myEmail && partEmail === myEmail))) {
-						iOwe.push({ tx, participant: p });
-					}
+				}
+
+				// I owe others? skip if participant is creator (creator does not owe)
+				if (!p.settled && ((partUserId && String(partUserId) === String(myId)) || (partEmail && myEmail && partEmail === myEmail)) && !isPartCreator) {
+					iOwe.push({ tx, participant: p });
 				}
 			}
 		}

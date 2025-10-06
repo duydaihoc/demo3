@@ -1,27 +1,34 @@
 const mongoose = require('mongoose');
 
 const participantSchema = new mongoose.Schema({
-  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // optional if unknown
-  email: { type: String, trim: true, lowercase: true },
-  shareAmount: { type: Number, required: true, default: 0 }, // amount owed by this participant
-  settled: { type: Boolean, default: false }, // has participant settled their debt?
-  settledAt: { type: Date }
+  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false },
+  email: { type: String, required: false },
+  shareAmount: { type: Number, default: 0 },
+  percentage: { type: Number, default: 0 },
+  settled: { type: Boolean, default: false }
 }, { _id: false });
 
 const groupTransactionSchema = new mongoose.Schema({
-  group: { type: mongoose.Schema.Types.ObjectId, ref: 'Group', required: true },
-  payer: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, // who paid
-  amount: { type: Number, required: true }, // total amount paid
-  perPerson: { type: Boolean, default: false }, // if true, `amount` is per-person and total will be amount * participants.length
+  groupId: { type: mongoose.Schema.Types.ObjectId, ref: 'Group', required: true },
   title: { type: String, default: '' },
   description: { type: String, default: '' },
-  category: { type: mongoose.Schema.Types.ObjectId, ref: 'Category' }, // Thêm trường danh mục
-  participants: [participantSchema], // list of people who owe (does not necessarily include payer)
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  amount: { type: Number, required: true, default: 0 },
+  transactionType: {
+    type: String,
+    enum: ['payer_single', 'payer_for_others', 'equal_split', 'percentage_split'],
+    default: 'equal_split'
+  },
+  payer: { type: mongoose.Schema.Types.Mixed, required: false },
+  participants: { type: [participantSchema], default: [] },
+  percentages: { type: [{ user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, email: String, percentage: Number }], default: [] },
+  category: { type: mongoose.Schema.Types.Mixed, required: false },
+  perPerson: { type: Boolean, default: false },
+  createdBy: { type: mongoose.Schema.Types.Mixed, required: false },
   date: { type: Date, default: Date.now },
-  meta: { type: mongoose.Schema.Types.Mixed }
-}, {
-  timestamps: true
-});
+  settled: { type: Boolean, default: false },
+}, { timestamps: true });
 
-module.exports = mongoose.model('GroupTransaction', groupTransactionSchema);
+groupTransactionSchema.index({ groupId: 1, createdAt: -1 });
+
+module.exports = mongoose.models.GroupTransaction || mongoose.model('GroupTransaction', groupTransactionSchema);
+    
