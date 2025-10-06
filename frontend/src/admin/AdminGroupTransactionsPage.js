@@ -4,21 +4,6 @@ import AdminSidebar from './AdminSidebar';
 import './AdminPage.css';
 import './AdminGroupTransactionsPage.css';
 
-// Helper: lấy tên người dùng từ object hoặc id/email
-function getUserName(user) {
-  if (!user) return '';
-  if (typeof user === 'object') {
-    return user.name || user.email || '';
-  }
-  if (typeof user === 'string') {
-    // Nếu là email
-    if (user.includes('@')) return user;
-    // Nếu là id, trả về rỗng hoặc id
-    return user;
-  }
-  return '';
-}
-
 function AdminGroupTransactionsPage() {
   const navigate = useNavigate();
   const [transactions, setTransactions] = useState([]);
@@ -86,7 +71,6 @@ function AdminGroupTransactionsPage() {
     }
     
     try {
-      // Build query parameters
       const queryParams = new URLSearchParams();
       if (filters.groupId) queryParams.append('groupId', filters.groupId);
       if (filters.startDate) queryParams.append('startDate', filters.startDate);
@@ -97,12 +81,10 @@ function AdminGroupTransactionsPage() {
       if (filters.searchQuery) queryParams.append('q', filters.searchQuery);
       queryParams.append('page', pagination.page);
       queryParams.append('limit', pagination.limit);
-      
+
       const url = `${API_BASE}/api/admin/group-transactions?${queryParams.toString()}`;
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+
       if (!res.ok) {
         if (res.status === 403) {
           setError('Bạn không có quyền xem giao dịch nhóm');
@@ -113,45 +95,17 @@ function AdminGroupTransactionsPage() {
         setLoading(false);
         return;
       }
-      
+
       const payload = await res.json();
-      
-      // Normalize supported response shapes:
-      // 1) { total, page, limit, pages, data: [...] }
-      // 2) { transactions: [...], total } or { transactions: [...] }
-      // 3) plain array [...]
-      let items = [];
-      let total = 0;
-      let page = pagination.page;
-      let limit = pagination.limit;
-      let pagesCount = 1;
-      
-      if (Array.isArray(payload)) {
-        items = payload;
-        total = payload.length;
-      } else if (payload && Array.isArray(payload.data)) {
-        items = payload.data;
-        total = Number(payload.total || payload.count || items.length) || 0;
-        page = Number(payload.page || page);
-        limit = Number(payload.limit || limit);
-        pagesCount = Number(payload.pages || Math.ceil(total / limit) || 1);
-      } else if (payload && Array.isArray(payload.transactions)) {
-        items = payload.transactions;
-        total = Number(payload.total || payload.count || items.length) || 0;
-      } else {
-        // fallback: payload may be object with fields directly
-        items = payload.items || payload.data || [];
-        if (!Array.isArray(items) && typeof payload === 'object') items = [];
-        total = Number(payload.total || payload.count || items.length) || 0;
-      }
-      
+      // Expect backend to return { total, page, limit, pages, data: [ { id,title,group,transactionType,amount,creator,participants,date } ] }
+      const items = Array.isArray(payload.data) ? payload.data : (Array.isArray(payload) ? payload : []);
       setTransactions(items);
       setPagination(prev => ({
         ...prev,
-        total: total,
-        page: page,
-        limit: limit,
-        pages: pagesCount
+        total: Number(payload.total || items.length || 0),
+        page: Number(payload.page || prev.page),
+        limit: Number(payload.limit || prev.limit),
+        pages: Number(payload.pages || Math.ceil((payload.total || items.length || 0) / prev.limit) || 1)
       }));
     } catch (err) {
       console.error('Error fetching transactions', err);
@@ -265,11 +219,25 @@ function AdminGroupTransactionsPage() {
     return 'Unknown Group';
   };
 
-  // Get user name (creator) - ưu tiên creatorName nếu có
+  // Get user name (creator) - ưu tiên creator object / creatorName / createdBy
   const getCreatorDisplayName = (transaction) => {
     if (!transaction) return 'Unknown';
+    // 1) normalized backend: transaction.creator { id, name, email }
+    if (transaction.creator && typeof transaction.creator === 'object') {
+      return transaction.creator.name || transaction.creator.email || 'Unknown';
+    }
+    // 2) older backend: creatorName string
     if (transaction.creatorName) return transaction.creatorName;
-    return getUserName(transaction.createdBy);
+    // 3) legacy: createdBy may be populated object or an id/email string
+    if (transaction.createdBy) {
+      if (typeof transaction.createdBy === 'object') {
+        return transaction.createdBy.name || transaction.createdBy.email || 'Unknown';
+      }
+      const cb = String(transaction.createdBy);
+      if (cb.includes('@')) return cb;
+      return cb; // id fallback
+    }
+    return 'Unknown';
   };
 
   // Get transaction type (kiểu chia) - ưu tiên transactionType nếu có
@@ -460,6 +428,7 @@ function AdminGroupTransactionsPage() {
                     <th>Kiểu giao dịch</th>
                     <th>Số tiền</th>
                     <th>Người tạo</th>
+                    <th>Số tham gia</th>
                     <th>Ngày</th>
                     <th>Thao tác</th>
                   </tr>
@@ -484,6 +453,9 @@ function AdminGroupTransactionsPage() {
                       </td>
                       <td className="tx-creator">
                         {getCreatorDisplayName(transaction)}
+                      </td>
+                      <td className="tx-participants-count">
+                        {typeof transaction.participantsCount !== 'undefined' ? transaction.participantsCount : (transaction.participants ? transaction.participants.length : 0)}
                       </td>
                       <td className="tx-date">
                         {formatDate(transaction.date || transaction.createdAt)}
@@ -549,87 +521,86 @@ function AdminGroupTransactionsPage() {
           <div className="transaction-details-modal">
             <div className="modal-header">
               <h3>Chi tiết giao dịch</h3>
-              <button 
-                className="close-modal"
-                onClick={() => setShowDetails(false)}
-              >
-                <i className="fas fa-times"></i>
-              </button>
+              <button className="close-modal" onClick={() => setShowDetails(false)}><i className="fas fa-times"></i></button>
             </div>
-            
             <div className="modal-body">
               <div className="detail-header">
-                <div className="transaction-badge">
+                <div className={`transaction-badge ${selectedTransaction.transactionType || ''}`}>
                   {getTransactionTypeLabel(selectedTransaction)}
                 </div>
-                <div className="transaction-amount">
-                  {formatCurrency(selectedTransaction.amount || 0)}
-                </div>
+                <div className="transaction-amount">{formatCurrency(selectedTransaction.amount || 0)}</div>
               </div>
-              
+
               <div className="detail-content">
                 <div className="detail-group">
                   <div className="detail-label">Nhóm</div>
-                  <div className="detail-value">{getGroupName(selectedTransaction.group)}</div>
+                  <div className="detail-value">{selectedTransaction.group ? selectedTransaction.group.name : getGroupName(selectedTransaction.group)}</div>
                 </div>
-                
+
                 <div className="detail-group">
-                  <div className="detail-label">Nội dung</div>
-                  <div className="detail-value">
-                    {selectedTransaction.title || selectedTransaction.description || 'Không có tiêu đề'}
-                  </div>
+                  <div className="detail-label">Tiêu đề</div>
+                  <div className="detail-value">{selectedTransaction.title || selectedTransaction.description || 'Không có tiêu đề'}</div>
                 </div>
-                
-                <div className="detail-group">
-                  <div className="detail-label">Mô tả</div>
-                  <div className="detail-value">
-                    {selectedTransaction.description || 'Không có mô tả'}
-                  </div>
-                </div>
-                
+
                 <div className="detail-group">
                   <div className="detail-label">Người tạo</div>
+                  <div className="detail-value">{(selectedTransaction.creator && (selectedTransaction.creator.name || selectedTransaction.creator.email)) || ''}</div>
+                </div>
+
+                <div className="detail-group">
+                  <div className="detail-label">Người tham gia</div>
                   <div className="detail-value">
-                    {getCreatorDisplayName(selectedTransaction)}
+                    {Array.isArray(selectedTransaction.allParticipants) && selectedTransaction.allParticipants.length > 0 ? (
+                      <ul style={{ margin: 0, paddingLeft: 18 }}>
+                        {selectedTransaction.allParticipants.map((p, i) => (
+                          <li key={i} style={{ marginBottom: 6 }}>
+                            <strong>{p.name || p.email || p.id || 'Unknown'}</strong>
+                            {' — '}
+                            {p.shareAmount ? formatCurrency(p.shareAmount) : ''}
+                            {p.percentage ? ` (${p.percentage}%)` : ''}
+                            {p.isCreator ? ' • Người tạo' : (p.settled ? ' • Đã thanh toán' : '')}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : Array.isArray(selectedTransaction.participants) && selectedTransaction.participants.length > 0 ? (
+                      <ul style={{ margin: 0, paddingLeft: 18 }}>
+                        {selectedTransaction.participants.map((p, i) => (
+                          <li key={i} style={{ marginBottom: 6 }}>
+                            <strong>{p.name || p.email || p.id || 'Unknown'}</strong>
+                            {' — '}
+                            {formatCurrency(p.shareAmount || 0)}
+                            {p.percentage ? ` (${p.percentage}%)` : ''}
+                            {p.settled ? ' • Đã thanh toán' : ''}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div>Không có người tham gia</div>
+                    )}
                   </div>
                 </div>
-                
+
                 <div className="detail-group">
                   <div className="detail-label">Danh mục</div>
                   <div className="detail-value">
-                    {selectedTransaction.category ? 
-                      (typeof selectedTransaction.category === 'object' ? 
-                        selectedTransaction.category.name : 
-                        selectedTransaction.category) : 
-                      'Không có danh mục'}
+                    {selectedTransaction.raw && selectedTransaction.raw.category ? (typeof selectedTransaction.raw.category === 'object' ? selectedTransaction.raw.category.name : selectedTransaction.raw.category) : 'Không có danh mục'}
                   </div>
                 </div>
-                
+
                 <div className="detail-group">
                   <div className="detail-label">Ngày tạo</div>
-                  <div className="detail-value">
-                    {formatDate(selectedTransaction.date || selectedTransaction.createdAt)}
-                  </div>
+                  <div className="detail-value">{formatDate(selectedTransaction.date)}</div>
                 </div>
-                
+
                 <div className="detail-group">
                   <div className="detail-label">ID Giao dịch</div>
-                  <div className="detail-value id-value">
-                    {selectedTransaction._id || selectedTransaction.id}
-                  </div>
+                  <div className="detail-value id-value">{selectedTransaction.id || selectedTransaction._id}</div>
                 </div>
               </div>
-              
+
               <div className="modal-footer">
-                <button 
-                  className="modal-button secondary"
-                  onClick={() => setShowDetails(false)}
-                >
-                  Đóng
-                </button>
-                <button className="modal-button primary">
-                  <i className="fas fa-edit"></i> Chỉnh sửa
-                </button>
+                <button className="modal-button secondary" onClick={() => setShowDetails(false)}>Đóng</button>
+                <button className="modal-button primary"><i className="fas fa-edit"></i> Chỉnh sửa</button>
               </div>
             </div>
           </div>
@@ -640,3 +611,4 @@ function AdminGroupTransactionsPage() {
 }
 
 export default AdminGroupTransactionsPage;
+

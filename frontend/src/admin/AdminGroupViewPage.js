@@ -49,13 +49,14 @@ function AdminGroupViewPage() {
       const data = await res.json();
       
       // Calculate active/pending members if not provided by API
-      if (data && data.members && !data.activeMembers) {
-        data.activeMembers = data.members.filter(m => !m.invited).length;
+      if (data && Array.isArray(data.members)) {
+        // accurate active members (joined)
+        const joined = data.members.filter(m => !m.invited);
+        data.activeMembers = joined.length;
+        // remove/ignore pendingMembers from stats (we don't expose it)
+        // but keep members array as-is for listing
       }
-      if (data && data.members && !data.pendingMembers) {
-        data.pendingMembers = data.members.filter(m => m.invited).length;
-      }
-      
+
       setGroup(data);
 
       // Try to fetch transactions data
@@ -74,7 +75,35 @@ function AdminGroupViewPage() {
         
         if (txRes.ok) {
           const txData = await txRes.json();
-          setTransactions(Array.isArray(txData) ? txData : []);
+          // Normalize transactions: ensure creatorName exists (try creator / creatorName / createdBy / lookup in members)
+          const membersList = Array.isArray(data.members) ? data.members : [];
+          const normalizeTx = (t) => {
+            const tx = { ...t };
+            let creatorName = '';
+            if (tx.creator && typeof tx.creator === 'object') {
+              creatorName = tx.creator.name || tx.creator.email || '';
+            } else if (tx.creatorName) {
+              creatorName = tx.creatorName;
+            } else if (tx.createdBy && typeof tx.createdBy === 'object') {
+              creatorName = tx.createdBy.name || tx.createdBy.email || '';
+            } else if (tx.createdBy) {
+              const cb = String(tx.createdBy);
+              // try find in members by id or email
+              const found = membersList.find(m => {
+                const mid = m.user && (m.user._id || m.user) ? String(m.user._id || m.user) : null;
+                const memEmail = (m.email || '').toLowerCase();
+                if (mid && String(mid) === cb) return true;
+                if (cb.includes('@') && memEmail && memEmail === cb.toLowerCase()) return true;
+                return false;
+              });
+              if (found) creatorName = (found.user && (found.user.name || found.user.email)) || found.name || found.email || cb;
+              else creatorName = cb;
+            }
+            return { ...tx, creatorName };
+          };
+          
+          const normalizedTxs = Array.isArray(txData) ? txData.map(normalizeTx) : [normalizeTx(txData)];
+          setTransactions(normalizedTxs);
         } else {
           console.warn('Could not fetch transactions', txRes.status);
           setTransactions([]);
@@ -131,15 +160,7 @@ function AdminGroupViewPage() {
 
   const renderMemberStatus = (member) => {
     if (!member) return 'N/A';
-    
-    if (member.invited) {
-      return (
-        <span className="member-status pending">
-          <i className="fas fa-clock"></i> Đang chờ
-        </span>
-      );
-    }
-    
+    // Always show "Đã tham gia" for members list per requirement
     return (
       <span className="member-status active">
         <i className="fas fa-check-circle"></i> Đã tham gia
@@ -365,12 +386,8 @@ function AdminGroupViewPage() {
                       <div className="stat-label">Tổng thành viên</div>
                     </div>
                     <div className="stat-card">
-                      <div className="stat-value">{group.activeMembers || 0}</div>
-                      <div className="stat-label">Thành viên đã tham gia</div>
-                    </div>
-                    <div className="stat-card">
-                      <div className="stat-value">{group.pendingMembers || 0}</div>
-                      <div className="stat-label">Thành viên đang chờ</div>
+                      <div className="stat-value">{group.ownerName || (group.owner && (group.owner.name || group.owner.email)) || '—'}</div>
+                      <div className="stat-label">Chủ nhóm</div>
                     </div>
                     <div className="stat-card">
                       <div className="stat-value">{transactions.length}</div>
@@ -484,8 +501,9 @@ function AdminGroupViewPage() {
                             }).format(tx.amount || 0)}
                           </td>
                           <td className="tx-creator">
-                            {tx.createdBy && typeof tx.createdBy === 'object' ? 
-                              (tx.createdBy.name || tx.createdBy.email) : 'Không xác định'}
+                            {tx.creatorName && tx.creatorName !== '' 
+                              ? tx.creatorName 
+                              : (tx.createdBy && typeof tx.createdBy === 'object' ? (tx.createdBy.name || tx.createdBy.email) : 'Không xác định')}
                           </td>
                           <td className="tx-date">{formatDate(tx.date || tx.createdAt)}</td>
                         </tr>
