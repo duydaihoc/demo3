@@ -515,13 +515,21 @@ export default function GroupTransactions() {
         setEditAmount(String(local.amount || ''));
         setEditDescription(local.description || '');
         setEditCategory(local.category && local.category._id ? local.category._id : (typeof local.category === 'string' ? local.category : ''));
-        const mappedLocal = Array.isArray(local.participants) ? local.participants.map(p => ({
+        // Map participants but REMOVE creator (avoid duplicate creator entries)
+        const mappedLocalAll = Array.isArray(local.participants) ? local.participants.map(p => ({
           id: p.user ? (p.user._id || p.user) : undefined,
           email: p.email || (p.user && p.user.email) || '',
           name: p.user ? (p.user.name || p.user.email || 'Thành viên') : (p.email || 'Thành viên'),
           settled: p.settled || false,
           shareAmount: p.shareAmount || 0
         })) : [];
+        const creator = getCurrentUser();
+        const mappedLocal = mappedLocalAll.filter(m => {
+          if (!creator) return true;
+          if (m.id && String(m.id) === String(creator.id)) return false;
+          if (m.email && creator.email && String(m.email).toLowerCase() === String(creator.email).toLowerCase()) return false;
+          return true;
+        });
         setEditSelectedMembers(mappedLocal);
         // try to initialize percentages from tx if present
         if (Array.isArray(local.percentages) && local.percentages.length > 0) {
@@ -555,13 +563,21 @@ export default function GroupTransactions() {
       setEditDescription(payloadTx.description || '');
       setEditCategory(payloadTx.category && payloadTx.category._id ? payloadTx.category._id : (typeof payloadTx.category === 'string' ? payloadTx.category : ''));
  
-      const mappedParticipants = Array.isArray(payloadTx.participants) ? payloadTx.participants.map(p => ({
+      const mappedAll = Array.isArray(payloadTx.participants) ? payloadTx.participants.map(p => ({
         id: p.user ? (p.user._id || p.user) : undefined,
         email: p.email || (p.user && p.user.email) || '',
         name: p.user ? (p.user.name || p.user.email || 'Thành viên') : (p.email || 'Thành viên'),
         settled: p.settled || false,
         shareAmount: p.shareAmount || 0
       })) : [];
+      // Remove creator from editSelectedMembers to avoid duplication when saving
+      const creator = getCurrentUser();
+      const mappedParticipants = mappedAll.filter(m => {
+        if (!creator) return true;
+        if (m.id && String(m.id) === String(creator.id)) return false;
+        if (m.email && creator.email && String(m.email).toLowerCase() === String(creator.email).toLowerCase()) return false;
+        return true;
+      });
       setEditSelectedMembers(mappedParticipants);
       // set percentages from payload if available, otherwise initialize similar to create flow
       if (Array.isArray(payloadTx.percentages) && payloadTx.percentages.length > 0) {
@@ -1564,7 +1580,7 @@ export default function GroupTransactions() {
                                   <>Bạn được <strong>{tx.payer ? (tx.payer.name || tx.payer.email || 'Người trả') : 'Chưa xác định'}</strong> trả giúp: </>
                                 )}
                                 {tx.transactionType === 'equal_split' && (
-                                  <>Bạn nợ <strong>{tx.payer ? (tx.payer.name || tx.payer.email || 'Người trả') : 'Chưa xác định'}</strong> (chia đều): </>
+<>Bạn nợ <strong>{tx.payer ? (tx.payer.name || tx.payer.email || 'Người trả') : 'Chưa xác định'}</strong> (chia đều): </>
                                 )}
                                 {tx.transactionType === 'percentage_split' && (
                                   <>Bạn nợ <strong>{tx.payer ? (tx.payer.name || tx.payer.email || 'Người trả') : 'Chưa xác định'}</strong> (phần trăm): </>
@@ -1904,22 +1920,6 @@ export default function GroupTransactions() {
                 ) : (
                   <div className="gt-optimized-list">
                     <div className="gt-optimized-header">
-                      <div className="gt-check-col">
-                        <input 
-                          type="checkbox" 
-                          checked={selectedOptimized.length === optimizedTransactions.length}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedOptimized(optimizedTransactions.map((_, idx) => idx));
-                            } else {
-                              setSelectedOptimized([]);
-                            }
-                          }}
-                        />
-                      </div>
-                      <div className="gt-from-col">Người trả</div>
-                      <div className="gt-to-col">Người nhận</div>
-                      <div className="gt-amount-col">Số tiền</div>
                     </div>
                     
                     {optimizedTransactions.map((tx, idx) => (
