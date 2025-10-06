@@ -312,7 +312,7 @@ router.post('/:groupId/transactions', auth, async (req, res) => {
     
     // Notify transaction creator with group context
     try {
-      await Notification.create({
+      const notif = await Notification.create({
         recipient: req.user._id,
         sender: req.user._id,
         type: 'group.transaction.created',
@@ -329,6 +329,11 @@ router.post('/:groupId/transactions', auth, async (req, res) => {
           categoryIcon: savedTransaction.category ? savedTransaction.category.icon : '',
         }
       });
+      // Emit realtime notification if socket.io is available
+      try {
+        const io = req.app.get('io');
+        if (io) io.to(String(req.user._id)).emit('notification', notif);
+      } catch (e) { /* ignore emit errors */ }
     } catch (e) {
       console.warn('Failed to create notification for transaction creator', e);
     }
@@ -375,11 +380,30 @@ router.post('/:groupId/transactions', auth, async (req, res) => {
               categoryIcon: savedTransaction.category ? savedTransaction.category.icon : '',
             }
           });
-        } catch (e) {
-          console.warn(`Failed to notify participant ${p.user}:`, e);
-        }
-      }
-    }
+          // Emit realtime notification to participant if possible
+          try {
+            const io = req.app.get('io');
+            if (io) io.to(String(p.user)).emit('notification', {
+              recipient: p.user,
+              sender: req.user._id,
+              type: 'group.transaction.debt',
+              message,
+              data: {
+                transactionId: savedTransaction._id,
+                groupId,
+                groupName: currentGroupName,
+                title,
+                shareAmount: p.shareAmount,
+                percentage: p.percentage,
+                transactionType
+              }
+            });
+          } catch (e) { /* ignore */ }
+         } catch (e) {
+           console.warn(`Failed to notify participant ${p.user}:`, e);
+         }
+       }
+     }
  
     // Return the created transaction
     return res.status(201).json(savedTransaction);
@@ -708,69 +732,239 @@ router.get('/:groupId/transactions/:txId', auth, async (req, res) => {
 router.put('/:groupId/transactions/:txId', auth, async (req, res) => {
   try {
     const { groupId, txId } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(txId)) return res.status(400).json({ message: 'Invalid txId' });
+    const updater = req.user && req.user._id;
+    // load existing transaction
+    const Transaction = require('../models/GroupTransaction'); // adjust path/name if different
+    const original = await Transaction.findById(txId).lean();
+    if (!original) return res.status(404).json({ message: 'Transaction not found' });
 
-    const tx = await GroupTransaction.findById(txId);
-    if (!tx) return res.status(404).json({ message: 'Transaction not found' });
+    // copy incoming payload
+    const updatePayload = { ...(req.body || {}) };
 
-    if (!belongsToGroup(tx, groupId)) return res.status(400).json({ message: 'Transaction does not belong to group' });
+    // determine the effective amount and type (prefer incoming values)
+    const effectiveAmount = Number(typeof updatePayload.amount !== 'undefined' ? updatePayload.amount : original.amount || 0);
+    const effectiveType = updatePayload.transactionType || original.transactionType || 'equal_split';
 
-    // Optional: enforce that only creator can edit
-    // if (String(tx.createdBy) !== String(req.user._id)) return res.status(403).json({ message: 'Not allowed to edit' });
+    // Helper: obtain normalized participant entries (user/email) from either incoming payload or original
+    let normalizedInputs = [];
+    if (Array.isArray(updatePayload.participants) && updatePayload.participants.length > 0) {
+      // reuse existing helper normalizeParticipantsInput
+      normalizedInputs = await normalizeParticipantsInput(updatePayload.participants);
+    } else if (Array.isArray(original.participants) && original.participants.length > 0) {
+      // derive from original participants
+      normalizedInputs = original.participants.map(p => ({
+        user: p.user ? (String(p.user._id || p.user)) : undefined,
+        email: p.email ? String(p.email).toLowerCase() : undefined
+      }));
+    } else {
+      normalizedInputs = [];
+    }
 
-    // Acceptable update fields
-    const allowed = [
-      'title','description','amount','category','participants','transactionType',
-      'percentages','perPerson','payer','date','shareSummary'
-    ];
-    for (const key of allowed) {
-      if (typeof req.body[key] !== 'undefined') {
-        if (key === 'amount') tx.amount = Number(req.body.amount);
-        else if (key === 'participants' && Array.isArray(req.body.participants)) {
-          tx.participants = req.body.participants.map(p => {
-            const out = {};
-            if (p.user) out.user = mongoose.Types.ObjectId.isValid(String(p.user)) ? p.user : p.user;
-            if (p.email) out.email = String(p.email).toLowerCase().trim();
-            if (typeof p.settled !== 'undefined') out.settled = !!p.settled;
-            if (typeof p.shareAmount !== 'undefined') out.shareAmount = Number(p.shareAmount);
-            if (typeof p.percentage !== 'undefined') out.percentage = Number(p.percentage);
-            return out;
-          });
-        } else if (key === 'percentages' && Array.isArray(req.body.percentages)) {
-          tx.percentages = req.body.percentages.map(p => ({ user: p.user, email: p.email, percentage: Number(p.percentage || 0) }));
-        } else if (key === 'category') {
-          tx.category = req.body.category;
-        } else if (key === 'date') {
-          tx.date = req.body.date ? new Date(req.body.date) : tx.date;
-        } else if (key === 'perPerson') {
-          tx.perPerson = !!req.body.perPerson;
-        } else if (key === 'payer') {
-          tx.payer = req.body.payer;
-        } else {
-          tx[key] = req.body[key];
+    // Build participants according to transaction type
+    let participantsBuilt = [];
+
+    if (effectiveType === 'payer_for_others') {
+      // each selected participant owes the full amount (creator paid for others)
+      if (normalizedInputs.length === 0) {
+        return res.status(400).json({ message: 'Participants required for payer_for_others' });
+      }
+      participantsBuilt = normalizedInputs.map(p => ({
+        user: p.user,
+        email: p.email,
+        shareAmount: Number(effectiveAmount),
+        percentage: 0,
+        settled: false
+      }));
+    } else if (effectiveType === 'equal_split') {
+      // include creator + normalizedInputs
+      const totalParticipants = (normalizedInputs.length + 1) || 1; // +1 for creator
+      const per = totalParticipants ? Number((effectiveAmount / totalParticipants).toFixed(2)) : 0;
+      // creator
+      participantsBuilt.push({
+        user: String(req.user._id),
+        email: req.user.email || undefined,
+        shareAmount: per,
+        percentage: 0,
+        settled: false
+      });
+      // others
+      participantsBuilt.push(...normalizedInputs.map(p => ({
+        user: p.user,
+        email: p.email,
+        shareAmount: per,
+        percentage: 0,
+        settled: false
+      })));
+    } else if (effectiveType === 'percentage_split') {
+      // Prefer incoming percentages, fallback to original.percentages or original.splitPercentages
+      const incomingPerc = Array.isArray(updatePayload.percentages) ? updatePayload.percentages :
+                           Array.isArray(updatePayload.splitPercentages) ? updatePayload.splitPercentages :
+                           Array.isArray(original.percentages) ? original.percentages :
+                           Array.isArray(original.splitPercentages) ? original.splitPercentages : [];
+
+      if (incomingPerc.length === 0) {
+        // If no percentages provided, initialize equal among creator + normalizedInputs
+        const list = [{ user: String(req.user._id), email: req.user.email }, ...normalizedInputs];
+        const base = list.length ? Number((100 / list.length).toFixed(2)) : 0;
+        const percArr = list.map((p, i) => ({ user: p.user, email: p.email, percentage: base }));
+        // ensure sum 100
+        const sum = percArr.reduce((s, x) => s + Number(x.percentage || 0), 0);
+        if (percArr.length > 0 && Math.abs(sum - 100) > 0.01) {
+          const diff = Number((100 - sum).toFixed(2));
+          percArr[percArr.length - 1].percentage = Number((Number(percArr[percArr.length - 1].percentage || 0) + diff).toFixed(2));
         }
+        // build participantsBuilt from percArr
+        participantsBuilt = percArr.map(pp => ({
+          user: pp.user,
+          email: pp.email,
+          percentage: Number(pp.percentage || 0),
+          shareAmount: Number(((Number(pp.percentage || 0) / 100) * effectiveAmount).toFixed(2)),
+          settled: false
+        }));
+        updatePayload.percentages = percArr;
+      } else {
+        // use incomingPerc to build participantsBuilt
+        participantsBuilt = incomingPerc.map(pp => {
+          const percentage = Number(pp.percentage || 0);
+          const shareAmount = Number(((percentage / 100) * effectiveAmount).toFixed(2));
+          return {
+            user: pp.user ? String(pp.user) : undefined,
+            email: pp.email ? String(pp.email).toLowerCase() : undefined,
+            percentage,
+            shareAmount,
+            settled: false
+          };
+        });
+        // keep percentages in payload
+        updatePayload.percentages = incomingPerc.map(pp => ({ user: pp.user, email: pp.email, percentage: Number(pp.percentage || 0) }));
+      }
+    } else if (effectiveType === 'payer_single') {
+      // only creator: single participant = creator
+      participantsBuilt = [{
+        user: String(req.user._id),
+        email: req.user.email || undefined,
+        shareAmount: Number(effectiveAmount),
+        percentage: 100,
+        settled: true
+      }];
+    } else {
+      // fallback: if there are normalizedInputs, divide among them; else keep original behavior
+      if (normalizedInputs.length > 0) {
+        const per = normalizedInputs.length ? Number((effectiveAmount / normalizedInputs.length).toFixed(2)) : 0;
+        participantsBuilt = normalizedInputs.map(p => ({
+          user: p.user,
+          email: p.email,
+          shareAmount: per,
+          percentage: 0,
+          settled: false
+        }));
+      } else {
+        participantsBuilt = original.participants || [];
       }
     }
 
-    await tx.save();
+    // assign built participants into payload so DB update persists correct shares
+    updatePayload.participants = participantsBuilt;
 
-    const updated = await GroupTransaction.findById(tx._id)
-      .populate('payer', 'name email')
-      .populate('participants.user', 'name email')
-      .populate('category', 'name icon')
-      .populate('createdBy', 'name email');
+    // ensure amount/type fields set as numbers/strings
+    updatePayload.amount = Number(effectiveAmount);
+    updatePayload.transactionType = effectiveType;
 
-    const participantsCount = computeParticipantsCount(updated);
+    // apply update and return new document
+    const updated = await Transaction.findByIdAndUpdate(txId, updatePayload, { new: true }).lean();
+    if (!updated) return res.status(500).json({ message: 'Failed to update transaction' });
 
-    // Return updated transaction plus convenience fields
-    return res.json({
-      transaction: updated,
-      transactionType: updated.transactionType || null,
-      amount: updated.amount || 0,
-      participantsCount
-    });
+    // Compare original vs updated to craft notification
+    const prevAmount = Number(original.amount || 0);
+    const newAmount = Number(updated.amount || 0);
+    const diff = Number((newAmount - prevAmount).toFixed(2));
+    const amountChanged = Math.abs(diff) > 0.001;
+    const prevType = original.transactionType || '';
+    const newType = updated.transactionType || '';
+    const typeChanged = prevType !== newType;
+
+    // Helper to compare participants / percentages to detect debt distribution change
+    const participantsChanged = () => {
+      const pA = Array.isArray(original.participants) ? original.participants : [];
+      const pB = Array.isArray(updated.participants) ? updated.participants : [];
+      if (pA.length !== pB.length) return true;
+      const normalize = p => ({
+        id: p.user ? String(p.user._id || p.user) : (p.email || '').toLowerCase(),
+        share: Number(p.shareAmount || p.share || 0),
+        perc: Number(p.percentage || 0)
+      });
+      const mapB = new Map(pB.map(x => [normalize(x).id, normalize(x)]));
+      for (const a of pA) {
+        const na = normalize(a);
+        const nb = mapB.get(na.id);
+        if (!nb) return true;
+        if (Math.abs(na.share - nb.share) > 0.01) return true;
+        if (Math.abs(na.perc - nb.perc) > 0.01) return true;
+      }
+      return false;
+    };
+    const debtChanged = participantsChanged() || amountChanged || typeChanged;
+
+    // Craft readable message and structured data
+    const actorName = (req.user && (req.user.name || req.user.email)) || 'Người dùng';
+    const txTitle = updated.title || 'Giao dịch';
+    const messageParts = [];
+    messageParts.push(`${actorName} đã chỉnh sửa giao dịch "${txTitle}"`);
+    if (amountChanged) messageParts.push(`Số tiền: ${prevAmount} → ${newAmount} (Δ ${diff >= 0 ? '+' : ''}${diff})`);
+    if (typeChanged) messageParts.push(`Kiểu giao dịch: ${prevType || 'n/a'} → ${newType || 'n/a'}`);
+    if (debtChanged) messageParts.push('Phân bổ nợ đã thay đổi');
+    const message = messageParts.join(' — ');
+
+    const notifData = {
+      transactionId: String(updated._id || updated.id),
+      groupId: String(groupId),
+      title: txTitle,
+      previousAmount: prevAmount,
+      newAmount: newAmount,
+      difference: diff,
+      previousType: prevType,
+      newType: newType,
+      debtChanged: !!debtChanged,
+      updatedBy: { id: String(updater), name: actorName }
+    };
+
+    // Attempt to notify group members (lookup group members list)
+    try {
+      const Group = require('../models/Group');
+      const groupDoc = await Group.findById(groupId).lean();
+      if (groupDoc && Array.isArray(groupDoc.members)) {
+        for (const m of groupDoc.members) {
+          // only notify members who have a linked user id
+          if (m.user) {
+            // Optionally skip notifying the actor themself
+            if (String(m.user) === String(updater)) continue;
+            try {
+              const notif = await Notification.create({
+                recipient: m.user,
+                sender: updater,
+                type: 'group.transaction.edited',
+                message,
+                data: notifData
+              });
+              // Emit realtime notification immediately if io available
+              try {
+                const io = req.app.get('io');
+                if (io) io.to(String(m.user)).emit('notification', notif);
+              } catch (emitErr) { /* ignore */ }
+            } catch (e) {
+              console.warn('Failed to create notif for member', m.user, e && e.message);
+            }
+          }
+        }
+      }
+    } catch (innerErr) {
+      console.warn('Could not fetch group members to notify:', innerErr && innerErr.message);
+    }
+
+    // return updated transaction (existing response format)
+    return res.json({ transaction: updated });
   } catch (err) {
-    console.error('Update transaction error:', err);
+    console.error('Transaction update error', err);
     return res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
