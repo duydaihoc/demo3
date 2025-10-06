@@ -610,21 +610,40 @@ export default function GroupTransactions() {
   const toggleEditMemberSelection = (member) => {
     setEditSelectedMembers(prev => {
       const isSelected = prev.some(m => m.id === member.id || m.email === member.email);
-      
       if (isSelected) {
         return prev.filter(m => !(m.id === member.id || m.email === member.email));
       } else {
-        // When adding a member, check if they were in the original transaction
-        // and preserve their settled status if so
-        const existingTxParticipant = editingTx?.participants?.find(p => 
-          (p.user && member.id && (p.user._id === member.id || p.user === member.id)) ||
-          (p.email && member.email && p.email.toLowerCase() === member.email.toLowerCase())
+        // preserve settled state if existed in original tx
+        const existingTxParticipant = editingTx?.participants?.find(p =>
+          (p.user && member.id && (String(p.user._id || p.user) === String(member.id))) ||
+          (p.email && member.email && String(p.email).toLowerCase() === String(member.email).toLowerCase())
         );
         
-        return [...prev, { 
-          ...member, 
+        // compute initial shareAmount for the new member based on current editTransactionType and editAmount
+        const prevCount = Array.isArray(prev) ? prev.length : 0; // number of already selected (excluding creator)
+        const amtNum = Number(editAmount || 0);
+        let initShare = 0;
+        if (editTransactionType === 'payer_for_others') {
+          // each participant owes the full amount (creator paid)
+          initShare = amtNum;
+        } else if (editTransactionType === 'equal_split') {
+          // after adding, total participants = (prevCount + 1 selected members) + creator => prevCount + 2
+          const totalParts = (prevCount + 2) || 1;
+          initShare = Number((amtNum / totalParts).toFixed(2));
+        } else if (editTransactionType === 'percentage_split') {
+          // percentage split handled by percentages editor; default to 0 for new member
+          initShare = 0;
+        } else if (editTransactionType === 'payer_single') {
+          // creator only; participants shouldn't normally be added but default to 0
+          initShare = 0;
+        } else {
+          initShare = amtNum;
+        }
+
+        return [...prev, {
+          ...member,
           settled: existingTxParticipant ? existingTxParticipant.settled : false,
-          shareAmount: editAmount ? Number(editAmount) : 0 // Use current edit amount
+          shareAmount: initShare
         }];
       }
     });
@@ -1655,12 +1674,12 @@ export default function GroupTransactions() {
                 </div>
                 
                 <div className="gt-form-group">
-                  <label>Số tiền (mỗi người)</label>
+                  <label>Số tiền</label>
                   <input 
                     type="number" 
                     value={editAmount} 
                     onChange={e => setEditAmount(e.target.value)} 
-                    placeholder="Số tiền cho mỗi người" 
+                    placeholder="Tổng số tiền của giao dịch" 
                     required
                   />
                 </div>
@@ -1724,15 +1743,55 @@ export default function GroupTransactions() {
 
                 {editAmount && editSelectedMembers.length > 0 && (
                   <div className="gt-total-summary">
-                    <div className="gt-amount-calculation">
-                      <div>Mỗi người: {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(editAmount) || 0)}</div>
-                      <div>×</div>
-                      <div>{editSelectedMembers.length} người</div>
-                      <div>=</div>
-                    </div>
-                    <div className="gt-total-preview">
-                      Thành tiền: {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format((Number(editAmount) || 0) * editSelectedMembers.length)}
-                    </div>
+                    {/* Show context-sensitive preview based on editTransactionType */}
+                    {editTransactionType === 'payer_for_others' && (() => {
+                      const per = Number(editAmount || 0);
+                      const count = editSelectedMembers.length;
+                      const totalOwed = per * count;
+                      return (
+                        <>
+                          <div className="gt-amount-calculation">
+                            <div>Bạn đã trả:</div>
+                            <div>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(per)}</div>
+                            <div className="gt-equals">→</div>
+                          </div>
+                          <div className="gt-total-preview">
+                            Mỗi người nợ: {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(per)} × {count} người = <strong>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(totalOwed)}</strong>
+                          </div>
+                        </>
+                      );
+                    })()}
+
+                    {editTransactionType === 'equal_split' && (() => {
+                      const totalParts = editSelectedMembers.length + 1; // +1 for creator
+                      const per = totalParts ? Number((Number(editAmount || 0) / totalParts).toFixed(2)) : 0;
+                      return (
+                        <>
+                          <div className="gt-amount-calculation">
+                            <div>Tổng tiền:</div>
+                            <div>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(editAmount || 0))}</div>
+                            <div>÷</div>
+                            <div>{totalParts} người</div>
+                            <div className="gt-equals">=</div>
+                          </div>
+                          <div className="gt-total-preview">
+                            Mỗi người (bao gồm bạn): <strong>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(per)}</strong>
+                          </div>
+                        </>
+                      );
+                    })()}
+
+                    {editTransactionType === 'percentage_split' && (
+                      <div className="gt-total-preview">
+                        Tổng tiền: <strong>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(editAmount || 0))}</strong> — Vui lòng điều chỉnh % bên dưới để xem số tiền từng người.
+                      </div>
+                    )}
+
+                    {editTransactionType === 'payer_single' && (
+                      <div className="gt-total-preview">
+                        Trả đơn: Bạn chịu toàn bộ <strong>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(editAmount || 0))}</strong>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1886,7 +1945,6 @@ export default function GroupTransactions() {
                     <i className="fas fa-magic"></i>
                     Tối ưu hóa thanh toán giúp giảm số lượng giao dịch cần thiết để cân bằng tất cả các khoản nợ trong nhóm.
                   </p>
-                  
                   {optimizedTransactions.length > 0 && (
                     <div className="gt-optimize-stats">
                       <div className="gt-stat">
@@ -1907,9 +1965,7 @@ export default function GroupTransactions() {
                     <i className="fas fa-exclamation-circle"></i>
                     <p>Lỗi tối ưu hóa</p>
                     <p className="gt-sub-message">{optimizeError}</p>
-                    <button className="gt-retry-btn" onClick={fetchOptimizedTransactions}>
-                      Thử lại
-                    </button>
+                    <button className="gt-retry-btn" onClick={fetchOptimizedTransactions}>Thử lại</button>
                   </div>
                 ) : optimizedTransactions.length === 0 ? (
                   <div className="gt-empty-message">
@@ -1920,17 +1976,29 @@ export default function GroupTransactions() {
                 ) : (
                   <div className="gt-optimized-list">
                     <div className="gt-optimized-header">
+                      <div className="gt-check-col">
+                        <input
+                          type="checkbox"
+                          checked={selectedOptimized.length === optimizedTransactions.length}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedOptimized(optimizedTransactions.map((_, idx) => idx));
+                            else setSelectedOptimized([]);
+                          }}
+                        />
+                      </div>
+                      <div className="gt-from-col">Người trả</div>
+                      <div className="gt-to-col">Người nhận</div>
+                      <div className="gt-amount-col">Số tiền</div>
                     </div>
-                    
                     {optimizedTransactions.map((tx, idx) => (
-                      <div 
-                        key={idx} 
+                      <div
+                        key={idx}
                         className={`gt-optimized-item ${selectedOptimized.includes(idx) ? 'selected' : ''}`}
                         onClick={() => toggleOptimizedSelection(idx)}
                       >
                         <div className="gt-check-col">
-                          <input 
-                            type="checkbox" 
+                          <input
+                            type="checkbox"
                             checked={selectedOptimized.includes(idx)}
                             onChange={(e) => {
                               e.stopPropagation();
@@ -1956,13 +2024,7 @@ export default function GroupTransactions() {
               </div>
               
               <div className="gt-modal-footer">
-                <button 
-                  className="gt-cancel-btn" 
-                  onClick={() => setShowOptimizeModal(false)}
-                >
-                  Đóng
-                </button>
-                
+                <button className="gt-cancel-btn" onClick={() => setShowOptimizeModal(false)}>Đóng</button>
                 {optimizedTransactions.length > 0 && (
                   <button
                     className="gt-settle-btn"
@@ -1982,7 +2044,7 @@ export default function GroupTransactions() {
                 )}
               </div>
             </div>
-                   </div>
+          </div>
         )}
       </main>
     </div>
