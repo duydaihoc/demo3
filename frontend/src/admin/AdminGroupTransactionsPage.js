@@ -4,6 +4,21 @@ import AdminSidebar from './AdminSidebar';
 import './AdminPage.css';
 import './AdminGroupTransactionsPage.css';
 
+// Helper: lấy tên người dùng từ object hoặc id/email
+function getUserName(user) {
+  if (!user) return '';
+  if (typeof user === 'object') {
+    return user.name || user.email || '';
+  }
+  if (typeof user === 'string') {
+    // Nếu là email
+    if (user.includes('@')) return user;
+    // Nếu là id, trả về rỗng hoặc id
+    return user;
+  }
+  return '';
+}
+
 function AdminGroupTransactionsPage() {
   const navigate = useNavigate();
   const [transactions, setTransactions] = useState([]);
@@ -76,7 +91,7 @@ function AdminGroupTransactionsPage() {
       if (filters.groupId) queryParams.append('groupId', filters.groupId);
       if (filters.startDate) queryParams.append('startDate', filters.startDate);
       if (filters.endDate) queryParams.append('endDate', filters.endDate);
-      if (filters.type) queryParams.append('type', filters.type);
+      if (filters.type) queryParams.append('transactionType', filters.type);
       if (filters.minAmount) queryParams.append('minAmount', filters.minAmount);
       if (filters.maxAmount) queryParams.append('maxAmount', filters.maxAmount);
       if (filters.searchQuery) queryParams.append('q', filters.searchQuery);
@@ -99,22 +114,45 @@ function AdminGroupTransactionsPage() {
         return;
       }
       
-      const data = await res.json();
+      const payload = await res.json();
       
-      // Handle different response formats
-      if (Array.isArray(data)) {
-        setTransactions(data);
-        setPagination(prev => ({ ...prev, total: data.length }));
-      } else if (data.transactions && Array.isArray(data.transactions)) {
-        setTransactions(data.transactions);
-        setPagination(prev => ({ 
-          ...prev, 
-          total: data.total || data.count || data.transactions.length 
-        }));
+      // Normalize supported response shapes:
+      // 1) { total, page, limit, pages, data: [...] }
+      // 2) { transactions: [...], total } or { transactions: [...] }
+      // 3) plain array [...]
+      let items = [];
+      let total = 0;
+      let page = pagination.page;
+      let limit = pagination.limit;
+      let pagesCount = 1;
+      
+      if (Array.isArray(payload)) {
+        items = payload;
+        total = payload.length;
+      } else if (payload && Array.isArray(payload.data)) {
+        items = payload.data;
+        total = Number(payload.total || payload.count || items.length) || 0;
+        page = Number(payload.page || page);
+        limit = Number(payload.limit || limit);
+        pagesCount = Number(payload.pages || Math.ceil(total / limit) || 1);
+      } else if (payload && Array.isArray(payload.transactions)) {
+        items = payload.transactions;
+        total = Number(payload.total || payload.count || items.length) || 0;
       } else {
-        setTransactions([]);
-        setPagination(prev => ({ ...prev, total: 0 }));
+        // fallback: payload may be object with fields directly
+        items = payload.items || payload.data || [];
+        if (!Array.isArray(items) && typeof payload === 'object') items = [];
+        total = Number(payload.total || payload.count || items.length) || 0;
       }
+      
+      setTransactions(items);
+      setPagination(prev => ({
+        ...prev,
+        total: total,
+        page: page,
+        limit: limit,
+        pages: pagesCount
+      }));
     } catch (err) {
       console.error('Error fetching transactions', err);
       setError('Đã xảy ra lỗi khi tải dữ liệu');
@@ -163,7 +201,15 @@ function AdminGroupTransactionsPage() {
   };
 
   const handlePageChange = (newPage) => {
+    if (newPage < 1) return;
+    const maxPage = Math.max(1, Math.ceil((pagination.total || 0) / pagination.limit || 1));
+    if (newPage > maxPage) return;
     setPagination(prev => ({ ...prev, page: newPage }));
+    // Immediately fetch new page
+    // (ensure fetchTransactions uses updated pagination.page; call after state update)
+    // we call fetchTransactions directly with updated page by temporarily building query:
+    // setTimeout small to ensure state flush (or simply call fetchTransactions because it reads pagination state in closure)
+    setTimeout(() => fetchTransactions(), 0);
   };
 
   const viewTransactionDetails = (transaction) => {
@@ -219,25 +265,29 @@ function AdminGroupTransactionsPage() {
     return 'Unknown Group';
   };
 
-  // Get user name (creator) - enhanced to handle various data formats
-  const getUserName = (user) => {
-    if (!user) return 'Unknown';
-    
-    // If user is already populated as an object
-    if (typeof user === 'object') {
-      if (user.name) return user.name;
-      if (user.email) return user.email;
-      
-      const userId = user._id || user.id;
-      if (userId) return `User ${String(userId).substring(0, 6)}`;
+  // Get user name (creator) - ưu tiên creatorName nếu có
+  const getCreatorDisplayName = (transaction) => {
+    if (!transaction) return 'Unknown';
+    if (transaction.creatorName) return transaction.creatorName;
+    return getUserName(transaction.createdBy);
+  };
+
+  // Get transaction type (kiểu chia) - ưu tiên transactionType nếu có
+  const getTransactionTypeLabel = (transaction) => {
+    if (!transaction) return '';
+    if (transaction.transactionType) {
+      switch (transaction.transactionType) {
+        case 'equal_split': return 'Chia đều';
+        case 'payer_for_others': return 'Trả giúp';
+        case 'percentage_split': return 'Chia phần trăm';
+        case 'payer_single': return 'Trả đơn';
+        default: return transaction.transactionType;
+      }
     }
-    
-    // If user is just an ID string
-    if (typeof user === 'string') {
-      return `User ${String(user).substring(0, 6)}`;
-    }
-    
-    return 'Unknown';
+    // fallback: type (expense/income)
+    if (transaction.type === 'expense') return 'Chi tiêu';
+    if (transaction.type === 'income') return 'Thu nhập';
+    return transaction.type || '';
   };
 
   return (
@@ -407,7 +457,7 @@ function AdminGroupTransactionsPage() {
                     <th>ID</th>
                     <th>Nhóm</th>
                     <th>Nội dung</th>
-                    <th>Loại</th>
+                    <th>Kiểu giao dịch</th>
                     <th>Số tiền</th>
                     <th>Người tạo</th>
                     <th>Ngày</th>
@@ -426,15 +476,14 @@ function AdminGroupTransactionsPage() {
                       <td className="tx-title">
                         {transaction.title || transaction.description || 'Không có tiêu đề'}
                       </td>
-                      <td className={`tx-type tx-type-${transaction.type}`}>
-                        {transaction.type === 'expense' ? 'Chi tiêu' : 
-                         transaction.type === 'income' ? 'Thu nhập' : transaction.type}
+                      <td className="tx-type">
+                        {getTransactionTypeLabel(transaction)}
                       </td>
-                      <td className={`tx-amount tx-amount-${transaction.type}`}>
+                      <td className="tx-amount">
                         {formatCurrency(transaction.amount || 0)}
                       </td>
                       <td className="tx-creator">
-                        {getUserName(transaction.createdBy)}
+                        {getCreatorDisplayName(transaction)}
                       </td>
                       <td className="tx-date">
                         {formatDate(transaction.date || transaction.createdAt)}
@@ -510,9 +559,8 @@ function AdminGroupTransactionsPage() {
             
             <div className="modal-body">
               <div className="detail-header">
-                <div className={`transaction-badge ${selectedTransaction.type}`}>
-                  {selectedTransaction.type === 'expense' ? 'Chi tiêu' : 
-                   selectedTransaction.type === 'income' ? 'Thu nhập' : selectedTransaction.type}
+                <div className="transaction-badge">
+                  {getTransactionTypeLabel(selectedTransaction)}
                 </div>
                 <div className="transaction-amount">
                   {formatCurrency(selectedTransaction.amount || 0)}
@@ -542,7 +590,7 @@ function AdminGroupTransactionsPage() {
                 <div className="detail-group">
                   <div className="detail-label">Người tạo</div>
                   <div className="detail-value">
-                    {getUserName(selectedTransaction.createdBy)}
+                    {getCreatorDisplayName(selectedTransaction)}
                   </div>
                 </div>
                 

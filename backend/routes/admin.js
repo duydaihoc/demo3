@@ -3,6 +3,8 @@ const User = require('../models/User');
 const router = express.Router();
 const { auth } = require('../middleware/auth');
 const Group = require('../models/Group');
+const mongoose = require('mongoose');
+const GroupTransaction = require('../models/GroupTransaction');
 
 // Middleware kiểm tra quyền admin
 function isAdmin(req, res, next) {
@@ -182,125 +184,161 @@ router.get('/groups/:groupId', auth, async (req, res) => {
   }
 });
 
-// GET /api/admin/groups/:groupId/transactions - Admin endpoint to get transactions for a group
-router.get('/groups/:groupId/transactions', auth, async (req, res) => {
-  try {
-    // Verify admin role
-    if (!req.user || req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Admin access required' });
-    }
-
-    const { groupId } = req.params;
-    if (!groupId) return res.status(400).json({ message: 'Group ID required' });
-    
-    // Import models if not already imported at top of file
-    const GroupTransaction = require('../models/GroupTransaction');
-    
-    const transactions = await GroupTransaction.find({ group: groupId })
-      .populate('createdBy', 'name email')
-      .populate('category')
-      .sort({ date: -1, createdAt: -1 });
-      
-    res.json(transactions);
-  } catch (err) {
-    console.error('Admin group transactions fetch error:', err);
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-// GET /api/admin/group-transactions - Admin endpoint to get transactions across all groups
+// --- Only keep this admin group-transactions endpoint ---
+// GET /api/admin/group-transactions
+// Admin only: list all group transactions with filters, pagination and sorting.
+// Query params: page, limit, groupId, transactionType, q, startDate, endDate, sort
 router.get('/group-transactions', auth, async (req, res) => {
   try {
-    // Verify admin role
-    if (!req.user || req.user.role !== 'admin') {
+    // basic admin guard - adjust to your user model fields
+    if (!req.user || !(req.user.role === 'admin' || req.user.isAdmin)) {
       return res.status(403).json({ message: 'Admin access required' });
     }
 
     const {
+      page = 1,
+      limit = 50,
       groupId,
+      transactionType,
+      q,
       startDate,
       endDate,
-      type,
-      minAmount,
-      maxAmount,
-      q: searchQuery,
-      page = 1,
-      limit = 20
+      sort = '-createdAt'
     } = req.query;
 
-    // Build filter query
+    const pg = Math.max(1, parseInt(page, 10) || 1);
+    const lim = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
+
     const filter = {};
-    
-    // Filter by group
+
     if (groupId) {
-      filter.group = groupId;
-    }
-    
-    // Filter by date range
-    if (startDate || endDate) {
-      filter.date = {};
-      if (startDate) filter.date.$gte = new Date(startDate);
-      if (endDate) {
-        // Set to end of the day for the end date
-        const endDateTime = new Date(endDate);
-        endDateTime.setHours(23, 59, 59, 999);
-        filter.date.$lte = endDateTime;
+      // Prefer matching groupId field; include legacy group string if provided
+      if (mongoose.Types.ObjectId.isValid(String(groupId))) {
+        filter.$or = [{ groupId: groupId }];
+      } else {
+        filter.$or = [{ groupId: groupId }, { group: groupId }];
       }
     }
-    
-    // Filter by transaction type
-    if (type) {
-      filter.type = type;
-    }
-    
-    // Filter by amount range
-    if (minAmount || maxAmount) {
-      filter.amount = {};
-      if (minAmount) filter.amount.$gte = parseFloat(minAmount);
-      if (maxAmount) filter.amount.$lte = parseFloat(maxAmount);
-    }
-    
-    // Search in title or description
-    if (searchQuery) {
-      filter.$or = [
-        { title: { $regex: searchQuery, $options: 'i' } },
-        { description: { $regex: searchQuery, $options: 'i' } }
-      ];
-    }
-    
-    // Import model if not already imported
-    const GroupTransaction = require('../models/GroupTransaction');
 
-    // Calculate pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    
-    // Execute query with pagination - improved populate to get more group info
-    const transactions = await GroupTransaction.find(filter)
-      .populate({
-        path: 'group',
-        select: 'name description owner members createdAt', // Get more fields
-        populate: {
-          path: 'owner',
-          select: 'name email'
-        }
-      })
+    if (transactionType) filter.transactionType = transactionType;
+
+    if (q && String(q).trim()) {
+      const regex = new RegExp(String(q).trim(), 'i');
+      filter.$or = (filter.$or || []).concat([
+        { title: { $regex: regex } },
+        { description: { $regex: regex } }
+      ]);
+    }
+
+    if (startDate || endDate) {
+      filter.date = {};
+      if (startDate) {
+        const s = new Date(startDate);
+        if (!isNaN(s)) filter.date.$gte = s;
+      }
+      if (endDate) {
+        const e = new Date(endDate);
+        if (!isNaN(e)) filter.date.$lte = e;
+      }
+      if (Object.keys(filter.date).length === 0) delete filter.date;
+    }
+
+    const totalCount = await GroupTransaction.countDocuments(filter);
+
+    // IMPORTANT: do NOT populate('group') if schema doesn't include it.
+    // Populate only fields known to exist on the schema to avoid StrictPopulateError.
+    const items = await GroupTransaction.find(filter)
+      .populate('payer', 'name email')
+      .populate('participants.user', 'name email')
       .populate('category', 'name icon')
       .populate('createdBy', 'name email')
-      .sort({ date: -1, createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit));
-    
-    // Get total count for pagination
-    const total = await GroupTransaction.countDocuments(filter);
-    
+      .sort(sort)
+      .skip((pg - 1) * lim)
+      .limit(lim)
+      .lean()
+      .exec();
+
+    // Batch-load groups referenced by groupId (or legacy group) to avoid StrictPopulateError and N+1 queries
+    const groupIdSet = new Set();
+    items.forEach(it => {
+      const gid = it.groupId || it.group;
+      if (gid && mongoose.Types.ObjectId.isValid(String(gid))) groupIdSet.add(String(gid));
+    });
+
+    let groupMap = new Map();
+    if (groupIdSet.size > 0) {
+      const ids = Array.from(groupIdSet);
+      try {
+        const groups = await Group.find({ _id: { $in: ids } }).select('name owner').lean();
+        groupMap = new Map(groups.map(g => [String(g._id), g]));
+        items.forEach(it => {
+          const gid = it.groupId || it.group;
+          if (gid && groupMap.has(String(gid))) it.group = groupMap.get(String(gid));
+        });
+      } catch (e) {
+        console.warn('Admin: failed to batch-load groups', e && e.message);
+        // don't fail whole request if group lookup fails
+      }
+    }
+
+    // Chuẩn hóa dữ liệu trả về: lấy tên người dùng, kiểu giao dịch
+    const normalized = await Promise.all(items.map(async tx => {
+      // payer
+      let payerName = '';
+      if (tx.payer && typeof tx.payer === 'object') {
+        payerName = tx.payer.name || tx.payer.email || '';
+      } else if (tx.payer) {
+        payerName = String(tx.payer);
+      }
+      // createdBy
+      let creatorName = '';
+      if (tx.createdBy && typeof tx.createdBy === 'object') {
+        creatorName = tx.createdBy.name || tx.createdBy.email || '';
+      } else if (tx.createdBy) {
+        // Nếu là id, truy vấn User để lấy tên/email
+        try {
+          const user = await User.findById(tx.createdBy).select('name email').lean();
+          creatorName = user ? (user.name || user.email || '') : '';
+        } catch (e) {
+          creatorName = '';
+        }
+      }
+      // participants
+      let participants = Array.isArray(tx.participants) ? tx.participants.map(p => {
+        let name = '';
+        if (p.user && typeof p.user === 'object') {
+          name = p.user.name || p.user.email || '';
+        } else if (p.user) {
+          name = String(p.user);
+        } else if (p.email) {
+          name = p.email;
+        }
+        return {
+          ...p,
+          userName: name
+        };
+      }) : [];
+      // transactionType
+      const transactionType = tx.transactionType || 'unknown';
+
+      return {
+        ...tx,
+        payerName,
+        creatorName,
+        transactionType,
+        participants,
+      };
+    }));
+
     res.json({
-      transactions,
-      total,
-      page: parseInt(page),
-      limit: parseInt(limit)
+      total: totalCount,
+      page: pg,
+      limit: lim,
+      pages: Math.max(1, Math.ceil(totalCount / lim)),
+      data: normalized
     });
   } catch (err) {
-    console.error('Admin group transactions fetch error:', err);
+    console.error('Admin group-transactions error:', err);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
@@ -335,4 +373,163 @@ router.get('/group-transactions/:id', auth, async (req, res) => {
   }
 });
 
+// GET /api/admin/group-transactions
+// Admin only: list all group transactions with filters, pagination and sorting.
+// Query params: page, limit, groupId, transactionType, q, startDate, endDate, sort
+router.get('/group-transactions', auth, async (req, res) => {
+  try {
+    // basic admin guard - adjust to your user model fields
+    if (!req.user || !(req.user.role === 'admin' || req.user.isAdmin)) {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    const {
+      page = 1,
+      limit = 50,
+      groupId,
+      transactionType,
+      q,
+      startDate,
+      endDate,
+      sort = '-createdAt'
+    } = req.query;
+
+    const pg = Math.max(1, parseInt(page, 10) || 1);
+    const lim = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
+
+    const filter = {};
+
+    if (groupId) {
+      // Prefer matching groupId field; include legacy group string if provided
+      if (mongoose.Types.ObjectId.isValid(String(groupId))) {
+        filter.$or = [{ groupId: groupId }];
+      } else {
+        filter.$or = [{ groupId: groupId }, { group: groupId }];
+      }
+    }
+
+    if (transactionType) filter.transactionType = transactionType;
+
+    if (q && String(q).trim()) {
+      const regex = new RegExp(String(q).trim(), 'i');
+      filter.$or = (filter.$or || []).concat([
+        { title: { $regex: regex } },
+        { description: { $regex: regex } }
+      ]);
+    }
+
+    if (startDate || endDate) {
+      filter.date = {};
+      if (startDate) {
+        const s = new Date(startDate);
+        if (!isNaN(s)) filter.date.$gte = s;
+      }
+      if (endDate) {
+        const e = new Date(endDate);
+        if (!isNaN(e)) filter.date.$lte = e;
+      }
+      if (Object.keys(filter.date).length === 0) delete filter.date;
+    }
+
+    const totalCount = await GroupTransaction.countDocuments(filter);
+
+    // IMPORTANT: do NOT populate('group') if schema doesn't include it.
+    // Populate only fields known to exist on the schema to avoid StrictPopulateError.
+    const items = await GroupTransaction.find(filter)
+      .populate('payer', 'name email')
+      .populate('participants.user', 'name email')
+      .populate('category', 'name icon')
+      .populate('createdBy', 'name email')
+      .sort(sort)
+      .skip((pg - 1) * lim)
+      .limit(lim)
+      .lean()
+      .exec();
+
+    // Batch-load groups referenced by groupId (or legacy group) to avoid StrictPopulateError and N+1 queries
+    const groupIdSet = new Set();
+    items.forEach(it => {
+      const gid = it.groupId || it.group;
+      if (gid && mongoose.Types.ObjectId.isValid(String(gid))) groupIdSet.add(String(gid));
+    });
+
+    let groupMap = new Map();
+    if (groupIdSet.size > 0) {
+      const ids = Array.from(groupIdSet);
+      try {
+        const groups = await Group.find({ _id: { $in: ids } }).select('name owner').lean();
+        groupMap = new Map(groups.map(g => [String(g._id), g]));
+        items.forEach(it => {
+          const gid = it.groupId || it.group;
+          if (gid && groupMap.has(String(gid))) it.group = groupMap.get(String(gid));
+        });
+      } catch (e) {
+        console.warn('Admin: failed to batch-load groups', e && e.message);
+        // don't fail whole request if group lookup fails
+      }
+    }
+
+    // Chuẩn hóa dữ liệu trả về: lấy tên người dùng, kiểu giao dịch
+    const normalized = await Promise.all(items.map(async tx => {
+      // payer
+      let payerName = '';
+      if (tx.payer && typeof tx.payer === 'object') {
+        payerName = tx.payer.name || tx.payer.email || '';
+      } else if (tx.payer) {
+        payerName = String(tx.payer);
+      }
+      // createdBy
+      let creatorName = '';
+      if (tx.createdBy && typeof tx.createdBy === 'object') {
+        creatorName = tx.createdBy.name || tx.createdBy.email || '';
+      } else if (tx.createdBy) {
+        // Nếu là id, truy vấn User để lấy tên/email
+        try {
+          const user = await User.findById(tx.createdBy).select('name email').lean();
+          creatorName = user ? (user.name || user.email || '') : '';
+        } catch (e) {
+          creatorName = '';
+        }
+      }
+      // participants
+      let participants = Array.isArray(tx.participants) ? tx.participants.map(p => {
+        let name = '';
+        if (p.user && typeof p.user === 'object') {
+          name = p.user.name || p.user.email || '';
+        } else if (p.user) {
+          name = String(p.user);
+        } else if (p.email) {
+          name = p.email;
+        }
+        return {
+          ...p,
+          userName: name
+        };
+      }) : [];
+      // transactionType
+      const transactionType = tx.transactionType || 'unknown';
+
+      return {
+        ...tx,
+        payerName,
+        creatorName,
+        transactionType,
+        participants,
+      };
+    }));
+
+    res.json({
+      total: totalCount,
+      page: pg,
+      limit: lim,
+      pages: Math.max(1, Math.ceil(totalCount / lim)),
+      data: normalized
+    });
+  } catch (err) {
+    console.error('Admin group-transactions error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+module.exports = router;
 module.exports = router;
