@@ -417,95 +417,19 @@ router.post('/:groupId/transactions', auth, async (req, res) => {
 router.get('/:groupId/transactions', auth, async (req, res) => {
   try {
     const { groupId } = req.params;
-    const { page = 1, limit = 100 } = req.query;
-    if (!groupId) return res.status(400).json({ message: 'groupId required' });
+    // Query both possible fields: some code paths save as `group` while others use `groupId`.
+    // This makes the endpoint robust and returns all transactions for the group regardless of storage field.
+    const query = { $or: [{ group: groupId }, { groupId: groupId }] };
+    const txs = await GroupTransaction.find(query)
+      .sort({ createdAt: -1 })
+      .populate('payer', 'name email')
+      .populate('participants.user', 'name email')
+      .populate('category', 'name icon')
+      .populate('createdBy', 'name email');
 
-    const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const lim = Math.max(1, Math.min(1000, parseInt(limit, 10) || 100));
-    const skip = (pageNum - 1) * lim;
-
-    const GroupTransaction = require('../models/GroupTransaction');
-    const Group = require('../models/Group');
-    const User = require('../models/User');
-
-    // fetch lean to avoid strict populate errors, then manually enrich
-    const [txs, total] = await Promise.all([
-      GroupTransaction.find({ $or: [{ group: groupId }, { groupId: groupId }] }).sort({ date: -1, createdAt: -1 }).skip(skip).limit(lim).lean(),
-      GroupTransaction.countDocuments({ $or: [{ group: groupId }, { groupId: groupId }] })
-    ]);
-
-    // gather ids
-    const userIds = new Set();
-    txs.forEach(tx => {
-      if (tx.createdBy) {
-        const cb = typeof tx.createdBy === 'object' ? (tx.createdBy._id || tx.createdBy) : tx.createdBy;
-        if (cb) userIds.add(String(cb));
-      }
-      if (tx.payer) {
-        const p = typeof tx.payer === 'object' ? (tx.payer._id || tx.payer) : tx.payer;
-        if (p) userIds.add(String(p));
-      }
-      if (Array.isArray(tx.participants)) {
-        tx.participants.forEach(p => {
-          if (p && p.user) {
-            const uid = typeof p.user === 'object' ? (p.user._id || p.user) : p.user;
-            if (uid) userIds.add(String(uid));
-          }
-        });
-      }
-    });
-
-    const usersArr = userIds.size ? await User.find({ _id: { $in: Array.from(userIds) } }).select('name email').lean() : [];
-    const userMap = new Map(usersArr.map(u => [String(u._id), u]));
-
-    const countParticipants = (tx) => {
-      const s = new Set();
-      if (Array.isArray(tx.participants)) {
-        tx.participants.forEach(p => {
-          if (!p) return;
-          if (p.user) s.add(String(typeof p.user === 'object' ? (p.user._id || p.user) : p.user));
-          else if (p.email) s.add(String((p.email || '').toLowerCase()));
-        });
-      }
-      if (tx.createdBy) {
-        const c = typeof tx.createdBy === 'object' ? (tx.createdBy._id || tx.createdBy.email || tx.createdBy) : tx.createdBy;
-        if (c) s.add(String(c).toLowerCase());
-      }
-      return s.size || 0;
-    };
-
-    const enriched = txs.map(tx => {
-      const copy = { ...tx };
-      if (copy.createdBy) {
-        const cbId = typeof copy.createdBy === 'object' ? (String(copy.createdBy._id || copy.createdBy)) : String(copy.createdBy);
-        copy.createdBy = userMap.has(cbId) ? { _id: cbId, name: userMap.get(cbId).name, email: userMap.get(cbId).email } : (typeof copy.createdBy === 'object' ? copy.createdBy : { _id: cbId });
-      }
-      if (copy.payer) {
-        const pId = typeof copy.payer === 'object' ? (String(copy.payer._id || copy.payer)) : String(copy.payer);
-        copy.payer = userMap.has(pId) ? { _id: pId, name: userMap.get(pId).name, email: userMap.get(pId).email } : (typeof copy.payer === 'object' ? copy.payer : { _id: pId });
-      }
-      if (Array.isArray(copy.participants)) {
-        copy.participants = copy.participants.map(p => {
-          const pp = { ...p };
-          if (pp.user) {
-            const uid = typeof pp.user === 'object' ? (String(pp.user._id || pp.user)) : String(pp.user);
-            pp.user = userMap.has(uid) ? { _id: uid, name: userMap.get(uid).name, email: userMap.get(uid).email } : (typeof pp.user === 'object' ? pp.user : { _id: uid });
-          }
-          if (typeof pp.shareAmount !== 'undefined') pp.shareAmount = Number(pp.shareAmount || 0);
-          if (typeof pp.percentage !== 'undefined') pp.percentage = Number(pp.percentage || 0);
-          return pp;
-        });
-      } else copy.participants = [];
-
-      copy.amount = Number(copy.amount || 0);
-      copy.transactionType = copy.transactionType || copy.type || copy.txType || copy.transaction_type || null;
-      copy.participantsCount = Number(typeof copy.participantsCount !== 'undefined' ? copy.participantsCount : countParticipants(copy));
-      return copy;
-    });
-
-    return res.json({ transactions: enriched, total, page: pageNum, limit: lim });
+    res.json(txs);
   } catch (err) {
-    console.error('Group transactions fetch error:', err);
+    console.error('List group transactions error:', err);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });

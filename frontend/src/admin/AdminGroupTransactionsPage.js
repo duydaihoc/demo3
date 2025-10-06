@@ -73,6 +73,7 @@ function AdminGroupTransactionsPage() {
     try {
       // Build query parameters
       const queryParams = new URLSearchParams();
+      if (filters.groupId) queryParams.append('groupId', filters.groupId);
       if (filters.startDate) queryParams.append('startDate', filters.startDate);
       if (filters.endDate) queryParams.append('endDate', filters.endDate);
       if (filters.type) queryParams.append('type', filters.type);
@@ -82,10 +83,10 @@ function AdminGroupTransactionsPage() {
       queryParams.append('page', pagination.page);
       queryParams.append('limit', pagination.limit);
       
-      // backend expects path param groupId; use 'all' when not filtering a single group
-      const groupPath = filters.groupId && filters.groupId !== '' ? encodeURIComponent(filters.groupId) : 'all';
-      const url = `${API_BASE}/api/admin/groups/${groupPath}/transactions?${queryParams.toString()}`;
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      const url = `${API_BASE}/api/admin/group-transactions?${queryParams.toString()}`;
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       
       if (!res.ok) {
         if (res.status === 403) {
@@ -100,19 +101,16 @@ function AdminGroupTransactionsPage() {
       
       const data = await res.json();
       
-      // expected response: { transactions: [...], total, page, limit }
-      if (data && Array.isArray(data.transactions)) {
-        setTransactions(data.transactions);
-        setPagination(prev => ({
-          ...prev,
-          total: Number(data.total || data.count || data.transactions.length || 0),
-          page: Number(data.page || prev.page),
-          limit: Number(data.limit || prev.limit)
-        }));
-      } else if (Array.isArray(data)) {
-        // backward compatibility: server returned array
+      // Handle different response formats
+      if (Array.isArray(data)) {
         setTransactions(data);
         setPagination(prev => ({ ...prev, total: data.length }));
+      } else if (data.transactions && Array.isArray(data.transactions)) {
+        setTransactions(data.transactions);
+        setPagination(prev => ({ 
+          ...prev, 
+          total: data.total || data.count || data.transactions.length 
+        }));
       } else {
         setTransactions([]);
         setPagination(prev => ({ ...prev, total: 0 }));
@@ -240,20 +238,6 @@ function AdminGroupTransactionsPage() {
     }
     
     return 'Unknown';
-  };
-
-  // helper: render transaction "loại" (supports both group transactionType and generic type)
-  const renderTransactionType = (tx) => {
-    const tt = tx.transactionType || tx.type || tx.transaction_type || '';
-    // if this is group-split type show friendly labels
-    if (tt === 'payer_for_others') return 'Trả giúp';
-    if (tt === 'equal_split') return 'Chia đều';
-    if (tt === 'percentage_split') return 'Chia phần trăm';
-    if (tt === 'payer_single') return 'Trả đơn';
-    // fallback for general finance type (expense/income)
-    if (tt === 'expense') return 'Chi tiêu';
-    if (tt === 'income') return 'Thu nhập';
-    return tt || '-';
   };
 
   return (
@@ -423,7 +407,6 @@ function AdminGroupTransactionsPage() {
                     <th>ID</th>
                     <th>Nhóm</th>
                     <th>Nội dung</th>
-                    <th>Số người</th>
                     <th>Loại</th>
                     <th>Số tiền</th>
                     <th>Người tạo</th>
@@ -443,12 +426,9 @@ function AdminGroupTransactionsPage() {
                       <td className="tx-title">
                         {transaction.title || transaction.description || 'Không có tiêu đề'}
                       </td>
-                      <td className="tx-count">
-                        {/* participantsCount from backend; fallback to participants array length */}
-                        {typeof transaction.participantsCount !== 'undefined' ? transaction.participantsCount : (Array.isArray(transaction.participants) ? transaction.participants.length : 0)}
-                      </td>
                       <td className={`tx-type tx-type-${transaction.type}`}>
-                        {renderTransactionType(transaction)}
+                        {transaction.type === 'expense' ? 'Chi tiêu' : 
+                         transaction.type === 'income' ? 'Thu nhập' : transaction.type}
                       </td>
                       <td className={`tx-amount tx-amount-${transaction.type}`}>
                         {formatCurrency(transaction.amount || 0)}
@@ -530,8 +510,9 @@ function AdminGroupTransactionsPage() {
             
             <div className="modal-body">
               <div className="detail-header">
-                <div className={`transaction-badge ${selectedTransaction.transactionType || selectedTransaction.type || ''}`}>
-                  {renderTransactionType(selectedTransaction)}
+                <div className={`transaction-badge ${selectedTransaction.type}`}>
+                  {selectedTransaction.type === 'expense' ? 'Chi tiêu' : 
+                   selectedTransaction.type === 'income' ? 'Thu nhập' : selectedTransaction.type}
                 </div>
                 <div className="transaction-amount">
                   {formatCurrency(selectedTransaction.amount || 0)}
@@ -611,4 +592,3 @@ function AdminGroupTransactionsPage() {
 }
 
 export default AdminGroupTransactionsPage;
-

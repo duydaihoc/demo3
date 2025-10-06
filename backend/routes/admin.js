@@ -182,131 +182,26 @@ router.get('/groups/:groupId', auth, async (req, res) => {
   }
 });
 
-// Admin: get transactions for a group (or all groups)
-// GET /api/admin/groups/:groupId/transactions? page, limit, startDate, endDate, minAmount, maxAmount, type, q
+// GET /api/admin/groups/:groupId/transactions - Admin endpoint to get transactions for a group
 router.get('/groups/:groupId/transactions', auth, async (req, res) => {
   try {
-    if (!req.user || req.user.role !== 'admin') return res.status(403).json({ message: 'Admin access required' });
+    // Verify admin role
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
 
     const { groupId } = req.params;
-    const { page = 1, limit = 50, startDate, endDate, minAmount, maxAmount, type, q } = req.query;
-
-    const filter = {};
-    if (groupId && String(groupId).toLowerCase() !== 'all') filter.$or = [{ group: groupId }, { groupId: groupId }];
-
-    if (startDate || endDate) {
-      filter.date = {};
-      if (startDate) { const sd = new Date(startDate); if (!isNaN(sd)) filter.date.$gte = sd; }
-      if (endDate)   { const ed = new Date(endDate); if (!isNaN(ed)) { ed.setHours(23,59,59,999); filter.date.$lte = ed; } }
-      if (Object.keys(filter.date).length === 0) delete filter.date;
-    }
-
-    if (minAmount || maxAmount) {
-      filter.amount = {};
-      if (minAmount && !isNaN(Number(minAmount))) filter.amount.$gte = Number(minAmount);
-      if (maxAmount && !isNaN(Number(maxAmount))) filter.amount.$lte = Number(maxAmount);
-      if (Object.keys(filter.amount).length === 0) delete filter.amount;
-    }
-
-    if (type) filter.transactionType = type;
-    if (q) {
-      const regex = new RegExp(String(q), 'i');
-      filter.$or = filter.$or ? [...filter.$or, { title: { $regex: regex } }, { description: { $regex: regex } }] : [{ title: { $regex: regex } }, { description: { $regex: regex } }];
-    }
-
-    const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const lim = Math.max(1, Math.min(1000, parseInt(limit, 10) || 50));
-    const skip = (pageNum - 1) * lim;
-
+    if (!groupId) return res.status(400).json({ message: 'Group ID required' });
+    
+    // Import models if not already imported at top of file
     const GroupTransaction = require('../models/GroupTransaction');
-    const Group = require('../models/Group');
-    const User = require('../models/User');
-
-    const [txs, total] = await Promise.all([
-      GroupTransaction.find(filter).sort({ date: -1, createdAt: -1 }).skip(skip).limit(lim).lean(),
-      GroupTransaction.countDocuments(filter)
-    ]);
-
-    // collect ids
-    const groupIds = new Set();
-    const userIds = new Set();
-    txs.forEach(tx => {
-      if (tx.group) groupIds.add(String(tx.group));
-      if (tx.groupId) groupIds.add(String(tx.groupId));
-      if (tx.createdBy) {
-        const cb = typeof tx.createdBy === 'object' ? (tx.createdBy._id || tx.createdBy) : tx.createdBy;
-        if (cb) userIds.add(String(cb));
-      }
-      if (tx.payer) {
-        const p = typeof tx.payer === 'object' ? (tx.payer._id || tx.payer) : tx.payer;
-        if (p) userIds.add(String(p));
-      }
-      if (Array.isArray(tx.participants)) {
-        tx.participants.forEach(p => {
-          if (p && p.user) {
-            const uid = typeof p.user === 'object' ? (p.user._id || p.user) : p.user;
-            if (uid) userIds.add(String(uid));
-          }
-        });
-      }
-    });
-
-    const groupsArr = groupIds.size ? await Group.find({ _id: { $in: Array.from(groupIds) } }).select('name').lean() : [];
-    const usersArr = userIds.size ? await User.find({ _id: { $in: Array.from(userIds) } }).select('name email').lean() : [];
-
-    const groupMap = new Map(groupsArr.map(g => [String(g._id), g]));
-    const userMap = new Map(usersArr.map(u => [String(u._id), u]));
-
-    const countParticipants = (tx) => {
-      const s = new Set();
-      if (Array.isArray(tx.participants)) {
-        tx.participants.forEach(p => {
-          if (!p) return;
-          if (p.user) s.add(String(typeof p.user === 'object' ? (p.user._id || p.user) : p.user));
-          else if (p.email) s.add(String((p.email || '').toLowerCase()));
-        });
-      }
-      if (tx.createdBy) {
-        const c = typeof tx.createdBy === 'object' ? (tx.createdBy._id || tx.createdBy.email || tx.createdBy) : tx.createdBy;
-        if (c) s.add(String(c).toLowerCase());
-      }
-      return s.size || 0;
-    };
-
-    const enriched = txs.map(tx => {
-      const copy = { ...tx };
-      const gid = copy.group ? String(copy.group) : (copy.groupId ? String(copy.groupId) : null);
-      copy.group = gid ? (groupMap.get(gid) ? { _id: gid, name: groupMap.get(gid).name } : { _id: gid, name: `Group ${gid.substring(0,8)}...` }) : null;
-
-      if (copy.createdBy) {
-        const cbId = typeof copy.createdBy === 'object' ? (String(copy.createdBy._id || copy.createdBy)) : String(copy.createdBy);
-        copy.createdBy = userMap.has(cbId) ? { _id: cbId, name: userMap.get(cbId).name, email: userMap.get(cbId).email } : (typeof copy.createdBy === 'object' ? copy.createdBy : { _id: cbId });
-      }
-      if (copy.payer) {
-        const pId = typeof copy.payer === 'object' ? (String(copy.payer._id || copy.payer)) : String(copy.payer);
-        copy.payer = userMap.has(pId) ? { _id: pId, name: userMap.get(pId).name, email: userMap.get(pId).email } : (typeof copy.payer === 'object' ? copy.payer : { _id: pId });
-      }
-
-      if (Array.isArray(copy.participants)) {
-        copy.participants = copy.participants.map(p => {
-          const pp = { ...p };
-          if (pp.user) {
-            const uid = typeof pp.user === 'object' ? (String(pp.user._id || pp.user)) : String(pp.user);
-            pp.user = userMap.has(uid) ? { _id: uid, name: userMap.get(uid).name, email: userMap.get(uid).email } : (typeof pp.user === 'object' ? pp.user : { _id: uid });
-          }
-          if (typeof pp.shareAmount !== 'undefined') pp.shareAmount = Number(pp.shareAmount || 0);
-          if (typeof pp.percentage !== 'undefined') pp.percentage = Number(pp.percentage || 0);
-          return pp;
-        });
-      } else copy.participants = [];
-
-      copy.amount = Number(copy.amount || 0);
-      copy.transactionType = copy.transactionType || copy.type || copy.txType || copy.transaction_type || null;
-      copy.participantsCount = Number(typeof copy.participantsCount !== 'undefined' ? copy.participantsCount : countParticipants(copy));
-      return copy;
-    });
-
-    return res.json({ transactions: enriched, total, page: pageNum, limit: lim });
+    
+    const transactions = await GroupTransaction.find({ group: groupId })
+      .populate('createdBy', 'name email')
+      .populate('category')
+      .sort({ date: -1, createdAt: -1 });
+      
+    res.json(transactions);
   } catch (err) {
     console.error('Admin group transactions fetch error:', err);
     res.status(500).json({ message: 'Server error', error: err.message });
@@ -441,4 +336,3 @@ router.get('/group-transactions/:id', auth, async (req, res) => {
 });
 
 module.exports = router;
-      
