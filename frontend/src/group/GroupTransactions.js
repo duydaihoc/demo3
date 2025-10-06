@@ -46,6 +46,8 @@ export default function GroupTransactions() {
   const [editCategory, setEditCategory] = useState('');
   const [editSelectedMembers, setEditSelectedMembers] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);              // { added }
+  const [editTransactionType, setEditTransactionType] = useState('equal_split'); // { added }
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [txToDelete, setTxToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -135,7 +137,7 @@ export default function GroupTransactions() {
       const res = await fetch(`${API_BASE}/api/groups/${groupId}/transactions`, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) { setTxs([]); return; }
       const data = await res.json().catch(() => []);
-      setTxs(Array.isArray(data) ? data : []);
+      setTxs(Array.isArray(data) ? data.map(normalizeTxForDisplay) : []);
     } catch (e) {
       setError('Lỗi khi tải giao dịch');
       setTxs([]);
@@ -189,7 +191,7 @@ export default function GroupTransactions() {
       }
       
       const data = await res.json();
-      setTxs(data || []);
+      setTxs(Array.isArray(data) ? data.map(normalizeTxForDisplay) : (data ? [normalizeTxForDisplay(data)] : []));
     } catch (err) {
       console.error('Error fetching transactions:', err);
       setError(err.message || 'Failed to fetch transactions');
@@ -332,7 +334,11 @@ export default function GroupTransactions() {
       return;
     }
     
-    const participants = buildParticipants();
+    let participants = buildParticipants();
+    if (transactionType === 'payer_for_others') {
+      // each selected participant owes the full amount (creator paid for others)
+      participants = participants.map(p => ({ ...p, shareAmount: Number(amount) }));
+    }
 
     // Nếu chọn kiểu percentage_split, kiểm tra tổng % = 100
     if (transactionType === 'percentage_split') {
@@ -490,31 +496,98 @@ export default function GroupTransactions() {
   };
 
   // Start editing a transaction
-  const handleEditTransaction = (tx) => {
-    setEditingTx(tx);
-    setEditTitle(tx.title || '');
-    setEditAmount(tx.perPerson && tx.participants && tx.participants.length > 0 
-      ? String(tx.amount / tx.participants.length) 
-      : String(tx.amount || ''));
-    setEditDescription(tx.description || '');
-    setEditCategory(tx.category && tx.category._id ? tx.category._id : (typeof tx.category === 'string' ? tx.category : ''));
-    
-    // Map participants to the format expected by our UI
-    if (tx.participants && Array.isArray(tx.participants)) {
-      const mappedParticipants = tx.participants.map(p => ({
+  const handleEditTransaction = async (tx) => {
+    // load latest transaction from server to ensure we have transactionType, amounts, participants count etc.
+    if (!tx || !tx._id) return;
+    setEditLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/groups/${groupId}/transactions/${tx._id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (!res.ok) {
+        // fallback to using provided tx object
+        console.warn('Failed to load transaction details, using local copy');
+        const local = tx;
+        setEditingTx(local);
+        setEditTransactionType(local.transactionType || 'equal_split');
+        setEditTitle(local.title || '');
+        setEditAmount(String(local.amount || ''));
+        setEditDescription(local.description || '');
+        setEditCategory(local.category && local.category._id ? local.category._id : (typeof local.category === 'string' ? local.category : ''));
+        const mappedLocal = Array.isArray(local.participants) ? local.participants.map(p => ({
+          id: p.user ? (p.user._id || p.user) : undefined,
+          email: p.email || (p.user && p.user.email) || '',
+          name: p.user ? (p.user.name || p.user.email || 'Thành viên') : (p.email || 'Thành viên'),
+          settled: p.settled || false,
+          shareAmount: p.shareAmount || 0
+        })) : [];
+        setEditSelectedMembers(mappedLocal);
+        // try to initialize percentages from tx if present
+        if (Array.isArray(local.percentages) && local.percentages.length > 0) {
+          setPercentages(local.percentages.map(pp => ({ id: pp.user, email: pp.email, name: pp.name, percentage: Number(pp.percentage || 0) })));
+        } else {
+          // build default percentages including creator
+          const creator = getCurrentUser();
+          const list = [{ id: creator?.id, email: creator?.email, name: creator?.name || 'Bạn' }, ...mappedLocal.map(m => ({ id: m.id, email: m.email, name: m.name }))];
+          const base = Math.round((100 / (list.length || 1)) * 100) / 100;
+          const newPerc = list.map((p, idx) => ({ id: p.id, email: p.email, name: p.name, percentage: base }));
+          // adjust last
+          const sum = newPerc.reduce((s, x) => s + Number(x.percentage || 0), 0);
+          if (newPerc.length > 0 && Math.abs(sum - 100) > 0.01) {
+            const diff = Number((100 - sum).toFixed(2));
+            newPerc[newPerc.length - 1].percentage = Number((Number(newPerc[newPerc.length - 1].percentage || 0) + diff).toFixed(2));
+          }
+          setPercentages(newPerc);
+        }
+        setIsEditing(true);
+        return;
+      }
+ 
+      const body = await res.json().catch(() => null);
+      // backend may return { transaction, transactionType, amount, participantsCount } or the tx directly
+      const payloadTx = (body && body.transaction) ? body.transaction : (body || tx);
+ 
+      setEditingTx(payloadTx);
+      setEditTransactionType(payloadTx.transactionType || 'equal_split');
+      setEditTitle(payloadTx.title || '');
+      setEditAmount(String(payloadTx.amount || ''));
+      setEditDescription(payloadTx.description || '');
+      setEditCategory(payloadTx.category && payloadTx.category._id ? payloadTx.category._id : (typeof payloadTx.category === 'string' ? payloadTx.category : ''));
+ 
+      const mappedParticipants = Array.isArray(payloadTx.participants) ? payloadTx.participants.map(p => ({
         id: p.user ? (p.user._id || p.user) : undefined,
         email: p.email || (p.user && p.user.email) || '',
         name: p.user ? (p.user.name || p.user.email || 'Thành viên') : (p.email || 'Thành viên'),
         settled: p.settled || false,
         shareAmount: p.shareAmount || 0
-      }));
+      })) : [];
       setEditSelectedMembers(mappedParticipants);
-    } else {
-      setEditSelectedMembers([]);
+      // set percentages from payload if available, otherwise initialize similar to create flow
+      if (Array.isArray(payloadTx.percentages) && payloadTx.percentages.length > 0) {
+        setPercentages(payloadTx.percentages.map(pp => ({ id: pp.user, email: pp.email, name: pp.name, percentage: Number(pp.percentage || 0) })));
+      } else if (payloadTx.transactionType === 'percentage_split') {
+        const creator = getCurrentUser();
+        const list = [{ id: creator?.id, email: creator?.email, name: creator?.name || 'Bạn' }, ...mappedParticipants.map(m => ({ id: m.id, email: m.email, name: m.name }))];
+        const base = Math.round((100 / (list.length || 1)) * 100) / 100;
+        const newPerc = list.map((p, idx) => ({ id: p.id, email: p.email, name: p.name, percentage: base }));
+        const sum = newPerc.reduce((s, x) => s + Number(x.percentage || 0), 0);
+        if (newPerc.length > 0 && Math.abs(sum - 100) > 0.01) {
+          const diff = Number((100 - sum).toFixed(2));
+          newPerc[newPerc.length - 1].percentage = Number((Number(newPerc[newPerc.length - 1].percentage || 0) + diff).toFixed(2));
+        }
+        setPercentages(newPerc);
+      } else {
+        setPercentages([]); // not percentage split
+      }
+ 
+      setIsEditing(true);
+    } catch (err) {
+      console.error('Error fetching transaction for edit:', err);
+      alert('Không thể tải dữ liệu giao dịch để sửa. Thử lại sau.');
+    } finally {
+      setEditLoading(false);
     }
-    
-    // Show edit modal
-    setIsEditing(true);
   };
 
   // Toggle member selection in edit mode
@@ -552,6 +625,120 @@ export default function GroupTransactions() {
     });
   };
 
+  // Add helper to normalize transaction for UI (ensure participants have shareAmount based on transactionType/percentages)
+  function normalizeTxForDisplay(tx) {
+	// (this helper will be used below)
+	if (!tx) return tx;
+	const copy = { ...tx };
+	const amt = Number(copy.amount || 0);
+	const parts = Array.isArray(copy.participants) ? copy.participants.map(p => ({ ...p })) : [];
+
+	// build percentage map if present
+	const percMap = new Map();
+	if (Array.isArray(copy.percentages)) {
+		copy.percentages.forEach(pp => {
+			const key = (pp.email || pp.user || '').toString().toLowerCase();
+			percMap.set(key, Number(pp.percentage || 0));
+		});
+	}
+
+	// compute unique total participants (include creator if missing)
+	const idSet = new Set();
+	parts.forEach(p => {
+		if (p.user) idSet.add(String(p.user._id || p.user));
+		else if (p.email) idSet.add(String((p.email || '').toLowerCase()));
+	});
+	if (copy.createdBy) {
+		const c = (typeof copy.createdBy === 'object') ? (copy.createdBy._id || copy.createdBy.email) : copy.createdBy;
+		if (c) idSet.add(String((c || '').toString().toLowerCase()));
+	}
+	const totalParticipants = idSet.size || (copy.createdBy ? 1 : 0);
+
+	// compute shareAmount based on transactionType
+	if (copy.transactionType === 'percentage_split' && percMap.size > 0) {
+		parts.forEach(p => {
+			const key = (p.email || p.user || '').toString().toLowerCase();
+			const perc = percMap.get(key) || 0;
+			p.shareAmount = Number(((perc / 100) * amt).toFixed(2));
+			p.percentage = perc;
+		});
+	} else if (copy.transactionType === 'equal_split') {
+		const per = totalParticipants ? Number((amt / totalParticipants).toFixed(2)) : 0;
+		parts.forEach(p => p.shareAmount = p.shareAmount ? Number(p.shareAmount) : per);
+	} else if (copy.transactionType === 'payer_for_others') {
+		// Creator paid for others -> each selected participant owes the full amount (not split)
+		parts.forEach(p => p.shareAmount = Number(amt));
+	} else if (copy.transactionType === 'payer_single') {
+		// Only creator involved; participants (if any) owe nothing by default
+		parts.forEach(p => p.shareAmount = p.shareAmount ? Number(p.shareAmount) : 0);
+	} else {
+		// fallback: divide equally among participants
+		const cnt = parts.length || totalParticipants || 1;
+		const per = cnt ? Number((amt / cnt).toFixed(2)) : 0;
+		parts.forEach(p => p.shareAmount = p.shareAmount ? Number(p.shareAmount) : per);
+	}
+
+	copy.participants = parts;
+	return copy;
+}
+ 
+  // Sync edit modal shares/percentages when type or amount or selected members change
+  useEffect(() => {
+	if (!isEditing) return;
+
+	const amt = Number(editAmount || 0);
+
+	// equal_split: every participant (including creator) pays equal share
+	if (editTransactionType === 'equal_split') {
+		const total = (editSelectedMembers.length + 1) || 1; // include creator
+		const per = Number((amt / total).toFixed(2));
+		setEditSelectedMembers(prev => prev.map(m => ({ ...m, shareAmount: per })));
+		setPercentages([]); // clear percentages
+		setPercentTotalError('');
+		return;
+	}
+
+	// payer_for_others: creator paid full amount; selected members each owe equal part
+	if (editTransactionType === 'payer_for_others') {
+		// For "trả giúp" (creator pays for others) each selected member owes the FULL amount
+		setEditSelectedMembers(prev => prev.map(m => ({ ...m, shareAmount: Number(amt) })));
+		setPercentages([]);
+		setPercentTotalError('');
+		return;
+	}
+
+	// percentage_split: ensure percentages array exists for creator + selectedMembers
+	if (editTransactionType === 'percentage_split') {
+		const creator = getCurrentUser();
+		const list = [{ id: creator?.id, email: creator?.email, name: creator?.name || 'Bạn' }, ...editSelectedMembers.map(m => ({ id: m.id, email: m.email, name: m.name }))];
+		// If current percentages length matches keep them, otherwise initialize equal
+		if (!Array.isArray(percentages) || percentages.length !== list.length) {
+			const base = Math.round((100 / (list.length || 1)) * 100) / 100;
+			let newPerc = list.map(p => ({ id: p.id, email: p.email, name: p.name, percentage: base }));
+			const sum = newPerc.reduce((s, x) => s + Number(x.percentage || 0), 0);
+			if (newPerc.length > 0 && Math.abs(sum - 100) > 0.01) {
+				const diff = Number((100 - sum).toFixed(2));
+				newPerc[newPerc.length - 1].percentage = Number((Number(newPerc[newPerc.length - 1].percentage || 0) + diff).toFixed(2));
+			}
+			setPercentages(newPerc);
+		}
+		// compute shareAmount for editSelectedMembers according to percentages
+		const percMap = new Map();
+		(percentages || []).forEach(pp => {
+			const key = (pp.email || pp.id || '').toString().toLowerCase();
+			percMap.set(key, Number(pp.percentage || 0));
+		});
+		setEditSelectedMembers(prev => prev.map(m => {
+			const key = (m.email || m.id || '').toString().toLowerCase();
+			const perc = percMap.get(key) || 0;
+			return { ...m, shareAmount: Number(((perc / 100) * amt).toFixed(2)), percentage: perc };
+		}));
+		return;
+	}
+
+	// default: do nothing
+}, [editTransactionType, editAmount, editSelectedMembers.length, isEditing]); // eslint-disable-line
+
   // Save edited transaction
   const handleSaveEdit = async () => {
     if (!editingTx || !editingTx._id) return;
@@ -571,26 +758,39 @@ export default function GroupTransactions() {
       return;
     }
 
+    // Build participants from selected members
+    let participants = editSelectedMembers.map(m => ({
+      user: m.id,
+      email: m.email,
+      settled: m.settled || false,
+      shareAmount: m.shareAmount || Number(editAmount),
+      percentage: typeof m.percentage !== 'undefined' ? Number(m.percentage) : undefined
+    }));
+    
+    // If payer_for_others, ensure each participant owes the full amount
+    if (editTransactionType === 'payer_for_others') {
+      participants = participants.map(p => ({ ...p, shareAmount: Number(editAmount) }));
+    }
+    
+    // Build payload
+    const payload = {
+      title: editTitle,
+      description: editDescription,
+      amount: Number(editAmount),
+      category: editCategory,
+      transactionType: editTransactionType,
+      participants,
+      perPerson: true
+    };
+    // include percentages when editing percentage_split
+    if (editTransactionType === 'percentage_split') {
+      payload.percentages = (percentages || []).map(p => ({ user: p.id, email: p.email, percentage: Number(p.percentage || 0) }));
+    }
+
+    // Close modal UI while saving but keep a copy to restore on error
+    setIsEditing(false);
+    const prevTxs = txs;
     try {
-      // Build participants from selected members
-      const participants = editSelectedMembers.map(m => ({
-        user: m.id,
-        email: m.email,
-        settled: m.settled || false,
-        shareAmount: m.shareAmount || Number(editAmount)
-      }));
-      
-      const payload = {
-        title: editTitle,
-        description: editDescription,
-        amount: Number(editAmount),
-        category: editCategory,
-        participants,
-        perPerson: true // We're using per person amount in the edit form
-      };
-      
-      setIsEditing(false); // Close modal during fetch
-      
       const res = await fetch(`${API_BASE}/api/groups/${groupId}/transactions/${editingTx._id}`, {
         method: 'PUT',
         headers: {
@@ -600,18 +800,48 @@ export default function GroupTransactions() {
         body: JSON.stringify(payload)
       });
       
+      const body = await res.json().catch(() => null);
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Lỗi khi cập nhật giao dịch');
+        const msg = (body && (body.message || body.error)) || 'Lỗi khi cập nhật giao dịch';
+        throw new Error(msg);
       }
       
-      // Success - refresh transactions list
-      fetchTxs();
-      alert('Cập nhật giao dịch thành công');
+      // backend may return { transaction: {...} } or the transaction directly
+      const updatedTx = body && body.transaction ? body.transaction : (body || null);
+      if (!updatedTx) {
+        // fallback: refresh full list if backend didn't return updated object
+        await fetchTxs();
+        setGlobalMessage('Cập nhật giao dịch thành công');
+        setGlobalMessageType('success');
+        setTimeout(() => setGlobalMessage(''), 4000);
+        return;
+      }
+      
+      // Normalize updated transaction for UI (ensures shareAmount / percentages are correct)
+      const updatedNormalized = normalizeTxForDisplay({
+        ...updatedTx,
+        participants: Array.isArray(updatedTx.participants) ? updatedTx.participants.map(p => ({
+          ...p,
+          user: p.user && (p.user._id || p.user.name) ? p.user : p.user,
+          email: p.email
+        })) : []
+      });
+      
+      // Replace the transaction in local state so UI updates immediately
+      setTxs(prev => prev.map(t => (String(t._id || t.id) === String(updatedNormalized._id || updatedNormalized.id) ? updatedNormalized : t)));
+      
+      // update editingTx (in case modal remained open elsewhere) and show success
+      setEditingTx(updatedNormalized);
+
+      setGlobalMessage('Cập nhật giao dịch thành công');
+      setGlobalMessageType('success');
+      setTimeout(() => setGlobalMessage(''), 4000);
     } catch (err) {
-      console.error("Error updating transaction:", err);
+      console.error('Error updating transaction:', err);
+      // restore previous list and re-open modal so user can retry
+      setTxs(prevTxs);
       alert(err.message || 'Đã xảy ra lỗi khi cập nhật giao dịch');
-      setIsEditing(true); // Re-open modal to fix issues
+      setIsEditing(true);
     }
   };
 
@@ -1382,6 +1612,21 @@ export default function GroupTransactions() {
               </div>
               
               <div className="gt-modal-body">
+                {editLoading ? (
+                  <div style={{ padding: 20, textAlign: 'center' }}><i className="fas fa-spinner fa-spin"></i> Đang tải...</div>
+                ) : null}
+                
+                {/* Transaction type selector for edit */}
+                <div className="gt-form-group">
+                  <label>Kiểu giao dịch</label>
+                  <select value={editTransactionType} onChange={(e) => setEditTransactionType(e.target.value)}>
+                    <option value="payer_single">Trả đơn (Chỉ tôi)</option>
+                    <option value="payer_for_others">Trả giúp (Tôi trả tiền cho người khác)</option>
+                    <option value="equal_split">Chia đều (Chia đều cho tất cả)</option>
+                    <option value="percentage_split">Chia phần trăm (Tùy chỉnh % cho mỗi người)</option>
+                  </select>
+                </div>
+                
                 <div className="gt-form-group">
                   <label>Tiêu đề</label>
                   <input 
@@ -1484,6 +1729,55 @@ export default function GroupTransactions() {
                     placeholder="Thêm mô tả chi tiết (tùy chọn)"
                   />
                 </div>
+
+                {/* Percentage editor (same as create) */}
+                {editTransactionType === 'percentage_split' && (
+                  <div className="percentage-table" style={{ marginTop: 12 }}>
+                    <div className="percentage-table-header">
+                      <div>Thành viên</div>
+                      <div>%</div>
+                      <div>Số tiền</div>
+                    </div>
+                    <div className="percentage-table-body">
+                      {(percentages || []).map((p, idx) => (
+                        <div key={String(p.email || p.id || idx)} className="percentage-table-row">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div style={{ width: 36, height: 36, borderRadius: 8, background: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
+                              {(p.name || '').charAt(0).toUpperCase() || 'U'}
+                            </div>
+                            <div>
+                              <div style={{ fontWeight: 700 }}>{p.name || p.email || 'Người dùng'}</div>
+                              <div style={{ fontSize: 12, color: '#64748b' }}>{p.email || ''}</div>
+                            </div>
+                          </div>
+                          <div>
+                            <div className={`percentage-input-wrapper ${percentTotalError ? 'error' : ''}`}>
+                              <input
+                                className="percentage-input"
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.01"
+                                value={p.percentage}
+                                onChange={(e) => changePercentage(idx, e.target.value)}
+                              />
+                              <span className="percentage-symbol">%</span>
+                            </div>
+                          </div>
+                          <div style={{ textAlign: 'right', fontWeight: 700 }}>
+                            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(((Number(p.percentage || 0) / 100) * Number(editAmount || 0)) || 0)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div className={`percentage-total ${percentTotalError ? 'error' : 'success'}`} style={{ padding: '6px 10px' }}>
+                        Tổng: {(percentages || []).reduce((s, x) => s + Number(x.percentage || 0), 0)}%
+                      </div>
+                      {percentTotalError && <div style={{ color: '#b91c1c', fontSize: 13 }}>{percentTotalError}</div>}
+                    </div>
+                  </div>
+                )}
 
                 {/* New section to show selected members and allow toggling their settled status */}
                 {editSelectedMembers.length > 0 && (
