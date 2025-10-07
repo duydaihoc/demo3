@@ -200,9 +200,32 @@ export default function GroupMemberPage() {
 	
 	// Get member initial for avatar
 	const getMemberInitial = (member) => {
-		if (member.name) return member.name.charAt(0).toUpperCase();
 		if (member.email) return member.email.charAt(0).toUpperCase();
 		return 'U';
+	};
+
+	// NEW helper: resolve payer info (id + name) for a transaction
+	const getTransactionPayer = (tx) => {
+		if (!tx) return { id: null, name: 'Người trả' };
+		if (tx.payer) {
+			if (typeof tx.payer === 'object') {
+				return {
+					id: tx.payer._id || tx.payer.id || null,
+					name: tx.payer.name || tx.payer.email || String(tx.payer._id || tx.payer.id || tx.payer)
+				};
+			}
+			return { id: tx.payer, name: String(tx.payer) };
+		}
+		if (tx.createdBy) {
+			if (typeof tx.createdBy === 'object') {
+				return {
+					id: tx.createdBy._id || tx.createdBy.id || null,
+					name: tx.createdBy.name || tx.createdBy.email || String(tx.createdBy._id || tx.createdBy.id || tx.createdBy)
+				};
+			}
+			return { id: tx.createdBy, name: String(tx.createdBy) };
+		}
+		return { id: null, name: 'Người trả' };
 	};
 
 	return (
@@ -492,7 +515,7 @@ export default function GroupMemberPage() {
 													<ul className="gm-members-list">
 														{owesMe.map((entry,i) => {
 															const p = entry.participant;
-															const name = p.user ? (p.user.name || p.user.email) : (p.email || 'Người dùng');
+																const name = p.user ? (p.user.name || p.user.email) : (p.email || 'Người trả');
 															return (
 																<li key={i} className="gm-member-item">
 																	<div style={{flex:1}}>
@@ -515,8 +538,8 @@ export default function GroupMemberPage() {
 												{iOwe.length === 0 ? <div className="gm-empty-state-text">Bạn không nợ ai</div> :
 													<ul className="gm-members-list">
 														{iOwe.map((entry,i) => {
-															const payer = entry.tx.payer;
-															const payerName = payer ? (payer.name || payer.email) : 'Người trả';
+															const payerInfo = getTransactionPayer(entry.tx);
+															const payerName = payerInfo.name || payerInfo.id || 'Người trả';
 															const p = entry.participant;
 															return (
 																<li key={i} className="gm-member-item">
@@ -545,4 +568,5 @@ export default function GroupMemberPage() {
 		</div>
 	);
 }
+
 
