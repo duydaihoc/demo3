@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import GroupSidebar from './GroupSidebar';
 import './GroupTransactions.css';
+import { showNotification } from '../utils/notify';
 
 export default function GroupTransactions() {
   const { groupId } = useParams();
@@ -20,7 +21,6 @@ export default function GroupTransactions() {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [creating, setCreating] = useState(false);
-  const [createResult, setCreateResult] = useState(null);
   const [transactionType, setTransactionType] = useState('equal_split'); // Kiểu giao dịch mặc định
 
   // Thêm state cho người dùng hiện tại
@@ -312,25 +312,21 @@ export default function GroupTransactions() {
   // Chuyển đổi để sử dụng perPerson=true cho logic trả dùm
   const handleCreate = async (e) => {
     e && e.preventDefault();
-    setCreateResult(null);
     
     if (!amount || Number(amount) <= 0) {
-      setCreateResult({ ok: false, message: 'Vui lòng nhập số tiền hợp lệ' });
+      showNotification('Vui lòng nhập số tiền hợp lệ', 'error');
       return;
     }
-    
     if (!title.trim()) {
-      setCreateResult({ ok: false, message: 'Vui lòng nhập tiêu đề' });
+      showNotification('Vui lòng nhập tiêu đề', 'error');
       return;
     }
-    
     if (!selectedCategory) {
-      setCreateResult({ ok: false, message: 'Vui lòng chọn danh mục' });
+      showNotification('Vui lòng chọn danh mục', 'error');
       return;
     }
-    
     if (!groupId || !token) {
-      setCreateResult({ ok: false, message: 'Thiếu context hoặc chưa đăng nhập' });
+      showNotification('Thiếu context hoặc chưa đăng nhập', 'error');
       return;
     }
     
@@ -344,7 +340,7 @@ export default function GroupTransactions() {
     if (transactionType === 'percentage_split') {
       const sum = (percentages || []).reduce((s, p) => s + Number(p.percentage || 0), 0);
       if (Math.abs(sum - 100) > 0.01) {
-        setCreateResult({ ok: false, message: `Tổng phần trăm phải bằng 100% (hiện ${sum}%)` });
+        showNotification(`Tổng phần trăm phải bằng 100% (hiện ${sum}%)`, 'error');
         return;
       }
     }
@@ -381,11 +377,10 @@ export default function GroupTransactions() {
       const body = await res.json().catch(() => null);
       
       if (!res.ok) {
-        setCreateResult({ ok: false, message: (body && (body.message || body.error)) || 'Server error' });
+        showNotification((body && (body.message || body.error)) || 'Server error', 'error');
         return;
       }
-      
-      setCreateResult({ ok: true, message: 'Tạo giao dịch thành công' });
+      showNotification('✅ Giao dịch đã được tạo thành công!', 'success');
       
       // reset form
       setTitle('');
@@ -398,7 +393,7 @@ export default function GroupTransactions() {
       // refresh list
       await fetchTxs();
     } catch (err) {
-      setCreateResult({ ok: false, message: 'Lỗi mạng' });
+      showNotification('Lỗi mạng', 'error');
     } finally {
       setCreating(false);
     }
@@ -849,6 +844,7 @@ export default function GroupTransactions() {
         setGlobalMessage('Cập nhật giao dịch thành công');
         setGlobalMessageType('success');
         setTimeout(() => setGlobalMessage(''), 4000);
+        try { showNotification('Cập nhật giao dịch thành công', 'success'); } catch (e) {}
         return;
       }
       
@@ -868,9 +864,8 @@ export default function GroupTransactions() {
       // update editingTx (in case modal remained open elsewhere) and show success
       setEditingTx(updatedNormalized);
 
-      setGlobalMessage('Cập nhật giao dịch thành công');
-      setGlobalMessageType('success');
-      setTimeout(() => setGlobalMessage(''), 4000);
+      setGlobalMessage('');
+      showNotification('✅ Giao dịch đã được cập nhật thành công!', 'success');
     } catch (err) {
       console.error('Error updating transaction:', err);
       // restore previous list and re-open modal so user can retry
@@ -904,8 +899,8 @@ export default function GroupTransactions() {
       }
       
       // Success - refresh transactions list
+      showNotification('❌ Giao dịch đã được xóa thành công!', 'success');
       fetchTxs();
-      alert('Đã xóa giao dịch thành công');
       
     } catch (err) {
       console.error("Error deleting transaction:", err);
@@ -1253,11 +1248,7 @@ export default function GroupTransactions() {
                 </button>
               </div>
 
-              {createResult && (
-                <div className={`gt-create-result ${createResult.ok ? 'ok' : 'err'}`}>
-                  {createResult.message}
-                </div>
-              )}
+              {/* Thông báo tạo giao dịch đã chuyển sang showNotification, không cần hiện ở đây nữa */}
             </form>
           </section>
 

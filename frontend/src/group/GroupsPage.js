@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import GroupSidebar from './GroupSidebar';
 import './GroupsPage.css';
+import { showNotification } from '../utils/notify';
 
 export default function GroupsPage() {
 	const navigate = useNavigate();
@@ -240,8 +241,9 @@ export default function GroupsPage() {
 			// keep created group and switch to invite step
 			setCreatedGroup(newGroup);
 			setModalStep(2);
-			// ensure friends list is loaded
 			fetchFriendsList();
+			// notify user
+			showNotification('✅ Nhóm đã được tạo thành công!', 'success');
 		} catch (err) {
 			console.error('Create group failed', err);
 			setErrorMsg(err.message || 'Lỗi khi tạo nhóm');

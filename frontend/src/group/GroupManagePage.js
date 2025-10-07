@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import GroupSidebar from './GroupSidebar';
 import './GroupManagePage.css';
+import { showNotification } from '../utils/notify';
 
 export default function GroupManagePage() {
 	const { groupId } = useParams();
@@ -130,6 +131,9 @@ export default function GroupManagePage() {
 			const updated = await res.json();
 			setGroup(updated);
 			setEditing(false);
+
+			// notify user
+			showNotification('✅ Nhóm đã được cập nhật thành công!', 'success');
 		} catch (e) {
 			setError('Lỗi mạng');
 		} finally {
@@ -187,7 +191,7 @@ export default function GroupManagePage() {
 			}
 			// success: close modal and navigate away
 			setShowDeleteModal(false);
-			alert('Đã xóa nhóm');
+			showNotification('❌ Nhóm đã được xóa thành công!', 'success');
 			navigate('/groups');
 		} catch (e) {
 			console.error('handleConfirmDelete error', e);
