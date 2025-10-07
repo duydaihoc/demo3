@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import GroupSidebar from './GroupSidebar';
 import './GroupManagePage.css';
 import { showNotification } from '../utils/notify';
+import GroupCharts from './GroupCharts';
+import './GroupCharts.css';
 
 export default function GroupManagePage() {
 	const { groupId } = useParams();
@@ -537,6 +539,9 @@ export default function GroupManagePage() {
 			alert('Lỗi mạng khi đánh dấu thanh toán');
 		}
 	};
+
+	// ensure we have groupId from route (if not already available in this file)
+	// (removed duplicate `const { groupId } = ...` because `groupId` is already declared elsewhere)
 
 	// Inside the render method, update the layout structure for a banking-style interface:
 	return (
@@ -1222,6 +1227,13 @@ export default function GroupManagePage() {
 					</>
 				)}
 
+				{/* Group charts: visualize transactions & debts */}
+				{groupId && <section className="groups-section">
+				  <div className="section-header">
+				    <h2 className="section-title"><i className="fas fa-chart-area"></i> Thống kê nhanh</h2>
+				  </div>
+				  <GroupCharts groupId={groupId} />
+				</section>}
 			</main>
 		</div>
 	);

@@ -991,17 +991,6 @@ export default function GroupTransactions() {
           <div className="gt-header-actions">
             <button className="gm-btn secondary" onClick={() => navigate(-1)}>← Quay lại</button>
             <button className="gm-btn primary" onClick={fetchTxs}>Làm mới</button>
-            
-            <button
-              className="gt-optimize-btn"
-              onClick={() => {
-                setShowOptimizeModal(true);
-                fetchOptimizedTransactions();
-              }}
-              title="Tối ưu hóa thanh toán"
-            >
-              <i className="fas fa-magic"></i> Tối ưu hóa thanh toán
-            </button>
           </div>
         </header>
 

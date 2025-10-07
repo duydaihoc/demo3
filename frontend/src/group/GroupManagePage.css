@@ -928,21 +928,37 @@
   padding-bottom: 40px; /* Add space at the bottom */
 }
 
-/* Make card bodies scroll if they get too tall */
-.gm-card-body {
-  color: #556575;
-  padding: 24px;
-  max-height: 70vh; /* Limit height for very tall content */
-  overflow-y: auto; /* Allow scrolling within cards if needed */
+/* Fix charts sizing/overflow so Chart.js canvases render correctly inside banking cards */
+.gm-card .group-charts,
+.gm-card-body .group-charts {
+  overflow: visible; /* allow canvas to render fully */
 }
 
-/* Add scrolling to specific sections that might get long */
-.gm-members-list, 
-.gm-friends-grid {
-  max-height: 60vh;
-  overflow-y: auto;
-  scrollbar-width: thin; /* For Firefox */
-  scrollbar-color: #c1c1c1 #f1f1f1; /* For Firefox */
+/* ensure each chart panel has a sensible minimum height */
+.group-charts .gc-chart,
+.group-charts .gc-chart-wide,
+.group-charts .gc-chart-narrow {
+  min-height: 220px;
+  height: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* make chart canvas fill the chart container (Chart.js maintainAspectRatio: false will respect container) */
+.group-charts canvas,
+.group-charts .chartjs-render-monitor {
+  width: 100% !important;
+  height: 100% !important;
+  max-height: 520px; /* safeguard for very tall charts */
+}
+
+/* on small screens reduce minimum height */
+@media (max-width: 640px) {
+  .group-charts .gc-chart,
+  .group-charts .gc-chart-wide,
+  .group-charts .gc-chart-narrow {
+    min-height: 180px;
+  }
 }
 
 /* Update modal styling for better scrolling */
