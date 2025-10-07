@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import GroupSidebar from './GroupSidebar';
-import GroupCharts from './GroupCharts';
 import './GroupMemberPage.css';
-import './GroupCharts.css';
+
 
 export default function GroupMemberPage() {
 	const { groupId } = useParams();
@@ -539,16 +538,6 @@ export default function GroupMemberPage() {
 									})()}
 								</div>
 							</div>
-
-							{ /* Charts for members */ }
-							{ groupId && (
-							  <section className="groups-section">
-							    <div className="section-header">
-							      <h2 className="section-title"><i className="fas fa-chart-pie"></i> Thống kê nhóm</h2>
-							    </div>
-							    <GroupCharts groupId={groupId} />
-							  </section>
-							) }
 						</div>
 					</>
 				)}
