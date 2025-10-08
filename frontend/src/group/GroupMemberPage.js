@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import GroupSidebar from './GroupSidebar';
+import GroupCharts from './GroupCharts';
 import './GroupMemberPage.css';
+import './GroupCharts.css';
 
 
 export default function GroupMemberPage() {
@@ -477,6 +479,11 @@ export default function GroupMemberPage() {
 										</ul>
 									}
 								</div>
+							</div>
+
+							{/* ADD: Charts */}
+							<div style={{gridColumn: "1 / span 1"}}>
+								<GroupCharts txs={txs} members={group ? group.members : []} />
 							</div>
 
 							{/* NEW: Debts card - Thay đổi gridColumn */}

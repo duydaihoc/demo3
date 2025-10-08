@@ -11,7 +11,6 @@ export default function GroupSidebar({ active = 'overview' }) {
     { id: 'groups', label: 'Nhóm', route: '/groups' },
     { id: 'friends', label: 'Bạn bè', route: '/friends' }, // mới
     { id: 'activity', label: 'Hoạt động', route: '/activity' },
-    { id: 'settings', label: 'Cài đặt', route: '/settings' },
   ];
 
   // Keep .groups-main height in sync on resize (UI-only)

@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import GroupSidebar from './GroupSidebar';
 import './GroupManagePage.css';
 import { showNotification } from '../utils/notify';
+import GroupCharts from './GroupCharts';
+import './GroupCharts.css';
 
 
 export default function GroupManagePage() {
@@ -386,44 +388,43 @@ export default function GroupManagePage() {
 		return { id: null, name: 'Người trả' };
 	};
 
-	// NEW helper: resolve a userId/email to a display name using current group (owner then members)
-	const getUserNameById = (userIdOrEmail) => {
-		if (!userIdOrEmail || !group) return null;
-		const s = String(userIdOrEmail).trim();
-		const lower = s.toLowerCase();
+// NEW helper: resolve a userId/email to a display name using current group (owner then members)
+const getUserNameById = (userIdOrEmail) => {
+	if (!userIdOrEmail || !group) return null;
+	const s = String(userIdOrEmail).trim();
+	const lower = s.toLowerCase();
 
-		// 1) check owner by id or email
-		if (group.owner) {
-			const ownerId = group.owner && (group.owner._id || group.owner.id || group.owner);
-			const ownerEmail = (group.owner && group.owner.email || '').toLowerCase().trim();
-			if (ownerId && String(ownerId) === String(s)) return group.owner.name || ownerEmail || String(s);
-			if (ownerEmail && ownerEmail === lower) return group.owner.name || ownerEmail || String(s);
-		}
+	// 1) check owner by id or email
+	if (group.owner) {
+		const ownerId = group.owner && (group.owner._id || group.owner.id || group.owner);
+		const ownerEmail = ((group.owner && group.owner.email) || '').toLowerCase().trim();
+		if (ownerId && String(ownerId) === String(s)) return group.owner.name || ownerEmail || String(s);
+		if (ownerEmail && ownerEmail === lower) return group.owner.name || ownerEmail || String(s);
+	}
 
-		// 2) check members: match by populated user id or by member.email
-		if (Array.isArray(group.members)) {
-			for (const m of group.members) {
-				const mUserId = m.user && (m.user._id || m.user.id || m.user);
-				const mEmail = (m.email || '').toLowerCase().trim();
-				const mName = m.name || (m.user && (m.user.name || m.user.email)) || null;
+	// 2) check members: match by populated user id or by member.email
+	if (Array.isArray(group.members)) {
+		for (const m of group.members) {
+			const mUserId = m.user && (m.user._id || m.user.id || m.user);
+			const mEmail = (m.email || '').toLowerCase().trim();
+			const mName = m.name || (m.user && (m.user.name || m.user.email)) || null;
 
-				if (mUserId && String(mUserId) === String(s)) return mName || mEmail || String(s);
-				if (mEmail && mEmail === lower) return mName || mEmail || String(s);
+			if (mUserId && String(mUserId) === String(s)) return mName || mEmail || String(s);
+			if (mEmail && mEmail === lower) return mName || mEmail || String(s);
 
-				// if member.user is populated object and has email or id nested
-				if (m.user && typeof m.user === 'object') {
-					const muId = m.user._id || m.user.id || null;
-					const muEmail = (m.user.email || '').toLowerCase().trim();
-					const muName = m.user.name || null;
-					if (muId && String(muId) === String(s)) return muName || muEmail || String(s);
-					if (muEmail && muEmail === lower) return muName || muEmail || String(s);
-				}
+			// if member.user is populated object and has email or id nested
+			if (m.user && typeof m.user === 'object') {
+				const muId = m.user._id || m.user.id || null;
+				const muEmail = (m.user && m.user.email ? m.user.email.toLowerCase().trim() : '');
+				const muName = m.user.name || null;
+				if (muId && String(muId) === String(s)) return muName || muEmail || String(s);
+				if (muEmail && muEmail === lower) return muName || muEmail || String(s);
 			}
 		}
+	}
 
-		return null;
-	};
-
+	return null;
+};
 	// Format date for display (simple helper)
 	const formatDate = (dateString) => {
 		if (!dateString) return '';
@@ -1148,6 +1149,12 @@ export default function GroupManagePage() {
 										</ul>
 									)}
 								</div>
+							</div>
+
+							{/* ADD: Charts (transactions over time + member percentage) */}
+							{/* place charts between activity and debts */}
+							<div style={{gridColumn: "1 / span 1"}}>
+								<GroupCharts txs={txs} members={group ? group.members : []} />
 							</div>
 
 							{/* NEW: Debts Card - Thay đổi gridColumn */}
