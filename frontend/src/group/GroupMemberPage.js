@@ -207,25 +207,51 @@ export default function GroupMemberPage() {
 	// NEW helper: resolve payer info (id + name) for a transaction
 	const getTransactionPayer = (tx) => {
 		if (!tx) return { id: null, name: 'Người trả' };
-		if (tx.payer) {
-			if (typeof tx.payer === 'object') {
-				return {
-					id: tx.payer._id || tx.payer.id || null,
-					name: tx.payer.name || tx.payer.email || String(tx.payer._id || tx.payer.id || tx.payer)
-				};
-			}
-			return { id: tx.payer, name: String(tx.payer) };
+		// if populated object, use it
+		if (tx.payer && typeof tx.payer === 'object') {
+			return {
+				id: tx.payer._id || tx.payer.id || null,
+				name: tx.payer.name || tx.payer.email || String(tx.payer._id || tx.payer.id || tx.payer)
+			};
 		}
-		if (tx.createdBy) {
-			if (typeof tx.createdBy === 'object') {
-				return {
-					id: tx.createdBy._id || tx.createdBy.id || null,
-					name: tx.createdBy.name || tx.createdBy.email || String(tx.createdBy._id || tx.createdBy.id || tx.createdBy)
-				};
-			}
-			return { id: tx.createdBy, name: String(tx.createdBy) };
+		// raw string (could be id or email) or createdBy fallback
+		const raw = tx.payer || tx.createdBy || '';
+		const id = (typeof raw === 'string' && raw) ? raw : (raw && (raw._id || raw.id) ? String(raw._id || raw.id) : null);
+
+		// try to resolve from group (owner or members)
+		if (id && group) {
+			const resolved = getUserNameById(id);
+			if (resolved) return { id, name: resolved };
 		}
-		return { id: null, name: 'Người trả' };
+
+		// if raw looks like email, show it
+		if (typeof raw === 'string' && raw.includes('@')) {
+			return { id, name: raw };
+		}
+
+		// fallback: show truncated id
+		return { id, name: id ? `Người trả #${String(id).substring(0,6)}...` : 'Người trả' };
+	};
+
+	// Thêm hàm tra cứu tên/email từ id
+	const getUserNameById = (userId) => {
+		if (!userId) return null;
+		// check owner first
+		if (group && group.owner) {
+			const ownerId = group.owner && (group.owner._id || group.owner.id || group.owner);
+			if (ownerId && String(ownerId) === String(userId)) {
+				return group.owner.name || group.owner.email || String(userId);
+			}
+		}
+		// then members
+		if (group && Array.isArray(group.members)) {
+			const member = group.members.find(m => {
+				const mUserId = m.user && (m.user._id ? String(m.user._id) : String(m.user));
+				return mUserId && String(mUserId) === String(userId);
+			});
+			if (member) return member.name || member.email || String(userId);
+		}
+		return null;
 	};
 
 	return (
@@ -539,7 +565,15 @@ export default function GroupMemberPage() {
 													<ul className="gm-members-list">
 														{iOwe.map((entry,i) => {
 															const payerInfo = getTransactionPayer(entry.tx);
-															const payerName = payerInfo.name || payerInfo.id || 'Người trả';
+															// Nếu payerInfo.name là id, chuyển thành tên/email
+															let payerName = payerInfo.name;
+															if (
+																payerName &&
+																!/[@.]/.test(payerName) && // không phải email
+																payerName.length > 10 // id thường dài
+															) {
+																payerName = getUserNameById(payerInfo.id || payerName);
+															}
 															const p = entry.participant;
 															return (
 																<li key={i} className="gm-member-item">

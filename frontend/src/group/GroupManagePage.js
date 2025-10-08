@@ -317,25 +317,111 @@ export default function GroupManagePage() {
 	// NEW helper: resolve payer info (id + name) for a transaction
 	const getTransactionPayer = (tx) => {
 		if (!tx) return { id: null, name: 'Người trả' };
-		if (tx.payer) {
-			if (typeof tx.payer === 'object') {
-				return {
-					id: tx.payer._id || tx.payer.id || null,
-					name: tx.payer.name || tx.payer.email || String(tx.payer._id || tx.payer.id || tx.payer)
-				};
-			}
-			return { id: tx.payer, name: String(tx.payer) };
+
+		// helper to try resolve from group by id/email (see below)
+		const resolveFromGroup = (rawIdOrEmail) => {
+			if (!rawIdOrEmail || !group) return null;
+			return getUserNameById(rawIdOrEmail);
+		};
+
+		// If payer is an object (populated), prefer its name but fall back to group lookup using id or email
+		if (tx.payer && typeof tx.payer === 'object') {
+			const payerId = tx.payer._id || tx.payer.id || null;
+			const payerEmail = (tx.payer.email || '').toLowerCase().trim();
+			const payerName = tx.payer.name || null;
+
+			if (payerName) return { id: payerId, name: payerName };
+			// try group resolution by id first
+			const resolvedById = payerId ? resolveFromGroup(payerId) : null;
+			if (resolvedById) return { id: payerId, name: resolvedById };
+			// try by email
+			const resolvedByEmail = payerEmail ? resolveFromGroup(payerEmail) : null;
+			if (resolvedByEmail) return { id: payerId || payerEmail, name: resolvedByEmail };
+
+			// fallback to email if present, else show truncated id
+			if (payerEmail) return { id: payerId || payerEmail, name: payerEmail };
+			if (payerId) return { id: payerId, name: `Người trả #${String(payerId).slice(0,6)}...` };
+
+			return { id: null, name: 'Người trả' };
 		}
+
+		// If payer is a raw string (could be id or email)
+		if (tx.payer && typeof tx.payer === 'string') {
+			const raw = tx.payer;
+			if (raw.includes('@')) {
+				// email string: try resolve by email to get name
+				const resolved = resolveFromGroup(raw.toLowerCase().trim());
+				return { id: raw, name: resolved || raw };
+			}
+			// likely an id: try resolve by id
+			const resolvedById = resolveFromGroup(raw);
+			if (resolvedById) return { id: raw, name: resolvedById };
+			return { id: raw, name: `Người trả #${String(raw).slice(0,6)}...` };
+		}
+
+		// fallback to createdBy if payer missing
 		if (tx.createdBy) {
 			if (typeof tx.createdBy === 'object') {
-				return {
-					id: tx.createdBy._id || tx.createdBy.id || null,
-					name: tx.createdBy.name || tx.createdBy.email || String(tx.createdBy._id || tx.createdBy.id || tx.createdBy)
-				};
+				const cbId = tx.createdBy._id || tx.createdBy.id || null;
+				const cbEmail = (tx.createdBy.email || '').toLowerCase().trim();
+				const cbName = tx.createdBy.name || null;
+				if (cbName) return { id: cbId, name: cbName };
+				const resolved = cbId ? resolveFromGroup(cbId) : (cbEmail ? resolveFromGroup(cbEmail) : null);
+				if (resolved) return { id: cbId || cbEmail, name: resolved };
+				if (cbEmail) return { id: cbId || cbEmail, name: cbEmail };
+				if (cbId) return { id: cbId, name: `Người trả #${String(cbId).slice(0,6)}...` };
 			}
-			return { id: tx.createdBy, name: String(tx.createdBy) };
+			if (typeof tx.createdBy === 'string') {
+				const raw = tx.createdBy;
+				if (raw.includes('@')) {
+					const resolved = resolveFromGroup(raw.toLowerCase().trim());
+					return { id: raw, name: resolved || raw };
+				}
+				const resolvedById = resolveFromGroup(raw);
+				if (resolvedById) return { id: raw, name: resolvedById };
+				return { id: raw, name: `Người trả #${String(raw).slice(0,6)}...` };
+			}
 		}
+
 		return { id: null, name: 'Người trả' };
+	};
+
+	// NEW helper: resolve a userId/email to a display name using current group (owner then members)
+	const getUserNameById = (userIdOrEmail) => {
+		if (!userIdOrEmail || !group) return null;
+		const s = String(userIdOrEmail).trim();
+		const lower = s.toLowerCase();
+
+		// 1) check owner by id or email
+		if (group.owner) {
+			const ownerId = group.owner && (group.owner._id || group.owner.id || group.owner);
+			const ownerEmail = (group.owner && group.owner.email || '').toLowerCase().trim();
+			if (ownerId && String(ownerId) === String(s)) return group.owner.name || ownerEmail || String(s);
+			if (ownerEmail && ownerEmail === lower) return group.owner.name || ownerEmail || String(s);
+		}
+
+		// 2) check members: match by populated user id or by member.email
+		if (Array.isArray(group.members)) {
+			for (const m of group.members) {
+				const mUserId = m.user && (m.user._id || m.user.id || m.user);
+				const mEmail = (m.email || '').toLowerCase().trim();
+				const mName = m.name || (m.user && (m.user.name || m.user.email)) || null;
+
+				if (mUserId && String(mUserId) === String(s)) return mName || mEmail || String(s);
+				if (mEmail && mEmail === lower) return mName || mEmail || String(s);
+
+				// if member.user is populated object and has email or id nested
+				if (m.user && typeof m.user === 'object') {
+					const muId = m.user._id || m.user.id || null;
+					const muEmail = (m.user.email || '').toLowerCase().trim();
+					const muName = m.user.name || null;
+					if (muId && String(muId) === String(s)) return muName || muEmail || String(s);
+					if (muEmail && muEmail === lower) return muName || muEmail || String(s);
+				}
+			}
+		}
+
+		return null;
 	};
 
 	// Format date for display (simple helper)
