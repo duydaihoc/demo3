@@ -41,7 +41,7 @@ async function selectCategory(walletId, title, type) {
 
 // POST /api/ai/create-transaction
 // body: { title: string, walletId: string, amount?: number }
-// Tự đoán type và category, tạo transaction và cập nhật balance ví
+// Tự đoán type và category, tạo transaction nếu có category phù hợp, ngược lại trả về thông báo
 router.post('/create-transaction', auth, async (req, res) => {
   try {
     const { title, walletId, amount } = req.body;
@@ -63,7 +63,14 @@ router.post('/create-transaction', auth, async (req, res) => {
     // Chọn category
     const category = await selectCategory(walletId, title, type);
     if (!category) {
-      return res.status(400).json({ message: 'No suitable category found for this transaction type' });
+      // Không có category phù hợp, trả về thông báo cho AI
+      return res.json({
+        aiMessage: `Không tìm thấy danh mục phù hợp cho giao dịch "${title}" (loại: ${type}). Hãy thêm danh mục vào ví trước khi tạo giao dịch. Ví dụ: thêm danh mục "Ăn uống" cho chi tiêu hoặc "Lương" cho thu nhập.`,
+        aiDecisions: {
+          guessedType: type,
+          categoryNotFound: true
+        }
+      });
     }
 
     // Sử dụng amount nếu cung cấp và > 0, ngược lại mặc định 0

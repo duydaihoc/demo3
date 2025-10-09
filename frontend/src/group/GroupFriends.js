@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import GroupSidebar from './GroupSidebar';
 import './GroupFriends.css';
+import { showNotification } from '../utils/notify'; // Thêm import
 
 export default function GroupFriends() {
   const [searchEmail, setSearchEmail] = useState('');
@@ -159,12 +160,14 @@ export default function GroupFriends() {
         // clarify operator precedence to satisfy ESLint
         if (msg.includes('already sent') || (msg.includes('already') && msg.includes('sent'))) {
           setReqState(prev => ({ ...prev, [key]: 'sent' }));
+          showNotification('Lời mời đã được gửi trước đó', 'info');
           return;
         }
 
         // otherwise show error state briefly
         setReqState(prev => ({ ...prev, [key]: 'error' }));
         console.warn('invite failed', err);
+        showNotification('Không thể gửi lời mời', 'error');
         setTimeout(() => setReqState(prev => ({ ...prev, [key]: 'idle' })), 3000);
         return;
       }
@@ -172,6 +175,7 @@ export default function GroupFriends() {
       // success -> mark as sent
       await res.json();
       setReqState(prev => ({ ...prev, [key]: 'sent' }));
+      showNotification('Đã gửi lời mời kết bạn', 'success');
 
       // try to refresh notifications (best-effort)
       try {
@@ -182,6 +186,7 @@ export default function GroupFriends() {
     } catch (err) {
       console.warn('sendFriendRequest error', err);
       setReqState(prev => ({ ...prev, [key]: 'error' }));
+      showNotification('Lỗi khi gửi lời mời', 'error');
       setTimeout(() => setReqState(prev => ({ ...prev, [key]: 'idle' })), 3000);
     } finally {
       // refresh incoming requests after sending (recipient may now have a pending)
@@ -191,7 +196,7 @@ export default function GroupFriends() {
 
   // --- Thay đổi handleRespond: cập nhật UI ngay và làm mới friends ---
   const handleRespond = async (requestId, accept) => {
-    if (!token) { alert('Bạn cần đăng nhập'); return; }
+    if (!token) { showNotification('Bạn cần đăng nhập', 'error'); return; }
     // optimistic UI: remove request immediately so UX thấy thay đổi
     setIncomingRequests(prev => prev.filter(r => String(r._id || r.id) !== String(requestId)));
     try {
@@ -207,7 +212,7 @@ export default function GroupFriends() {
         // on error, re-fetch requests to restore list
         await fetchRequests();
         const err = await res.json().catch(() => null);
-        alert((err && err.message) ? err.message : 'Không thể phản hồi lời mời');
+        showNotification((err && err.message) ? err.message : 'Không thể phản hồi lời mời', 'error');
         return;
       }
       await res.json();
@@ -216,19 +221,19 @@ export default function GroupFriends() {
       await fetchCurrentUser();
       // also refresh notifications (best-effort)
       try { await fetch(`${API_BASE}/api/notifications`, { headers: { Authorization: `Bearer ${token}` } }); } catch(e){/*ignore*/}
-      if (accept) alert('Đã chấp nhận lời mời');
-      else alert('Đã từ chối lời mời');
+      if (accept) showNotification('Đã chấp nhận lời mời', 'success');
+      else showNotification('Đã từ chối lời mời', 'info');
     } catch (err) {
       console.warn('handleRespond error', err);
       // on network error, restore list
       await fetchRequests();
-      alert('Lỗi mạng, thử lại');
+      showNotification('Lỗi mạng, thử lại', 'error');
     }
   };
 
   // remove friend handler
   const handleRemoveFriend = async (friendId) => {
-    if (!token) { alert('Bạn cần đăng nhập'); return; }
+    if (!token) { showNotification('Bạn cần đăng nhập', 'error'); return; }
     // optimistic UI remove
     const prev = friends;
     setFriends(prev => prev.filter(f => String(f.id || f._id) !== String(friendId)));
@@ -246,17 +251,17 @@ export default function GroupFriends() {
         // rollback on error
         setFriends(prev);
         const err = await res.json().catch(() => null);
-        alert((err && err.message) ? err.message : 'Không thể xóa bạn bè');
+        showNotification((err && err.message) ? err.message : 'Không thể xóa bạn bè', 'error');
         return;
       }
       // success: optionally refresh requests and notifications
       await fetchCurrentUser();
       try { await fetch(`${API_BASE}/api/notifications`, { headers: { Authorization: `Bearer ${token}` } }); } catch(e){/*ignore*/}
-      alert('Đã xóa bạn bè');
+      showNotification('Đã xóa bạn bè', 'success');
     } catch (err) {
       console.warn('handleRemoveFriend error', err);
       setFriends(prev);
-      alert('Lỗi mạng, thử lại');
+      showNotification('Lỗi mạng, thử lại', 'error');
     }
   };
 

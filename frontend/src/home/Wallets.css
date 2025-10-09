@@ -288,12 +288,11 @@
 
 .wallet-modal {
   background: linear-gradient(135deg, #4ecdc4, #2a5298);
-  padding: 25px;
-  border-radius: 12px;
-  width: 420px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
-  transform: scale(0.9);
-  animation: popIn 0.35s cubic-bezier(.68,-0.55,.27,1.55) forwards;
+  padding: 32px;
+  border-radius: 16px;
+  width: 620px; /* tăng kích thước modal lên thêm nữa */
+  max-width: 99vw;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
   color: #fff;
 }
 
@@ -1071,3 +1070,53 @@
 @media (max-width: 520px) {
   .create-wallet-card { width: calc(100% - 32px); margin: 0 16px; min-height: auto; }
 }
+
+/* Danh mục chọn trong modal sửa ví */
+.wallet-modal-category-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); /* tăng min-width lên 160px */
+  gap: 16px; /* tăng gap cho thoáng */
+  margin-top: 12px;
+  margin-bottom: 12px;
+}
+
+/* Danh mục card */
+.wallet-modal-category-card {
+  background: linear-gradient(180deg,#ffffff,#fbfdff);
+  border: 1px solid rgba(22,58,90,0.09);
+  border-radius: 10px;
+  padding: 12px 18px; /* tăng padding cho card */
+  box-shadow: 0 6px 18px rgba(7,22,37,0.08);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  transition: box-shadow 0.18s, transform 0.18s;
+  cursor: pointer;
+}
+
+.wallet-modal-category-card:hover {
+  box-shadow: 0 12px 32px rgba(7,22,37,0.12);
+  transform: translateY(-2px);
+}
+
+/* Tên danh mục: cho phép hiển thị nhiều ký tự hơn, không bị bóp/chấm quá sớm */
+.wallet-modal-category-name {
+  font-weight: 600;
+  color: #163a5a;
+  font-size: 1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px; /* tăng max-width để hiện nhiều ký tự hơn */
+}
+
+/* Nếu muốn cho phép xuống dòng khi quá dài, dùng: */
+/*
+.wallet-modal-category-name {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  max-width: none;
+}
+*/
