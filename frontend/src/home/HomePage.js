@@ -4,6 +4,7 @@ import Wallets from './Wallets';
 import './HomePage.css';
 import FinanceDashboard from './FinanceDashboard'; // new component
 import SavingsGoals from './SavingsGoals';
+import AiAssistant from './AiAssistant';
 
 import { useNavigate } from 'react-router-dom';
 
@@ -46,6 +47,7 @@ function HomePage() {
           </aside>
         </div>
       </main>
+      <AiAssistant />
     </div>
   );
 }
