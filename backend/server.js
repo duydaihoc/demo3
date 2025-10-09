@@ -18,6 +18,7 @@ const categoryRoutes = require('./routes/Category'); // Import category routes
 const savingsRoutes = require('./routes/SavingsGoal'); // Import savings goal routes
 const groupRoutes = require('./routes/groups'); // Import group routes
 const notificationRoutes = require('./routes/notifications'); // Import notification routes
+const aiRoutes = require('./routes/ai'); // Import AI routes
 const http = require('http');
 let Server = null;
 try {
@@ -227,6 +228,8 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/savings', savingsRoutes);
 // Mount group routes
 app.use('/api/groups', groupRoutes);
+// Mount AI routes
+app.use('/api/ai', aiRoutes);
 
 // Mount group transactions routes (must come after groupRoutes mounting so group routes unaffected)
 app.use('/api/groups', require('./routes/groupTransactions')); // routes in groupTransactions.js use '/:groupId/transactions'
