@@ -20,6 +20,7 @@ export default function AiAssistant() {
   const [awaitingDeleteSelection, setAwaitingDeleteSelection] = useState(false);
   const [deleteMatchingTransactions, setDeleteMatchingTransactions] = useState([]);
   const [awaitingDeleteConfirmation, setAwaitingDeleteConfirmation] = useState(false);
+  const [categories, setCategories] = useState([]);
 
   const API_BASE = 'http://localhost:5000';
   const token = localStorage.getItem('token');
@@ -40,6 +41,18 @@ export default function AiAssistant() {
         .then(res => res.json())
         .then(data => setTransactions(data || []))
         .catch(err => console.error('Fetch transactions error:', err));
+    }
+  }, [token]);
+
+  // Fetch categories on mount
+  useEffect(() => {
+    if (token) {
+      fetch(`${API_BASE}/api/categories`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(data => setCategories(data || []))
+        .catch(err => console.error('Fetch categories error:', err));
     }
   }, [token]);
 
@@ -72,8 +85,100 @@ export default function AiAssistant() {
     setMessages(prev => [...prev, userMessage]);
     setInput('');
 
-    // Check if user wants to create transaction
     const lowerInput = input.toLowerCase().trim();
+
+    // Check if user wants to view wallets
+    if (lowerInput === 'xem ví' || lowerInput === 'xem tất cả ví') {
+      const walletList = wallets.map(w => `- ${w.name}: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(w.initialBalance || 0)}`).join('\n');
+      setTimeout(() => {
+        setMessages(prev => [...prev, { id: Date.now(), text: `Danh sách ví của bạn:\n${walletList}`, sender: 'ai' }]);
+      }, 500);
+      return;
+    }
+
+    // Check if user wants to view specific wallet
+    if (lowerInput.startsWith('xem ví ')) {
+      const walletName = input.substring(8).trim();
+      const wallet = wallets.find(w => w.name.toLowerCase() === walletName.toLowerCase());
+      if (!wallet) {
+        setTimeout(() => {
+          setMessages(prev => [...prev, { id: Date.now(), text: `Không tìm thấy ví "${walletName}". Vui lòng kiểm tra tên ví.`, sender: 'ai' }]);
+        }, 500);
+        return;
+      }
+      setTimeout(() => {
+        setMessages(prev => [...prev, {
+          id: Date.now(),
+          text: `Chi tiết ví "${wallet.name}":\n- Số tiền hiện tại: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(wallet.initialBalance || 0)}\n- Tiền tệ: ${wallet.currency || 'VND'}\n- Mô tả: ${wallet.description || 'Không có'}`,
+          sender: 'ai'
+        }]);
+      }, 500);
+      return;
+    }
+
+    // Check if user wants transaction statistics
+    if (lowerInput === 'thống kê giao dịch' || lowerInput === 'thống kê') {
+      const totalIncome = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + (t.amount || 0), 0);
+      const totalExpense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + (t.amount || 0), 0);
+      const netBalance = totalIncome - totalExpense;
+      const totalTransactions = transactions.length;
+      setTimeout(() => {
+        setMessages(prev => [...prev, {
+          id: Date.now(),
+          text: `Thống kê giao dịch tổng quan:\n- Tổng thu nhập: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(totalIncome)}\n- Tổng chi tiêu: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(totalExpense)}\n- Số dư: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(netBalance)}\n- Tổng số giao dịch: ${totalTransactions}`,
+          sender: 'ai'
+        }]);
+      }, 500);
+      return;
+    }
+
+    // Check if user wants statistics by wallet
+    if (lowerInput.startsWith('thống kê giao dịch theo ví ')) {
+      const walletName = input.substring(26).trim();
+      const wallet = wallets.find(w => w.name.toLowerCase() === walletName.toLowerCase());
+      if (!wallet) {
+        setTimeout(() => {
+          setMessages(prev => [...prev, { id: Date.now(), text: `Không tìm thấy ví "${walletName}".`, sender: 'ai' }]);
+        }, 500);
+        return;
+      }
+      const walletTransactions = transactions.filter(t => t.wallet && t.wallet._id === wallet._id);
+      const income = walletTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + (t.amount || 0), 0);
+      const expense = walletTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + (t.amount || 0), 0);
+      setTimeout(() => {
+        setMessages(prev => [...prev, {
+          id: Date.now(),
+          text: `Thống kê giao dịch cho ví "${wallet.name}":\n- Thu nhập: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(income)}\n- Chi tiêu: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(expense)}\n- Số dư: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(income - expense)}\n- Số giao dịch: ${walletTransactions.length}`,
+          sender: 'ai'
+        }]);
+      }, 500);
+      return;
+    }
+
+    // Check if user wants statistics by category
+    if (lowerInput.startsWith('thống kê giao dịch theo danh mục ')) {
+      const categoryName = input.substring(32).trim();
+      const category = categories.find(c => c.name.toLowerCase().includes(categoryName.toLowerCase()));
+      if (!category) {
+        setTimeout(() => {
+          setMessages(prev => [...prev, { id: Date.now(), text: `Không tìm thấy danh mục "${categoryName}".`, sender: 'ai' }]);
+        }, 500);
+        return;
+      }
+      const categoryTransactions = transactions.filter(t => t.category && t.category._id === category._id);
+      const income = categoryTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + (t.amount || 0), 0);
+      const expense = categoryTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + (t.amount || 0), 0);
+      setTimeout(() => {
+        setMessages(prev => [...prev, {
+          id: Date.now(),
+          text: `Thống kê giao dịch cho danh mục "${category.name}":\n- Thu nhập: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(income)}\n- Chi tiêu: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(expense)}\n- Số giao dịch: ${categoryTransactions.length}`,
+          sender: 'ai'
+        }]);
+      }, 500);
+      return;
+    }
+
+    // Check if user wants to create transaction
     if (lowerInput.startsWith('tạo giao dịch ')) {
       const title = input.substring(14).trim(); // Remove "tạo giao dịch "
       if (!title) {
