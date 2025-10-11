@@ -1,0 +1,556 @@
+/* Cấu trúc layout chính */
+.family-page {
+  display: flex;
+  min-height: 100vh;
+  height: auto;
+  overflow-x: hidden;
+}
+
+/* Main content area */
+.family-main {
+  background: #f7fafc;
+  font-family: 'Roboto', sans-serif;
+  padding: 24px;
+  width: calc(100% - 220px); /* Chiều rộng bằng 100% trừ đi chiều rộng của sidebar */
+  margin-left: 220px; /* Đặt margin bên trái bằng chiều rộng của sidebar */
+  box-sizing: border-box;
+}
+
+/* Responsive layout: khi màn hình nhỏ, main sẽ chiếm 100% chiều rộng */
+@media (max-width: 900px) {
+  .family-main {
+    width: 100%;
+    margin-left: 0;
+    height: auto;
+    min-height: auto;
+  }
+  
+  .family-page {
+    flex-direction: column;
+  }
+}
+
+/* Loading & Error States */
+.fh-loading, .fh-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  text-align: center;
+  color: #64748b;
+}
+
+.fh-loading-spinner {
+  border: 4px solid rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  border-top: 4px solid #10b981;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.fh-error i {
+  font-size: 48px;
+  color: #ef4444;
+  margin-bottom: 16px;
+}
+
+.fh-error button {
+  margin-top: 16px;
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+/* Header Section */
+.fh-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.fh-title-area h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: #1e293b;
+}
+
+.fh-title-area p {
+  margin: 4px 0 0 0;
+  color: #64748b;
+  font-size: 1rem;
+}
+
+.fh-actions {
+  display: flex;
+  gap: 12px;
+}
+
+/* Button Styles */
+.fh-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.fh-btn i {
+  font-size: 1rem;
+}
+
+.fh-btn.primary {
+  background-color: #10b981;
+  color: white;
+}
+
+.fh-btn.primary:hover {
+  background-color: #059669;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.2);
+}
+
+.fh-btn.secondary {
+  background-color: #e0f2fe;
+  color: #0369a1;
+}
+
+.fh-btn.secondary:hover {
+  background-color: #bae6fd;
+  transform: translateY(-2px);
+}
+
+.fh-btn-link {
+  background: none;
+  border: none;
+  color: #3b82f6;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.fh-btn-link i {
+  font-size: 0.75rem;
+}
+
+.fh-btn-link:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+/* Financial Overview Cards */
+.fh-financial-overview {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.fh-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s;
+  position: relative;
+  overflow: hidden;
+}
+
+.fh-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+}
+
+.fh-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+}
+
+.fh-card.balance::before { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+.fh-card.income::before { background: linear-gradient(90deg, #10b981, #34d399); }
+.fh-card.expense::before { background: linear-gradient(90deg, #ef4444, #f87171); }
+.fh-card.savings::before { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
+
+.fh-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.fh-card-header i {
+  font-size: 1rem;
+}
+
+.fh-card.balance .fh-card-header i { color: #3b82f6; }
+.fh-card.income .fh-card-header i { color: #10b981; }
+.fh-card.expense .fh-card-header i { color: #ef4444; }
+.fh-card.savings .fh-card-header i { color: #8b5cf6; }
+
+.fh-card-amount {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+/* Grid Layout for Main Content */
+.fh-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+}
+
+/* Section Header Styling */
+.fh-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.fh-section-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fh-section-header h2 i {
+  font-size: 1rem;
+  color: #3b82f6;
+}
+
+/* Budget Overview Section */
+.fh-budget-overview, 
+.fh-recent-transactions,
+.fh-family-members,
+.fh-quick-actions {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.fh-budget-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.fh-budget-item {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.fh-budget-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #3b82f6;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.fh-budget-content {
+  flex: 1;
+}
+
+.fh-budget-title {
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 8px;
+}
+
+.fh-budget-bar-container {
+  height: 8px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.fh-budget-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease-in-out;
+}
+
+.fh-budget-bar.good { background: #10b981; }
+.fh-budget-bar.warning { background: #f59e0b; }
+.fh-budget-bar.danger { background: #ef4444; }
+
+.fh-budget-details {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.875rem;
+}
+
+.fh-budget-spent {
+  color: #64748b;
+}
+
+.fh-budget-percentage {
+  font-weight: 600;
+}
+
+.fh-budget-percentage.good { color: #10b981; }
+.fh-budget-percentage.warning { color: #f59e0b; }
+.fh-budget-percentage.danger { color: #ef4444; }
+
+/* Transactions List */
+.fh-transactions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.fh-transaction-item {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.fh-transaction-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.fh-transaction-date {
+  width: 45px;
+  height: 45px;
+  background: #f1f5f9;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  font-size: 0.875rem;
+  color: #64748b;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.fh-transaction-content {
+  flex: 1;
+}
+
+.fh-transaction-title {
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 4px;
+}
+
+.fh-transaction-meta {
+  font-size: 0.813rem;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.fh-transaction-separator {
+  font-size: 0.5rem;
+}
+
+.fh-transaction-amount {
+  font-weight: 700;
+  color: #1e293b;
+}
+
+/* Family Members Section */
+.fh-members-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.fh-member-item {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.fh-member-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #10b981);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.fh-member-info {
+  flex: 1;
+  overflow: hidden;
+}
+
+.fh-member-name {
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fh-member-role {
+  font-size: 0.813rem;
+  color: #64748b;
+}
+
+.fh-add-member {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+  gap: 8px;
+  background: none;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.fh-add-member:hover {
+  border-color: #3b82f6;
+  color: #3b82f6;
+  background: #f0f9ff;
+}
+
+.fh-add-member i {
+  font-size: 1.5rem;
+}
+
+/* Quick Actions Grid */
+.fh-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.fh-action-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 16px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.fh-action-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.05);
+}
+
+.fh-action-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #3b82f6, #10b981);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+}
+
+.fh-action-title {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+  .fh-financial-overview {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .fh-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  
+  .fh-actions {
+    width: 100%;
+  }
+  
+  .fh-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .fh-members-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .fh-financial-overview {
+    grid-template-columns: 1fr;
+  }
+  
+  .fh-actions {
+    flex-direction: column;
+  }
+  
+  .fh-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .fh-actions-grid {
+    grid-template-columns: 1fr;
+  }
+}

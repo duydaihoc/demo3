@@ -22,6 +22,7 @@ import GroupTransactions from './group/GroupTransactions'; // <-- new import
 import GroupManagePage from './group/GroupManagePage';
 import GroupMemberPage from './group/GroupMemberPage';
 import AdminGroupViewPage from './admin/AdminGroupViewPage';
+import FamilyHome from './family/FamilyHome'; // Import FamilyHome component
 
 import { useEffect, useState } from 'react';
 
@@ -90,6 +91,13 @@ function AppRoutes() {
 				<Route path="/groups/:groupId/transactions" element={<GroupTransactions />} /> {/* Group transactions */}
 				<Route path="/groups/manage/:groupId" element={<GroupManagePage />} />
 				<Route path="/groups/member/:groupId" element={<GroupMemberPage />} />
+				{/* Family Routes */}
+				<Route path="/family" element={<FamilyHome />} />
+				<Route path="/family/expenses" element={<FamilyHome />} /> {/* Thay bằng component tương ứng khi bạn tạo */}
+				<Route path="/family/budget" element={<FamilyHome />} /> {/* Thay bằng component tương ứng khi bạn tạo */}
+				<Route path="/family/savings" element={<FamilyHome />} /> {/* Thay bằng component tương ứng khi bạn tạo */}
+				<Route path="/family/bills" element={<FamilyHome />} /> {/* Thay bằng component tương ứng khi bạn tạo */}
+				<Route path="/family/members" element={<FamilyHome />} /> {/* Thay bằng component tương ứng khi bạn tạo */}
 			</Routes>
 		</div>
 	);

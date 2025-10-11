@@ -1,26 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import './GroupSidebar.css';
+import './FamilySidebar.css';
 
-export default function GroupSidebar({ active = 'overview' }) {
+export default function FamilySidebar({ active = 'home' }) {
   const navigate = useNavigate();
   const [selected, setSelected] = useState(active);
 
   const items = [
-    { id: 'home', label: 'Trang chủ', route: '/group' },
-    { id: 'groups', label: 'Nhóm', route: '/groups' },
-    { id: 'friends', label: 'Bạn bè', route: '/friends' }, // mới
-    { id: 'activity', label: 'Hoạt động', route: '/activity' },
+    { id: 'home', label: 'Trang chủ', route: '/family', icon: 'fas fa-home' },
+    { id: 'expenses', label: 'Chi tiêu', route: '/family/expenses', icon: 'fas fa-receipt' },
+    { id: 'budget', label: 'Ngân sách', route: '/family/budget', icon: 'fas fa-wallet' },
+    { id: 'savings', label: 'Tiết kiệm', route: '/family/savings', icon: 'fas fa-piggy-bank' },
+    { id: 'bills', label: 'Hóa đơn', route: '/family/bills', icon: 'fas fa-file-invoice-dollar' },
+    { id: 'members', label: 'Thành viên', route: '/family/members', icon: 'fas fa-users' },
   ];
 
-  // Keep .groups-main height in sync on resize (UI-only)
+  // Keep sidebar height in sync on resize (UI-only)
   useEffect(() => {
     const resizeHandler = () => {
-      const main = document.querySelector('.groups-main');
+      const main = document.querySelector('.family-main');
       if (!main) return;
       // ensure main is at least viewport height so internal scroll behaves consistently
       main.style.minHeight = '100vh';
-      // on mobile, CSS media query will handle layout
     };
     window.addEventListener('resize', resizeHandler);
     // initial run
@@ -32,10 +33,9 @@ export default function GroupSidebar({ active = 'overview' }) {
     setSelected(it.id);
     if (it.route) {
       navigate(it.route);
-      // UI: after navigation, ensure the group content scroll container is at top
-      // small timeout to allow route swap / DOM update
+      // UI: after navigation, ensure the content scroll container is at top
       setTimeout(() => {
-        const main = document.querySelector('.groups-main');
+        const main = document.querySelector('.family-main');
         if (main) {
           try {
             main.scrollTo({ top: 0, behavior: 'smooth' });
@@ -52,7 +52,7 @@ export default function GroupSidebar({ active = 'overview' }) {
   };
 
   return (
-    <aside className="group-sidebar" aria-label="Sidebar nhóm">
+    <aside className="family-sidebar" aria-label="Sidebar gia đình">
       {/* Add logo component at the top */}
       <div className="sidebar-logo">
         <div className="logo-icon">
@@ -65,40 +65,39 @@ export default function GroupSidebar({ active = 'overview' }) {
         </div>
         <div className="logo-text">
           <span className="text-primary">Quản lý</span>
-          <span className="text-secondary">Chi tiêu</span>
+          <span className="text-secondary">Gia đình</span>
         </div>
       </div>
       
-      <div className="gs-header">
-        <div className="gs-logo">NHÓM</div>
-        <div className="gs-sub">Quản lý nhóm</div>
+      <div className="fs-header">
+        <div className="fs-logo">GIA ĐÌNH</div>
+        <div className="fs-sub">Quản lý tài chính gia đình</div>
       </div>
 
-      <nav className="gs-nav" role="navigation">
+      <nav className="fs-nav" role="navigation">
         <ul className="sidebar-menu">
           {items.map(it => (
             <li key={it.id}>
               <button
-                className={`gs-item ${selected === it.id ? 'active' : ''}`}
+                className={`fs-item ${selected === it.id ? 'active' : ''}`}
                 onClick={() => handleNav(it)}
                 aria-pressed={selected === it.id}
                 aria-label={it.label}
               >
-                {it.label}
+                <i className={it.icon}></i>
+                <span>{it.label}</span>
               </button>
             </li>
           ))}
         </ul>
       </nav>
 
-      <div className="gs-footer">
-        <button className="gs-family-btn" onClick={() => navigate('/family')}>
-          <i className="fas fa-home"></i> Chuyển sang Gia đình
+      <div className="fs-footer">
+        <button className="fs-group-btn" onClick={() => navigate('/group')}>
+          <i className="fas fa-users"></i> Chuyển sang Nhóm
         </button>
-        <button className="gs-back" onClick={() => navigate('/home')}>← Về Trang chủ</button>
+        <button className="fs-back" onClick={() => navigate('/home')}>← Về Trang chủ</button>
       </div>
     </aside>
   );
 }
-
-

@@ -1599,7 +1599,7 @@ export default function GroupTransactions() {
                                   <>Bạn được <strong>{tx.payer ? (tx.payer.name || tx.payer.email || 'Người trả') : 'Chưa xác định'}</strong> trả giúp: </>
                                 )}
                                 {tx.transactionType === 'equal_split' && (
-<>Bạn nợ <strong>{tx.payer ? (tx.payer.name || tx.payer.email || 'Người trả') : 'Chưa xác định'}</strong> (chia đều): </>
+                                  <>Bạn nợ <strong>{tx.payer ? (tx.payer.name || tx.payer.email || 'Người trả') : 'Chưa xác định'}</strong> (chia đều): </>
                                 )}
                                 {tx.transactionType === 'percentage_split' && (
                                   <>Bạn nợ <strong>{tx.payer ? (tx.payer.name || tx.payer.email || 'Người trả') : 'Chưa xác định'}</strong> (phần trăm): </>

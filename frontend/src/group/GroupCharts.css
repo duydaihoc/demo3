@@ -1,42 +1,430 @@
+.group-charts {
+  width: 100%;
+  font-family: 'Roboto', sans-serif;
+  margin-bottom: 24px;
+}
+
+/* Tab navigation styling */
+.gc-tabs {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 2px;
+}
+
+.gc-tab-btn {
+  border: none;
+  background: none;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gc-tab-btn:hover {
+  color: #0ea5e9;
+}
+
+.gc-tab-btn.active {
+  color: #0ea5e9;
+  border-bottom-color: #0ea5e9;
+}
+
+.gc-tab-btn i {
+  font-size: 14px;
+}
+
+/* Chart container grid layout */
 .gc-charts-container {
   display: grid;
-  grid-template-columns: 1fr 420px;
+  grid-template-columns: 1fr 1fr;
   gap: 18px;
   margin-top: 16px;
   align-items: stretch;
 }
+
+/* Card styling with improved shadows and borders */
 .gc-card {
   background: #fff;
   border-radius: 12px;
-  padding: 12px;
-  box-shadow: 0 8px 24px rgba(2,6,23,0.06);
+  padding: 16px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.06);
   display: flex;
   flex-direction: column;
-  min-height: 260px;
+  min-height: 320px;
+  border: 1px solid #f1f5f9;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
 }
+
+.gc-card:hover {
+  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+  transform: translateY(-2px);
+}
+
+.gc-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #0ea5e9, #38bdf8);
+  border-radius: 3px 3px 0 0;
+}
+
 .gc-card-header {
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
 }
+
 .gc-card-header h3 {
-  margin:0;
-  font-size: 1rem;
+  margin: 0;
+  font-size: 1.05rem;
   color: #0f172a;
   font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
-.gc-chart {
-  flex:1;
-  min-height: 180px;
-  position: relative;
-  padding: 6px 4px 4px 4px;
-}
-.gc-doughnut canvas { max-height: 320px !important; }
-.gc-line canvas { max-height: 320px !important; }
 
-@media (max-width: 980px) {
-  .gc-charts-container { grid-template-columns: 1fr; }
-  .gc-card { min-height: 220px; }
+.gc-card-header h3 i {
+  color: #0ea5e9;
 }
+
+.gc-card-badge {
+  background: #e0f2fe;
+  color: #0369a1;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.gc-card-badge i {
+  font-size: 10px;
+}
+
+/* Chart containers */
+.gc-chart {
+  flex: 1;
+  min-height: 240px;
+  position: relative;
+  padding: 6px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gc-line canvas, 
+.gc-bar canvas, 
+.gc-debt-bar canvas,
+.gc-network canvas {
+  max-height: 340px !important;
+  width: 100% !important;
+}
+
+/* Empty state styling */
+.gc-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 20px;
+  text-align: center;
+  color: #64748b;
+}
+
+.gc-empty-state i {
+  font-size: 3rem;
+  color: #cbd5e1;
+  margin-bottom: 16px;
+}
+
+.gc-empty-state p {
+  font-size: 1rem;
+  margin: 0;
+}
+
+/* Debt summary grid */
+.gc-debt-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  height: 100%;
+  padding-right: 4px;
+}
+
+/* Member summary card */
+.gc-member-summary-card {
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  transition: all 0.2s;
+  border: 1px solid #f1f5f9;
+}
+
+.gc-member-summary-card:hover {
+  background: #f1f5f9;
+  transform: translateY(-2px);
+}
+
+.gc-member-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 700;
+  color: white;
+  flex-shrink: 0;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+}
+
+.gc-member-stats {
+  flex: 1;
+}
+
+.gc-member-name {
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 8px;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gc-member-balance-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.gc-stat-label {
+  color: #64748b;
+}
+
+.gc-stat-amount {
+  font-weight: 600;
+}
+
+.gc-stat-paid {
+  color: #10b981; /* green */
+}
+
+.gc-stat-borrowed {
+  color: #ef4444; /* red */
+}
+
+.gc-stat-owed {
+  color: #3b82f6; /* blue */
+}
+
+.gc-net-balance {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.gc-positive {
+  color: #10b981;
+}
+
+.gc-negative {
+  color: #ef4444;
+}
+
+.gc-balance-direction {
+  display: block;
+  font-size: 10px;
+  font-weight: normal;
+  opacity: 0.8;
+}
+
+/* Network chart container styles */
+.gc-network-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 260px;
+}
+
+.gc-network-legend {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.gc-legend-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.gc-legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+/* Summary cards for debts overview */
+.gc-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.gc-summary-card {
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 16px;
+  text-align: center;
+  border: 1px solid #f1f5f9;
+}
+
+.gc-summary-card.incoming {
+  background-color: #ecfdf5;
+  border-color: #d1fae5;
+}
+
+.gc-summary-card.outgoing {
+  background-color: #fee2e2;
+  border-color: #fecaca;
+}
+
+.gc-summary-card.balance {
+  background-color: #e0f2fe;
+  border-color: #bae6fd;
+}
+
+.gc-summary-value {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 8px 0;
+}
+
+.gc-summary-label {
+  font-size: 13px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.gc-summary-icon {
+  font-size: 16px;
+}
+
+.incoming .gc-summary-icon {
+  color: #10b981;
+}
+
+.outgoing .gc-summary-icon {
+  color: #ef4444;
+}
+
+.balance .gc-summary-icon {
+  color: #3b82f6;
+}
+
+/* Animated transition for tabs */
+.gc-tab-content {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 980px) {
+  .gc-charts-container {
+    grid-template-columns: 1fr;
+  }
   
+  .gc-card {
+    min-height: 300px;
+  }
+  
+  .gc-debt-summary-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .gc-summary-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Loading indicator */
+.gc-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
+  color: #64748b;
+}
+
+.gc-loading i {
+  animation: spin 1s linear infinite;
+  margin-right: 8px;
+  font-size: 20px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Tooltip styling */
+.gc-tooltip {
+  position: absolute;
+  background: rgba(15, 23, 42, 0.95);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  z-index: 10;
+  pointer-events: none;
+  max-width: 220px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
