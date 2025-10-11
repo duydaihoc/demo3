@@ -760,6 +760,47 @@ router.put('/:groupId/transactions/:txId', auth, async (req, res) => {
       normalizedInputs = [];
     }
 
+    // Create a map of original participant settlement status to preserve it
+    const originalSettlementMap = new Map();
+    if (Array.isArray(original.participants)) {
+      original.participants.forEach(p => {
+        const key = p.user ? String(p.user._id || p.user) : (p.email ? p.email.toLowerCase() : '');
+        if (key) {
+          originalSettlementMap.set(key, {
+            settled: !!p.settled,
+            settledAt: p.settledAt
+          });
+        }
+      });
+    }
+
+    // Create a map of incoming participant settlement status
+    const incomingSettlementMap = new Map();
+    if (Array.isArray(updatePayload.participants)) {
+      updatePayload.participants.forEach(p => {
+        const key = p.user ? String(p.user) : (p.email ? p.email.toLowerCase() : '');
+        if (key) {
+          incomingSettlementMap.set(key, {
+            settled: !!p.settled,
+            settledAt: p.settledAt || (p.settled ? new Date() : null)
+          });
+        }
+      });
+    }
+
+    // Function to get settlement status for a participant
+    const getSettlementStatus = (participant) => {
+      const key = participant.user ? String(participant.user) : (participant.email ? participant.email.toLowerCase() : '');
+      // Prefer incoming status over original status
+      if (key && incomingSettlementMap.has(key)) {
+        return incomingSettlementMap.get(key);
+      }
+      if (key && originalSettlementMap.has(key)) {
+        return originalSettlementMap.get(key);
+      }
+      return { settled: false, settledAt: null };
+    };
+
     // Build participants according to transaction type
     let participantsBuilt = [];
 
@@ -768,39 +809,50 @@ router.put('/:groupId/transactions/:txId', auth, async (req, res) => {
       if (normalizedInputs.length === 0) {
         return res.status(400).json({ message: 'Participants required for payer_for_others' });
       }
-      participantsBuilt = normalizedInputs.map(p => ({
-        user: p.user,
-        email: p.email,
-        shareAmount: Number(effectiveAmount),
-        percentage: 0,
-        settled: false
-      }));
+      participantsBuilt = normalizedInputs.map(p => {
+        const status = getSettlementStatus(p);
+        return {
+          user: p.user,
+          email: p.email,
+          shareAmount: Number(effectiveAmount),
+          percentage: 0,
+          settled: status.settled,
+          settledAt: status.settledAt
+        };
+      });
     } else if (effectiveType === 'equal_split') {
       // include creator + normalizedInputs
       const totalParticipants = (normalizedInputs.length + 1) || 1; // +1 for creator
       const per = totalParticipants ? Number((effectiveAmount / totalParticipants).toFixed(2)) : 0;
       // creator
+      const creatorStatus = getSettlementStatus({ user: String(req.user._id) });
       participantsBuilt.push({
         user: String(req.user._id),
         email: req.user.email || undefined,
         shareAmount: per,
         percentage: 0,
-        settled: false
+        settled: creatorStatus.settled,
+        settledAt: creatorStatus.settledAt
       });
       // others
-      participantsBuilt.push(...normalizedInputs.map(p => ({
-        user: p.user,
-        email: p.email,
-        shareAmount: per,
-        percentage: 0,
-        settled: false
-      })));
+      participantsBuilt.push(...normalizedInputs.map(p => {
+        const status = getSettlementStatus(p);
+        return {
+          user: p.user,
+          email: p.email,
+          shareAmount: per,
+          percentage: 0,
+          settled: status.settled,
+          settledAt: status.settledAt
+        };
+      }));
     } else if (effectiveType === 'percentage_split') {
-      // Prefer incoming percentages, fallback to original.percentages or original.splitPercentages
+      // Kiểu 3: Chia theo phần trăm
+      // Modify to include settled status
       const incomingPerc = Array.isArray(updatePayload.percentages) ? updatePayload.percentages :
-                           Array.isArray(updatePayload.splitPercentages) ? updatePayload.splitPercentages :
-                           Array.isArray(original.percentages) ? original.percentages :
-                           Array.isArray(original.splitPercentages) ? original.splitPercentages : [];
+                         Array.isArray(updatePayload.splitPercentages) ? updatePayload.splitPercentages :
+                         Array.isArray(original.percentages) ? original.percentages :
+                         Array.isArray(original.splitPercentages) ? original.splitPercentages : [];
 
       if (incomingPerc.length === 0) {
         // If no percentages provided, initialize equal among creator + normalizedInputs
@@ -814,25 +866,31 @@ router.put('/:groupId/transactions/:txId', auth, async (req, res) => {
           percArr[percArr.length - 1].percentage = Number((Number(percArr[percArr.length - 1].percentage || 0) + diff).toFixed(2));
         }
         // build participantsBuilt from percArr
-        participantsBuilt = percArr.map(pp => ({
-          user: pp.user,
-          email: pp.email,
-          percentage: Number(pp.percentage || 0),
-          shareAmount: Number(((Number(pp.percentage || 0) / 100) * effectiveAmount).toFixed(2)),
-          settled: false
-        }));
+        participantsBuilt = percArr.map(pp => {
+          const status = getSettlementStatus(pp);
+          return {
+            user: pp.user,
+            email: pp.email,
+            percentage: Number(pp.percentage || 0),
+            shareAmount: Number(((Number(pp.percentage || 0) / 100) * effectiveAmount).toFixed(2)),
+            settled: status.settled,
+            settledAt: status.settledAt
+          };
+        });
         updatePayload.percentages = percArr;
       } else {
         // use incomingPerc to build participantsBuilt
         participantsBuilt = incomingPerc.map(pp => {
           const percentage = Number(pp.percentage || 0);
           const shareAmount = Number(((percentage / 100) * effectiveAmount).toFixed(2));
+          const status = getSettlementStatus(pp);
           return {
             user: pp.user ? String(pp.user) : undefined,
             email: pp.email ? String(pp.email).toLowerCase() : undefined,
             percentage,
             shareAmount,
-            settled: false
+            settled: status.settled,
+            settledAt: status.settledAt
           };
         });
         // keep percentages in payload
@@ -840,24 +898,30 @@ router.put('/:groupId/transactions/:txId', auth, async (req, res) => {
       }
     } else if (effectiveType === 'payer_single') {
       // only creator: single participant = creator
+      const creatorStatus = getSettlementStatus({ user: String(req.user._id) });
       participantsBuilt = [{
         user: String(req.user._id),
         email: req.user.email || undefined,
         shareAmount: Number(effectiveAmount),
         percentage: 100,
-        settled: true
+        settled: true, // Always settled for single payer
+        settledAt: creatorStatus.settledAt || new Date()
       }];
     } else {
       // fallback: if there are normalizedInputs, divide among them; else keep original behavior
       if (normalizedInputs.length > 0) {
         const per = normalizedInputs.length ? Number((effectiveAmount / normalizedInputs.length).toFixed(2)) : 0;
-        participantsBuilt = normalizedInputs.map(p => ({
-          user: p.user,
-          email: p.email,
-          shareAmount: per,
-          percentage: 0,
-          settled: false
-        }));
+        participantsBuilt = normalizedInputs.map(p => {
+          const status = getSettlementStatus(p);
+          return {
+            user: p.user,
+            email: p.email,
+            shareAmount: per,
+            percentage: 0,
+            settled: status.settled,
+            settledAt: status.settledAt
+          };
+        });
       } else {
         participantsBuilt = original.participants || [];
       }

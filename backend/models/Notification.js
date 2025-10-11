@@ -18,9 +18,12 @@ const notificationSchema = new mongoose.Schema({
       'group.invite', 'group.added', 'group.response', 
       'group.transaction', 'group.transaction.settle',
       'group.transaction.created', 
+      'group.transaction.updated',
       'group.transaction.debt',
       'group.transaction.settled',
-      'group.transaction.debt.paid'
+      'group.transaction.debt.paid',
+      'group.transaction.edited',
+      'group.transaction.deleted'
     ]
   },
   message: {

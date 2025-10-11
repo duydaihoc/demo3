@@ -27,15 +27,19 @@ export default function GroupActivity() {
       if (!res.ok) { setNotifications([]); return; }
       const data = await res.json().catch(() => []);
       const arr = Array.isArray(data) ? data : (Array.isArray(data.notifications) ? data.notifications : []);
-      const normalized = arr.map(n => ({
-        _id: n._id || n.id,
-        type: n.type,
-        message: n.message || n.text || '',
-        createdAt: n.createdAt || n.created || n.date,
-        read: !!n.read,
-        data: n.data || {},
-        raw: n
-      })).sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+      const normalized = arr.map(n => {
+        const normalizedNotif = {
+          _id: n._id || n.id,
+          type: n.type,
+          message: n.message || n.text || '',
+          createdAt: n.createdAt || n.created || n.date,
+          read: !!n.read,
+          data: n.data || {},
+          raw: n
+        };
+        // Apply type normalization
+        return normalizeNotificationType(normalizedNotif);
+      }).sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
       setNotifications(normalized);
     } catch (e) {
       console.warn('fetchNotifications activity', e);
@@ -113,12 +117,14 @@ export default function GroupActivity() {
   // Phân loại icon theo type của thông báo - cải tiến
   const getNotificationIcon = (type) => {
     if (!type) return '📋';
+    
+    // Use more flexible type checking with includes() instead of exact matches
     if (type.includes('friend')) return '👥';
     if (type.includes('group.transaction.debt')) return '💸';
     if (type.includes('group.transaction.settled') || type.includes('group.transaction.debt.paid')) return '✅';
     if (type.includes('group.transaction.updated')) return '🔄';
-    if (type.includes('group.transaction.edited')) return '✏️'; // New icon for self-edits
-    if (type.includes('group.transaction.deleted')) return '🗑️';
+    if (type.includes('group.transaction.edit')) return '✏️'; // More flexible matching for edits
+    if (type.includes('group.transaction.delet')) return '🗑️'; // More flexible matching for deletions
     if (type.includes('group.transaction')) return '💰';
     if (type.includes('group')) return '👨‍👩‍👧‍👦';
     if (type.includes('invite')) return '✉️';
@@ -126,18 +132,18 @@ export default function GroupActivity() {
     return '🔔';
   };
 
-  // Add new notification type checks
+  // Add new notification type checks with more flexible matching
   const isTransactionUpdatedNotification = (type) => {
-    return type && type.includes('transaction.updated');
+    return type && type.includes('transaction.update');
   };
 
   const isTransactionDeletedNotification = (type) => {
-    return type && type.includes('transaction.deleted');
+    return type && (type.includes('transaction.delet') || type.includes('transaction.remov'));
   };
 
-  // Add a handler for the new transaction edited notification type
+  // Add a handler for the new transaction edited notification type with more flexible matching
   const isTransactionEditedNotification = (type) => {
-    return type && type.includes('transaction.edited');
+    return type && type.includes('transaction.edit');
   };
 
   // Hiển thị thông báo chi tiết khi được chọn
@@ -226,10 +232,44 @@ export default function GroupActivity() {
   };
 
   // Render thông tin giao dịch
+  // (Removed duplicate declaration of renderTransactionDetails to fix redeclaration error)
+
+  // Add a helper function to normalize notification types that might be rejected by backend
+  const normalizeNotificationType = (notification) => {
+    if (!notification || !notification.type) return notification;
+    
+    // Create a copy to avoid modifying the original
+    const normalizedNotification = {...notification};
+    
+    // Handle potential backend validation issues by checking data context
+    if (normalizedNotification.type.includes('deleted') || 
+        (normalizedNotification.data && normalizedNotification.data.action === 'deleted')) {
+      // Set a fallback type that should be accepted by backend
+      normalizedNotification._originalType = normalizedNotification.type; // Store original for UI
+      normalizedNotification.type = 'group.transaction';
+    }
+    
+    if (normalizedNotification.type.includes('edited') || 
+        (normalizedNotification.data && normalizedNotification.data.action === 'edited')) {
+      // Set a fallback type that should be accepted by backend
+      normalizedNotification._originalType = normalizedNotification.type; // Store original for UI
+      normalizedNotification.type = 'group.transaction';
+    }
+    
+    return normalizedNotification;
+  };
+
+  // Use the normalized type for display purposes but preserve the backend type for API calls
+  const getEffectiveType = (notification) => {
+    return notification._originalType || notification.type;
+  };
+
+  // Modify renderTransactionDetails to use getEffectiveType
   const renderTransactionDetails = (notification) => {
     const data = notification.data || {};
+    const effectiveType = getEffectiveType(notification);
     
-    if (isTransactionNotification(notification.type)) {
+    if (isTransactionNotification(effectiveType)) {
       // Make group context more visually prominent
       const groupContext = (
         <div className="tx-group-context">
@@ -241,27 +281,28 @@ export default function GroupActivity() {
         </div>
       );
       
-      // Show transaction type based on notification type
+      // Show transaction type based on normalized notification type
       let transactionTypeInfo = null;
-      if (notification.type === 'group.transaction.created') {
+      if (notification.type === 'group.transaction.created' || 
+          (effectiveType && effectiveType.includes('created'))) {
         transactionTypeInfo = (
           <div className="tx-type tx-created">
             <i className="fas fa-plus-circle"></i> Giao dịch mới tạo
           </div>
         );
-      } else if (isSettledNotification(notification.type)) {
+      } else if (isSettledNotification(effectiveType)) {
         transactionTypeInfo = (
           <div className="tx-type tx-settled">
             <i className="fas fa-check-circle"></i> Thanh toán khoản nợ
           </div>
         );
-      } else if (isTransactionDeletedNotification(notification.type)) {
+      } else if (isTransactionDeletedNotification(effectiveType)) {
         transactionTypeInfo = (
           <div className="tx-type tx-deleted">
             <i className="fas fa-trash-alt"></i> Giao dịch đã xóa
           </div>
         );
-      } else if (isTransactionEditedNotification(notification.type)) {
+      } else if (isTransactionEditedNotification(effectiveType)) {
         transactionTypeInfo = (
           <div className="tx-type tx-edited">
             <i className="fas fa-edit"></i> Giao dịch đã chỉnh sửa
@@ -490,45 +531,48 @@ export default function GroupActivity() {
               </div>
             ) : (
               <div className="activity-list">
-                {filteredNotifications.map(notif => (
-                  <div 
-                    key={notif._id} 
-                    className={`activity-item ${notif.read ? '' : 'unread'} ${selectedNotif?._id === notif._id ? 'selected' : ''}`}
-                    onClick={() => handleNotificationClick(notif)}
-                  >
-                    <div className="activity-icon">
-                      {getNotificationIcon(notif.type)}
-                    </div>
-                    <div className="activity-content">
-                      <div className="activity-message">{notif.message}</div>
-                      <div className="activity-meta">
-                        <span className="activity-time">{formatTime(notif.createdAt)}</span>
-                        
-                        {/* Use getGroupName instead of direct access to notif.data.groupName */}
-                        {notif.data && notif.data.groupId && (
-                          <span className="activity-group-badge">
-                            <i className="fas fa-users"></i> {getGroupName(notif)}
-                          </span>
-                        )}
-                        
-                        {/* Show transaction title if available */}
-                        {notif.data && notif.data.title && (
-                          <span className="activity-transaction-badge">
-                            <i className="fas fa-file-invoice"></i> {notif.data.title}
-                          </span>
-                        )}
-                        
-                        {/* Show amount if available */}
-                        {notif.data && notif.data.shareAmount && (
-                          <span className="activity-amount-badge">
-                            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(notif.data.shareAmount)}
-                          </span>
-                        )}
+                {filteredNotifications.map(notif => {
+                  const effectiveType = getEffectiveType(notif);
+                  return (
+                    <div 
+                      key={notif._id} 
+                      className={`activity-item ${notif.read ? '' : 'unread'} ${selectedNotif?._id === notif._id ? 'selected' : ''}`}
+                      onClick={() => handleNotificationClick(notif)}
+                    >
+                      <div className="activity-icon">
+                        {getNotificationIcon(effectiveType)}
                       </div>
+                      <div className="activity-content">
+                        <div className="activity-message">{notif.message}</div>
+                        <div className="activity-meta">
+                          <span className="activity-time">{formatTime(notif.createdAt)}</span>
+                          
+                          {/* Use getGroupName instead of direct access to notif.data.groupName */}
+                          {notif.data && notif.data.groupId && (
+                            <span className="activity-group-badge">
+                              <i className="fas fa-users"></i> {getGroupName(notif)}
+                            </span>
+                          )}
+                          
+                          {/* Show transaction title if available */}
+                          {notif.data && notif.data.title && (
+                            <span className="activity-transaction-badge">
+                              <i className="fas fa-file-invoice"></i> {notif.data.title}
+                            </span>
+                          )}
+                          
+                          {/* Show amount if available */}
+                          {notif.data && notif.data.shareAmount && (
+                            <span className="activity-amount-badge">
+                              {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(notif.data.shareAmount)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {!notif.read && <div className="unread-dot"></div>}
                     </div>
-                    {!notif.read && <div className="unread-dot"></div>}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </section>

@@ -562,7 +562,8 @@ export default function GroupTransactions() {
         id: p.user ? (p.user._id || p.user) : undefined,
         email: p.email || (p.user && p.user.email) || '',
         name: p.user ? (p.user.name || p.user.email || 'Thành viên') : (p.email || 'Thành viên'),
-        settled: p.settled || false,
+        settled: !!p.settled,
+        settledAt: p.settledAt,  // Preserve settledAt timestamp
         shareAmount: p.shareAmount || 0
       })) : [];
       // Remove creator from editSelectedMembers to avoid duplication when saving
@@ -793,9 +794,19 @@ export default function GroupTransactions() {
       user: m.id,
       email: m.email,
       settled: m.settled || false,
+      settledAt: m.settled ? (m.settledAt || new Date().toISOString()) : null,
       shareAmount: m.shareAmount || Number(editAmount),
       percentage: typeof m.percentage !== 'undefined' ? Number(m.percentage) : undefined
     }));
+    
+    // Debug output to verify settled status
+    console.log('Edit transaction: Participants with settlement status', 
+      participants.map(p => ({
+        id: p.user,
+        email: p.email,
+        settled: p.settled
+      }))
+    );
     
     // If payer_for_others, ensure each participant owes the full amount
     if (editTransactionType === 'payer_for_others') {
@@ -847,6 +858,15 @@ export default function GroupTransactions() {
         try { showNotification('Cập nhật giao dịch thành công', 'success'); } catch (e) {}
         return;
       }
+      
+      // Debug output to verify returned settled status
+      console.log('Edit transaction: Updated TX with settlement status', 
+        updatedTx.participants?.map(p => ({
+          id: p.user?._id || p.user,
+          email: p.email,
+          settled: p.settled
+        }))
+      );
       
       // Normalize updated transaction for UI (ensures shareAmount / percentages are correct)
       const updatedNormalized = normalizeTxForDisplay({
