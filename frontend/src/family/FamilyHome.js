@@ -11,51 +11,69 @@ export default function FamilyHome() {
   const [transactions, setTransactions] = useState([]);
   const [error, setError] = useState(null);
   
-  // Simulated data - replace with actual API calls when backend is ready
+  const API_BASE = 'http://localhost:5000';
+  const token = localStorage.getItem('token');
+  const selectedFamilyId = localStorage.getItem('selectedFamilyId');
+  
+  // Lấy thông tin gia đình từ API thật
   useEffect(() => {
-    // Simulate loading
     const loadData = async () => {
+      if (!token) {
+        navigate('/login');
+        return;
+      }
+
+      if (!selectedFamilyId) {
+        navigate('/family-selector');
+        return;
+      }
+
       try {
         setLoading(true);
         
-        // Sample data - this would be replaced with actual API calls
-        const sampleFamily = {
-          name: "Gia đình Nguyễn",
-          members: [
-            { id: "1", name: "Nguyễn Văn A", role: "Bố" },
-            { id: "2", name: "Nguyễn Thị B", role: "Mẹ" },
-            { id: "3", name: "Nguyễn Văn C", role: "Con trai" },
-            { id: "4", name: "Nguyễn Thị D", role: "Con gái" }
-          ],
-          balance: 15000000,
-          income: 25000000,
-          expenses: 10000000,
-          savings: 5000000
-        };
-        
+        // Lấy thông tin gia đình cụ thể
+        const familyRes = await fetch(`${API_BASE}/api/family/${selectedFamilyId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (familyRes.status === 401) {
+          localStorage.removeItem('token');
+          navigate('/login');
+          return;
+        }
+
+        if (!familyRes.ok) {
+          throw new Error('Không thể tải thông tin gia đình');
+        }
+
+        const family = await familyRes.json();
+        setFamilyData(family);
+
+        // Tạo dữ liệu ngân sách mẫu (sẽ thay thế bằng API thật sau)
         const sampleBudgets = [
           { id: "1", category: "Ăn uống", allocated: 5000000, spent: 3500000, icon: "fas fa-utensils" },
           { id: "2", category: "Tiện ích", allocated: 2000000, spent: 1800000, icon: "fas fa-lightbulb" },
           { id: "3", category: "Đi lại", allocated: 1500000, spent: 800000, icon: "fas fa-car" },
           { id: "4", category: "Giải trí", allocated: 1000000, spent: 600000, icon: "fas fa-film" }
         ];
-        
-        const sampleTransactions = [
-          { id: "1", date: "2023-10-05", description: "Đi chợ", amount: 500000, category: "Ăn uống", member: "Nguyễn Thị B" },
-          { id: "2", date: "2023-10-04", description: "Tiền điện", amount: 800000, category: "Tiện ích", member: "Nguyễn Văn A" },
-          { id: "3", date: "2023-10-03", description: "Xăng xe", amount: 300000, category: "Đi lại", member: "Nguyễn Văn A" },
-          { id: "4", date: "2023-10-01", description: "Xem phim", amount: 400000, category: "Giải trí", member: "Nguyễn Văn C" }
-        ];
-        
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 800));
-        
-        setFamilyData(sampleFamily);
         setBudgets(sampleBudgets);
+
+        // Tạo dữ liệu giao dịch mẫu (sẽ thay thế bằng API thật sau)
+        const sampleTransactions = [
+          { id: "1", date: "2023-10-05", description: "Đi chợ", amount: 500000, category: "Ăn uống", member: family.owner?.name || "Thành viên" },
+          { id: "2", date: "2023-10-04", description: "Tiền điện", amount: 800000, category: "Tiện ích", member: family.owner?.name || "Thành viên" },
+          { id: "3", date: "2023-10-03", description: "Xăng xe", amount: 300000, category: "Đi lại", member: family.owner?.name || "Thành viên" },
+          { id: "4", date: "2023-10-01", description: "Xem phim", amount: 400000, category: "Giải trí", member: family.owner?.name || "Thành viên" }
+        ];
         setTransactions(sampleTransactions);
         
       } catch (err) {
         console.error("Error fetching family data:", err);
+        if (err.message.includes('401') || err.message.includes('invalid')) {
+          localStorage.removeItem('token');
+          navigate('/login');
+          return;
+        }
         setError("Không thể tải dữ liệu gia đình");
       } finally {
         setLoading(false);
@@ -63,7 +81,7 @@ export default function FamilyHome() {
     };
     
     loadData();
-  }, []);
+  }, [token, navigate, API_BASE, selectedFamilyId]);
   
   // Format currency helper
   const formatCurrency = (amount) => {
@@ -74,6 +92,22 @@ export default function FamilyHome() {
   const calculatePercentage = (spent, allocated) => {
     return Math.min(Math.round((spent / allocated) * 100), 100);
   };
+
+  // Nếu không có dữ liệu gia đình và không loading, hiển thị lỗi
+  if (!loading && !familyData && !error) {
+    return (
+      <div className="family-page">
+        <FamilySidebar active="home" />
+        <main className="family-main">
+          <div className="fh-error">
+            <i className="fas fa-exclamation-triangle"></i>
+            <p>Bạn chưa tham gia gia đình nào</p>
+            <button onClick={() => navigate('/family-switch')}>Tạo hoặc tham gia gia đình</button>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="family-page">
@@ -236,11 +270,11 @@ export default function FamilyHome() {
                   {familyData?.members.map(member => (
                     <div key={member.id} className="fh-member-item">
                       <div className="fh-member-avatar">
-                        {member.name.charAt(0)}
+                        {member.name ? member.name.charAt(0).toUpperCase() : '?'}
                       </div>
                       <div className="fh-member-info">
-                        <div className="fh-member-name">{member.name}</div>
-                        <div className="fh-member-role">{member.role}</div>
+                        <div className="fh-member-name">{member.name || 'Thành viên'}</div>
+                        <div className="fh-member-role">{member.role || 'Thành viên'}</div>
                       </div>
                     </div>
                   ))}

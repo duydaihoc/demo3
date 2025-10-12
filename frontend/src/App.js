@@ -23,6 +23,8 @@ import GroupManagePage from './group/GroupManagePage';
 import GroupMemberPage from './group/GroupMemberPage';
 import AdminGroupViewPage from './admin/AdminGroupViewPage';
 import FamilyHome from './family/FamilyHome'; // Import FamilyHome component
+import FamilySwitchPage from './family/FamilySwitchPage';
+import FamilySelectorPage from './family/FamilySelectorPage';
 
 import { useEffect, useState } from 'react';
 
@@ -92,6 +94,8 @@ function AppRoutes() {
 				<Route path="/groups/manage/:groupId" element={<GroupManagePage />} />
 				<Route path="/groups/member/:groupId" element={<GroupMemberPage />} />
 				{/* Family Routes */}
+				<Route path="/family-selector" element={<FamilySelectorPage />} />
+				<Route path="/family-switch" element={<FamilySwitchPage />} />
 				<Route path="/family" element={<FamilyHome />} />
 				<Route path="/family/expenses" element={<FamilyHome />} /> {/* Thay bằng component tương ứng khi bạn tạo */}
 				<Route path="/family/budget" element={<FamilyHome />} /> {/* Thay bằng component tương ứng khi bạn tạo */}

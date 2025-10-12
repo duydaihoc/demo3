@@ -1,21 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import './FamilySidebar.css';
 
 export default function FamilySidebar({ active = 'home' }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [selected, setSelected] = useState(active);
 
+  // New: menu items required by user
   const items = [
     { id: 'home', label: 'Trang chủ', route: '/family', icon: 'fas fa-home' },
-    { id: 'expenses', label: 'Chi tiêu', route: '/family/expenses', icon: 'fas fa-receipt' },
-    { id: 'budget', label: 'Ngân sách', route: '/family/budget', icon: 'fas fa-wallet' },
-    { id: 'savings', label: 'Tiết kiệm', route: '/family/savings', icon: 'fas fa-piggy-bank' },
-    { id: 'bills', label: 'Hóa đơn', route: '/family/bills', icon: 'fas fa-file-invoice-dollar' },
+    { id: 'transactions', label: 'Giao dịch', route: '/family/transactions', icon: 'fas fa-exchange-alt' },
+    { id: 'tx-list', label: 'Danh sách giao dịch', route: '/family/transactions/list', icon: 'fas fa-list-alt' },
+    { id: 'groceries', label: 'Danh sách tạp hóa', route: '/family/groceries', icon: 'fas fa-shopping-basket' },
+    { id: 'todos', label: 'Danh sách việc cần làm', route: '/family/todos', icon: 'fas fa-clipboard-list' },
     { id: 'members', label: 'Thành viên', route: '/family/members', icon: 'fas fa-users' },
   ];
 
-  // Keep sidebar height in sync on resize (UI-only)
+  // Sync selected state with current URL
+  useEffect(() => {
+    const path = location.pathname || '';
+    // find first matching item by route prefix
+    const match = items.find(it => path === it.route || path.startsWith(it.route + '/') || (it.route !== '/' && path.startsWith(it.route)));
+    if (match) setSelected(match.id);
+    // fallback if no match (keep existing)
+  }, [location.pathname]); // eslint-disable-line
+
+  // Keep main content height in sync on resize (UI-only)
   useEffect(() => {
     const resizeHandler = () => {
       const main = document.querySelector('.family-main');
@@ -83,9 +94,10 @@ export default function FamilySidebar({ active = 'home' }) {
                 onClick={() => handleNav(it)}
                 aria-pressed={selected === it.id}
                 aria-label={it.label}
+                title={it.label}
               >
-                <i className={it.icon}></i>
-                <span>{it.label}</span>
+                <i className={it.icon + ' fs-icon'} aria-hidden="true"></i>
+                <span className="fs-label">{it.label}</span>
               </button>
             </li>
           ))}

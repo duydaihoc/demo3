@@ -19,6 +19,7 @@ const savingsRoutes = require('./routes/SavingsGoal'); // Import savings goal ro
 const groupRoutes = require('./routes/groups'); // Import group routes
 const notificationRoutes = require('./routes/notifications'); // Import notification routes
 const aiRoutes = require('./routes/ai'); // Import AI routes
+const familyRoutes = require('./routes/family'); // Import family routes
 const http = require('http');
 let Server = null;
 try {
@@ -28,7 +29,14 @@ try {
   console.warn('socket.io not installed — realtime notifications disabled. To enable, run `npm install socket.io` in backend.');
 }
 
-dotenv.config();
+// Load environment variables
+require('dotenv').config();
+
+// Set default environment
+process.env.NODE_ENV = process.env.NODE_ENV || 'development';
+
+// Set default JWT secret if not provided
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'secretKey';
 
 const app = express();
 
@@ -230,6 +238,8 @@ app.use('/api/savings', savingsRoutes);
 app.use('/api/groups', groupRoutes);
 // Mount AI routes
 app.use('/api/ai', aiRoutes);
+// Mount family routes
+app.use('/api/family', familyRoutes);
 
 // Mount group transactions routes (must come after groupRoutes mounting so group routes unaffected)
 app.use('/api/groups', require('./routes/groupTransactions')); // routes in groupTransactions.js use '/:groupId/transactions'

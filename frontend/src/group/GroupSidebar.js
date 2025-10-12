@@ -92,7 +92,7 @@ export default function GroupSidebar({ active = 'overview' }) {
       </nav>
 
       <div className="gs-footer">
-        <button className="gs-family-btn" onClick={() => navigate('/family')}>
+        <button className="gs-family-btn" onClick={() => navigate('/family-selector')}>
           <i className="fas fa-home"></i> Chuyển sang Gia đình
         </button>
         <button className="gs-back" onClick={() => navigate('/home')}>← Về Trang chủ</button>
