@@ -429,12 +429,50 @@
 }
 
 .fh-member-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.fh-member-name {
   font-weight: 600;
   color: #1e293b;
   margin-bottom: 2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.fh-owner-badge, .fh-current-user-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 12px;
+  gap: 4px;
+  font-weight: 500;
+  margin-left: 8px;
+}
+
+.fh-owner-badge {
+  background-color: #fff8e1;
+  color: #f59e0b;
+}
+
+.fh-current-user-badge {
+  background-color: #e0f2fe;
+  color: #0284c7;
+}
+
+.fh-owner-badge i, .fh-current-user-badge i {
+  font-size: 0.7rem;
+}
+
+/* Highlight current user's member item */
+.fh-member-item.current-user {
+  background-color: #f0f9ff;
+  border: 1px solid #bae6fd;
 }
 
 .fh-member-role {
@@ -553,4 +591,17 @@
   .fh-actions-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.family-home {
+  display: flex;
+  min-height: 100vh;
+  background: #f7fafc;
+}
+
+.fh-main {
+  flex: 1;
+  padding: 24px;
+  margin-left: 220px;
+  box-sizing: border-box;
 }

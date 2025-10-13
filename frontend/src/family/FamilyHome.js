@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import FamilySidebar from './FamilySidebar';
 import './FamilyHome.css';
@@ -10,11 +10,28 @@ export default function FamilyHome() {
   const [budgets, setBudgets] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [error, setError] = useState(null);
+  // Thêm state cho người dùng hiện tại
+  const [currentUser, setCurrentUser] = useState(null);
   
   const API_BASE = 'http://localhost:5000';
   const token = localStorage.getItem('token');
   const selectedFamilyId = localStorage.getItem('selectedFamilyId');
-  
+
+  // Lấy thông tin người dùng hiện tại từ token
+  const getCurrentUser = useCallback(() => {
+    if (!token) return null;
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      return {
+        id: payload.id || payload._id || payload.userId || '',
+        name: payload.name || '',
+        email: payload.email || ''
+      };
+    } catch (e) {
+      return null;
+    }
+  }, [token]);
+
   // Lấy thông tin gia đình từ API thật
   useEffect(() => {
     const loadData = async () => {
@@ -30,6 +47,9 @@ export default function FamilyHome() {
 
       try {
         setLoading(true);
+        
+        // Lấy thông tin người dùng hiện tại
+        setCurrentUser(getCurrentUser());
         
         // Lấy thông tin gia đình cụ thể
         const familyRes = await fetch(`${API_BASE}/api/family/${selectedFamilyId}`, {
@@ -81,7 +101,7 @@ export default function FamilyHome() {
     };
     
     loadData();
-  }, [token, navigate, API_BASE, selectedFamilyId]);
+  }, [token, navigate, API_BASE, selectedFamilyId, getCurrentUser]);
   
   // Format currency helper
   const formatCurrency = (amount) => {
@@ -109,11 +129,34 @@ export default function FamilyHome() {
     );
   }
 
+  // Lấy thông tin owner
+  const getOwnerInfo = () => {
+    if (!familyData || !familyData.owner) return null;
+    return familyData.owner;
+  };
+
+  // Kiểm tra xem một member có phải là owner không
+  const isMemberOwner = (member) => {
+    const owner = getOwnerInfo();
+    if (!owner) return false;
+    
+    const ownerId = owner._id || owner.id || owner;
+    const memberUserId = member.user && (member.user._id || member.user);
+    return String(ownerId) === String(memberUserId);
+  };
+
+  // Kiểm tra xem một member có phải là người dùng hiện tại không
+  const isCurrentUser = (member) => {
+    if (!currentUser || !member) return false;
+    const memberUserId = member.user && (member.user._id || member.user);
+    return String(memberUserId) === String(currentUser.id);
+  };
+
   return (
-    <div className="family-page">
-      <FamilySidebar active="home" />
+    <div className="family-home">
+      <FamilySidebar />
       
-      <main className="family-main">
+      <main className="fh-main">
         {loading ? (
           <div className="fh-loading">
             <div className="fh-loading-spinner"></div>
@@ -267,17 +310,45 @@ export default function FamilyHome() {
                 </div>
                 
                 <div className="fh-members-list">
-                  {familyData?.members.map(member => (
-                    <div key={member.id} className="fh-member-item">
-                      <div className="fh-member-avatar">
-                        {member.name ? member.name.charAt(0).toUpperCase() : '?'}
+                  {familyData?.members.map(member => {
+                    const memberUserId = member.user && (member.user._id || member.user);
+                    const isOwner = isMemberOwner(member);
+                    const isUserCurrent = isCurrentUser(member);
+                    
+                    // Tạo biến tên hiển thị - ưu tiên hiển thị tên thật
+                    const displayName = member.name || 
+                                       (member.user && member.user.name) || 
+                                       'Thành viên';
+                    
+                    return (
+                      <div 
+                        key={memberUserId || member.email} 
+                        className={`fh-member-item ${isUserCurrent ? 'current-user' : ''}`}
+                      >
+                        <div className="fh-member-avatar">
+                          {displayName.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="fh-member-info">
+                          <div className="fh-member-name">
+                            {displayName}
+                            {isOwner && (
+                              <span className="fh-owner-badge">
+                                <i className="fas fa-crown"></i> Chủ gia đình
+                              </span>
+                            )}
+                            {isUserCurrent && !isOwner && (
+                              <span className="fh-current-user-badge">
+                                <i className="fas fa-user"></i> Bạn
+                              </span>
+                            )}
+                          </div>
+                          <div className="fh-member-role">
+                            {member.email}
+                          </div>
+                        </div>
                       </div>
-                      <div className="fh-member-info">
-                        <div className="fh-member-name">{member.name || 'Thành viên'}</div>
-                        <div className="fh-member-role">{member.role || 'Thành viên'}</div>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   
                   <button className="fh-add-member" onClick={() => navigate('/family/members')}>
                     <i className="fas fa-plus"></i>

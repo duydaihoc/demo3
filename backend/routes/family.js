@@ -228,35 +228,49 @@ router.post('/invitations/:invitationId/decline', authenticateToken, async (req,
   }
 });
 
-// Mời thành viên vào gia đình
+// Mời thành viên mới
 router.post('/:familyId/invite', authenticateToken, async (req, res) => {
   try {
     const { familyId } = req.params;
     const { email } = req.body;
     const userId = req.user.id || req.user._id;
 
-    if (!email || !email.trim()) {
-      return res.status(400).json({ message: 'Email is required' });
-    }
-
-    // Kiểm tra quyền owner
+    // Kiểm tra xem user có phải là member của gia đình không
     const family = await Family.findOne({
       _id: familyId,
-      owner: userId
+      'members.user': userId
     });
 
     if (!family) {
-      return res.status(403).json({ message: 'Not authorized to invite members' });
+      return res.status(403).json({ message: 'Bạn không có quyền mời thành viên vào gia đình này' });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Kiểm tra email có tồn tại trong hệ thống không
+    const existingUser = await User.findOne({ email: normalizedEmail });
+    if (!existingUser) {
+      return res.status(400).json({ message: 'Email không tồn tại trong hệ thống' });
+    }
+
+    // Kiểm tra xem email đã được mời chưa
+    const existingInvitation = await FamilyInvitation.findOne({
+      family: familyId,
+      email: normalizedEmail,
+      status: 'pending'
+    });
+
+    if (existingInvitation) {
+      return res.status(400).json({ message: 'Email này đã được mời và đang chờ chấp nhận' });
     }
 
     // Kiểm tra xem email đã là thành viên chưa
-    const isAlreadyMember = family.members.some(m =>
-      (m.user && m.email === email.toLowerCase()) ||
-      (m.email && m.email === email.toLowerCase())
+    const existingMember = family.members.find(member => 
+      member.email && member.email.toLowerCase().trim() === normalizedEmail
     );
 
-    if (isAlreadyMember) {
-      return res.status(400).json({ message: 'User is already a member of this family' });
+    if (existingMember) {
+      return res.status(400).json({ message: 'Email này đã là thành viên của gia đình' });
     }
 
     // Tạo token cho lời mời
@@ -266,17 +280,17 @@ router.post('/:familyId/invite', authenticateToken, async (req, res) => {
     const invitation = new FamilyInvitation({
       family: familyId,
       invitedBy: userId,
-      email: email.toLowerCase().trim(),
-      token
+      email: normalizedEmail,
+      token: token,
+      status: 'pending',
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 ngày
     });
 
     await invitation.save();
 
-    // TODO: Gửi email mời (có thể implement sau)
-
-    res.json({ message: 'Invitation sent successfully' });
+    res.json({ message: 'Lời mời đã được gửi thành công' });
   } catch (error) {
-    console.error('Error sending invitation:', error);
+    console.error('Error inviting member:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -300,6 +314,144 @@ router.get('/:familyId', authenticateToken, async (req, res) => {
     res.json(family);
   } catch (error) {
     console.error('Error fetching family:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Xóa thành viên khỏi gia đình
+router.delete('/:familyId/remove-member', authenticateToken, async (req, res) => {
+  try {
+    const { familyId } = req.params;
+    const { memberId } = req.body;
+    const userId = req.user.id || req.user._id;
+
+    // Kiểm tra xem user có phải là owner không
+    const family = await Family.findOne({
+      _id: familyId,
+      owner: userId
+    });
+
+    if (!family) {
+      return res.status(403).json({ message: 'Bạn không có quyền xóa thành viên' });
+    }
+
+    // Kiểm tra memberId không phải là owner
+    if (String(family.owner) === String(memberId)) {
+      return res.status(400).json({ message: 'Không thể xóa chủ gia đình' });
+    }
+
+    // Kiểm tra thành viên có tồn tại trong gia đình
+    const memberIndex = family.members.findIndex(member => 
+      String(member.user) === String(memberId)
+    );
+
+    if (memberIndex === -1) {
+      return res.status(404).json({ message: 'Thành viên không tồn tại trong gia đình' });
+    }
+
+    // Lấy thông tin member trước khi xóa để lấy email
+    const memberToRemove = family.members[memberIndex];
+    const memberEmail = memberToRemove.email;
+
+    // Xóa thành viên khỏi danh sách members
+    family.members.splice(memberIndex, 1);
+    await family.save();
+
+    // Xóa tất cả lời mời liên quan đến thành viên này
+    // 1. Lời mời mà thành viên này đã mời (invitedBy = memberId)
+    await FamilyInvitation.deleteMany({
+      family: familyId,
+      invitedBy: memberId
+    });
+
+    // 2. Lời mời gửi đến email của thành viên này (email = memberEmail)
+    if (memberEmail) {
+      await FamilyInvitation.deleteMany({
+        family: familyId,
+        email: memberEmail.toLowerCase().trim()
+      });
+    }
+
+    res.json({ message: 'Đã xóa thành viên và các lời mời liên quan' });
+  } catch (error) {
+    console.error('Error removing member:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Lấy danh sách lời mời của gia đình
+router.get('/:familyId/invitations', authenticateToken, async (req, res) => {
+  try {
+    const { familyId } = req.params;
+    const userId = req.user.id || req.user._id;
+
+    // Kiểm tra quyền truy cập gia đình
+    const family = await Family.findOne({
+      _id: familyId,
+      'members.user': userId
+    });
+
+    if (!family) {
+      return res.status(404).json({ message: 'Gia đình không tìm thấy hoặc bạn không có quyền truy cập' });
+    }
+
+    // Lấy danh sách lời mời
+    const invitations = await FamilyInvitation.find({
+      family: familyId
+    })
+    .populate('invitedBy', 'name email')
+    .populate('invitedUser', 'name email')
+    .sort({ createdAt: -1 });
+
+    res.json(invitations);
+  } catch (error) {
+    console.error('Error fetching family invitations:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Hủy lời mời
+router.delete('/:familyId/invitations/:invitationId', authenticateToken, async (req, res) => {
+  try {
+    const { familyId, invitationId } = req.params;
+    const userId = req.user.id || req.user._id;
+
+    // Kiểm tra xem user có phải là member của gia đình không
+    const family = await Family.findOne({
+      _id: familyId,
+      'members.user': userId
+    });
+
+    if (!family) {
+      return res.status(403).json({ message: 'Bạn không có quyền hủy lời mời trong gia đình này' });
+    }
+
+    // Tìm lời mời
+    const invitation = await FamilyInvitation.findOne({
+      _id: invitationId,
+      family: familyId
+    });
+
+    if (!invitation) {
+      return res.status(404).json({ message: 'Không tìm thấy lời mời' });
+    }
+
+    // Kiểm tra trạng thái lời mời - chỉ cho phép hủy lời mời đang chờ
+    if (invitation.status !== 'pending') {
+      return res.status(400).json({ message: 'Không thể hủy lời mời đã được xử lý' });
+    }
+
+    // Kiểm tra xem user có phải là người mời không
+    if (String(invitation.invitedBy) !== String(userId)) {
+      return res.status(403).json({ message: 'Bạn chỉ có thể hủy lời mời do mình gửi' });
+    }
+
+    // Xóa lời mời
+    await FamilyInvitation.findByIdAndDelete(invitationId);
+
+    res.json({ message: 'Lời mời đã được hủy thành công' });
+  } catch (error) {
+    console.error('Error cancelling invitation:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

@@ -20,8 +20,10 @@ function HomePage() {
           <span className="home-title">Trang chủ</span>
           <div className="home-actions">
             <button onClick={() => navigate('/transactions')}>+ Ghi chép</button>
-            {/* New: button to switch to Group interface */}
-            <button onClick={() => navigate('/group')} style={{ marginLeft: 8 }}>Tạo nhóm</button>
+            {/* Thay đổi nút tạo nhóm thành nút chọn nhóm/gia đình */}
+            <button onClick={() => navigate('/switch')} style={{ marginLeft: 8 }}>
+              <i className="fas fa-layer-group"></i> Nhóm/Gia đình
+            </button>
           </div>
         </div>
         <div className="home-content">

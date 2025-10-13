@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './FamilySidebar.css';
 
-export default function FamilySidebar({ active = 'home' }) {
+export default function FamilySidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [selected, setSelected] = useState(active);
 
   // New: menu items required by user
   const items = [
@@ -17,14 +16,20 @@ export default function FamilySidebar({ active = 'home' }) {
     { id: 'members', label: 'Thành viên', route: '/family/members', icon: 'fas fa-users' },
   ];
 
-  // Sync selected state with current URL
-  useEffect(() => {
-    const path = location.pathname || '';
-    // find first matching item by route prefix
-    const match = items.find(it => path === it.route || path.startsWith(it.route + '/') || (it.route !== '/' && path.startsWith(it.route)));
-    if (match) setSelected(match.id);
-    // fallback if no match (keep existing)
-  }, [location.pathname]); // eslint-disable-line
+  // Xác định tab active dựa trên URL hiện tại
+  const getActiveTab = () => {
+    const path = location.pathname;
+    
+    if (path === '/family') return 'home';
+    if (path === '/family/members') return 'members';
+    // Thêm các route khác nếu có
+    // if (path === '/family/tasks') return 'tasks';
+    // if (path === '/family/settings') return 'settings';
+    
+    return '';
+  };
+
+  const activeTab = getActiveTab();
 
   // Keep main content height in sync on resize (UI-only)
   useEffect(() => {
@@ -41,7 +46,6 @@ export default function FamilySidebar({ active = 'home' }) {
   }, []);
 
   const handleNav = (it) => {
-    setSelected(it.id);
     if (it.route) {
       navigate(it.route);
       // UI: after navigation, ensure the content scroll container is at top
@@ -90,9 +94,9 @@ export default function FamilySidebar({ active = 'home' }) {
           {items.map(it => (
             <li key={it.id}>
               <button
-                className={`fs-item ${selected === it.id ? 'active' : ''}`}
+                className={`fs-item ${activeTab === it.id ? 'active' : ''}`}
                 onClick={() => handleNav(it)}
-                aria-pressed={selected === it.id}
+                aria-pressed={activeTab === it.id}
                 aria-label={it.label}
                 title={it.label}
               >

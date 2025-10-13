@@ -1,0 +1,211 @@
+.switch-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.sp-container {
+  max-width: 1000px;
+  width: 100%;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.sp-header {
+  text-align: center;
+  padding: 40px 30px 30px;
+  background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);
+  color: white;
+}
+
+.sp-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.9;
+}
+
+.sp-header h1 {
+  margin: 0 0 8px 0;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.sp-header p {
+  margin: 0;
+  font-size: 16px;
+  opacity: 0.9;
+}
+
+.sp-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  padding: 30px;
+}
+
+.sp-option-card {
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 24px;
+  cursor: pointer;
+  transition: all 0.3s;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.sp-option-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #10b981, #3b82f6);
+}
+
+.sp-option-card.group::before {
+  background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+}
+
+.sp-option-card.family::before {
+  background: linear-gradient(90deg, #10b981, #059669);
+}
+
+.sp-option-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  border-color: #10b981;
+}
+
+.sp-option-icon {
+  font-size: 48px;
+  color: #10b981;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.sp-option-card.group .sp-option-icon {
+  color: #3b82f6;
+}
+
+.sp-option-content {
+  flex: 1;
+}
+
+.sp-option-content h2 {
+  margin: 0 0 12px 0;
+  font-size: 20px;
+  color: #1e293b;
+}
+
+.sp-option-content p {
+  margin: 0 0 16px 0;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.sp-features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sp-features li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #475569;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+
+.sp-features li i {
+  color: #10b981;
+  font-size: 12px;
+}
+
+.sp-option-action {
+  margin-top: 20px;
+}
+
+.sp-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+  justify-content: center;
+}
+
+.sp-btn.primary {
+  background: #10b981;
+  color: white;
+}
+
+.sp-btn.primary:hover {
+  background: #059669;
+  transform: translateY(-2px);
+}
+
+.sp-btn.secondary {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.sp-btn.secondary:hover {
+  background: #e2e8f0;
+}
+
+.sp-footer {
+  text-align: center;
+  padding: 20px 30px;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .switch-page {
+    padding: 10px;
+  }
+  
+  .sp-container {
+    border-radius: 12px;
+  }
+  
+  .sp-header {
+    padding: 30px 20px 20px;
+  }
+  
+  .sp-header h1 {
+    font-size: 24px;
+  }
+  
+  .sp-options {
+    grid-template-columns: 1fr;
+    gap: 20px;
+    padding: 20px;
+  }
+  
+  .sp-option-card {
+    padding: 20px;
+  }
+  
+  .sp-option-icon {
+    font-size: 40px;
+  }
+}
