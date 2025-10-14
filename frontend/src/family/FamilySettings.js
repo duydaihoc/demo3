@@ -22,6 +22,12 @@ export default function FamilySettings() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   
+  // State cho chức năng đặt vai trò
+  const [editingRoleMemberId, setEditingRoleMemberId] = useState(null);
+  const [familyRoleText, setFamilyRoleText] = useState('');
+  const [savingRole, setSavingRole] = useState(false);
+  const [showRoleModal, setShowRoleModal] = useState(false);
+  
   const API_BASE = 'http://localhost:5000';
   const token = localStorage.getItem('token');
   const selectedFamilyId = localStorage.getItem('selectedFamilyId');
@@ -204,6 +210,50 @@ export default function FamilySettings() {
     }
   };
 
+  // Hàm xử lý mở modal chỉnh sửa vai trò
+  const handleOpenRoleModal = (member) => {
+    const memberUserId = member.user && (member.user._id || member.user);
+    setEditingRoleMemberId(memberUserId);
+    setFamilyRoleText(member.familyRole || '');
+    setShowRoleModal(true);
+  };
+  
+  // Hàm lưu vai trò thành viên
+  const handleSaveMemberRole = async () => {
+    if (!editingRoleMemberId || !selectedFamilyId) return;
+    
+    setSavingRole(true);
+    try {
+      const endpoint = editingRoleMemberId === currentUser?.id
+        ? `${API_BASE}/api/family/${selectedFamilyId}/my-role`
+        : `${API_BASE}/api/family/${selectedFamilyId}/member/${editingRoleMemberId}/role`;
+        
+      const res = await fetch(endpoint, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ familyRole: familyRoleText })
+      });
+      
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || 'Không thể cập nhật vai trò');
+      }
+      
+      const updatedFamily = await res.json();
+      setFamilyData(updatedFamily);
+      showNotification('Đã cập nhật vai trò thành công', 'success');
+      setShowRoleModal(false);
+    } catch (err) {
+      console.error("Error updating member role:", err);
+      showNotification(err.message || 'Đã xảy ra lỗi khi cập nhật vai trò', 'error');
+    } finally {
+      setSavingRole(false);
+    }
+  };
+
   return (
     <div className="family-home">
       <FamilySidebar />
@@ -329,6 +379,12 @@ export default function FamilySettings() {
             <div className="fs-card full-width">
               <div className="fs-card-header">
                 <h2><i className="fas fa-users"></i> Thành viên gia đình</h2>
+                {isOwner() && (
+                  <div className="fs-header-note">
+                    <i className="fas fa-info-circle"></i> 
+                    Bạn có thể đặt vai trò cho các thành viên
+                  </div>
+                )}
               </div>
               <div className="fs-card-body">
                 <div className="fs-member-list">
@@ -360,12 +416,32 @@ export default function FamilySettings() {
                             )}
                           </div>
                           <div className="fs-member-email">{member.email}</div>
+                          {/* Hiển thị vai trò gia đình nếu có */}
+                          {member.familyRole && (
+                            <div className="fs-family-role">
+                              <i className="fas fa-user-tag"></i> {member.familyRole}
+                            </div>
+                          )}
                         </div>
-                        {isOwner() && !isOwnerMember && !isCurrentUser && (
-                          <button className="fs-btn sm danger">
-                            <i className="fas fa-user-minus"></i> Xóa
-                          </button>
-                        )}
+                        <div className="fs-member-actions">
+                          {/* Nút chỉnh sửa vai trò nếu là owner */}
+                          {isOwner() && (
+                            <button 
+                              className="fs-btn sm primary"
+                              onClick={() => handleOpenRoleModal(member)}
+                              title="Đặt vai trò trong gia đình"
+                            >
+                              <i className="fas fa-user-tag"></i> {member.familyRole ? 'Sửa vai trò' : 'Đặt vai trò'}
+                            </button>
+                          )}
+                          
+                          {/* Nút xóa thành viên cho owner */}
+                          {isOwner() && !isOwnerMember && !isCurrentUser && (
+                            <button className="fs-btn sm danger">
+                              <i className="fas fa-user-minus"></i> Xóa
+                            </button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -375,6 +451,75 @@ export default function FamilySettings() {
           </div>
         )}
       </main>
+      
+      {/* Modal đặt vai trò */}
+      {showRoleModal && (
+        <div className="fs-modal-overlay">
+          <div className="fs-modal">
+            <div className="fs-modal-header">
+              <h3>
+                <i className="fas fa-user-tag"></i> Đặt vai trò trong gia đình
+              </h3>
+              <button className="fs-modal-close" onClick={() => setShowRoleModal(false)}>
+                &times;
+              </button>
+            </div>
+            <div className="fs-modal-body">
+              <p>
+                Vai trò giúp xác định vị trí của thành viên trong gia đình, 
+                ví dụ như: Bố, Mẹ, Chị cả, Em út,...
+              </p>
+              
+              <div className="fs-form-group">
+                <label>Vai trò trong gia đình</label>
+                <input
+                  type="text"
+                  value={familyRoleText}
+                  onChange={(e) => setFamilyRoleText(e.target.value)}
+                  placeholder="Ví dụ: Bố, Mẹ, Con trai cả,..."
+                  maxLength={50}
+                />
+                <div className="fs-form-hint">Tối đa 50 ký tự</div>
+              </div>
+              
+              <div className="fs-role-examples">
+                <p>Một số gợi ý:</p>
+                <div className="fs-role-examples-grid">
+                  {['Bố', 'Mẹ', 'Con trai', 'Con gái', 'Anh trai', 'Chị gái', 'Em út', 'Ông', 'Bà', 'Cô', 'Chú'].map(role => (
+                    <button 
+                      key={role} 
+                      className="fs-role-example-btn"
+                      onClick={() => setFamilyRoleText(role)}
+                    >
+                      {role}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="fs-modal-footer">
+              <button 
+                className="fs-btn secondary" 
+                onClick={() => setShowRoleModal(false)}
+                disabled={savingRole}
+              >
+                Hủy
+              </button>
+              <button 
+                className="fs-btn primary" 
+                onClick={handleSaveMemberRole}
+                disabled={savingRole}
+              >
+                {savingRole ? (
+                  <><i className="fas fa-spinner fa-spin"></i> Đang lưu...</>
+                ) : (
+                  <><i className="fas fa-save"></i> Lưu vai trò</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Confirmation Modal */}
       {showDeleteModal && (

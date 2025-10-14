@@ -568,4 +568,88 @@ router.post('/:id/leave', authenticateToken, async (req, res) => {
   }
 });
 
+// Cập nhật vai trò thành viên gia đình (chỉ owner)
+router.put('/:familyId/member/:memberId/role', authenticateToken, async (req, res) => {
+  try {
+    const { familyId, memberId } = req.params;
+    const { familyRole } = req.body;
+    const userId = req.user.id || req.user._id;
+
+    // Kiểm tra xem user có phải là owner của gia đình không
+    const family = await Family.findOne({
+      _id: familyId,
+      owner: userId
+    });
+
+    if (!family) {
+      return res.status(403).json({ message: 'Bạn không phải là chủ gia đình hoặc gia đình không tồn tại' });
+    }
+
+    // Tìm thành viên cần cập nhật
+    const memberIndex = family.members.findIndex(member => 
+      String(member.user) === String(memberId)
+    );
+
+    if (memberIndex === -1) {
+      return res.status(404).json({ message: 'Thành viên không tồn tại trong gia đình' });
+    }
+
+    // Cập nhật familyRole
+    family.members[memberIndex].familyRole = familyRole.trim();
+    await family.save();
+
+    // Populate thông tin thành viên
+    const updatedFamily = await Family.findById(familyId)
+      .populate('owner', 'name email')
+      .populate('members.user', 'name email');
+
+    res.json(updatedFamily);
+  } catch (error) {
+    console.error('Error updating member role:', error);
+    res.status(500).json({ message: 'Lỗi server khi cập nhật vai trò' });
+  }
+});
+
+// Cập nhật vai trò của bản thân (cho owner)
+router.put('/:familyId/my-role', authenticateToken, async (req, res) => {
+  try {
+    const { familyId } = req.params;
+    const { familyRole } = req.body;
+    const userId = req.user.id || req.user._id;
+
+    // Kiểm tra xem user có phải là owner của gia đình không
+    const family = await Family.findOne({
+      _id: familyId,
+      owner: userId
+    });
+
+    if (!family) {
+      return res.status(403).json({ message: 'Bạn không phải là chủ gia đình hoặc gia đình không tồn tại' });
+    }
+
+    // Tìm thành viên là owner
+    const ownerMemberIndex = family.members.findIndex(member => 
+      String(member.user) === String(userId)
+    );
+
+    if (ownerMemberIndex === -1) {
+      return res.status(404).json({ message: 'Không tìm thấy thông tin chủ gia đình' });
+    }
+
+    // Cập nhật familyRole cho chủ gia đình
+    family.members[ownerMemberIndex].familyRole = familyRole.trim();
+    await family.save();
+
+    // Populate thông tin thành viên
+    const updatedFamily = await Family.findById(familyId)
+      .populate('owner', 'name email')
+      .populate('members.user', 'name email');
+
+    res.json(updatedFamily);
+  } catch (error) {
+    console.error('Error updating owner role:', error);
+    res.status(500).json({ message: 'Lỗi server khi cập nhật vai trò' });
+  }
+});
+
 module.exports = router;

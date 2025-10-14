@@ -363,6 +363,12 @@
   font-weight: 500;
 }
 
+.ft-creator-role {
+  font-weight: 600;
+  color: #0369a1;
+  margin-left: 2px;
+}
+
 /* Delete confirmation modal */
 .ft-delete-confirmation {
   text-align: center;

@@ -58,12 +58,29 @@ familyBalanceSchema.statics.updateBalance = async function(familyId, userId, amo
     if (memberIndex >= 0) {
       // Thành viên đã tồn tại trong danh sách
       familyBalance.memberBalances[memberIndex].balance += updateAmount;
+      console.log(`Updated member balance: userId=${userId}, newBalance=${familyBalance.memberBalances[memberIndex].balance}`);
     } else {
+      // Tìm user để lấy thêm thông tin name và email
+      let userName = '', userEmail = '';
+      try {
+        const User = mongoose.model('User');
+        const user = await User.findById(userId).select('name email');
+        if (user) {
+          userName = user.name || '';
+          userEmail = user.email || '';
+        }
+      } catch (err) {
+        console.error("Error fetching user info for balance:", err);
+      }
+
       // Thêm thành viên mới vào danh sách
       familyBalance.memberBalances.push({
         userId,
+        userName,
+        userEmail,
         balance: updateAmount
       });
+      console.log(`Added new member balance: userId=${userId}, balance=${updateAmount}`);
     }
   }
   

@@ -201,11 +201,9 @@ export default function FamilyTransactions() {
           return;
         }
       } else {
-        const memberBalance = familyBalance?.memberBalances?.find(m => 
-          currentUser && m.userId === currentUser.id
-        );
-        if (!memberBalance || memberBalance.balance < amount) {
-          const currentBalance = memberBalance ? memberBalance.balance : 0;
+        // Cải thiện kiểm tra số dư cá nhân
+        const currentBalance = getCurrentUserBalance();
+        if (currentBalance < amount) {
           showNotification(`Số dư cá nhân không đủ. Hiện tại: ${formatCurrency(currentBalance)}`, 'error');
           return;
         }
@@ -428,9 +426,15 @@ export default function FamilyTransactions() {
   const getCurrentUserBalance = () => {
     if (!familyBalance || !currentUser) return 0;
     
+    // Cải thiện việc tìm kiếm - kiểm tra cả ID và email
     const memberBalance = familyBalance.memberBalances.find(m => 
-      m.userId === currentUser.id || (m.userEmail && m.userEmail === currentUser.email)
+      (m.userId && String(m.userId) === String(currentUser.id)) || 
+      (m.userEmail && m.userEmail.toLowerCase() === currentUser.email.toLowerCase())
     );
+    
+    console.log("Current User ID:", currentUser.id);
+    console.log("Current User Email:", currentUser.email);
+    console.log("Available Member Balances:", familyBalance.memberBalances);
     
     return memberBalance ? memberBalance.balance : 0;
   };
@@ -847,6 +851,9 @@ export default function FamilyTransactions() {
                             {transaction.creatorName && (
                               <span className="ft-creator">
                                 <i className="fas fa-user"></i> {transaction.creatorName}
+                                {transaction.creatorRole && (
+                                  <span className="ft-creator-role">({transaction.creatorRole})</span>
+                                )}
                               </span>
                             )}
                           </div>

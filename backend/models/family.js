@@ -27,6 +27,12 @@ const familySchema = new mongoose.Schema({
       enum: ['owner', 'member'],
       default: 'member'
     },
+    // Thêm trường familyRole để lưu vai trò trong gia đình (bố, mẹ, chị...)
+    familyRole: {
+      type: String,
+      trim: true,
+      default: ''
+    },
     joinedAt: {
       type: Date,
       default: Date.now

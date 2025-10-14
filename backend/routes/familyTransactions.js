@@ -101,11 +101,48 @@ router.get('/:familyId/transactions', authenticateToken, isFamilyMember, async (
       .skip(skip)
       .limit(parseInt(limit));
     
+    // Thêm thông tin vai trò và tên cho từng giao dịch
+    const family = await Family.findById(familyId);
+    const transactionsWithRoles = transactions.map(tx => {
+      const txObj = tx.toObject();
+      
+      // Lấy thông tin người tạo
+      const creatorId = txObj.createdBy?._id || txObj.createdBy;
+      const creatorEmail = txObj.createdBy?.email;
+      const creatorName = txObj.createdBy?.name || '';
+      
+      // Tìm vai trò của người tạo trong gia đình
+      let creatorRole = '';
+      if (family?.members) {
+        const member = family.members.find(m => {
+          // So sánh theo user ID
+          if (m.user && creatorId && String(m.user) === String(creatorId)) {
+            return true;
+          }
+          // So sánh theo email nếu không có user ID
+          if (m.email && creatorEmail && m.email.toLowerCase() === creatorEmail.toLowerCase()) {
+            return true;
+          }
+          return false;
+        });
+        
+        if (member) {
+          creatorRole = member.familyRole || '';
+        }
+      }
+      
+      // Thêm thông tin vào transaction object
+      txObj.creatorName = creatorName;
+      txObj.creatorRole = creatorRole;
+      
+      return txObj;
+    });
+    
     // Đếm tổng số giao dịch để phân trang
     const totalCount = await FamilyTransaction.countDocuments(filter);
     
     res.json({
-      transactions,
+      transactions: transactionsWithRoles,
       pagination: {
         totalItems: totalCount,
         totalPages: Math.ceil(totalCount / parseInt(limit)),
@@ -149,7 +186,33 @@ router.get('/transactions/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'You do not have permission to view this transaction' });
     }
     
-    res.json(transaction);
+    // Thêm thông tin vai trò và tên
+    const txObj = transaction.toObject();
+    const creatorId = txObj.createdBy?._id || txObj.createdBy;
+    const creatorEmail = txObj.createdBy?.email;
+    const creatorName = txObj.createdBy?.name || '';
+    
+    let creatorRole = '';
+    if (family?.members) {
+      const member = family.members.find(m => {
+        if (m.user && creatorId && String(m.user) === String(creatorId)) {
+          return true;
+        }
+        if (m.email && creatorEmail && m.email.toLowerCase() === creatorEmail.toLowerCase()) {
+          return true;
+        }
+        return false;
+      });
+      
+      if (member) {
+        creatorRole = member.familyRole || '';
+      }
+    }
+    
+    txObj.creatorName = creatorName;
+    txObj.creatorRole = creatorRole;
+    
+    res.json(txObj);
   } catch (error) {
     console.error('Error fetching transaction details:', error);
     res.status(500).json({ message: 'Server error' });
@@ -205,9 +268,25 @@ router.post('/transactions', authenticateToken, async (req, res) => {
       } 
       
       if (transactionScope === 'personal') {
-        const memberBalance = balance.memberBalances.find(m => String(m.userId) === String(userId));
+        // Cải thiện việc tìm kiếm memberBalance - so sánh cả ID và email
+        const memberBalance = balance.memberBalances.find(m => 
+          String(m.userId) === String(userId) || 
+          (m.userEmail && m.userEmail.toLowerCase() === req.user.email.toLowerCase())
+        );
+        
+        console.log("User ID:", userId);
+        console.log("User Email:", req.user.email);
+        console.log("Available Balances:", balance.memberBalances.map(m => ({
+          userId: m.userId,
+          userEmail: m.userEmail,
+          balance: m.balance
+        })));
+        
         if (!memberBalance || memberBalance.balance < amount) {
-          return res.status(400).json({ message: 'Số dư cá nhân không đủ để thực hiện giao dịch này' });
+          const currentBalance = memberBalance ? memberBalance.balance : 0;
+          return res.status(400).json({ 
+            message: `Số dư cá nhân không đủ để thực hiện giao dịch này. Số dư hiện tại: ${currentBalance}` 
+          });
         }
       }
     }
