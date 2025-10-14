@@ -9,13 +9,11 @@ export default function FamilySidebar() {
   // Menu items array
   const items = [
     { id: 'home', label: 'Trang chủ', route: '/family', icon: 'fas fa-home' },
-    { id: 'expenses', label: 'Chi tiêu', route: '/family/expenses', icon: 'fas fa-receipt' },
-    { id: 'budget', label: 'Ngân sách', route: '/family/budget', icon: 'fas fa-wallet' },
-    { id: 'savings', label: 'Tiết kiệm', route: '/family/savings', icon: 'fas fa-piggy-bank' },
-    { id: 'bills', label: 'Hóa đơn', route: '/family/bills', icon: 'fas fa-file-invoice-dollar' },
-    { id: 'reports', label: 'Báo cáo', route: '/family/reports', icon: 'fas fa-chart-pie' },
+    { id: 'transactions', label: 'Giao dịch', route: '/family/transactions', icon: 'fas fa-exchange-alt' },
+    { id: 'lists', label: 'Danh sách', route: '/family/lists', icon: 'fas fa-list' },
+    { id: 'charts', label: 'Biểu đồ', route: '/family/charts', icon: 'fas fa-chart-bar' },
     { id: 'members', label: 'Thành viên', route: '/family/members', icon: 'fas fa-users' },
-    { id: 'settings', label: 'Cài đặt', route: '/family/settings', icon: 'fas fa-cog' }, // Thêm mục Cài đặt
+    { id: 'settings', label: 'Cài đặt', route: '/family/settings', icon: 'fas fa-cog' },
   ];
 
   // Xác định tab active dựa trên URL hiện tại
@@ -23,8 +21,11 @@ export default function FamilySidebar() {
     const path = location.pathname;
     
     if (path === '/family') return 'home';
+    if (path === '/family/transactions') return 'transactions';
+    if (path === '/family/lists') return 'lists';
+    if (path === '/family/charts') return 'charts';
     if (path === '/family/members') return 'members';
-    if (path === '/family/settings') return 'settings'; // Thêm kiểm tra cho trang cài đặt
+    if (path === '/family/settings') return 'settings';
     // Thêm các route khác nếu có
     // if (path === '/family/tasks') return 'tasks';
     // if (path === '/family/reports') return 'reports';
