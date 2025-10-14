@@ -6,14 +6,16 @@ export default function FamilySidebar() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // New: menu items required by user
+  // Menu items array
   const items = [
     { id: 'home', label: 'Trang chủ', route: '/family', icon: 'fas fa-home' },
-    { id: 'transactions', label: 'Giao dịch', route: '/family/transactions', icon: 'fas fa-exchange-alt' },
-    { id: 'tx-list', label: 'Danh sách giao dịch', route: '/family/transactions/list', icon: 'fas fa-list-alt' },
-    { id: 'groceries', label: 'Danh sách tạp hóa', route: '/family/groceries', icon: 'fas fa-shopping-basket' },
-    { id: 'todos', label: 'Danh sách việc cần làm', route: '/family/todos', icon: 'fas fa-clipboard-list' },
+    { id: 'expenses', label: 'Chi tiêu', route: '/family/expenses', icon: 'fas fa-receipt' },
+    { id: 'budget', label: 'Ngân sách', route: '/family/budget', icon: 'fas fa-wallet' },
+    { id: 'savings', label: 'Tiết kiệm', route: '/family/savings', icon: 'fas fa-piggy-bank' },
+    { id: 'bills', label: 'Hóa đơn', route: '/family/bills', icon: 'fas fa-file-invoice-dollar' },
+    { id: 'reports', label: 'Báo cáo', route: '/family/reports', icon: 'fas fa-chart-pie' },
     { id: 'members', label: 'Thành viên', route: '/family/members', icon: 'fas fa-users' },
+    { id: 'settings', label: 'Cài đặt', route: '/family/settings', icon: 'fas fa-cog' }, // Thêm mục Cài đặt
   ];
 
   // Xác định tab active dựa trên URL hiện tại
@@ -22,9 +24,10 @@ export default function FamilySidebar() {
     
     if (path === '/family') return 'home';
     if (path === '/family/members') return 'members';
+    if (path === '/family/settings') return 'settings'; // Thêm kiểm tra cho trang cài đặt
     // Thêm các route khác nếu có
     // if (path === '/family/tasks') return 'tasks';
-    // if (path === '/family/settings') return 'settings';
+    // if (path === '/family/reports') return 'reports';
     
     return '';
   };

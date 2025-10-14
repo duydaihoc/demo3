@@ -67,4 +67,7 @@ familySchema.pre('save', function(next) {
 // Thêm index cho tìm kiếm nhanh
 familySchema.index({ 'members.user': 1, 'members.role': 1 });
 
-module.exports = mongoose.model('Family', familySchema);
+// Export the Family model, checking if it already exists to avoid OverwriteModelError
+const Family = mongoose.models.Family || mongoose.model('Family', familySchema);
+
+module.exports = Family;

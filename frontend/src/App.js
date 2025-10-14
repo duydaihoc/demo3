@@ -27,6 +27,7 @@ import FamilySwitchPage from './family/FamilySwitchPage';
 import FamilySelectorPage from './family/FamilySelectorPage';
 import SwitchPage from './SwitchPage';
 import FamilyMembersPage from './family/FamilyMembersPage';
+import FamilySettings from './family/FamilySettings'; // Import component mới
 
 import { useEffect, useState } from 'react';
 
@@ -104,6 +105,7 @@ function AppRoutes() {
 				<Route path="/family/savings" element={<FamilyHome />} /> {/* Thay bằng component tương ứng khi bạn tạo */}
 				<Route path="/family/bills" element={<FamilyHome />} /> {/* Thay bằng component tương ứng khi bạn tạo */}
 				<Route path="/family/members" element={<FamilyMembersPage />} /> {/* Thay bằng component tương ứng khi bạn tạo */}
+				<Route path="/family/settings" element={<FamilySettings />} />
 				<Route path="/switch" element={<SwitchPage />} />
 			</Routes>
 		</div>

@@ -5,6 +5,8 @@ const { auth } = require('../middleware/auth');
 const Group = require('../models/Group');
 const mongoose = require('mongoose');
 const GroupTransaction = require('../models/GroupTransaction');
+// Import Family model for admin family management
+const Family = require('../models/Family');
 
 // Middleware kiểm tra quyền admin
 function isAdmin(req, res, next) {
@@ -444,6 +446,43 @@ router.get('/group-transactions/:id', auth, async (req, res) => {
     res.json(transaction);
   } catch (err) {
     console.error('Admin transaction fetch error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// GET /api/admin/families - Admin endpoint to get all families with detailed information
+router.get('/families', auth, async (req, res) => {
+  try {
+    // Verify admin role
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    // Fetch all families with populated information
+    const families = await Family.find({})
+      .populate('owner', 'name email')
+      .populate('members.user', 'name email')
+      .sort({ createdAt: -1 });
+
+    // Transform and enhance the data for admin view
+    const enhancedFamilies = families.map(family => {
+      // Convert to plain object to avoid mongoose document immutability
+      const f = family.toObject();
+      
+      // Add calculated fields for admin display
+      return {
+        ...f,
+        memberCount: f.members ? f.members.length : 0,
+        activeMembers: f.members ? f.members.filter(m => !m.invited).length : 0,
+        pendingMembers: f.members ? f.members.filter(m => m.invited).length : 0,
+        ownerName: f.owner ? (f.owner.name || f.owner.email) : 'Unknown',
+        ownerEmail: f.owner ? f.owner.email : ''
+      };
+    });
+
+    res.json(enhancedFamilies);
+  } catch (err) {
+    console.error('Admin families fetch error:', err);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });

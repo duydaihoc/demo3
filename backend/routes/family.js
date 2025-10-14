@@ -456,4 +456,116 @@ router.delete('/:familyId/invitations/:invitationId', authenticateToken, async (
   }
 });
 
+// Cập nhật thông tin gia đình (chỉ owner)
+router.put('/:id', authenticateToken, async (req, res) => {
+  try {
+    const familyId = req.params.id;
+    const { name } = req.body;
+    
+    // Tìm gia đình và kiểm tra người dùng có phải owner không
+    const family = await Family.findById(familyId);
+    if (!family) {
+      return res.status(404).json({ message: 'Không tìm thấy gia đình' });
+    }
+    
+    // Kiểm tra xem người đang yêu cầu có phải owner không
+    if (String(family.owner) !== String(req.user.id)) {
+      return res.status(403).json({ message: 'Bạn không có quyền cập nhật gia đình này' });
+    }
+    
+    // Cập nhật thông tin
+    family.name = name || family.name;
+    
+    // Nếu có thay đổi color hoặc description, cập nhật chúng
+    if (req.body.color) {
+      family.color = req.body.color;
+    }
+    
+    if (req.body.description !== undefined) {
+      family.description = req.body.description;
+    }
+    
+    // Lưu thay đổi
+    await family.save();
+    
+    // Trả về dữ liệu đã cập nhật với thông tin owner và members đã populate
+    const updatedFamily = await Family.findById(familyId)
+      .populate('owner', 'name email')
+      .populate('members.user', 'name email');
+    
+    res.status(200).json(updatedFamily);
+  } catch (error) {
+    console.error('Error updating family:', error);
+    res.status(500).json({ message: 'Lỗi server khi cập nhật gia đình' });
+  }
+});
+
+// Xóa gia đình (chỉ owner)
+router.delete('/:id', authenticateToken, async (req, res) => {
+  try {
+    const familyId = req.params.id;
+    
+    // Tìm gia đình và kiểm tra quyền owner
+    const family = await Family.findById(familyId);
+    if (!family) {
+      return res.status(404).json({ message: 'Không tìm thấy gia đình' });
+    }
+    
+    // Kiểm tra quyền owner
+    if (String(family.owner) !== String(req.user.id)) {
+      return res.status(403).json({ message: 'Bạn không có quyền xóa gia đình này' });
+    }
+    
+    // Xóa tất cả dữ liệu liên quan đến gia đình (nếu có)
+    // TODO: Có thể thêm logic xóa các dữ liệu khác liên quan đến gia đình như: giao dịch, ngân sách, v.v.
+    
+    // Xóa gia đình
+    await Family.findByIdAndDelete(familyId);
+    
+    res.status(200).json({ message: 'Gia đình đã được xóa thành công' });
+  } catch (error) {
+    console.error('Error deleting family:', error);
+    res.status(500).json({ message: 'Lỗi server khi xóa gia đình' });
+  }
+});
+
+// Rời khỏi gia đình (cho member)
+router.post('/:id/leave', authenticateToken, async (req, res) => {
+  try {
+    const familyId = req.params.id;
+    const userId = req.user.id;
+    
+    // Tìm gia đình
+    const family = await Family.findById(familyId);
+    if (!family) {
+      return res.status(404).json({ message: 'Không tìm thấy gia đình' });
+    }
+    
+    // Kiểm tra người dùng có phải là owner không
+    if (String(family.owner) === String(userId)) {
+      return res.status(403).json({ 
+        message: 'Bạn là chủ sở hữu gia đình này. Không thể rời đi mà phải xóa gia đình hoặc chuyển quyền sở hữu trước.' 
+      });
+    }
+    
+    // Kiểm tra xem người dùng có phải là thành viên không
+    const memberIndex = family.members.findIndex(
+      m => (m.user && String(m.user) === String(userId)) || (m.email === req.user.email)
+    );
+    
+    if (memberIndex === -1) {
+      return res.status(404).json({ message: 'Bạn không phải là thành viên của gia đình này' });
+    }
+    
+    // Xóa người dùng khỏi danh sách thành viên
+    family.members.splice(memberIndex, 1);
+    await family.save();
+    
+    res.status(200).json({ message: 'Đã rời khỏi gia đình thành công' });
+  } catch (error) {
+    console.error('Error leaving family:', error);
+    res.status(500).json({ message: 'Lỗi server khi rời khỏi gia đình' });
+  }
+});
+
 module.exports = router;

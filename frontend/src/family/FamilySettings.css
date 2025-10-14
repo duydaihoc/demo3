@@ -1,0 +1,384 @@
+/* Cấu trúc trang cài đặt */
+.fs-content {
+  padding: 24px 0;
+}
+
+.fs-header {
+  margin-bottom: 32px;
+}
+
+.fs-header h1 {
+  font-size: 1.75rem;
+  margin: 0 0 8px 0;
+  color: #1e293b;
+}
+
+.fs-header p {
+  color: #64748b;
+  margin: 0;
+  font-size: 1rem;
+}
+
+/* Card Grid */
+.fs-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+/* Card Styles */
+.fs-card {
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+.fs-card.full-width {
+  grid-column: 1 / -1;
+}
+
+.fs-card.danger-zone {
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.fs-card-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.fs-card-header h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  color: #0f172a;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fs-card-header h2 i {
+  color: #3b82f6;
+}
+
+.fs-card-header.danger {
+  background-color: #fef2f2;
+}
+
+.fs-card-header.danger h2 {
+  color: #b91c1c;
+}
+
+.fs-card-header.danger h2 i {
+  color: #ef4444;
+}
+
+.fs-card-body {
+  padding: 24px;
+}
+
+/* Form Styles */
+.fs-form {
+  width: 100%;
+}
+
+.fs-form-group {
+  margin-bottom: 20px;
+}
+
+.fs-form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #334155;
+}
+
+.fs-form-group input,
+.fs-form-group textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+.fs-form-group textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+
+.fs-form-group input:focus,
+.fs-form-group textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.fs-error-message {
+  color: #dc2626;
+  margin: 8px 0;
+  padding: 8px 12px;
+  background-color: #fef2f2;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  border-left: 3px solid #dc2626;
+}
+
+.fs-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+
+/* Button Styles */
+.fs-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.fs-btn.primary {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.fs-btn.primary:hover {
+  background-color: #2563eb;
+}
+
+.fs-btn.secondary {
+  background-color: #f1f5f9;
+  color: #334155;
+}
+
+.fs-btn.secondary:hover {
+  background-color: #e2e8f0;
+}
+
+.fs-btn.danger {
+  background-color: #ef4444;
+  color: white;
+}
+
+.fs-btn.danger:hover {
+  background-color: #dc2626;
+}
+
+.fs-btn.warning {
+  background-color: #f97316;
+  color: white;
+}
+
+.fs-btn.warning:hover {
+  background-color: #ea580c;
+}
+
+.fs-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.fs-btn.sm {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+}
+
+/* Danger Action Section */
+.fs-danger-action {
+  border-left: 4px solid #ef4444;
+  padding-left: 16px;
+}
+
+.fs-danger-action h3 {
+  margin: 0 0 8px 0;
+  color: #b91c1c;
+  font-size: 1.1rem;
+}
+
+.fs-danger-action p {
+  color: #64748b;
+  margin-bottom: 16px;
+}
+
+/* Member List */
+.fs-member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fs-member-item {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  border-radius: 8px;
+  background-color: #f8fafc;
+  gap: 16px;
+}
+
+.fs-member-item.current-user {
+  background-color: #f0f9ff;
+  border: 1px solid #bae6fd;
+}
+
+.fs-member-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #10b981);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.fs-member-info {
+  flex: 1;
+}
+
+.fs-member-name {
+  font-weight: 600;
+  color: #0f172a;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fs-member-email {
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.fs-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.fs-badge.owner {
+  background-color: #fff7ed;
+  color: #c2410c;
+}
+
+.fs-badge.current {
+  background-color: #ecfdf5;
+  color: #047857;
+}
+
+/* Modal Styles */
+.fs-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.fs-modal {
+  width: 500px;
+  max-width: 90%;
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+  animation: modal-fade-in 0.3s ease-out;
+}
+
+@keyframes modal-fade-in {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fs-modal-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.fs-modal-header h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 1.25rem;
+}
+
+.fs-modal-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #64748b;
+  height: 32px;
+  width: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+}
+
+.fs-modal-close:hover {
+  background-color: #f1f5f9;
+  color: #334155;
+}
+
+.fs-modal-body {
+  padding: 24px;
+}
+
+.fs-warning-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background-color: #fef2f2;
+  border-radius: 8px;
+  color: #b91c1c;
+  margin: 16px 0;
+}
+
+.fs-warning-text i {
+  color: #ef4444;
+  font-size: 1.1rem;
+}
+
+.fs-modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .fs-card-grid {
+    grid-template-columns: 1fr;
+  }
+}
