@@ -241,6 +241,12 @@ app.use('/api/ai', aiRoutes);
 // Mount family routes
 app.use('/api/family', familyRoutes);
 
+// Import familyTransactions routes
+const familyTransactionsRoutes = require('./routes/familyTransactions');
+
+// Mount family transactions routes
+app.use('/api/family', familyTransactionsRoutes);
+
 // Mount group transactions routes (must come after groupRoutes mounting so group routes unaffected)
 app.use('/api/groups', require('./routes/groupTransactions')); // routes in groupTransactions.js use '/:groupId/transactions'
 
