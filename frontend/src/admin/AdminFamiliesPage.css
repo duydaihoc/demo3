@@ -206,6 +206,27 @@
   background: #b91c1c;
 }
 
+/* Scope badge styling */
+.admin-scope-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.admin-scope-badge.family {
+  background-color: #ecfdf5;
+  color: #065f46;
+}
+
+.admin-scope-badge.personal {
+  background-color: #e0f2fe;
+  color: #0369a1;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .admin-header {

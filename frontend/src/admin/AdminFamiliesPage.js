@@ -364,6 +364,7 @@ function AdminFamiliesPage() {
                     <tr>
                       <th>Gia đình</th>
                       <th>Loại</th>
+                      <th>Phạm vi</th>
                       <th>Mô tả</th>
                       <th>Số tiền</th>
                       <th>Danh mục</th>
@@ -374,7 +375,7 @@ function AdminFamiliesPage() {
                   <tbody>
                     {transactions.length === 0 ? (
                       <tr>
-                        <td colSpan="7" className="admin-empty-row">
+                        <td colSpan="8" className="admin-empty-row">
                           Không có giao dịch nào
                         </td>
                       </tr>
@@ -387,6 +388,11 @@ function AdminFamiliesPage() {
                             <td>
                               <span className={`admin-transaction-type ${transaction.type}`}>
                                 {transaction.type === 'income' ? '💰 Thu nhập' : '💸 Chi tiêu'}
+                              </span>
+                            </td>
+                            <td>
+                              <span className={`admin-scope-badge ${transaction.transactionScope}`}>
+                                {transaction.transactionScope === 'family' ? '🏠 Gia đình' : '👤 Cá nhân'}
                               </span>
                             </td>
                             <td>{transaction.description || 'Không có mô tả'}</td>
