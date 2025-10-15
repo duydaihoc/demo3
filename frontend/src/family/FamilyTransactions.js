@@ -285,21 +285,29 @@ export default function FamilyTransactions() {
       return;
     }
     
-    // Kiểm tra số dư nếu là chi tiêu
-    if (editFormData.type === 'expense') {
-      const amount = Number(editFormData.amount);
+    // Chỉ kiểm tra số dư nếu là giao dịch chi tiêu và số tiền tăng
+    const oldAmount = editingTransaction.amount;
+    const newAmount = Number(editFormData.amount);
+    const amountDifference = newAmount - oldAmount;
+    
+    // Chỉ kiểm tra số dư nếu là giao dịch chi tiêu VÀ số tiền mới lớn hơn số tiền cũ
+    if (editFormData.type === 'expense' && amountDifference > 0) {
       if (editFormData.transactionScope === 'family') {
-        if (familyBalance && familyBalance.familyBalance < amount) {
-          showNotification(`Số dư gia đình không đủ. Hiện tại: ${formatCurrency(familyBalance.familyBalance)}`, 'error');
+        if (familyBalance && familyBalance.familyBalance < amountDifference) {
+          showNotification(`Số dư gia đình không đủ để tăng số tiền thêm ${formatCurrency(amountDifference)}. Hiện tại: ${formatCurrency(familyBalance.familyBalance)}`, 'error');
           return;
         }
       } else {
+        // Tìm số dư cá nhân bằng cả ID và email
         const memberBalance = familyBalance?.memberBalances?.find(m => 
-          currentUser && m.userId === currentUser.id
+          (m.userId && String(m.userId) === String(currentUser.id)) || 
+          (m.userEmail && m.userEmail.toLowerCase() === currentUser.email.toLowerCase())
         );
-        if (!memberBalance || memberBalance.balance < amount) {
+        
+        // Chỉ cần đủ tiền cho phần chênh lệch tăng thêm
+        if (!memberBalance || memberBalance.balance < amountDifference) {
           const currentBalance = memberBalance ? memberBalance.balance : 0;
-          showNotification(`Số dư cá nhân không đủ. Hiện tại: ${formatCurrency(currentBalance)}`, 'error');
+          showNotification(`Số dư cá nhân không đủ để tăng số tiền thêm ${formatCurrency(amountDifference)}. Hiện tại: ${formatCurrency(currentBalance)}`, 'error');
           return;
         }
       }
@@ -309,7 +317,7 @@ export default function FamilyTransactions() {
     try {
       const payload = {
         ...editFormData,
-        amount: Number(editFormData.amount)
+        amount: newAmount
       };
       
       const res = await fetch(`${API_BASE}/api/family/transactions/${editingTransaction._id}`, {

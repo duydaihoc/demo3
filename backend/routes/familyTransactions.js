@@ -356,12 +356,52 @@ router.put('/transactions/:id', authenticateToken, async (req, res) => {
       }
     }
 
-    // Lưu trữ giá trị cũ để hoàn tác số dư
+    // Lưu trữ giá trị cũ để tính toán sự thay đổi số dư
     const oldType = transaction.type;
     const oldAmount = transaction.amount;
     const oldTransactionScope = transaction.transactionScope;
     
-    // Cập nhật các trường
+    // Xác định giá trị mới
+    const newType = type || oldType;
+    const newAmount = amount || oldAmount;
+    const newTransactionScope = transactionScope || oldTransactionScope;
+    
+    // Tính toán sự thay đổi số dư
+    // oldBalanceChange: số tiền mà giao dịch cũ đã thay đổi số dư (income: +amount, expense: -amount)
+    const oldBalanceChange = oldType === 'income' ? oldAmount : -oldAmount;
+    // newBalanceChange: số tiền mà giao dịch mới sẽ thay đổi số dư
+    const newBalanceChange = newType === 'income' ? newAmount : -newAmount;
+    // balanceDifference: sự khác biệt cần cập nhật (new - old)
+    const balanceDifference = newBalanceChange - oldBalanceChange;
+    
+    // Nếu có sự thay đổi số dư, cập nhật
+    if (balanceDifference !== 0) {
+      // Nếu balanceDifference âm, nghĩa là cần trừ thêm từ số dư, cần kiểm tra trước
+      if (balanceDifference < 0) {
+        const balance = await FamilyBalance.getBalance(transaction.familyId);
+        const amountNeeded = Math.abs(balanceDifference);
+        
+        if (newTransactionScope === 'family') {
+          if (balance.familyBalance < amountNeeded) {
+            return res.status(400).json({ message: 'Số dư gia đình không đủ để thực hiện giao dịch này' });
+          }
+        } else {
+          const memberBalance = balance.memberBalances.find(m => String(m.userId) === String(userId));
+          if (!memberBalance || memberBalance.balance < amountNeeded) {
+            return res.status(400).json({ message: 'Số dư cá nhân không đủ để thực hiện giao dịch này' });
+          }
+        }
+      }
+      
+      // Cập nhật số dư theo sự khác biệt
+      if (newTransactionScope === 'family') {
+        await FamilyBalance.updateBalance(transaction.familyId, userId, balanceDifference, 'income', 'family');
+      } else {
+        await FamilyBalance.updateBalance(transaction.familyId, userId, balanceDifference, 'income', 'personal');
+      }
+    }
+    
+    // Cập nhật các trường giao dịch
     if (type) transaction.type = type;
     if (amount) transaction.amount = amount;
     if (category) {
@@ -376,60 +416,8 @@ router.put('/transactions/:id', authenticateToken, async (req, res) => {
     if (date) transaction.date = date;
     if (tags) transaction.tags = tags;
     
-    // Kiểm tra số dư nếu là giao dịch chi tiêu mới
-    if ((type || transaction.type) === 'expense') {
-      const balance = await FamilyBalance.getBalance(transaction.familyId);
-      
-      // Hoàn tác giao dịch cũ
-      await FamilyBalance.updateBalance(
-        transaction.familyId,
-        userId,
-        oldAmount,
-        oldType === 'income' ? 'expense' : 'income', // Đảo ngược loại để hoàn tác
-        oldTransactionScope
-      );
-      
-      // Kiểm tra số dư mới
-      if ((transactionScope || transaction.transactionScope) === 'family') {
-        if (balance.familyBalance < (amount || transaction.amount)) {
-          // Hoàn tác lại về trạng thái trước đó
-          await FamilyBalance.updateBalance(
-            transaction.familyId,
-            userId,
-            oldAmount,
-            oldType,
-            oldTransactionScope
-          );
-          return res.status(400).json({ message: 'Số dư gia đình không đủ để thực hiện giao dịch này' });
-        }
-      } 
-      
-      if ((transactionScope || transaction.transactionScope) === 'personal') {
-        const memberBalance = balance.memberBalances.find(m => String(m.userId) === String(userId));
-        if (!memberBalance || memberBalance.balance < (amount || transaction.amount)) {
-          // Hoàn tác lại về trạng thái trước đó
-          await FamilyBalance.updateBalance(
-            transaction.familyId,
-            userId,
-            oldAmount,
-            oldType,
-            oldTransactionScope
-          );
-          return res.status(400).json({ message: 'Số dư cá nhân không đủ để thực hiện giao dịch này' });
-        }
-      }
-    }
-    
+    // Lưu giao dịch đã cập nhật
     await transaction.save();
-    
-    // Cập nhật số dư với giao dịch mới
-    await FamilyBalance.updateBalance(
-      transaction.familyId,
-      userId,
-      amount || transaction.amount,
-      type || transaction.type,
-      transactionScope || transaction.transactionScope
-    );
     
     // Populate và trả về
     await transaction.populate('category', 'name icon type');
@@ -460,15 +448,16 @@ router.delete('/transactions/:id', authenticateToken, async (req, res) => {
       }
     }
     
-    // Hoàn tác số dư
-    await FamilyBalance.updateBalance(
-      transaction.familyId,
-      userId,
-      transaction.amount,
-      transaction.type === 'income' ? 'expense' : 'income', // Đảo ngược loại để hoàn tác
-      transaction.transactionScope
-    );
+    // Hoàn tác số dư của giao dịch này
+    const updateAmount = transaction.type === 'income' ? -transaction.amount : transaction.amount; // Đảo ngược để hoàn tác
     
+    if (transaction.transactionScope === 'family') {
+      await FamilyBalance.updateBalance(transaction.familyId, userId, updateAmount, 'income', 'family');
+    } else {
+      await FamilyBalance.updateBalance(transaction.familyId, userId, updateAmount, 'income', 'personal');
+    }
+    
+    // Xóa giao dịch
     await FamilyTransaction.findByIdAndDelete(req.params.id);
     
     res.json({ message: 'Transaction deleted successfully' });
@@ -484,7 +473,7 @@ router.get('/:familyId/balance', authenticateToken, isFamilyMember, async (req, 
     const { familyId } = req.params;
     
     const balance = await FamilyBalance.getBalance(familyId);
-    
+     
     // Lấy thông tin bổ sung về thành viên
     if (balance.memberBalances && balance.memberBalances.length > 0) {
       for (const member of balance.memberBalances) {
@@ -546,7 +535,7 @@ router.get('/:familyId/transactions/monthly/:year/:month', authenticateToken, is
     const { familyId, year, month } = req.params;
     
     const transactions = await FamilyTransaction.getMonthlyTransactions(familyId, parseInt(year), parseInt(month));
-    
+     
     // Tính tổng thu và chi
     const income = transactions
       .filter(t => t.type === 'income')
