@@ -7,11 +7,18 @@ function AdminFamiliesPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('families'); // 'families' or 'transactions'
   const [families, setFamilies] = useState([]);
+  const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortOrder, setSortOrder] = useState('desc');
+  const [transactionFilters, setTransactionFilters] = useState({
+    familyId: '',
+    type: '',
+    startDate: '',
+    endDate: ''
+  });
 
   const API_BASE = 'http://localhost:5000';
   const token = localStorage.getItem('token');
@@ -36,6 +43,32 @@ function AdminFamiliesPage() {
     }
   }, [token, API_BASE]);
 
+  const fetchTransactions = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const params = new URLSearchParams();
+      if (transactionFilters.familyId) params.append('familyId', transactionFilters.familyId);
+      if (transactionFilters.type) params.append('type', transactionFilters.type);
+      if (transactionFilters.startDate) params.append('startDate', transactionFilters.startDate);
+      if (transactionFilters.endDate) params.append('endDate', transactionFilters.endDate);
+      
+      const res = await fetch(`${API_BASE}/api/admin/family-transactions?${params}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        throw new Error('Không thể tải giao dịch gia đình');
+      }
+      const data = await res.json();
+      setTransactions(data.data || []);
+    } catch (err) {
+      console.error('Error fetching transactions:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [token, API_BASE, transactionFilters]);
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     const role = localStorage.getItem('role');
@@ -44,9 +77,11 @@ function AdminFamiliesPage() {
     } else {
       if (activeTab === 'families') {
         fetchFamilies();
+      } else if (activeTab === 'transactions') {
+        fetchTransactions();
       }
     }
-  }, [navigate, activeTab, fetchFamilies]);
+  }, [navigate, activeTab, fetchFamilies, fetchTransactions]);
 
   const handleDeleteFamily = async (familyId) => {
     if (!window.confirm('Bạn có chắc chắn muốn xóa gia đình này?')) return;
@@ -106,6 +141,17 @@ function AdminFamiliesPage() {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+  };
+
+  const getCategoryInfo = (category) => {
+    if (typeof category === 'object' && category !== null) {
+      return { name: category.name || 'Không có', icon: category.icon || '📝' };
+    }
+    return { name: 'Không có', icon: '📝' };
   };
 
   return (
@@ -252,9 +298,123 @@ function AdminFamiliesPage() {
 
         {activeTab === 'transactions' && (
           <div className="admin-card">
-            <h3>Giao dịch gia đình</h3>
-            <p>Tính năng giao dịch gia đình sẽ được phát triển sau.</p>
-            {/* Có thể thêm bảng giao dịch gia đình ở đây sau */}
+            <div className="admin-card-header">
+              <h3>Giao dịch gia đình</h3>
+              <div className="admin-controls">
+                <select 
+                  value={transactionFilters.familyId}
+                  onChange={(e) => setTransactionFilters({...transactionFilters, familyId: e.target.value})}
+                  className="admin-sort-select"
+                >
+                  <option value="">Tất cả gia đình</option>
+                  {families.map(family => (
+                    <option key={family._id} value={family._id}>
+                      {family.name || 'Gia đình chưa đặt tên'}
+                    </option>
+                  ))}
+                </select>
+                <select 
+                  value={transactionFilters.type}
+                  onChange={(e) => setTransactionFilters({...transactionFilters, type: e.target.value})}
+                  className="admin-sort-select"
+                >
+                  <option value="">Tất cả loại</option>
+                  <option value="income">Thu nhập</option>
+                  <option value="expense">Chi tiêu</option>
+                </select>
+                <input
+                  type="date"
+                  placeholder="Từ ngày"
+                  value={transactionFilters.startDate}
+                  onChange={(e) => setTransactionFilters({...transactionFilters, startDate: e.target.value})}
+                  className="admin-search-input"
+                  style={{width: '120px'}}
+                />
+                <input
+                  type="date"
+                  placeholder="Đến ngày"
+                  value={transactionFilters.endDate}
+                  onChange={(e) => setTransactionFilters({...transactionFilters, endDate: e.target.value})}
+                  className="admin-search-input"
+                  style={{width: '120px'}}
+                />
+                <button onClick={fetchTransactions} className="admin-refresh-btn">
+                  🔄 Lọc
+                </button>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="admin-loading">
+                <i className="fas fa-spinner fa-spin"></i>
+                <p>Đang tải giao dịch gia đình...</p>
+              </div>
+            ) : error ? (
+              <div className="admin-error">
+                <i className="fas fa-exclamation-triangle"></i>
+                <p>{error}</p>
+                <button onClick={fetchTransactions} className="admin-retry-btn">
+                  Thử lại
+                </button>
+              </div>
+            ) : (
+              <div className="admin-table-container">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Gia đình</th>
+                      <th>Loại</th>
+                      <th>Mô tả</th>
+                      <th>Số tiền</th>
+                      <th>Danh mục</th>
+                      <th>Người tạo</th>
+                      <th>Ngày</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {transactions.length === 0 ? (
+                      <tr>
+                        <td colSpan="7" className="admin-empty-row">
+                          Không có giao dịch nào
+                        </td>
+                      </tr>
+                    ) : (
+                      transactions.map(transaction => {
+                        const category = getCategoryInfo(transaction.category);
+                        return (
+                          <tr key={transaction._id}>
+                            <td>{transaction.familyId?.name || 'Gia đình'}</td>
+                            <td>
+                              <span className={`admin-transaction-type ${transaction.type}`}>
+                                {transaction.type === 'income' ? '💰 Thu nhập' : '💸 Chi tiêu'}
+                              </span>
+                            </td>
+                            <td>{transaction.description || 'Không có mô tả'}</td>
+                            <td className={`admin-amount ${transaction.type}`}>
+                              {transaction.type === 'expense' ? '-' : '+'}{formatCurrency(transaction.amount)}
+                            </td>
+                            <td>
+                              <span className="admin-category">
+                                {category.icon} {category.name}
+                              </span>
+                            </td>
+                            <td>
+                              <div className="admin-creator-info">
+                                <div>{transaction.creatorName}</div>
+                                {transaction.creatorRole && (
+                                  <div className="admin-creator-role">({transaction.creatorRole})</div>
+                                )}
+                              </div>
+                            </td>
+                            <td>{formatDate(transaction.date || transaction.createdAt)}</td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </div>

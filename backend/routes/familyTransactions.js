@@ -274,13 +274,13 @@ router.post('/transactions', authenticateToken, async (req, res) => {
           (m.userEmail && m.userEmail.toLowerCase() === req.user.email.toLowerCase())
         );
         
-        console.log("User ID:", userId);
-        console.log("User Email:", req.user.email);
-        console.log("Available Balances:", balance.memberBalances.map(m => ({
-          userId: m.userId,
-          userEmail: m.userEmail,
-          balance: m.balance
-        })));
+        // console.log("User ID:", userId);
+        // console.log("User Email:", req.user.email);
+        // console.log("Available Balances:", balance.memberBalances.map(m => ({
+        //   userId: m.userId,
+        //   userEmail: m.userEmail,
+        //   balance: m.balance
+        // })));
         
         if (!memberBalance || memberBalance.balance < amount) {
           const currentBalance = memberBalance ? memberBalance.balance : 0;
@@ -555,6 +555,85 @@ router.get('/:familyId/transactions/monthly/:year/:month', authenticateToken, is
     });
   } catch (error) {
     console.error('Error fetching monthly transactions:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /api/family/:familyId/member-transactions - Lấy giao dịch của một thành viên cụ thể
+router.get('/:familyId/member-transactions', authenticateToken, isFamilyMember, async (req, res) => {
+  try {
+    const { familyId } = req.params;
+    const { userId, userEmail, limit = 10, page = 1 } = req.query;
+    
+    if (!userId && !userEmail) {
+      return res.status(400).json({ message: 'Cần có userId hoặc userEmail' });
+    }
+    
+    // Kiểm tra quyền truy cập (chỉ owner hoặc bản thân thành viên đó)
+    const family = await Family.findById(familyId);
+    if (!family) {
+      return res.status(404).json({ message: 'Family not found' });
+    }
+    
+    const currentUserId = req.user.id || req.user._id;
+    const isOwner = String(family.owner) === String(currentUserId);
+    const isSelfQuery = (userId && String(userId) === String(currentUserId)) || 
+                       (userEmail && userEmail.toLowerCase() === req.user.email.toLowerCase());
+    
+    if (!isOwner && !isSelfQuery) {
+      return res.status(403).json({ message: 'Bạn không có quyền xem giao dịch của thành viên khác' });
+    }
+    
+    // Xây dựng query filter
+    const filter = { familyId };
+    
+    // Lọc theo userId hoặc email của người tạo
+    if (userId) {
+      // Đảm bảo userId là string hợp lệ
+      const userIdStr = typeof userId === 'object' ? (userId._id || userId.id || userId) : userId;
+      if (userIdStr && typeof userIdStr === 'string') {
+        filter.createdBy = userIdStr;
+      }
+    } else if (userEmail) {
+      // Tìm user ID từ email
+      const user = await User.findOne({ email: userEmail.toLowerCase().trim() });
+      if (user) {
+        filter.createdBy = user._id;
+      } else {
+        // Nếu không tìm thấy user, trả về mảng rỗng
+        return res.json({ transactions: [], total: 0 });
+      }
+    }
+    
+    // Thêm filter cho transactionScope nếu có
+    if (req.query.transactionScope) {
+      filter.transactionScope = req.query.transactionScope;
+    }
+    
+    // Query với phân trang
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const sortOption = { date: -1 }; // Mặc định sắp xếp theo ngày mới nhất
+    
+    const transactions = await FamilyTransaction.find(filter)
+      .populate('category', 'name icon type')
+      .sort(sortOption)
+      .skip(skip)
+      .limit(parseInt(limit));
+    
+    // Đếm tổng số giao dịch
+    const totalCount = await FamilyTransaction.countDocuments(filter);
+    
+    res.json({
+      transactions,
+      pagination: {
+        totalItems: totalCount,
+        totalPages: Math.ceil(totalCount / parseInt(limit)),
+        currentPage: parseInt(page),
+        itemsPerPage: parseInt(limit)
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching member transactions:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

@@ -58,7 +58,7 @@ familyBalanceSchema.statics.updateBalance = async function(familyId, userId, amo
     if (memberIndex >= 0) {
       // Thành viên đã tồn tại trong danh sách
       familyBalance.memberBalances[memberIndex].balance += updateAmount;
-      console.log(`Updated member balance: userId=${userId}, newBalance=${familyBalance.memberBalances[memberIndex].balance}`);
+      // console.log(`Updated member balance: userId=${userId}, newBalance=${familyBalance.memberBalances[memberIndex].balance}`);
     } else {
       // Tìm user để lấy thêm thông tin name và email
       let userName = '', userEmail = '';
@@ -80,7 +80,7 @@ familyBalanceSchema.statics.updateBalance = async function(familyId, userId, amo
         userEmail,
         balance: updateAmount
       });
-      console.log(`Added new member balance: userId=${userId}, balance=${updateAmount}`);
+      // console.log(`Added new member balance: userId=${userId}, balance=${updateAmount}`);
     }
   }
   

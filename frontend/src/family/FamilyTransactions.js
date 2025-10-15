@@ -74,6 +74,12 @@ export default function FamilyTransactions() {
   const [familyBalance, setFamilyBalance] = useState(null);
   const [loadingBalance, setLoadingBalance] = useState(false);
   
+  // Thêm state cho danh sách thành viên với số dư
+  const [membersBalance, setMembersBalance] = useState([]);
+  
+  // Thêm state cho thông tin gia đình
+  const [familyInfo, setFamilyInfo] = useState(null);
+  
   // Lấy danh mục từ API
   const fetchCategories = useCallback(async () => {
     if (!token) return;
@@ -142,10 +148,35 @@ export default function FamilyTransactions() {
       
       const data = await res.json();
       setFamilyBalance(data);
+      
+      // Lưu danh sách thành viên với số dư
+      if (data.memberBalances) {
+        setMembersBalance(data.memberBalances);
+      }
     } catch (err) {
       console.error("Error fetching balance:", err);
     } finally {
       setLoadingBalance(false);
+    }
+  }, [token, selectedFamilyId, API_BASE]);
+
+  // Lấy thông tin gia đình từ API
+  const fetchFamilyInfo = useCallback(async () => {
+    if (!token || !selectedFamilyId) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (!res.ok) {
+        console.error("Error fetching family info");
+        return;
+      }
+      
+      const data = await res.json();
+      setFamilyInfo(data);
+    } catch (err) {
+      console.error("Error fetching family info:", err);
     }
   }, [token, selectedFamilyId, API_BASE]);
 
@@ -169,7 +200,8 @@ export default function FamilyTransactions() {
     fetchCategories();
     fetchTransactions();
     fetchBalance(); // Thêm fetch balance
-  }, [navigate, fetchCategories, fetchTransactions, fetchBalance, getCurrentUser]);
+    fetchFamilyInfo(); // Thêm fetch family info
+  }, [navigate, fetchCategories, fetchTransactions, fetchBalance, fetchFamilyInfo, getCurrentUser]);
 
   // Cập nhật tab và reset trang
   const handleTabChange = (tab) => {
@@ -408,7 +440,11 @@ export default function FamilyTransactions() {
 
   // Get filtered categories based on transaction type
   const getFilteredCategories = (type = activeTab) => {
-    return categories.filter(cat => cat.type === type);
+    // Lọc danh mục theo loại giao dịch và chỉ lấy danh mục của system và admin
+    return categories.filter(cat => 
+      cat.type === type && 
+      (cat.createdBy === 'system' || cat.createdBy === 'admin')
+    );
   };
 
   // Xử lý chuyển trang
@@ -445,6 +481,85 @@ export default function FamilyTransactions() {
     console.log("Available Member Balances:", familyBalance.memberBalances);
     
     return memberBalance ? memberBalance.balance : 0;
+  };
+
+  // Thêm hàm kiểm tra owner
+  const isOwner = useCallback(() => {
+    if (!currentUser || !familyInfo) return false;
+    
+    // So sánh ID owner với ID người dùng hiện tại
+    const ownerId = familyInfo.owner && (familyInfo.owner._id || familyInfo.owner.id || familyInfo.owner);
+    return String(ownerId) === String(currentUser.id);
+  }, [currentUser, familyInfo]);
+
+  // Thêm state để quản lý chi tiết thành viên và giao dịch của thành viên
+  const [selectedMember, setSelectedMember] = useState(null);
+  const [memberTransactions, setMemberTransactions] = useState([]);
+  const [loadingMemberTransactions, setLoadingMemberTransactions] = useState(false);
+  const [showMemberDetail, setShowMemberDetail] = useState(false);
+
+  // Thêm hàm lấy thông tin giao dịch của thành viên
+  const fetchMemberTransactions = async (memberId, memberEmail) => {
+    if (!token || !selectedFamilyId || (!memberId && !memberEmail)) return;
+    
+    setLoadingMemberTransactions(true);
+    try {
+      // Xây dựng query params
+      const params = new URLSearchParams();
+      params.append('limit', '10'); // Giới hạn số lượng giao dịch
+    
+      // Đảm bảo memberId là string
+      const userIdStr = memberId && typeof memberId === 'object' ? (memberId._id || memberId.id || memberId) : memberId;
+      if (userIdStr) params.append('userId', userIdStr);
+      if (memberEmail) params.append('userEmail', memberEmail);
+      params.append('transactionScope', 'personal');
+    
+      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/member-transactions?${params}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (!res.ok) {
+        throw new Error('Không thể tải giao dịch của thành viên');
+      }
+      
+      const data = await res.json();
+      setMemberTransactions(data.transactions || []);
+    } catch (err) {
+      console.error("Error fetching member transactions:", err);
+      setMemberTransactions([]);
+    } finally {
+      setLoadingMemberTransactions(false);
+    }
+  };
+
+  // Thêm hàm xử lý khi chọn xem chi tiết một thành viên
+  const handleViewMemberDetail = (member) => {
+    setSelectedMember(member);
+    // Đảm bảo truyền memberId dưới dạng string
+    const memberId = member.userId && typeof member.userId === 'object' ? (member.userId._id || member.userId.id || member.userId) : member.userId;
+    fetchMemberTransactions(memberId, member.userEmail);
+    setShowMemberDetail(true);
+  };
+
+  // Hàm lấy vai trò của thành viên từ familyInfo
+  const getMemberRole = (memberId, memberEmail) => {
+    if (!familyInfo || !familyInfo.members) return 'Thành viên';
+    
+    const member = familyInfo.members.find(m => {
+      // Xử lý trường hợp m.user là object hoặc string
+      const userId = m.user && typeof m.user === 'object' ? (m.user._id || m.user.id || m.user) : m.user;
+      const matchesUserId = userId && String(userId) === String(memberId);
+      
+      // Xử lý email
+      const matchesEmail = m.email && memberEmail && m.email.toLowerCase() === memberEmail.toLowerCase();
+      
+      return matchesUserId || matchesEmail;
+    });
+    
+    if (!member) return 'Thành viên';
+    
+    // Trả về vai trò từ database, nếu không có thì mặc định là 'Thành viên'
+    return member.familyRole || 'Thành viên';
   };
 
   return (
@@ -941,6 +1056,164 @@ export default function FamilyTransactions() {
             </>
           )}
         </div>
+        
+        {/* Thêm section hiển thị số dư thành viên cho owner */}
+        {isOwner() && (
+          <div className="ft-members-balance-section">
+            <div className="ft-section-header">
+              <h2><i className="fas fa-users-cog"></i> Quản lý số dư thành viên</h2>
+              <p>Xem và quản lý số dư của tất cả thành viên trong gia đình</p>
+            </div>
+            
+            <div className="ft-members-balance-grid">
+              {loadingBalance ? (
+                <div className="ft-loading">
+                  <div className="ft-loading-spinner"></div>
+                  <p>Đang tải số dư thành viên...</p>
+                </div>
+              ) : membersBalance.length === 0 ? (
+                <div className="ft-empty-state">
+                  <i className="fas fa-users-slash"></i>
+                  <h3>Chưa có thành viên nào</h3>
+                  <p>Gia đình chưa có thành viên nào có số dư</p>
+                </div>
+              ) : (
+                membersBalance.map(member => (
+                  <div key={member.userId || member.userEmail} className="ft-member-balance-card">
+                    <div className="ft-member-info">
+                      <div className="ft-member-avatar">
+                        {member.userName ? member.userName.charAt(0).toUpperCase() : 'U'}
+                      </div>
+                      <div className="ft-member-details">
+                        <div className="ft-member-name">
+                          {member.userName || 'Thành viên'}
+                          <span className="ft-member-role">{getMemberRole(member.userId, member.userEmail)}</span>
+                        </div>
+                        <div className="ft-member-email">{member.userEmail || ''}</div>
+                      </div>
+                    </div>
+                    <div className="ft-member-balance">
+                      <div className="ft-balance-label">Số dư cá nhân</div>
+                      <div className={`ft-balance-amount ${member.balance >= 0 ? 'positive' : 'negative'}`}>
+                        {formatCurrency(member.balance)}
+                      </div>
+                      <button 
+                        className="ft-view-member-btn"
+                        onClick={() => handleViewMemberDetail(member)}
+                      >
+                        <i className="fas fa-eye"></i> Xem chi tiết
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Modal chi tiết thành viên */}
+        {showMemberDetail && selectedMember && (
+          <div className="ft-modal-overlay">
+            <div className="ft-modal ft-member-modal">
+              <div className="ft-modal-header">
+                <h3>
+                  <i className="fas fa-user-circle"></i> 
+                  {selectedMember.userName || 'Thành viên'}
+                </h3>
+                <button 
+                  className="ft-modal-close"
+                  onClick={() => setShowMemberDetail(false)}
+                >
+                  &times;
+                </button>
+              </div>
+              
+              <div className="ft-member-detail">
+                <div className="ft-member-profile">
+                  <div className="ft-member-avatar-large">
+                    {selectedMember.userName ? selectedMember.userName.charAt(0).toUpperCase() : 'U'}
+                  </div>
+                  <div className="ft-member-info-detail">
+                    <h4>{selectedMember.userName || 'Thành viên'}</h4>
+                    <div className="ft-member-meta">
+                      <div className="ft-member-meta-item">
+                        <i className="fas fa-envelope"></i> {selectedMember.userEmail || 'Không có email'}
+                      </div>
+                      <div className="ft-member-meta-item">
+                        <i className="fas fa-user-tag"></i> {getMemberRole(selectedMember.userId, selectedMember.userEmail)}
+                      </div>
+                    </div>
+                    
+                    <div className="ft-member-balance-detail">
+                      <div className="ft-balance-row">
+                        <div className="ft-balance-label">Số dư cá nhân:</div>
+                        <div className={`ft-balance-value ${selectedMember.balance >= 0 ? 'positive' : 'negative'}`}>
+                          {formatCurrency(selectedMember.balance)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="ft-member-transactions">
+                  <h4>
+                    <i className="fas fa-exchange-alt"></i> Giao dịch gần đây
+                  </h4>
+                  
+                  {loadingMemberTransactions ? (
+                    <div className="ft-loading-inline">
+                      <div className="ft-loading-spinner"></div>
+                      <p>Đang tải giao dịch...</p>
+                    </div>
+                  ) : memberTransactions.length === 0 ? (
+                    <div className="ft-empty-state-small">
+                      <i className="fas fa-receipt"></i>
+                      <p>Chưa có giao dịch nào</p>
+                    </div>
+                  ) : (
+                    <div className="ft-member-tx-list">
+                      {memberTransactions.map(tx => {
+                        const category = getCategoryInfo(tx.category);
+                        return (
+                          <div key={tx._id} className="ft-member-tx-item">
+                            <div className="ft-member-tx-icon">
+                              <i className={`fas ${tx.type === 'expense' ? 'fa-arrow-up' : 'fa-arrow-down'}`}></i>
+                            </div>
+                            <div className="ft-member-tx-content">
+                              <div className="ft-member-tx-header">
+                                <div className="ft-member-tx-title">{tx.description || 'Giao dịch'}</div>
+                                <div className={`ft-member-tx-amount ${tx.type === 'expense' ? 'expense' : 'income'}`}>
+                                  {tx.type === 'expense' ? '-' : '+'}{formatCurrency(tx.amount)}
+                                </div>
+                              </div>
+                              <div className="ft-member-tx-meta">
+                                <span className="ft-category-badge">
+                                  {category.icon} {category.name}
+                                </span>
+                                <span className="ft-date">
+                                  <i className="fas fa-calendar-alt"></i> {formatDate(tx.date || tx.createdAt)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                
+                <div className="ft-modal-footer">
+                  <button 
+                    className="ft-btn secondary"
+                    onClick={() => setShowMemberDetail(false)}
+                  >
+                    <i className="fas fa-times"></i> Đóng
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

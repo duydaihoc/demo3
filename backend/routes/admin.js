@@ -6,7 +6,9 @@ const Group = require('../models/Group');
 const mongoose = require('mongoose');
 const GroupTransaction = require('../models/GroupTransaction');
 // Import Family model for admin family management
-const Family = require('../models/Family');
+const Family = require('../models/family');
+// Import FamilyTransaction model for admin family transactions
+const FamilyTransaction = require('../models/FamilyTransaction');
 
 // Middleware kiểm tra quyền admin
 function isAdmin(req, res, next) {
@@ -487,54 +489,33 @@ router.get('/families', auth, async (req, res) => {
   }
 });
 
-module.exports = router;
-    
-
-// GET /api/admin/group-transactions
-// Admin only: list all group transactions with filters, pagination and sorting.
-// Query params: page, limit, groupId, transactionType, q, startDate, endDate, sort
-router.get('/group-transactions', auth, async (req, res) => {
+// GET /api/admin/family-transactions - Admin endpoint to get all family transactions
+router.get('/family-transactions', auth, async (req, res) => {
   try {
-    // basic admin guard - adjust to your user model fields
-    if (!req.user || !(req.user.role === 'admin' || req.user.isAdmin)) {
+    // Verify admin role
+    if (!req.user || req.user.role !== 'admin') {
       return res.status(403).json({ message: 'Admin access required' });
     }
 
     const {
       page = 1,
       limit = 50,
-      groupId,
-      transactionType,
-      q,
+      familyId,
+      type,
+      category,
       startDate,
       endDate,
-      sort = '-createdAt'
+      sort = '-date'
     } = req.query;
 
     const pg = Math.max(1, parseInt(page, 10) || 1);
     const lim = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
 
     const filter = {};
-
-    if (groupId) {
-      // Prefer matching groupId field; include legacy group string if provided
-      if (mongoose.Types.ObjectId.isValid(String(groupId))) {
-        filter.$or = [{ groupId: groupId }];
-      } else {
-        filter.$or = [{ groupId: groupId }, { group: groupId }];
-      }
-    }
-
-    if (transactionType) filter.transactionType = transactionType;
-
-    if (q && String(q).trim()) {
-      const regex = new RegExp(String(q).trim(), 'i');
-      filter.$or = (filter.$or || []).concat([
-        { title: { $regex: regex } },
-        { description: { $regex: regex } }
-      ]);
-    }
-
+    if (familyId) filter.familyId = familyId;
+    if (type) filter.type = type;
+    if (category) filter.category = category;
+    
     if (startDate || endDate) {
       filter.date = {};
       if (startDate) {
@@ -548,102 +529,59 @@ router.get('/group-transactions', auth, async (req, res) => {
       if (Object.keys(filter.date).length === 0) delete filter.date;
     }
 
-    const totalCount = await GroupTransaction.countDocuments(filter);
+    const totalCount = await FamilyTransaction.countDocuments(filter);
 
-    // IMPORTANT: do NOT populate('group') if schema doesn't include it.
-    // Populate only fields known to exist on the schema to avoid StrictPopulateError.
-    const items = await GroupTransaction.find(filter)
-      .populate('payer', 'name email')
-      .populate('participants.user', 'name email')
-      .populate('category', 'name icon')
+    const transactions = await FamilyTransaction.find(filter)
+      .populate('familyId', 'name')
+      .populate('category', 'name icon type')
       .populate('createdBy', 'name email')
       .sort(sort)
       .skip((pg - 1) * lim)
-      .limit(lim)
-      .lean()
-      .exec();
+      .limit(lim);
 
-    // Batch-load groups referenced by groupId (or legacy group) to avoid StrictPopulateError and N+1 queries
-    const groupIdSet = new Set();
-    items.forEach(it => {
-      const gid = it.groupId || it.group;
-      if (gid && mongoose.Types.ObjectId.isValid(String(gid))) groupIdSet.add(String(gid));
-    });
-
-    let groupMap = new Map();
-    if (groupIdSet.size > 0) {
-      const ids = Array.from(groupIdSet);
-      try {
-        const groups = await Group.find({ _id: { $in: ids } }).select('name owner').lean();
-        groupMap = new Map(groups.map(g => [String(g._id), g]));
-        items.forEach(it => {
-          const gid = it.groupId || it.group;
-          if (gid && groupMap.has(String(gid))) it.group = groupMap.get(String(gid));
+    // Thêm thông tin vai trò và tên cho từng giao dịch
+    const transactionsWithRoles = transactions.map(tx => {
+      const txObj = tx.toObject();
+      
+      // Lấy thông tin người tạo
+      const creatorId = txObj.createdBy?._id || txObj.createdBy;
+      const creatorEmail = txObj.createdBy?.email;
+      const creatorName = txObj.createdBy?.name || '';
+      
+      // Tìm vai trò của người tạo trong gia đình
+      let creatorRole = '';
+      if (txObj.familyId?.members) {
+        const member = txObj.familyId.members.find(m => {
+          if (m.user && creatorId && String(m.user) === String(creatorId)) {
+            return true;
+          }
+          if (m.email && creatorEmail && m.email.toLowerCase() === creatorEmail.toLowerCase()) {
+            return true;
+          }
+          return false;
         });
-      } catch (e) {
-        console.warn('Admin: failed to batch-load groups', e && e.message);
-        // don't fail whole request if group lookup fails
-      }
-    }
-
-    // Chuẩn hóa dữ liệu trả về: lấy tên người dùng, kiểu giao dịch
-    const normalized = await Promise.all(items.map(async tx => {
-      // payer
-      let payerName = '';
-      if (tx.payer && typeof tx.payer === 'object') {
-        payerName = tx.payer.name || tx.payer.email || '';
-      } else if (tx.payer) {
-        payerName = String(tx.payer);
-      }
-      // createdBy
-      let creatorName = '';
-      if (tx.createdBy && typeof tx.createdBy === 'object') {
-        creatorName = tx.createdBy.name || tx.createdBy.email || '';
-      } else if (tx.createdBy) {
-        // Nếu là id, truy vấn User để lấy tên/email
-        try {
-          const user = await User.findById(tx.createdBy).select('name email').lean();
-          creatorName = user ? (user.name || user.email || '') : '';
-        } catch (e) {
-          creatorName = '';
+        
+        if (member) {
+          creatorRole = member.familyRole || '';
         }
       }
-      // participants
-      let participants = Array.isArray(tx.participants) ? tx.participants.map(p => {
-        let name = '';
-        if (p.user && typeof p.user === 'object') {
-          name = p.user.name || p.user.email || '';
-        } else if (p.user) {
-          name = String(p.user);
-        } else if (p.email) {
-          name = p.email;
-        }
-        return {
-          ...p,
-          userName: name
-        };
-      }) : [];
-      // transactionType
-      const transactionType = tx.transactionType || 'unknown';
-
-      return {
-        ...tx,
-        payerName,
-        creatorName,
-        transactionType,
-        participants,
-      };
-    }));
+      
+      // Thêm thông tin vào transaction object
+      txObj.creatorName = creatorName;
+      txObj.creatorRole = creatorRole;
+      
+      return txObj;
+    });
 
     res.json({
       total: totalCount,
       page: pg,
       limit: lim,
       pages: Math.max(1, Math.ceil(totalCount / lim)),
-      data: normalized
+      data: transactionsWithRoles
     });
   } catch (err) {
-    console.error('Admin group-transactions error:', err);
+    console.error('Admin family-transactions error:', err);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
