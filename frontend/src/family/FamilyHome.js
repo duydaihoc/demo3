@@ -8,10 +8,14 @@ export default function FamilyHome() {
   const [loading, setLoading] = useState(true);
   const [familyData, setFamilyData] = useState(null);
   const [budgets, setBudgets] = useState([]);
-  const [transactions, setTransactions] = useState([]);
   const [error, setError] = useState(null);
   // Thêm state cho người dùng hiện tại
   const [currentUser, setCurrentUser] = useState(null);
+  // Thêm state mới
+  const [familyBalance, setFamilyBalance] = useState(null);
+  const [recentTransactions, setRecentTransactions] = useState([]);
+  const [loadingBalance, setLoadingBalance] = useState(false);
+  const [loadingTransactions, setLoadingTransactions] = useState(false);
   
   const API_BASE = 'http://localhost:5000';
   const token = localStorage.getItem('token');
@@ -31,6 +35,56 @@ export default function FamilyHome() {
       return null;
     }
   }, [token]);
+
+  // Thêm hàm để lấy số dư gia đình
+  const fetchFamilyBalance = useCallback(async () => {
+    if (!token || !selectedFamilyId) return;
+    
+    setLoadingBalance(true);
+    try {
+      // Thêm timestamp để tránh cache
+      const timestamp = new Date().getTime();
+      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/balance?_t=${timestamp}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (!res.ok) {
+        throw new Error('Không thể tải số dư gia đình');
+      }
+      
+      const data = await res.json();
+      console.log('Family balance data:', data); // Để debug
+      setFamilyBalance(data);
+    } catch (err) {
+      console.error("Error fetching family balance:", err);
+    } finally {
+      setLoadingBalance(false);
+    }
+  }, [token, selectedFamilyId, API_BASE]);
+
+  // Thêm hàm để lấy các giao dịch gần đây của gia đình
+  const fetchRecentTransactions = useCallback(async () => {
+    if (!token || !selectedFamilyId) return;
+    
+    setLoadingTransactions(true);
+    try {
+      // Chỉ lấy giao dịch gia đình (transactionScope=family)
+      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/transactions?limit=5&sort=date&order=desc&transactionScope=family`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (!res.ok) {
+        throw new Error('Không thể tải giao dịch gần đây');
+      }
+      
+      const data = await res.json();
+      setRecentTransactions(data.transactions || []);
+    } catch (err) {
+      console.error("Error fetching recent transactions:", err);
+    } finally {
+      setLoadingTransactions(false);
+    }
+  }, [token, selectedFamilyId, API_BASE]);
 
   // Lấy thông tin gia đình từ API thật
   useEffect(() => {
@@ -77,15 +131,12 @@ export default function FamilyHome() {
           { id: "4", category: "Giải trí", allocated: 1000000, spent: 600000, icon: "fas fa-film" }
         ];
         setBudgets(sampleBudgets);
-
-        // Tạo dữ liệu giao dịch mẫu (sẽ thay thế bằng API thật sau)
-        const sampleTransactions = [
-          { id: "1", date: "2023-10-05", description: "Đi chợ", amount: 500000, category: "Ăn uống", member: family.owner?.name || "Thành viên" },
-          { id: "2", date: "2023-10-04", description: "Tiền điện", amount: 800000, category: "Tiện ích", member: family.owner?.name || "Thành viên" },
-          { id: "3", date: "2023-10-03", description: "Xăng xe", amount: 300000, category: "Đi lại", member: family.owner?.name || "Thành viên" },
-          { id: "4", date: "2023-10-01", description: "Xem phim", amount: 400000, category: "Giải trí", member: family.owner?.name || "Thành viên" }
-        ];
-        setTransactions(sampleTransactions);
+        
+        // Gọi các API mới
+        await Promise.all([
+          fetchFamilyBalance(),
+          fetchRecentTransactions()
+        ]);
         
       } catch (err) {
         console.error("Error fetching family data:", err);
@@ -101,7 +152,7 @@ export default function FamilyHome() {
     };
     
     loadData();
-  }, [token, navigate, API_BASE, selectedFamilyId, getCurrentUser]);
+  }, [token, navigate, API_BASE, selectedFamilyId, getCurrentUser, fetchFamilyBalance, fetchRecentTransactions]);
   
   // Format currency helper
   const formatCurrency = (amount) => {
@@ -192,33 +243,57 @@ export default function FamilyHome() {
               <div className="fh-card balance">
                 <div className="fh-card-header">
                   <i className="fas fa-wallet"></i>
-                  <span>Số dư</span>
+                  <span>Số dư gia đình</span>
                 </div>
-                <div className="fh-card-amount">{formatCurrency(familyData?.balance || 0)}</div>
+                <div className="fh-card-amount">
+                  {loadingBalance ? (
+                    <div className="fh-loading-spinner small"></div>
+                  ) : (
+                    formatCurrency(familyBalance?.familyBalance || 0)
+                  )}
+                </div>
               </div>
               
               <div className="fh-card income">
                 <div className="fh-card-header">
                   <i className="fas fa-arrow-down"></i>
-                  <span>Thu nhập</span>
+                  <span>Thu nhập gia đình</span>
                 </div>
-                <div className="fh-card-amount">{formatCurrency(familyData?.income || 0)}</div>
+                <div className="fh-card-amount">
+                  {loadingBalance ? (
+                    <div className="fh-loading-spinner small"></div>
+                  ) : (
+                    formatCurrency(familyBalance?.familyIncome || 0)
+                  )}
+                </div>
               </div>
               
               <div className="fh-card expense">
                 <div className="fh-card-header">
                   <i className="fas fa-arrow-up"></i>
-                  <span>Chi tiêu</span>
+                  <span>Chi tiêu gia đình</span>
                 </div>
-                <div className="fh-card-amount">{formatCurrency(familyData?.expenses || 0)}</div>
+                <div className="fh-card-amount">
+                  {loadingBalance ? (
+                    <div className="fh-loading-spinner small"></div>
+                  ) : (
+                    formatCurrency(familyBalance?.familyExpense || 0)
+                  )}
+                </div>
               </div>
               
               <div className="fh-card savings">
                 <div className="fh-card-header">
                   <i className="fas fa-piggy-bank"></i>
-                  <span>Tiết kiệm</span>
+                  <span>Tổng giao dịch gia đình</span>
                 </div>
-                <div className="fh-card-amount">{formatCurrency(familyData?.savings || 0)}</div>
+                <div className="fh-card-amount">
+                  {loadingTransactions ? (
+                    <div className="fh-loading-spinner small"></div>
+                  ) : (
+                    recentTransactions.length
+                  )}
+                </div>
               </div>
             </section>
             
@@ -270,34 +345,58 @@ export default function FamilyHome() {
               {/* Recent Transactions */}
               <section className="fh-recent-transactions">
                 <div className="fh-section-header">
-                  <h2><i className="fas fa-exchange-alt"></i> Giao dịch gần đây</h2>
-                  <button className="fh-btn-link" onClick={() => navigate('/family/expenses')}>
+                  <h2><i className="fas fa-exchange-alt"></i> Giao dịch gia đình gần đây</h2>
+                  <button className="fh-btn-link" onClick={() => navigate('/family/transactions')}>
                     Xem tất cả <i className="fas fa-chevron-right"></i>
                   </button>
                 </div>
                 
-                <div className="fh-transactions-list">
-                  {transactions.map(transaction => (
-                    <div key={transaction.id} className="fh-transaction-item">
-                      <div className="fh-transaction-date">
-                        {new Date(transaction.date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}
-                      </div>
+                {loadingTransactions ? (
+                  <div className="fh-loading-inline">
+                    <div className="fh-loading-spinner"></div>
+                    <p>Đang tải giao dịch gia đình...</p>
+                  </div>
+                ) : recentTransactions.length === 0 ? (
+                  <div className="fh-empty-state">
+                    <i className="fas fa-receipt"></i>
+                    <p>Chưa có giao dịch gia đình nào</p>
+                  </div>
+                ) : (
+                  <div className="fh-transactions-list">
+                    {recentTransactions.map(tx => {
+                      const categoryInfo = tx.category && typeof tx.category === 'object' 
+                        ? { name: tx.category.name, icon: tx.category.icon }
+                        : { name: 'Không có', icon: 'fa-receipt' };
+                        
+                      const creatorName = tx.creatorName || (tx.createdBy && tx.createdBy.name) || 'Thành viên';
                       
-                      <div className="fh-transaction-content">
-                        <div className="fh-transaction-title">{transaction.description}</div>
-                        <div className="fh-transaction-meta">
-                          <span className="fh-transaction-category">{transaction.category}</span>
-                          <span className="fh-transaction-separator">•</span>
-                          <span className="fh-transaction-member">{transaction.member}</span>
+                      return (
+                        <div key={tx._id} className="fh-transaction-item">
+                          <div className="fh-transaction-date">
+                            {new Date(tx.date || tx.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}
+                          </div>
+                          
+                          <div className="fh-transaction-content">
+                            <div className="fh-transaction-title">{tx.description || 'Giao dịch gia đình'}</div>
+                            <div className="fh-transaction-meta">
+                              <span className="fh-transaction-category">{categoryInfo.name}</span>
+                              <span className="fh-transaction-separator">•</span>
+                              <span className="fh-transaction-member">{creatorName}</span>
+                              <span className="fh-transaction-separator">•</span>
+                              <span className={`fh-transaction-type ${tx.type}`}>
+                                {tx.type === 'income' ? 'Thu nhập' : 'Chi tiêu'}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          <div className={`fh-transaction-amount ${tx.type === 'expense' ? 'expense' : 'income'}`}>
+                            {tx.type === 'expense' ? '-' : '+'}{formatCurrency(tx.amount)}
+                          </div>
                         </div>
-                      </div>
-                      
-                      <div className="fh-transaction-amount">
-                        {formatCurrency(transaction.amount)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
               </section>
               
               {/* Family Members */}

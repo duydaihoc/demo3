@@ -10,6 +10,23 @@ const familyBalanceSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  // Thêm các trường mới cho thu nhập/chi tiêu
+  familyIncome: {
+    type: Number,
+    default: 0
+  },
+  familyExpense: {
+    type: Number,
+    default: 0
+  },
+  totalIncome: {
+    type: Number,
+    default: 0
+  },
+  totalExpense: {
+    type: Number,
+    default: 0
+  },
   memberBalances: [{
     userId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -88,23 +105,74 @@ familyBalanceSchema.statics.updateBalance = async function(familyId, userId, amo
   return await familyBalance.save();
 };
 
-// Phương thức để lấy số dư
+// Thêm static method getBalance vào schema
 familyBalanceSchema.statics.getBalance = async function(familyId) {
-  let balance = await this.findOne({ familyId })
-    .populate('memberBalances.userId', 'name email');
-  
-  if (!balance) {
-    balance = new this({
-      familyId,
-      familyBalance: 0,
-      memberBalances: []
+  try {
+    let balance = await this.findOne({ familyId });
+    
+    if (!balance) {
+      balance = new this({
+        familyId,
+        familyBalance: 0,
+        memberBalances: [],
+        totalIncome: 0,
+        totalExpense: 0,
+        familyIncome: 0,
+        familyExpense: 0
+      });
+      await balance.save();
+    }
+    
+    // Tính toán thu nhập và chi tiêu gia đình từ giao dịch
+    const FamilyTransaction = require('./FamilyTransaction');
+    
+    // Lấy tất cả giao dịch gia đình
+    const familyTransactions = await FamilyTransaction.find({ 
+      familyId, 
+      transactionScope: 'family' 
     });
+    
+    let familyIncome = 0;
+    let familyExpense = 0;
+    
+    familyTransactions.forEach(tx => {
+      if (tx.type === 'income') {
+        familyIncome += Number(tx.amount || 0);
+      } else if (tx.type === 'expense') {
+        familyExpense += Number(tx.amount || 0);
+      }
+    });
+    
+    // Cập nhật balance
+    balance.familyIncome = familyIncome;
+    balance.familyExpense = familyExpense;
+    
+    // Tính tổng thu nhập và chi tiêu tất cả (bao gồm cả cá nhân)
+    const allTransactions = await FamilyTransaction.find({ familyId });
+    let totalIncome = 0;
+    let totalExpense = 0;
+    
+    allTransactions.forEach(tx => {
+      if (tx.type === 'income') {
+        totalIncome += Number(tx.amount || 0);
+      } else if (tx.type === 'expense') {
+        totalExpense += Number(tx.amount || 0);
+      }
+    });
+    
+    balance.totalIncome = totalIncome;
+    balance.totalExpense = totalExpense;
+    
     await balance.save();
+    
+    return balance;
+  } catch (error) {
+    console.error('Error getting family balance:', error);
+    throw error;
   }
-  
-  return balance;
 };
 
+// Tạo model sau khi đã định nghĩa static methods
 const FamilyBalance = mongoose.model('FamilyBalance', familyBalanceSchema);
 
 module.exports = FamilyBalance;
