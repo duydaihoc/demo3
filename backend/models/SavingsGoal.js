@@ -55,6 +55,14 @@ const SavingsGoalSchema = new Schema({
     type: String,
     default: '#2a5298' // Default blue color
   },
+  status: {
+    type: String,
+    enum: ['active', 'completed', 'overdue'],
+    default: 'active'
+  },
+  completedAt: {
+    type: Date
+  },
   contributions: [ContributionSchema],
   createdAt: {
     type: Date,

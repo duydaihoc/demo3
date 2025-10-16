@@ -395,6 +395,56 @@ function SavingsGoals() {
     }
   };
 
+  // Thêm hàm báo cáo hoàn thành mục tiêu
+  const reportGoalCompletion = async (goalId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/api/savings/${goalId}/report`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Không thể báo cáo mục tiêu');
+      }
+
+      showNotification('Đã báo cáo hoàn thành mục tiêu!', 'success');
+      fetchGoals(); // Refresh danh sách
+
+      // Tải PDF báo cáo
+      const pdfResponse = await fetch(`http://localhost:5000/api/savings/${goalId}/report-pdf`, {
+        headers: {
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        }
+      });
+
+      if (pdfResponse.ok) {
+        const blob = await pdfResponse.blob();
+        if (blob.size > 0) {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `bao-cao-muc-tieu-${Date.now()}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        } else {
+          showNotification('Không thể tải PDF báo cáo - file rỗng', 'error');
+        }
+      } else {
+        showNotification('Không thể tải PDF báo cáo', 'error');
+      }
+    } catch (error) {
+      console.error('Error reporting goal:', error);
+      showNotification(error.message || 'Có lỗi xảy ra khi báo cáo mục tiêu', 'error');
+    }
+  };
+
   // UI notification component
   const Notification = ({ message, type }) => (
     message ? (
@@ -907,7 +957,7 @@ function SavingsGoals() {
         <div className="goals-grid">
           {goals.map(goal => (
             <div 
-              className="goal-card" 
+              className={`goal-card ${goal.status === 'completed' ? 'completed' : goal.status === 'overdue' ? 'overdue' : ''}`}
               key={goal._id}
               style={{
                 background: goal.color ? 
@@ -938,6 +988,24 @@ function SavingsGoals() {
               <div className="goal-card-footer">
                 <div className="goal-days">{getDaysRemaining(goal.targetDate)} ngày còn lại</div>
               </div>
+
+              {/* Hiển thị thông báo nếu có */}
+              {goal.notification && (
+                <div className={`goal-notification ${goal.notification.type}`}>
+                  <div className="notification-icon">
+                    {goal.notification.type === 'completed' ? '🎉' : '⚠️'}
+                  </div>
+                  <div className="notification-content">
+                    <div className="notification-message">{goal.notification.message}</div>
+                    <button 
+                      className="notification-action-btn"
+                      onClick={() => reportGoalCompletion(goal._id)}
+                    >
+                      Báo cáo hoàn thành
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="goal-card-actions">
                 <button className="goal-action-btn deposit" onClick={() => openDepositForm(goal)}>Nạp tiền</button>

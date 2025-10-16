@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const SavingsGoal = require('../models/SavingsGoal');
 const Wallet = require('../models/Wallet');
+const PDFDocument = require('pdfkit');
+const fs = require('fs');
+const path = require('path');
 
 // lightweight JWT payload parser (no verification) to extract user id if token provided
 function parseJwt(token) {
@@ -35,7 +38,37 @@ router.get('/', async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    res.json(goals);
+    // Tính toán status cho mỗi mục tiêu
+    const now = new Date();
+    const goalsWithStatus = goals.map(goal => {
+      let status = goal.status || 'active';
+      let notification = null;
+
+      // Nếu đã hoàn thành hoặc quá hạn, cập nhật status
+      if (goal.currentAmount >= goal.targetAmount) {
+        status = 'completed';
+        notification = {
+          type: 'completed',
+          message: 'Mục tiêu đã đạt được số tiền yêu cầu!',
+          action: 'report'
+        };
+      } else if (goal.targetDate && new Date(goal.targetDate) < now) {
+        status = 'overdue';
+        notification = {
+          type: 'overdue',
+          message: 'Mục tiêu đã đến ngày hạn!',
+          action: 'report'
+        };
+      }
+
+      return {
+        ...goal,
+        status,
+        notification
+      };
+    });
+
+    res.json(goalsWithStatus);
   } catch (err) {
     console.error('Error fetching goals:', err);
     res.status(500).json({
@@ -359,6 +392,178 @@ router.put('/:id', async (req, res) => {
       message: 'Lỗi khi cập nhật mục tiêu',
       error: process.env.NODE_ENV === 'development' ? err.message : undefined
     });
+  }
+});
+
+// PUT /api/savings/:id/report - báo cáo hoàn thành mục tiêu
+router.put('/:id/report', async (req, res) => {
+  try {
+    const userId = getUserIdFromHeader(req);
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
+
+    const goal = await SavingsGoal.findOne({ _id: req.params.id, owner: userId });
+    if (!goal) return res.status(404).json({ message: 'Mục tiêu không tồn tại' });
+
+    // Cập nhật status thành completed
+    goal.status = 'completed';
+    goal.completedAt = new Date();
+    await goal.save();
+
+    const populated = await SavingsGoal.findById(goal._id).populate('walletId', 'name currency balance').lean();
+    res.json({
+      message: 'Đã báo cáo hoàn thành mục tiêu',
+      goal: populated
+    });
+  } catch (err) {
+    console.error('Error reporting goal:', err);
+    res.status(500).json({
+      message: 'Lỗi khi báo cáo mục tiêu',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+});
+
+// GET /api/savings/:id/report-pdf - Xuất PDF báo cáo hoàn thành mục tiêu
+router.get('/:id/report-pdf', async (req, res) => {
+  try {
+    const userId = getUserIdFromHeader(req);
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
+
+    const goal = await SavingsGoal.findOne({ _id: req.params.id, owner: userId })
+      .populate('walletId', 'name')
+      .populate('contributions.walletId', 'name');
+
+    if (!goal) return res.status(404).json({ message: 'Mục tiêu không tồn tại' });
+
+    // Tạo PDF document với font mặc định (Helvetica) - font chuẩn mà mọi PDF reader đều hỗ trợ
+    const doc = new PDFDocument({
+      size: 'A4',
+      margin: 50
+    });
+
+    // Không set font tùy chỉnh, dùng font mặc định Helvetica
+    // Lưu ý: Font mặc định không hỗ trợ tiếng Việt tốt, text có thể hiển thị sai
+    // Để hỗ trợ tiếng Việt, cần cài font Unicode như DejaVu Sans vào thư mục fonts/
+
+    // Tạo tên file an toàn (loại bỏ dấu và ký tự đặc biệt)
+    const safeName = goal.name
+      .normalize('NFD') // Tách dấu ra khỏi ký tự
+      .replace(/[\u0300-\u036f]/g, '') // Loại bỏ dấu
+      .replace(/[^a-zA-Z0-9\s-]/g, '') // Loại bỏ ký tự đặc biệt
+      .replace(/\s+/g, '-') // Thay khoảng trắng bằng dấu gạch ngang
+      .toLowerCase();
+    
+    const filename = `bao-cao-muc-tieu-${safeName}.pdf`;
+    
+    // Set headers cho response
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Cache-Control', 'no-cache');
+
+    // Pipe PDF vào response
+    doc.pipe(res);
+
+    // Header
+    doc.fontSize(24).fillColor('#2a5298')
+       .text('BAO CAO HOAN THANH MUC TIEU TIET KIEM', { align: 'center' });
+    
+    doc.moveDown(2);
+
+    // Thông tin mục tiêu
+    doc.fontSize(16).fillColor('#000')
+       .text('Thong tin muc tieu:', { underline: true });
+    doc.moveDown(0.5);
+    
+    doc.fontSize(12).fillColor('#333');
+    // Loại bỏ dấu khỏi tên mục tiêu và dùng format tiền đơn giản
+    const goalNameNoAccent = goal.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    doc.text(`Ten muc tieu: ${goalNameNoAccent}`);
+    doc.text(`Muc tieu so tien: ${goal.targetAmount.toLocaleString('vi-VN')} VND`);
+    doc.text(`So tien hien tai: ${goal.currentAmount.toLocaleString('vi-VN')} VND`);
+    doc.text(`Ngay bat dau: ${new Date(goal.startDate).toLocaleDateString('vi-VN')}`);
+    doc.text(`Ngay ket thuc: ${goal.targetDate ? new Date(goal.targetDate).toLocaleDateString('vi-VN') : 'Chua dat'}`);
+    doc.text(`Ngay hoan thanh: ${goal.completedAt ? new Date(goal.completedAt).toLocaleDateString('vi-VN') : 'Chua hoan thanh'}`);
+    doc.text(`Trang thai: ${goal.status === 'completed' ? 'Da hoan thanh' : goal.status === 'overdue' ? 'Qua han' : 'Dang thuc hien'}`);
+    
+    if (goal.walletId) {
+      doc.text(`Vi chinh: ${goal.walletId.name}`);
+    }
+
+    doc.moveDown(2);
+
+    // Thống kê đóng góp
+    doc.fontSize(16).fillColor('#000')
+       .text('Thong ke dong gop:', { underline: true });
+    doc.moveDown(0.5);
+
+    if (goal.contributions && goal.contributions.length > 0) {
+      const totalContributions = goal.contributions.length;
+      const totalAmount = goal.contributions.reduce((sum, c) => sum + (c.amount || 0), 0);
+      const avgContribution = totalAmount / totalContributions;
+
+      doc.fontSize(12).fillColor('#333');
+      doc.text(`Tong so lan dong gop: ${totalContributions}`);
+      doc.text(`Tong so tien dong gop: ${totalAmount.toLocaleString('vi-VN')} VND`);
+      doc.text(`So tien trung binh moi lan: ${avgContribution.toLocaleString('vi-VN')} VND`);
+      
+      doc.moveDown(1);
+
+      // Bảng chi tiết đóng góp
+      doc.fontSize(14).fillColor('#000')
+         .text('Chi tiet cac lan dong gop:', { underline: true });
+      doc.moveDown(0.5);
+
+      // Header bảng
+      const tableTop = doc.y;
+      doc.fontSize(10);
+      doc.text('Ngay', 50, tableTop);
+      doc.text('So tien', 150, tableTop);
+      doc.text('Vi', 250, tableTop);
+      doc.text('Ghi chu', 350, tableTop);
+      
+      // Dòng kẻ
+      doc.moveTo(50, tableTop + 15).lineTo(550, tableTop + 15).stroke();
+      
+      // Dữ liệu bảng
+      let yPosition = tableTop + 25;
+      doc.fontSize(9);
+      
+      goal.contributions.forEach((contribution, index) => {
+        if (yPosition > 700) { // Nếu gần cuối trang, xuống dòng
+          doc.addPage();
+          yPosition = 50;
+        }
+        
+        const date = new Date(contribution.date).toLocaleDateString('vi-VN');
+        const amount = `${contribution.amount.toLocaleString('vi-VN')} VND`;
+        const wallet = contribution.walletId ? contribution.walletId.name : 'N/A';
+        const note = contribution.note || '';
+        
+        doc.text(date, 50, yPosition);
+        doc.text(amount, 150, yPosition);
+        doc.text(wallet, 250, yPosition);
+        doc.text(note, 350, yPosition, { width: 150 });
+        
+        yPosition += 20;
+      });
+    } else {
+      doc.fontSize(12).fillColor('#666')
+         .text('Chua co dong gop nao.');
+    }
+
+    doc.moveDown(2);
+
+    // Footer
+    doc.fontSize(10).fillColor('#666')
+       .text(`Bao cao duoc tao vao: ${new Date().toLocaleString('vi-VN')}`, { align: 'center' });
+    doc.text('Ung dung Quan ly Tai chinh Ca nhan', { align: 'center' });
+
+    // Kết thúc PDF
+    doc.end();
+
+  } catch (err) {
+    console.error('Error generating PDF:', err);
+    res.status(500).json({ message: 'Loi khi tao bao cao PDF' });
   }
 });
 
