@@ -1008,8 +1008,12 @@ function SavingsGoals() {
               )}
 
               <div className="goal-card-actions">
-                <button className="goal-action-btn deposit" onClick={() => openDepositForm(goal)}>Nạp tiền</button>
-                <button className="goal-action-btn edit" onClick={() => openEditForm(goal)}>Sửa</button>
+                {goal.status !== 'completed' && (
+                  <>
+                    <button className="goal-action-btn deposit" onClick={() => openDepositForm(goal)}>Nạp tiền</button>
+                    <button className="goal-action-btn edit" onClick={() => openEditForm(goal)}>Sửa</button>
+                  </>
+                )}
                 <button className="goal-action-btn delete" onClick={() => setDeleteConfirm({ open: true, goal })}>Xóa</button>
               </div>
             </div>
