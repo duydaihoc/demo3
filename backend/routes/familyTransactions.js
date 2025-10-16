@@ -374,30 +374,34 @@ router.put('/transactions/:id', authenticateToken, async (req, res) => {
     // balanceDifference: sự khác biệt cần cập nhật (new - old)
     const balanceDifference = newBalanceChange - oldBalanceChange;
     
-    // Nếu có sự thay đổi số dư, cập nhật
-    if (balanceDifference !== 0) {
-      // Nếu balanceDifference âm, nghĩa là cần trừ thêm từ số dư, cần kiểm tra trước
-      if (balanceDifference < 0) {
-        const balance = await FamilyBalance.getBalance(transaction.familyId);
-        const amountNeeded = Math.abs(balanceDifference);
+    // Xử lý cập nhật số dư
+    if (balanceDifference !== 0 || oldTransactionScope !== newTransactionScope) {
+      // Nếu thay đổi scope, cần xử lý riêng
+      if (oldTransactionScope !== newTransactionScope) {
+        // Hoàn tác scope cũ
+        const reverseOldChange = oldType === 'income' ? -oldAmount : oldAmount;
         
-        if (newTransactionScope === 'family') {
-          if (balance.familyBalance < amountNeeded) {
-            return res.status(400).json({ message: 'Số dư gia đình không đủ để thực hiện giao dịch này' });
-          }
+        if (oldTransactionScope === 'family') {
+          await FamilyBalance.updateBalance(transaction.familyId, userId, reverseOldChange, 'income', 'family');
         } else {
-          const memberBalance = balance.memberBalances.find(m => String(m.userId) === String(userId));
-          if (!memberBalance || memberBalance.balance < amountNeeded) {
-            return res.status(400).json({ message: 'Số dư cá nhân không đủ để thực hiện giao dịch này' });
+          await FamilyBalance.updateBalance(transaction.familyId, userId, reverseOldChange, 'income', 'personal');
+        }
+        
+        // Áp dụng scope mới
+        if (newTransactionScope === 'family') {
+          await FamilyBalance.updateBalance(transaction.familyId, userId, newBalanceChange, 'income', 'family');
+        } else {
+          await FamilyBalance.updateBalance(transaction.familyId, userId, newBalanceChange, 'income', 'personal');
+        }
+      } else {
+        // Chỉ thay đổi amount/type, không thay đổi scope
+        if (balanceDifference !== 0) {
+          if (newTransactionScope === 'family') {
+            await FamilyBalance.updateBalance(transaction.familyId, userId, balanceDifference, 'income', 'family');
+          } else {
+            await FamilyBalance.updateBalance(transaction.familyId, userId, balanceDifference, 'income', 'personal');
           }
         }
-      }
-      
-      // Cập nhật số dư theo sự khác biệt
-      if (newTransactionScope === 'family') {
-        await FamilyBalance.updateBalance(transaction.familyId, userId, balanceDifference, 'income', 'family');
-      } else {
-        await FamilyBalance.updateBalance(transaction.familyId, userId, balanceDifference, 'income', 'personal');
       }
     }
     

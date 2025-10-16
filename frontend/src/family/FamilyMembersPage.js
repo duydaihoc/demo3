@@ -463,6 +463,20 @@ export default function FamilyMembersPage() {
 
   return (
     <div className="family-members-page">
+      {/* Animated background elements */}
+      <div className="fm-bg-shapes">
+        <div className="fm-bg-shape"></div>
+        <div className="fm-bg-shape"></div>
+        <div className="fm-bg-shape"></div>
+      </div>
+      
+      {/* Floating particles */}
+      <div className="fm-particle"></div>
+      <div className="fm-particle"></div>
+      <div className="fm-particle"></div>
+      <div className="fm-particle"></div>
+      <div className="fm-particle"></div>
+      
       <FamilySidebar />
       
       <main className="fm-main">

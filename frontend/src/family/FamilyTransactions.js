@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+// eslint-disable-next-line no-unused-vars
 import FamilySidebar from './FamilySidebar';
 import './FamilyTransactions.css';
 import { showNotification } from '../utils/notify';
@@ -562,11 +563,37 @@ export default function FamilyTransactions() {
     return member.familyRole || 'Thành viên';
   };
 
+  // Thêm state cho sidebar toggle
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
   return (
     <div className="family-page">
-      <FamilySidebar active="transactions" />
+      {/* Animated background elements */}
+      <div className="ft-bg-shapes">
+        <div className="ft-bg-shape"></div>
+        <div className="ft-bg-shape"></div>
+        <div className="ft-bg-shape"></div>
+      </div>
       
-      <main className="family-main">
+      {/* Floating particles */}
+      <div className="ft-particle"></div>
+      <div className="ft-particle"></div>
+      <div className="ft-particle"></div>
+      <div className="ft-particle"></div>
+      <div className="ft-particle"></div>
+      
+      <FamilySidebar active="transactions" collapsed={sidebarCollapsed} />
+      
+      <main className={`family-main ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+        {/* Toggle sidebar button */}
+        <button 
+          className="sidebar-toggle-btn"
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          title={sidebarCollapsed ? 'Mở sidebar' : 'Thu gọn sidebar'}
+        >
+          <i className={`fas ${sidebarCollapsed ? 'fa-bars' : 'fa-times'}`}></i>
+        </button>
+        
         <header className="ft-header">
           <h1>Giao dịch gia đình</h1>
           <p>Quản lý thu nhập và chi tiêu của gia đình</p>

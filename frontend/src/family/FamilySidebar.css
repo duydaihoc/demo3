@@ -25,6 +25,25 @@
   color: #fff;
   border: none;
   z-index: 100;
+  transition: width 0.3s ease;
+}
+
+.family-sidebar.collapsed {
+  width: 60px;
+}
+
+/* Hide text when collapsed */
+.family-sidebar.collapsed .sidebar-item-text,
+.family-sidebar.collapsed .sidebar-header h2,
+.family-sidebar.collapsed .sidebar-header p {
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* Adjust icons when collapsed */
+.family-sidebar.collapsed .sidebar-item-icon {
+  margin-right: 0;
+  font-size: 20px;
 }
 
 /* Logo styles for the sidebar */

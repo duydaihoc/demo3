@@ -28,6 +28,9 @@ export default function FamilySettings() {
   const [savingRole, setSavingRole] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
   
+  // Thêm state cho sidebar toggle
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  
   const API_BASE = 'http://localhost:5000';
   const token = localStorage.getItem('token');
   const selectedFamilyId = localStorage.getItem('selectedFamilyId');
@@ -256,9 +259,18 @@ export default function FamilySettings() {
 
   return (
     <div className="family-home">
-      <FamilySidebar />
+      <FamilySidebar collapsed={sidebarCollapsed} />
       
-      <main className="fh-main">
+      <main className={`fh-main ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+        {/* Toggle sidebar button */}
+        <button 
+          className="sidebar-toggle-btn"
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          title={sidebarCollapsed ? 'Mở sidebar' : 'Thu gọn sidebar'}
+        >
+          <i className={`fas ${sidebarCollapsed ? 'fa-bars' : 'fa-times'}`}></i>
+        </button>
+        
         {loading ? (
           <div className="fh-loading">
             <div className="fh-loading-spinner"></div>

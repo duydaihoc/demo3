@@ -12,18 +12,27 @@ export default function SwitchPage() {
 
   return (
     <div className="switch-page">
-      {/* Background animated elements */}
-      <div className="sp-bg-circle"></div>
-      <div className="sp-bg-circle"></div>
+      {/* Animated background elements */}
+      <div className="sp-bg-shapes">
+        <div className="sp-bg-shape"></div>
+        <div className="sp-bg-shape"></div>
+        <div className="sp-bg-shape"></div>
+      </div>
+      
+      {/* Floating particles */}
+      <div className="sp-particle"></div>
+      <div className="sp-particle"></div>
+      <div className="sp-particle"></div>
+      <div className="sp-particle"></div>
+      <div className="sp-particle"></div>
       
       {/* Decorative finance elements */}
-      <div className="sp-coin">$</div>
-      <div className="sp-coin">¥</div>
-      <div className="sp-coin">€</div>
-      <div className="sp-coin">₫</div>
-      
-      <div className="sp-card"></div>
-      <div className="sp-card"></div>
+      <div className="sp-decorative-element coin">$</div>
+      <div className="sp-decorative-element coin">¥</div>
+      <div className="sp-decorative-element coin">€</div>
+      <div className="sp-decorative-element coin">₫</div>
+      <div className="sp-decorative-element card"></div>
+      <div className="sp-decorative-element card"></div>
       
       <div className="sp-container">
         <div className="sp-header">

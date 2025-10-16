@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './FamilySidebar.css';
 
-export default function FamilySidebar() {
+export default function FamilySidebar({ active, collapsed = false }) {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -71,7 +71,7 @@ export default function FamilySidebar() {
   };
 
   return (
-    <aside className="family-sidebar" aria-label="Sidebar gia đình">
+    <aside className={`family-sidebar ${collapsed ? 'collapsed' : ''}`} aria-label="Sidebar gia đình">
       {/* Add logo component at the top */}
       <div className="sidebar-logo">
         <div className="logo-icon">
