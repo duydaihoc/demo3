@@ -5,6 +5,8 @@ const FamilyInvitation = require('../models/FamilyInvitation');
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const FamilyTransaction = require('../models/FamilyTransaction');
+const FamilyBalance = require('../models/FamilyBalance');
 
 // Middleware xác thực token
 const authenticateToken = (req, res, next) => {
@@ -109,6 +111,9 @@ router.post('/create', authenticateToken, async (req, res) => {
 
     await newFamily.save();
 
+    // { added: Khởi tạo số dư cho owner ngay khi tạo gia đình }
+    await FamilyBalance.updateBalance(newFamily._id, userId, 0, 'income', 'personal');
+
     // Populate thông tin owner và members
     await newFamily.populate('owner', 'name email');
     await newFamily.populate('members.user', 'name email');
@@ -181,6 +186,9 @@ router.post('/join/:invitationId', authenticateToken, async (req, res) => {
     });
 
     await family.save();
+
+    // { added: Khởi tạo số dư cho thành viên mới }
+    await FamilyBalance.updateBalance(invitation.family, userId, 0, 'income', 'personal');
 
     // Cập nhật trạng thái lời mời
     invitation.status = 'accepted';
@@ -353,7 +361,7 @@ router.delete('/:familyId/remove-member', authenticateToken, async (req, res) =>
     const memberToRemove = family.members[memberIndex];
     const memberEmail = memberToRemove.email;
 
-    // Xóa thành viên khỏi danh sách members
+    // Xóa thành viên khỏi danh sách members (bao gồm vai trò familyRole)
     family.members.splice(memberIndex, 1);
     await family.save();
 
@@ -372,7 +380,23 @@ router.delete('/:familyId/remove-member', authenticateToken, async (req, res) =>
       });
     }
 
-    res.json({ message: 'Đã xóa thành viên và các lời mời liên quan' });
+    // Xóa tất cả giao dịch của thành viên này và hoàn tác số dư
+    const transactionsToDelete = await FamilyTransaction.find({ familyId, createdBy: memberId });
+    for (const tx of transactionsToDelete) {
+      // Hoàn tác số dư: nếu income thì trừ amount, nếu expense thì cộng lại amount
+      const updateAmount = tx.type === 'income' ? -tx.amount : tx.amount;
+      await FamilyBalance.updateBalance(familyId, memberId, updateAmount, 'income', tx.transactionScope);
+    }
+    // Xóa tất cả giao dịch của thành viên
+    await FamilyTransaction.deleteMany({ familyId, createdBy: memberId });
+
+    // { added: Xóa số dư cá nhân của thành viên khỏi FamilyBalance }
+    await FamilyBalance.updateOne(
+      { familyId },
+      { $pull: { memberBalances: { userId: memberId } } }
+    );
+
+    res.json({ message: 'Đã xóa thành viên và các giao dịch liên quan' });
   } catch (error) {
     console.error('Error removing member:', error);
     res.status(500).json({ message: 'Server error' });
@@ -516,8 +540,15 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Bạn không có quyền xóa gia đình này' });
     }
     
-    // Xóa tất cả dữ liệu liên quan đến gia đình (nếu có)
-    // TODO: Có thể thêm logic xóa các dữ liệu khác liên quan đến gia đình như: giao dịch, ngân sách, v.v.
+    // { added: Xóa tất cả dữ liệu liên quan đến gia đình }
+    // Xóa tất cả giao dịch của gia đình
+    await FamilyTransaction.deleteMany({ familyId });
+    
+    // Xóa tất cả lời mời của gia đình
+    await FamilyInvitation.deleteMany({ family: familyId });
+    
+    // Xóa số dư của gia đình
+    await FamilyBalance.deleteMany({ familyId });
     
     // Xóa gia đình
     await Family.findByIdAndDelete(familyId);
@@ -557,10 +588,45 @@ router.post('/:id/leave', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Bạn không phải là thành viên của gia đình này' });
     }
     
-    // Xóa người dùng khỏi danh sách thành viên
+    // Lấy thông tin member trước khi xóa để lấy email
+    const memberToRemove = family.members[memberIndex];
+    const memberEmail = memberToRemove.email;
+
+    // Xóa thành viên khỏi danh sách members (bao gồm vai trò familyRole)
     family.members.splice(memberIndex, 1);
     await family.save();
-    
+
+    // { added: Xóa tất cả lời mời liên quan đến thành viên này }
+    // 1. Lời mời mà thành viên này đã mời (invitedBy = userId)
+    await FamilyInvitation.deleteMany({
+      family: familyId,
+      invitedBy: userId
+    });
+
+    // 2. Lời mời gửi đến email của thành viên này (email = memberEmail)
+    if (memberEmail) {
+      await FamilyInvitation.deleteMany({
+        family: familyId,
+        email: memberEmail.toLowerCase().trim()
+      });
+    }
+
+    // { added: Xóa tất cả giao dịch của thành viên này và hoàn tác số dư }
+    const transactionsToDelete = await FamilyTransaction.find({ familyId, createdBy: userId });
+    for (const tx of transactionsToDelete) {
+      // Hoàn tác số dư: nếu income thì trừ amount, nếu expense thì cộng lại amount
+      const updateAmount = tx.type === 'income' ? -tx.amount : tx.amount;
+      await FamilyBalance.updateBalance(familyId, userId, updateAmount, 'income', tx.transactionScope);
+    }
+    // Xóa tất cả giao dịch của thành viên
+    await FamilyTransaction.deleteMany({ familyId, createdBy: userId });
+
+    // { added: Xóa số dư cá nhân của thành viên khỏi FamilyBalance }
+    await FamilyBalance.updateOne(
+      { familyId },
+      { $pull: { memberBalances: { userId: userId } } }
+    );
+
     res.status(200).json({ message: 'Đã rời khỏi gia đình thành công' });
   } catch (error) {
     console.error('Error leaving family:', error);

@@ -88,7 +88,7 @@ export default function FamilySidebar() {
         </div>
       </div>
       
-      <div className="fs-header">
+      <div className="fs-header1">
         <div className="fs-logo">GIA ĐÌNH</div>
         <div className="fs-sub">Quản lý tài chính gia đình</div>
       </div>

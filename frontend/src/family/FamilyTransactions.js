@@ -1071,14 +1071,14 @@ export default function FamilyTransactions() {
                   <div className="ft-loading-spinner"></div>
                   <p>Đang tải số dư thành viên...</p>
                 </div>
-              ) : membersBalance.length === 0 ? (
+              ) : membersBalance.filter(member => String(member.userId) !== String(currentUser.id)).length === 0 ? (
                 <div className="ft-empty-state">
                   <i className="fas fa-users-slash"></i>
                   <h3>Chưa có thành viên nào</h3>
                   <p>Gia đình chưa có thành viên nào có số dư</p>
                 </div>
               ) : (
-                membersBalance.map(member => (
+                membersBalance.filter(member => String(member.userId) !== String(currentUser.id)).map(member => (
                   <div key={member.userId || member.userEmail} className="ft-member-balance-card">
                     <div className="ft-member-info">
                       <div className="ft-member-avatar">
