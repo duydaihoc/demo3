@@ -593,21 +593,20 @@ function TransactionsPage() {
                 <th>Loại</th>
                 <th>Danh mục</th>
                 <th>Số tiền</th>
+                <th>Nhóm</th>
                 <th>Thao tác</th>
               </tr>
             </thead>
             <tbody>
               {loadingTransactions ? (
-                <tr><td colSpan={showWalletColumn ? 7 : 6} style={{ textAlign: 'center', color: '#888' }}>Đang tải...</td></tr>
+                <tr><td colSpan={showWalletColumn ? 8 : 7} style={{ textAlign: 'center', color: '#888' }}>Đang tải...</td></tr>
               ) : filteredTransactions.length === 0 ? (
-                <tr><td colSpan={showWalletColumn ? 7 : 6} style={{ textAlign: 'center', color: '#888' }}>(Chưa có giao dịch)</td></tr>
+                <tr><td colSpan={showWalletColumn ? 8 : 7} style={{ textAlign: 'center', color: '#888' }}>(Chưa có giao dịch)</td></tr>
               ) : filteredTransactions.map(tx => {
-                // compute derived values to avoid mixing && and || in JSX
                 const titleText = tx.title || tx.description || '—';
                 const categoryLabel = tx.category ? (tx.category.name || tx.category) : '';
                 const walletObj = tx.wallet && (typeof tx.wallet === 'string' ? null : tx.wallet);
                 const currency = walletObj && walletObj.currency ? walletObj.currency : 'VND';
-                // determine wallet name: prefer populated wallet object, else lookup from wallets list when tx.wallet is id
                 let walletName = '';
                 if (walletObj && walletObj.name) walletName = walletObj.name;
                 else if (typeof tx.wallet === 'string') {
@@ -615,6 +614,10 @@ function TransactionsPage() {
                   walletName = w ? w.name : '';
                 }
                 const amountFormatted = formatCurrency(tx.amount, currency);
+
+                const groupInfo = tx.groupTransaction
+                  ? `${tx.groupTransaction.groupName || 'Nhóm không xác định'} (${tx.groupTransaction.title || 'Không tiêu đề'})`
+                  : '—';
 
                 return (
                   <tr key={tx._id}>
@@ -624,9 +627,15 @@ function TransactionsPage() {
                     <td style={{ textTransform: 'capitalize' }}>{tx.type}</td>
                     <td>{categoryLabel}</td>
                     <td>{amountFormatted}</td>
+                    <td>{groupInfo}</td>
                     <td className="tx-actions">
-                      <button className="tx-edit-btn" onClick={() => openEdit(tx)}>Sửa</button>
-                      <button className="tx-delete-btn" onClick={() => openDeleteConfirm(tx)}>Xóa</button>
+                      {/* Ẩn nút sửa và xóa nếu giao dịch thuộc về nhóm */}
+                      {!tx.groupTransaction && (
+                        <>
+                          <button className="tx-edit-btn" onClick={() => openEdit(tx)}>Sửa</button>
+                          <button className="tx-delete-btn" onClick={() => openDeleteConfirm(tx)}>Xóa</button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 );

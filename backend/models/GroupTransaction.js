@@ -5,7 +5,8 @@ const participantSchema = new mongoose.Schema({
   email: { type: String, required: false },
   shareAmount: { type: Number, default: 0 },
   percentage: { type: Number, default: 0 },
-  settled: { type: Boolean, default: false }
+  settled: { type: Boolean, default: false },
+  wallet: { type: mongoose.Schema.Types.ObjectId, ref: 'Wallet', required: false } // Thêm trường wallet cho participant
 }, { _id: false });
 
 const groupTransactionSchema = new mongoose.Schema({
@@ -22,6 +23,7 @@ const groupTransactionSchema = new mongoose.Schema({
   participants: { type: [participantSchema], default: [] },
   percentages: { type: [{ user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, email: String, percentage: Number }], default: [] },
   category: { type: mongoose.Schema.Types.Mixed, required: false },
+  wallet: { type: mongoose.Schema.Types.ObjectId, ref: 'Wallet', required: false }, // Ví của người trả dùm
   perPerson: { type: Boolean, default: false },
   createdBy: { type: mongoose.Schema.Types.Mixed, required: false },
   date: { type: Date, default: Date.now },
@@ -31,4 +33,3 @@ const groupTransactionSchema = new mongoose.Schema({
 groupTransactionSchema.index({ groupId: 1, createdAt: -1 });
 
 module.exports = mongoose.models.GroupTransaction || mongoose.model('GroupTransaction', groupTransactionSchema);
-    

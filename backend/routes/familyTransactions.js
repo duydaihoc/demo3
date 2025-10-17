@@ -180,7 +180,7 @@ router.get('/transactions/:id', authenticateToken, async (req, res) => {
     const isMember = family.members.some(member => 
       (member.user && String(member.user) === String(userId)) || 
       (member.email && member.email === req.user.email)
-    );
+    )
     
     if (!isMember && String(family.owner) !== String(userId)) {
       return res.status(403).json({ message: 'You do not have permission to view this transaction' });

@@ -26,10 +26,13 @@ export default function GroupTransactions() {
   // Thêm state cho người dùng hiện tại
   const [currentUser, setCurrentUser] = useState(null);
   
-  // Thêm state cho danh mục
+  // Thêm state cho danh mục và ví
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [loadingCategories, setLoadingCategories] = useState(false);
+  const [wallets, setWallets] = useState([]);
+  const [selectedWallet, setSelectedWallet] = useState('');
+  const [loadingWallets, setLoadingWallets] = useState(false);
   
   // State cho thành viên và người trả dùm
   const [members, setMembers] = useState([]);
@@ -46,8 +49,8 @@ export default function GroupTransactions() {
   const [editCategory, setEditCategory] = useState('');
   const [editSelectedMembers, setEditSelectedMembers] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
-  const [editLoading, setEditLoading] = useState(false);              // { added }
-  const [editTransactionType, setEditTransactionType] = useState('equal_split'); // { added }
+  const [editWallet, setEditWallet] = useState('');              // { added }
+  const [editTransactionType, setEditTransactionType] = useState('equal_split'); // Add this line
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [txToDelete, setTxToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -63,6 +66,12 @@ export default function GroupTransactions() {
   // Add these state variables at the beginning with other useState declarations
   const [globalMessage, setGlobalMessage] = useState('');
   const [globalMessageType, setGlobalMessageType] = useState('info');
+
+  // State for selecting wallet during repayment
+  const [showRepayModal, setShowRepayModal] = useState(false);
+  const [repayTransaction, setRepayTransaction] = useState(null);
+  const [repayWallet, setRepayWallet] = useState('');
+  const [repaying, setRepaying] = useState(false);
 
   // Lấy thông tin người dùng hiện tại
   const getCurrentUser = () => {
@@ -102,7 +111,7 @@ export default function GroupTransactions() {
     }
   };
 
-  // Fetch danh mục từ backend
+  // Lấy danh mục từ backend
   const fetchCategories = async () => {
     if (!token) return;
     setLoadingCategories(true);
@@ -126,6 +135,28 @@ export default function GroupTransactions() {
       console.error("Error fetching categories:", e);
     } finally {
       setLoadingCategories(false);
+    }
+  };
+
+  // Lấy danh sách ví
+  const fetchWallets = async () => {
+    if (!token) return;
+    setLoadingWallets(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/wallets`, { 
+        headers: { Authorization: `Bearer ${token}` } 
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setWallets(data);
+      // Chọn ví đầu tiên mặc định
+      if (data.length > 0) {
+        setSelectedWallet(data[0]._id);
+      }
+    } catch (e) {
+      console.error("Error fetching wallets:", e);
+    } finally {
+      setLoadingWallets(false);
     }
   };
 
@@ -206,6 +237,7 @@ export default function GroupTransactions() {
     fetchGroup();
     fetchTxs();
     fetchCategories();
+    fetchWallets(); // Thêm fetch wallets
     // eslint-disable-next-line
   }, [groupId, token]);
 
@@ -325,6 +357,10 @@ export default function GroupTransactions() {
       showNotification('Vui lòng chọn danh mục', 'error');
       return;
     }
+    if (!selectedWallet) {
+      showNotification('Vui lòng chọn ví', 'error');
+      return;
+    }
     if (!groupId || !token) {
       showNotification('Thiếu context hoặc chưa đăng nhập', 'error');
       return;
@@ -353,7 +389,8 @@ export default function GroupTransactions() {
         participants,
         title: title || '',
         description: description || '',
-        category: selectedCategory || undefined
+        category: selectedCategory || undefined,
+        walletId: selectedWallet // Thêm walletId
       };
 
       // Thêm percentages cho percentage_split
@@ -389,6 +426,7 @@ export default function GroupTransactions() {
       setPercentages([]);
       setDescription('');
       setTransactionType('equal_split');
+      setSelectedWallet(''); // Reset wallet
       
       // refresh list
       await fetchTxs();
@@ -494,7 +532,6 @@ export default function GroupTransactions() {
   const handleEditTransaction = async (tx) => {
     // load latest transaction from server to ensure we have transactionType, amounts, participants count etc.
     if (!tx || !tx._id) return;
-    setEditLoading(true);
     try {
       const res = await fetch(`${API_BASE}/api/groups/${groupId}/transactions/${tx._id}`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -557,6 +594,7 @@ export default function GroupTransactions() {
       setEditAmount(String(payloadTx.amount || ''));
       setEditDescription(payloadTx.description || '');
       setEditCategory(payloadTx.category && payloadTx.category._id ? payloadTx.category._id : (typeof payloadTx.category === 'string' ? payloadTx.category : ''));
+      setEditWallet(payloadTx.wallet?._id || payloadTx.wallet || payloadTx.walletId || ''); // set wallet for edit
  
       const mappedAll = Array.isArray(payloadTx.participants) ? payloadTx.participants.map(p => ({
         id: p.user ? (p.user._id || p.user) : undefined,
@@ -597,8 +635,6 @@ export default function GroupTransactions() {
     } catch (err) {
       console.error('Error fetching transaction for edit:', err);
       alert('Không thể tải dữ liệu giao dịch để sửa. Thử lại sau.');
-    } finally {
-      setEditLoading(false);
     }
   };
 
@@ -655,6 +691,10 @@ export default function GroupTransactions() {
       );
     });
   };
+
+  // Thêm hàm kiểm tra có participant đã thanh toán
+  const hasSettledParticipant = editingTx && Array.isArray(editingTx.participants)
+    && editingTx.participants.some(p => p.settled);
 
   // Add helper to normalize transaction for UI (ensure participants have shareAmount based on transactionType/percentages)
   function normalizeTxForDisplay(tx) {
@@ -821,7 +861,8 @@ export default function GroupTransactions() {
       category: editCategory,
       transactionType: editTransactionType,
       participants,
-      perPerson: true
+      perPerson: true,
+      walletId: editWallet // include walletId for API
     };
     // include percentages when editing percentage_split
     if (editTransactionType === 'percentage_split') {
@@ -987,6 +1028,46 @@ export default function GroupTransactions() {
     }
   };
   
+
+
+  // Gọi API để trả nợ cho giao dịch
+  const handleRepayClick = (transaction) => {
+    setRepayTransaction(transaction);
+    setRepayWallet(wallets.length > 0 ? wallets[0]._id : ''); // Default to the first wallet
+    setShowRepayModal(true);
+  };
+
+  // Xác nhận và thực hiện trả nợ
+  const handleConfirmRepay = async () => {
+    if (!repayTransaction || !repayWallet) return;
+
+    setRepaying(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/groups/${groupId}/transactions/${repayTransaction._id}/repay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ walletId: repayWallet })
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        alert(errorData.message || 'Lỗi khi trả nợ');
+        return;
+      }
+
+      // Refresh transactions and close modal
+      await fetchTxs();
+      setShowRepayModal(false);
+      setRepayTransaction(null);
+      setRepayWallet('');
+    } catch (err) {
+      console.error('Error during repayment:', err);
+      alert('Đã xảy ra lỗi khi trả nợ');
+    } finally {
+      setRepaying(false);
+    }
+  };
+
   return (
     <div className="groups-page">
       <GroupSidebar active="groups" />
@@ -1065,6 +1146,24 @@ export default function GroupTransactions() {
                   {categories.map(cat => (
                     <option key={cat._id} value={cat._id}>
                       {cat.icon} {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Thêm trường chọn ví */}
+              <div className="gt-form-group">
+                <label>Ví</label>
+                <select 
+                  value={selectedWallet}
+                  onChange={(e) => setSelectedWallet(e.target.value)}
+                  required
+                  disabled={loadingWallets}
+                >
+                  <option value="">-- Chọn ví --</option>
+                  {wallets.map(wallet => (
+                    <option key={wallet._id} value={wallet._id}>
+                      {wallet.name} ({new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(wallet.balance || wallet.initialBalance || 0)})
                     </option>
                   ))}
                 </select>
@@ -1507,7 +1606,7 @@ export default function GroupTransactions() {
                                    
                                    const isCreatorParticipant = Boolean(
                                      p._isCreatorSynthetic ||
-                                     (tx.createdBy && p.user && (typeof tx.createdBy === 'object' ? String(p.user._id || p.user) === String(tx.createdBy._id || tx.createdBy.id) : String(p.user._id || p.user) === String(tx.createdBy))) ||
+                                     (tx.createdBy && p.user && ( typeof tx.createdBy === 'object' ? String(p.user._id || p.user) === String(tx.createdBy._id) : String(p.user._id || p.user) === String(tx.createdBy))) ||
                                      (tx.createdBy && p.email && typeof tx.createdBy === 'string' && String(tx.createdBy).includes('@') && String(p.email).toLowerCase() === String(tx.createdBy).toLowerCase())
                                    );
                                    
@@ -1570,7 +1669,7 @@ export default function GroupTransactions() {
                                        {!isCreatorParticipant && isCurrentUserParticipant && !p.settled && (
                                         <button 
                                           className="gt-settle-btn"
-                                          onClick={() => handleSettle(tx._id || tx.id, (p.user ? (p.user._id || p.user) : p.email))}
+                                          onClick={() => handleRepayClick(tx)} // Sửa lại: mở modal chọn ví
                                         >
                                           <i className="fas fa-hand-holding-usd"></i> Trả tiền
                                         </button>
@@ -1645,248 +1744,283 @@ export default function GroupTransactions() {
                 <h3>Sửa giao dịch</h3>
                 <button className="gt-modal-close" onClick={() => setIsEditing(false)}>×</button>
               </div>
-              
               <div className="gt-modal-body">
-                {editLoading ? (
-                  <div style={{ padding: 20, textAlign: 'center' }}><i className="fas fa-spinner fa-spin"></i> Đang tải...</div>
-                ) : null}
-                
-                {/* Transaction type selector for edit */}
-                <div className="gt-form-group">
-                  <label>Kiểu giao dịch</label>
-                  <select value={editTransactionType} onChange={(e) => setEditTransactionType(e.target.value)}>
-                    <option value="payer_single">Trả đơn (Chỉ tôi)</option>
-                    <option value="payer_for_others">Trả giúp (Tôi trả tiền cho người khác)</option>
-                    <option value="equal_split">Chia đều (Chia đều cho tất cả)</option>
-                    <option value="percentage_split">Chia phần trăm (Tùy chỉnh % cho mỗi người)</option>
-                  </select>
-                </div>
-                
-                <div className="gt-form-group">
-                  <label>Tiêu đề</label>
-                  <input 
-                    type="text"
-                    value={editTitle} 
-                    onChange={e => setEditTitle(e.target.value)} 
-                    placeholder="Ví dụ: Ăn tối"
-                    required
-                  />
-                </div>
-                
-                <div className="gt-form-group">
-                  <label>Số tiền</label>
-                  <input 
-                    type="number" 
-                    value={editAmount} 
-                    onChange={e => setEditAmount(e.target.value)} 
-                    placeholder="Tổng số tiền của giao dịch" 
-                    required
-                  />
-                </div>
+                {/* Nếu có participant đã thanh toán, chỉ hiển thị cảnh báo */}
+                {hasSettledParticipant ? (
+                  <div style={{
+                    padding: '32px 16px',
+                    textAlign: 'center',
+                    color: '#b91c1c',
+                    fontWeight: 600,
+                    fontSize: 18
+                  }}>
+                    <i className="fas fa-exclamation-triangle" style={{fontSize: 32, marginBottom: 12}}></i>
+                    <div>Không thể sửa giao dịch vì đã có người thanh toán.</div>
+                    <div style={{marginTop: 12, fontSize: 15, color: '#64748b'}}>
+                      Nếu muốn thay đổi, hãy xóa giao dịch này và tạo lại giao dịch mới.
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Transaction type selector for edit */}
+                    <div className="gt-form-group">
+                      <label>Kiểu giao dịch</label>
+                      <select value={editTransactionType} onChange={(e) => setEditTransactionType(e.target.value)}>
+                        <option value="payer_single">Trả đơn (Chỉ tôi)</option>
+                        <option value="payer_for_others">Trả giúp (Tôi trả tiền cho người khác)</option>
+                        <option value="equal_split">Chia đều (Chia đều cho tất cả)</option>
+                        <option value="percentage_split">Chia phần trăm (Tùy chỉnh % cho mỗi người)</option>
+                      </select>
+                    </div>
+                    
+                    {/* Wallet selector */}
+                    <div className="gt-form-group">
+                      <label>Ví</label>
+                      <select
+                        value={editWallet}
+                        onChange={e => setEditWallet(e.target.value)}
+                        required
+                        disabled={loadingWallets}
+                      >
+                        <option value="">-- Chọn ví --</option>
+                        {wallets.map(wallet => (
+                          <option key={wallet._id} value={wallet._id}>
+                            {wallet.name} ({new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(wallet.initialBalance || 0)})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                <div className="gt-form-group">
-                  <label>Danh mục</label>
-                  <select 
-                    value={editCategory}
-                    onChange={(e) => setEditCategory(e.target.value)}
-                    required
-                    disabled={loadingCategories}
-                  >
-                    <option value="">-- Chọn danh mục --</option>
-                    {categories.map(cat => (
-                      <option key={cat._id} value={cat._id}>
-                        {cat.icon} {cat.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                    <div className="gt-form-group">
+                      <label>Tiêu đề</label>
+                      <input 
+                        type="text"
+                        value={editTitle} 
+                        onChange={e => setEditTitle(e.target.value)} 
+                        placeholder="Ví dụ: Ăn tối"
+                        required
+                      />
+                    </div>
+                    
+                    <div className="gt-form-group">
+                      <label>Số tiền</label>
+                      <input 
+                        type="number" 
+                        value={editAmount} 
+                        onChange={e => setEditAmount(e.target.value)} 
+                        placeholder="Tổng số tiền của giao dịch" 
+                        required
+                      />
+                    </div>
 
-                <div className="gt-form-group">
-                  <label>Trả dùm cho ai?</label>
-                  <div className="gt-members-list">
-                    {members.length === 0 ? (
-                      <div className="gt-no-members">Không có thành viên trong nhóm</div>
-                    ) : (
-                      <div className="gt-members-grid">
-                        {members.map(member => {
-                          // Không hiển thị bản thân trong danh sách trả dùm
-                          if (currentUser && (member.id === currentUser.id || member.email === currentUser.email)) {
-                            return null;
-                          }
+                    <div className="gt-form-group">
+                      <label>Danh mục</label>
+                      <select 
+                        value={editCategory}
+                        onChange={(e) => setEditCategory(e.target.value)}
+                        required
+                        disabled={loadingCategories}
+                      >
+                        <option value="">-- Chọn danh mục --</option>
+                        {categories.map(cat => (
+                          <option key={cat._id} value={cat._id}>
+                            {cat.icon} {cat.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                          const isSelected = editSelectedMembers.some(m => m.id === member.id || m.email === member.email);
+                    <div className="gt-form-group">
+                      <label>Trả dùm cho ai?</label>
+                      <div className="gt-members-list">
+                        {members.length === 0 ? (
+                          <div className="gt-no-members">Không có thành viên trong nhóm</div>
+                        ) : (
+                          <div className="gt-members-grid">
+                            {members.map(member => {
+                              // Không hiển thị bản thân trong danh sách trả dùm
+                              if (currentUser && (member.id === currentUser.id || member.email === currentUser.email)) {
+                                return null;
+                              }
+
+                              const isSelected = editSelectedMembers.some(m => m.id === member.id || m.email === member.email);
+                              return (
+                                <div 
+                                  key={member.id || member.email} 
+                                  className={`gt-member-item ${isSelected ? 'selected' : ''}`}
+                                  onClick={() => toggleEditMemberSelection(member)}
+                                >
+                                  <input 
+                                    type="checkbox" 
+                                    checked={isSelected}
+                                    onChange={() => toggleEditMemberSelection(member)}
+                                    id={`edit-member-${member.id || member.email}`}
+                                  />
+                                  <div className="gt-member-info">
+                                    <label htmlFor={`edit-member-${member.id || member.email}`}>
+                                      <div className="gt-member-name">{member.name}</div>
+                                      <div className="gt-member-email">{member.email}</div>
+                                    </label>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {editAmount && editSelectedMembers.length > 0 && (
+                      <div className="gt-total-summary">
+                        {/* Show context-sensitive preview based on editTransactionType */}
+                        {editTransactionType === 'payer_for_others' && (() => {
+                          const per = Number(editAmount || 0);
+                          const count = editSelectedMembers.length;
+                          const totalOwed = per * count;
                           return (
-                            <div 
-                              key={member.id || member.email} 
-                              className={`gt-member-item ${isSelected ? 'selected' : ''}`}
-                              onClick={() => toggleEditMemberSelection(member)}
-                            >
-                              <input 
-                                type="checkbox" 
-                                checked={isSelected}
-                                onChange={() => toggleEditMemberSelection(member)}
-                                id={`edit-member-${member.id || member.email}`}
-                              />
-                              <div className="gt-member-info">
-                                <label htmlFor={`edit-member-${member.id || member.email}`}>
-                                  <div className="gt-member-name">{member.name}</div>
-                                  <div className="gt-member-email">{member.email}</div>
-                                </label>
+                            <>
+                              <div className="gt-amount-calculation">
+                                <div>Bạn đã trả:</div>
+                                <div>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(per)}</div>
+                                <div className="gt-equals">→</div>
+                              </div>
+                              <div className="gt-total-preview">
+                                Mỗi người nợ: {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(per)} × {count} người = <strong>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(totalOwed)}</strong>
+                              </div>
+                            </>
+                          );
+                        })()}
+
+                        {editTransactionType === 'equal_split' && (() => {
+                          const totalParts = editSelectedMembers.length + 1; // +1 for creator
+                          const per = totalParts ? Number((Number(editAmount || 0) / totalParts).toFixed(2)) : 0;
+                          return (
+                            <>
+                              <div className="gt-amount-calculation">
+                                <div>Tổng tiền:</div>
+                                <div>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(editAmount || 0))}</div>
+                                <div>÷</div>
+                                <div>{totalParts} người</div>
+                                <div className="gt-equals">=</div>
+                              </div>
+                              <div className="gt-total-preview">
+                                Mỗi người (bao gồm bạn): <strong>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(per)}</strong>
+                              </div>
+                            </>
+                          );
+                        })()}
+
+                        {editTransactionType === 'percentage_split' && (
+                          <div className="gt-total-preview">
+                            Tổng tiền: <strong>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(editAmount || 0))}</strong> — Vui lòng điều chỉnh % bên dưới để xem số tiền từng người.
+                          </div>
+                        )}
+
+                        {editTransactionType === 'payer_single' && (
+                          <div className="gt-total-preview">
+                            Trả đơn: Bạn chịu toàn bộ <strong>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(editAmount || 0))}</strong>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="gt-form-group">
+                      <label>Mô tả</label>
+                      <textarea 
+                        value={editDescription} 
+                        onChange={e => setEditDescription(e.target.value)} 
+                        rows={3} 
+                        placeholder="Thêm mô tả chi tiết (tùy chọn)"
+                      />
+                    </div>
+
+                    {/* Percentage editor (same as create) */}
+                    {editTransactionType === 'percentage_split' && (
+                      <div className="percentage-table" style={{ marginTop: 12 }}>
+                        <div className="percentage-table-header">
+                          <div>Thành viên</div>
+                          <div>%</div>
+                          <div>Số tiền</div>
+                        </div>
+                        <div className="percentage-table-body">
+                          {(percentages || []).map((p, idx) => (
+                            <div key={String(p.email || p.id || idx)} className="percentage-table-row">
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{ width: 36, height: 36, borderRadius: 8, background: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
+                                  {(p.name || '').charAt(0).toUpperCase() || 'U'}
+                                </div>
+                                <div>
+                                  <div style={{ fontWeight: 700 }}>{p.name || p.email || 'Người dùng'}</div>
+                                  <div style={{ fontSize: 12, color: '#64748b' }}>{p.email || ''}</div>
+                                </div>
+                              </div>
+                              <div>
+                                <div className={`percentage-input-wrapper ${percentTotalError ? 'error' : ''}`}>
+                                  <input
+                                    className="percentage-input"
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.01"
+                                    value={p.percentage}
+                                    onChange={(e) => changePercentage(idx, e.target.value)}
+                                  />
+                                  <span className="percentage-symbol">%</span>
+                                </div>
+                              </div>
+                              <div style={{ textAlign: 'right', fontWeight: 700 }}>
+                                {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(((Number(p.percentage || 0) / 100) * Number(editAmount || 0)) || 0)}
                               </div>
                             </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {editAmount && editSelectedMembers.length > 0 && (
-                  <div className="gt-total-summary">
-                    {/* Show context-sensitive preview based on editTransactionType */}
-                    {editTransactionType === 'payer_for_others' && (() => {
-                      const per = Number(editAmount || 0);
-                      const count = editSelectedMembers.length;
-                      const totalOwed = per * count;
-                      return (
-                        <>
-                          <div className="gt-amount-calculation">
-                            <div>Bạn đã trả:</div>
-                            <div>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(per)}</div>
-                            <div className="gt-equals">→</div>
-                          </div>
-                          <div className="gt-total-preview">
-                            Mỗi người nợ: {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(per)} × {count} người = <strong>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(totalOwed)}</strong>
-                          </div>
-                        </>
-                      );
-                    })()}
-
-                    {editTransactionType === 'equal_split' && (() => {
-                      const totalParts = editSelectedMembers.length + 1; // +1 for creator
-                      const per = totalParts ? Number((Number(editAmount || 0) / totalParts).toFixed(2)) : 0;
-                      return (
-                        <>
-                          <div className="gt-amount-calculation">
-                            <div>Tổng tiền:</div>
-                            <div>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(editAmount || 0))}</div>
-                            <div>÷</div>
-                            <div>{totalParts} người</div>
-                            <div className="gt-equals">=</div>
-                          </div>
-                          <div className="gt-total-preview">
-                            Mỗi người (bao gồm bạn): <strong>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(per)}</strong>
-                          </div>
-                        </>
-                      );
-                    })()}
-
-                    {editTransactionType === 'percentage_split' && (
-                      <div className="gt-total-preview">
-                        Tổng tiền: <strong>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(editAmount || 0))}</strong> — Vui lòng điều chỉnh % bên dưới để xem số tiền từng người.
-                      </div>
-                    )}
-
-                    {editTransactionType === 'payer_single' && (
-                      <div className="gt-total-preview">
-                        Trả đơn: Bạn chịu toàn bộ <strong>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(editAmount || 0))}</strong>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div className="gt-form-group">
-                  <label>Mô tả</label>
-                  <textarea 
-                    value={editDescription} 
-                    onChange={e => setEditDescription(e.target.value)} 
-                    rows={3} 
-                    placeholder="Thêm mô tả chi tiết (tùy chọn)"
-                  />
-                </div>
-
-                {/* Percentage editor (same as create) */}
-                {editTransactionType === 'percentage_split' && (
-                  <div className="percentage-table" style={{ marginTop: 12 }}>
-                    <div className="percentage-table-header">
-                      <div>Thành viên</div>
-                      <div>%</div>
-                      <div>Số tiền</div>
-                    </div>
-                    <div className="percentage-table-body">
-                      {(percentages || []).map((p, idx) => (
-                        <div key={String(p.email || p.id || idx)} className="percentage-table-row">
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <div style={{ width: 36, height: 36, borderRadius: 8, background: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
-                              {(p.name || '').charAt(0).toUpperCase() || 'U'}
-                            </div>
-                            <div>
-                              <div style={{ fontWeight: 700 }}>{p.name || p.email || 'Người dùng'}</div>
-                              <div style={{ fontSize: 12, color: '#64748b' }}>{p.email || ''}</div>
-                            </div>
-                          </div>
-                          <div>
-                            <div className={`percentage-input-wrapper ${percentTotalError ? 'error' : ''}`}>
-                              <input
-                                className="percentage-input"
-                                type="number"
-                                min="0"
-                                max="100"
-                                step="0.01"
-                                value={p.percentage}
-                                onChange={(e) => changePercentage(idx, e.target.value)}
-                              />
-                              <span className="percentage-symbol">%</span>
-                            </div>
-                          </div>
-                          <div style={{ textAlign: 'right', fontWeight: 700 }}>
-                            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(((Number(p.percentage || 0) / 100) * Number(editAmount || 0)) || 0)}
-                          </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                    <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div className={`percentage-total ${percentTotalError ? 'error' : 'success'}`} style={{ padding: '6px 10px' }}>
-                        Tổng: {(percentages || []).reduce((s, x) => s + Number(x.percentage || 0), 0)}%
-                      </div>
-                      {percentTotalError && <div style={{ color: '#b91c1c', fontSize: 13 }}>{percentTotalError}</div>}
-                    </div>
-                  </div>
-                )}
-
-                {/* New section to show selected members and allow toggling their settled status */}
-                {editSelectedMembers.length > 0 && (
-                  <div className="gt-form-group">
-                    <label>Thành viên đã chọn</label>
-                    <div className="gt-selected-members-list">
-                      {editSelectedMembers.map((member, idx) => (
-                        <div key={idx} className="gt-selected-member">
-                          <div className="gt-selected-member-info">
-                            <div className="gt-selected-member-name">{member.name || member.email}</div>
-                            <div className="gt-selected-member-amount">
-                              {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(editAmount || 0)}
-                            </div>
+                        <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div className={`percentage-total ${percentTotalError ? 'error' : 'success'}`} style={{ padding: '6px 10px' }}>
+                            Tổng: {(percentages || []).reduce((s, x) => s + Number(x.percentage || 0), 0)}%
                           </div>
-                          <div className="gt-selected-member-actions">
-                            <button
-                              type="button"
-                              className={`gt-toggle-settled ${member.settled ? 'settled' : 'unsettled'}`}
-                              onClick={() => toggleParticipantSettled(idx)}
-                              title={member.settled ? 'Đánh dấu chưa thanh toán' : 'Đánh dấu đã thanh toán'}
-                            >
-                              {member.settled ? 'Đã thanh toán' : 'Chưa thanh toán'}
-                            </button>
-                          </div>
+                          {percentTotalError && <div style={{ color: '#b91c1c', fontSize: 13 }}>{percentTotalError}</div>}
                         </div>
-                      ))}
-                    </div>
-                  </div>
+                      </div>
+                    )}
+
+                    {/* New section to show selected members and allow toggling their settled status */}
+                    {editSelectedMembers.length > 0 && (
+                      <div className="gt-form-group">
+                        <label>Thành viên đã chọn</label>
+                        <div className="gt-selected-members-list">
+                          {editSelectedMembers.map((member, idx) => (
+                            <div key={idx} className="gt-selected-member">
+                              <div className="gt-selected-member-info">
+                                <div className="gt-selected-member-name">{member.name || member.email}</div>
+                                <div className="gt-selected-member-amount">
+                                  {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(editAmount || 0)}
+                                </div>
+                              </div>
+                              <div className="gt-selected-member-actions">
+                                <button
+                                  type="button"
+                                  className={`gt-toggle-settled ${member.settled ? 'settled' : 'unsettled'}`}
+                                  onClick={() => toggleParticipantSettled(idx)}
+                                  title={member.settled ? 'Đánh dấu chưa thanh toán' : 'Đánh dấu đã thanh toán'}
+                                >
+                                  {member.settled ? 'Đã thanh toán' : 'Chưa thanh toán'}
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
               
               <div className="gt-modal-footer">
-                <button className="gt-cancel-btn" onClick={() => setIsEditing(false)}>Hủy</button>
-                <button className="gt-save-btn" onClick={handleSaveEdit}>Lưu thay đổi</button>
+                <button className="gt-cancel-btn" onClick={() => setIsEditing(false)}>Đóng</button>
+                {/* Nếu chưa ai thanh toán thì mới hiện nút lưu */}
+                {!hasSettledParticipant && (
+                  <button className="gt-save-btn" onClick={handleSaveEdit}>Lưu thay đổi</button>
+                )}
               </div>
             </div>
           </div>
@@ -2042,6 +2176,47 @@ export default function GroupTransactions() {
                     )}
                   </button>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Repay Modal */}
+        {showRepayModal && repayTransaction && (
+          <div className="gt-modal-overlay">
+            <div className="gt-repay-modal">
+              <div className="gt-modal-header">
+                <h3>Trả nợ</h3>
+                <button className="gt-modal-close" onClick={() => setShowRepayModal(false)}>×</button>
+              </div>
+              <div className="gt-modal-body">
+                <p>Bạn đang trả nợ cho giao dịch: <strong>{repayTransaction.title || 'Không tiêu đề'}</strong></p>
+                <p>Số tiền cần trả: <strong>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(repayTransaction.participants.find(p => p.user && String(p.user._id || p.user) === String(currentUser.id))?.shareAmount || 0)}</strong></p>
+                <div className="gt-form-group">
+                  <label>Chọn ví để trả</label>
+                  <select
+                    value={repayWallet}
+                    onChange={(e) => setRepayWallet(e.target.value)}
+                    required
+                  >
+                    <option value="">-- Chọn ví --</option>
+                    {wallets.map(wallet => (
+                      <option key={wallet._id} value={wallet._id}>
+                        {wallet.name} ({new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(wallet.initialBalance || 0)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="gt-modal-footer">
+                <button className="gt-cancel-btn" onClick={() => setShowRepayModal(false)}>Hủy</button>
+                <button
+                  className="gt-confirm-btn"
+                  onClick={handleConfirmRepay}
+                  disabled={repaying}
+                >
+                  {repaying ? 'Đang xử lý...' : 'Xác nhận trả tiền'}
+                </button>
               </div>
             </div>
           </div>

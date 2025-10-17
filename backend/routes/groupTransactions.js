@@ -113,10 +113,11 @@ router.post('/:groupId/transactions', auth, async (req, res) => {
       amount,
       transactionType = 'equal_split',
       participants = [],
-      percentages = [], // for percentage split
+      percentages = [],
       title = '',
       description = '',
-      category
+      category,
+      walletId // Thêm walletId
     } = req.body;
 
     // Validate inputs
@@ -124,10 +125,23 @@ router.post('/:groupId/transactions', auth, async (req, res) => {
       return res.status(400).json({ message: 'Valid amount required' });
     }
 
-    // Validate transaction type (thêm payer_single)
+    // Validate transaction type
     const validTypes = ['payer_single', 'payer_for_others', 'equal_split', 'percentage_split'];
     if (!validTypes.includes(transactionType)) {
       return res.status(400).json({ message: 'Invalid transaction type' });
+    }
+
+    // Validate wallet
+    if (!walletId) {
+      return res.status(400).json({ message: 'Wallet is required' });
+    }
+    const Wallet = mongoose.model('Wallet');
+    const wallet = await Wallet.findOne({ _id: walletId, owner: req.user._id }); // Sửa từ userId thành owner
+    if (!wallet) {
+      return res.status(404).json({ message: 'Wallet not found' });
+    }
+    if (wallet.initialBalance < amount) { // Sửa từ balance thành initialBalance
+      return res.status(400).json({ message: 'Insufficient wallet balance' });
     }
 
     // Get group information for the notification
@@ -143,16 +157,16 @@ router.post('/:groupId/transactions', auth, async (req, res) => {
 
     // Build the transaction first before saving
     const builtTransaction = {
+      groupId, // Add groupId here
       amount: Number(amount),
       transactionType,
       title,
       description,
       date: new Date(),
-      group: groupId,
       payer: req.user._id,
       category,
       createdBy: req.user._id,
-      creatorIsParticipant: true // Người tạo luôn tham gia
+      wallet: walletId // Lưu ví của payer
     };
 
     let normalizedParticipants = [];
@@ -167,13 +181,11 @@ router.post('/:groupId/transactions', auth, async (req, res) => {
           return res.status(400).json({ message: 'Percentages required for percentage split' });
         }
 
-        // Validate total percentage is 100%
         const totalPercentage = percentages.reduce((sum, p) => sum + (Number(p.percentage) || 0), 0);
         if (Math.abs(totalPercentage - 100) > 0.01) {
           return res.status(400).json({ message: 'Total percentage must equal 100%' });
         }
 
-        // Validate each percentage is between 0 and 100
         for (const p of percentages) {
           const percentage = Number(p.percentage);
           if (isNaN(percentage) || percentage < 0 || percentage > 100) {
@@ -186,20 +198,17 @@ router.post('/:groupId/transactions', auth, async (req, res) => {
       let participantsBuilt = [];
 
       if (transactionType === 'payer_for_others') {
-        // Kiểu 1: Người tạo trả giúp, ghi nợ người tham gia
         participantsBuilt = normalizedParticipants.map(p => ({
           user: p.user,
           email: p.email,
-          shareAmount: Number(amount), // Mỗi người nợ toàn bộ số tiền
+          shareAmount: Number(amount),
           percentage: 0,
           settled: false
         }));
       } else if (transactionType === 'equal_split') {
-        // Kiểu 2: Chia đều cho tất cả người tham gia bao gồm người tạo
-        const totalParticipants = normalizedParticipants.length + 1; // +1 for creator
+        const totalParticipants = normalizedParticipants.length + 1;
         const shareAmount = Number(amount) / totalParticipants;
 
-        // Add creator as participant
         participantsBuilt.push({
           user: req.user._id,
           shareAmount: Number(shareAmount.toFixed(2)),
@@ -207,7 +216,6 @@ router.post('/:groupId/transactions', auth, async (req, res) => {
           settled: false
         });
 
-        // Add other participants
         participantsBuilt.push(...normalizedParticipants.map(p => ({
           user: p.user,
           email: p.email,
@@ -216,20 +224,16 @@ router.post('/:groupId/transactions', auth, async (req, res) => {
           settled: false
         })));
       } else if (transactionType === 'percentage_split') {
-        // Kiểu 3: Chia theo phần trăm
-        // Create map of participants for quick lookup
         const participantMap = new Map();
         normalizedParticipants.forEach(p => {
           const key = p.user ? String(p.user) : (p.email ? p.email.toLowerCase() : null);
           if (key) participantMap.set(key, p);
         });
 
-        // Build participants based on percentages
         for (const percentageData of percentages) {
           const percentage = Number(percentageData.percentage);
           const shareAmount = (Number(amount) * percentage) / 100;
 
-          // Find participant
           let participant = null;
           if (percentageData.user) {
             participant = participantMap.get(String(percentageData.user));
@@ -248,17 +252,13 @@ router.post('/:groupId/transactions', auth, async (req, res) => {
           }
         }
 
-        // Add creator if not already included and creatorIsParticipant is true
         if (builtTransaction.creatorIsParticipant) {
           const creatorPercentage = percentages.find(p =>
             (p.user && String(p.user) === String(req.user._id)) ||
             (p.email && p.email.toLowerCase() === req.user.email?.toLowerCase())
           );
 
-          if (creatorPercentage) {
-            // Creator already included in percentages
-          } else {
-            // Add creator with remaining percentage (should be 0 if total is 100%)
+          if (!creatorPercentage) {
             participantsBuilt.push({
               user: req.user._id,
               shareAmount: 0,
@@ -271,7 +271,6 @@ router.post('/:groupId/transactions', auth, async (req, res) => {
 
       builtTransaction.participants = participantsBuilt;
 
-      // Store percentages for percentage split
       if (transactionType === 'percentage_split') {
         builtTransaction.splitPercentages = percentages.map(p => ({
           user: p.user,
@@ -280,10 +279,8 @@ router.post('/:groupId/transactions', auth, async (req, res) => {
         }));
       }
     } else if (transactionType === 'payer_for_others') {
-      // payer_for_others yêu cầu phải có danh sách participants
       return res.status(400).json({ message: 'Participants required for payer_for_others transaction type' });
     } else if (transactionType === 'payer_single') {
-      // Trả đơn: giao dịch chỉ dành cho người tạo, không cần participants từ client
       const participantsBuilt = [{
         user: req.user._id,
         email: req.user.email || undefined,
@@ -294,17 +291,26 @@ router.post('/:groupId/transactions', auth, async (req, res) => {
       builtTransaction.participants = participantsBuilt;
     }
 
-    // Ensure required fields are present on builtTransaction before saving
-    // (groupId is required by schema; createdBy/payer often expected)
-    builtTransaction.groupId = builtTransaction.groupId || groupId;
-    if (!builtTransaction.createdBy) {
-      // record who created this transaction
-      builtTransaction.createdBy = req.user ? (req.user._id || req.user) : undefined;
+    // Xác định số tiền cần trừ khỏi ví của người tạo
+    let totalAmountToDeduct = Number(amount);
+
+    if (transactionType === 'payer_for_others') {
+      // Trả giúp: trừ số tiền * số người (bao gồm cả người tạo)
+      // participants chỉ chứa người được trả giúp, cần cộng thêm người tạo
+      totalAmountToDeduct = Number(amount) * (participants.length + 1);
     }
-    if (!builtTransaction.payer) {
-      // default payer to the creator (server-side canonical ref)
-      builtTransaction.payer = req.user ? (req.user._id || req.user) : undefined;
+    // equal_split, percentage_split, payer_single: trừ đúng số tiền như nhập
+
+    // Trừ tiền khỏi ví của người tạo
+    const payerWallet = await Wallet.findById(walletId);
+    if (!payerWallet) {
+      return res.status(404).json({ message: 'Wallet not found' });
     }
+    if (payerWallet.initialBalance < totalAmountToDeduct) {
+      return res.status(400).json({ message: 'Insufficient wallet balance' });
+    }
+    payerWallet.initialBalance -= totalAmountToDeduct;
+    await payerWallet.save();
 
     // Now create and save the transaction
     const newTransaction = new GroupTransaction(builtTransaction);
@@ -439,7 +445,7 @@ router.get('/:groupId/transactions', auth, async (req, res) => {
 router.post('/:groupId/transactions/:txId/settle', auth, async (req, res) => {
   try {
     const { groupId, txId } = req.params;
-    const { userId } = req.body;
+    const { userId, walletId } = req.body; // Thêm walletId
     if (!mongoose.Types.ObjectId.isValid(groupId) || !mongoose.Types.ObjectId.isValid(txId)) {
       return res.status(400).json({ message: 'Invalid id(s)' });
     }
@@ -450,7 +456,16 @@ router.post('/:groupId/transactions/:txId/settle', auth, async (req, res) => {
       return res.status(400).json({ message: 'Transaction does not belong to group' });
     }
 
-    // Allow either participant themselves or group owner/payer to mark settlement
+    // Validate wallet
+    if (!walletId) {
+      return res.status(400).json({ message: 'Wallet is required' });
+    }
+    const Wallet = mongoose.model('Wallet');
+    const userWallet = await Wallet.findOne({ _id: walletId, userId: req.user._id });
+    if (!userWallet) {
+      return res.status(404).json({ message: 'Wallet not found' });
+    }
+
     const actor = req.user;
     const isOwnerOrPayer = String(actor._id) === String(tx.payer) || String(actor._id) === String((tx.group && tx.group.owner) || '');
 
@@ -463,15 +478,39 @@ router.post('/:groupId/transactions/:txId/settle', auth, async (req, res) => {
 
     if (idx === -1) return res.status(404).json({ message: 'Participant not found in this transaction' });
 
-    // If caller is neither the participant nor owner/payer, forbid
     const participant = tx.participants[idx];
     const isParticipant = String(actor._id) === String(participant.user);
     if (!isParticipant && !isOwnerOrPayer) {
       return res.status(403).json({ message: 'Not authorized to settle for this participant' });
     }
 
+    if (tx.participants[idx].settled) {
+      const populatedAlready = await GroupTransaction.findById(txId)
+        .populate('payer', 'name email')
+        .populate('participants.user', 'name email')
+        .populate('category', 'name icon');
+      return res.json(populatedAlready);
+    }
+
+    // Validate balance
+    if (userWallet.balance < participant.shareAmount) {
+      return res.status(400).json({ message: 'Insufficient wallet balance' });
+    }
+
+    // Trừ tiền từ ví người nợ
+    userWallet.balance -= participant.shareAmount;
+    await userWallet.save();
+
+    // Cộng tiền vào ví của payer
+    const payerWallet = await Wallet.findById(tx.wallet);
+    if (payerWallet) {
+      payerWallet.balance += participant.shareAmount;
+      await payerWallet.save();
+    }
+
     tx.participants[idx].settled = true;
     tx.participants[idx].settledAt = new Date();
+    tx.participants[idx].wallet = walletId; // Lưu ví đã dùng
     await tx.save();
 
     // Notify payer that participant settled
@@ -727,309 +766,126 @@ router.get('/:groupId/transactions/:txId', auth, async (req, res) => {
   }
 });
 
-// PUT update a transaction
-// PUT /api/groups/:groupId/transactions/:txId
+// PUT /api/groups/:groupId/transactions/:txId - Sửa giao dịch nhóm
 router.put('/:groupId/transactions/:txId', auth, async (req, res) => {
   try {
     const { groupId, txId } = req.params;
-    const updater = req.user && req.user._id;
-    // load existing transaction
-    const Transaction = require('../models/GroupTransaction'); // adjust path/name if different
-    const original = await Transaction.findById(txId).lean();
-    if (!original) return res.status(404).json({ message: 'Transaction not found' });
-
-    // copy incoming payload
-    const updatePayload = { ...(req.body || {}) };
-
-    // determine the effective amount and type (prefer incoming values)
-    const effectiveAmount = Number(typeof updatePayload.amount !== 'undefined' ? updatePayload.amount : original.amount || 0);
-    const effectiveType = updatePayload.transactionType || original.transactionType || 'equal_split';
-
-    // Helper: obtain normalized participant entries (user/email) from either incoming payload or original
-    let normalizedInputs = [];
-    if (Array.isArray(updatePayload.participants) && updatePayload.participants.length > 0) {
-      // reuse existing helper normalizeParticipantsInput
-      normalizedInputs = await normalizeParticipantsInput(updatePayload.participants);
-    } else if (Array.isArray(original.participants) && original.participants.length > 0) {
-      // derive from original participants
-      normalizedInputs = original.participants.map(p => ({
-        user: p.user ? (String(p.user._id || p.user)) : undefined,
-        email: p.email ? String(p.email).toLowerCase() : undefined
-      }));
-    } else {
-      normalizedInputs = [];
+    const Transaction = require('../models/GroupTransaction');
+    const Wallet = mongoose.model('Wallet');
+    const transaction = await Transaction.findById(txId);
+    if (!transaction) {
+      return res.status(404).json({ message: 'Transaction not found' });
     }
 
-    // Create a map of original participant settlement status to preserve it
-    const originalSettlementMap = new Map();
-    if (Array.isArray(original.participants)) {
-      original.participants.forEach(p => {
-        const key = p.user ? String(p.user._id || p.user) : (p.email ? p.email.toLowerCase() : '');
-        if (key) {
-          originalSettlementMap.set(key, {
-            settled: !!p.settled,
-            settledAt: p.settledAt
-          });
-        }
-      });
+    // Không cho sửa nếu đã có participant thanh toán
+    const hasSettled = Array.isArray(transaction.participants) && transaction.participants.some(p => p.settled);
+    if (hasSettled) {
+      return res.status(400).json({ message: 'Không thể sửa giao dịch vì đã có người thanh toán.' });
     }
 
-    // Create a map of incoming participant settlement status
-    const incomingSettlementMap = new Map();
-    if (Array.isArray(updatePayload.participants)) {
-      updatePayload.participants.forEach(p => {
-        const key = p.user ? String(p.user) : (p.email ? p.email.toLowerCase() : '');
-        if (key) {
-          incomingSettlementMap.set(key, {
-            settled: !!p.settled,
-            settledAt: p.settledAt || (p.settled ? new Date() : null)
-          });
-        }
-      });
-    }
+    // Lưu lại thông tin ví cũ và số tiền cũ
+    const oldWalletId = transaction.wallet;
+    const oldAmount = transaction.amount;
+    const oldType = transaction.transactionType;
+    const oldParticipants = Array.isArray(transaction.participants) ? transaction.participants.length : 0;
 
-    // Function to get settlement status for a participant
-    const getSettlementStatus = (participant) => {
-      const key = participant.user ? String(participant.user) : (participant.email ? participant.email.toLowerCase() : '');
-      // Prefer incoming status over original status
-      if (key && incomingSettlementMap.has(key)) {
-        return incomingSettlementMap.get(key);
-      }
-      if (key && originalSettlementMap.has(key)) {
-        return originalSettlementMap.get(key);
-      }
-      return { settled: false, settledAt: null };
-    };
+    // Cập nhật các trường cơ bản
+    if (req.body.transactionType) transaction.transactionType = req.body.transactionType;
+    if (req.body.title) transaction.title = req.body.title;
+    if (req.body.amount) transaction.amount = req.body.amount;
+    if (req.body.description !== undefined) transaction.description = req.body.description;
+    if (req.body.participants) transaction.participants = req.body.participants;
+    if (req.body.percentages) transaction.percentages = req.body.percentages;
 
-    // Build participants according to transaction type
-    let participantsBuilt = [];
-
-    if (effectiveType === 'payer_for_others') {
-      // each selected participant owes the full amount (creator paid for others)
-      if (normalizedInputs.length === 0) {
-        return res.status(400).json({ message: 'Participants required for payer_for_others' });
-      }
-      participantsBuilt = normalizedInputs.map(p => {
-        const status = getSettlementStatus(p);
-        return {
-          user: p.user,
-          email: p.email,
-          shareAmount: Number(effectiveAmount),
-          percentage: 0,
-          settled: status.settled,
-          settledAt: status.settledAt
-        };
-      });
-    } else if (effectiveType === 'equal_split') {
-      // include creator + normalizedInputs
-      const totalParticipants = (normalizedInputs.length + 1) || 1; // +1 for creator
-      const per = totalParticipants ? Number((effectiveAmount / totalParticipants).toFixed(2)) : 0;
-      // creator
-      const creatorStatus = getSettlementStatus({ user: String(req.user._id) });
-      participantsBuilt.push({
-        user: String(req.user._id),
-        email: req.user.email || undefined,
-        shareAmount: per,
-        percentage: 0,
-        settled: creatorStatus.settled,
-        settledAt: creatorStatus.settledAt
-      });
-      // others
-      participantsBuilt.push(...normalizedInputs.map(p => {
-        const status = getSettlementStatus(p);
-        return {
-          user: p.user,
-          email: p.email,
-          shareAmount: per,
-          percentage: 0,
-          settled: status.settled,
-          settledAt: status.settledAt
-        };
-      }));
-    } else if (effectiveType === 'percentage_split') {
-      // Kiểu 3: Chia theo phần trăm
-      // Modify to include settled status
-      const incomingPerc = Array.isArray(updatePayload.percentages) ? updatePayload.percentages :
-                         Array.isArray(updatePayload.splitPercentages) ? updatePayload.splitPercentages :
-                         Array.isArray(original.percentages) ? original.percentages :
-                         Array.isArray(original.splitPercentages) ? original.splitPercentages : [];
-
-      if (incomingPerc.length === 0) {
-        // If no percentages provided, initialize equal among creator + normalizedInputs
-        const list = [{ user: String(req.user._id), email: req.user.email }, ...normalizedInputs];
-        const base = list.length ? Number((100 / list.length).toFixed(2)) : 0;
-        const percArr = list.map((p, i) => ({ user: p.user, email: p.email, percentage: base }));
-        // ensure sum 100
-        const sum = percArr.reduce((s, x) => s + Number(x.percentage || 0), 0);
-        if (percArr.length > 0 && Math.abs(sum - 100) > 0.01) {
-          const diff = Number((100 - sum).toFixed(2));
-          percArr[percArr.length - 1].percentage = Number((Number(percArr[percArr.length - 1].percentage || 0) + diff).toFixed(2));
-        }
-        // build participantsBuilt from percArr
-        participantsBuilt = percArr.map(pp => {
-          const status = getSettlementStatus(pp);
-          return {
-            user: pp.user,
-            email: pp.email,
-            percentage: Number(pp.percentage || 0),
-            shareAmount: Number(((Number(pp.percentage || 0) / 100) * effectiveAmount).toFixed(2)),
-            settled: status.settled,
-            settledAt: status.settledAt
-          };
-        });
-        updatePayload.percentages = percArr;
-      } else {
-        // use incomingPerc to build participantsBuilt
-        participantsBuilt = incomingPerc.map(pp => {
-          const percentage = Number(pp.percentage || 0);
-          const shareAmount = Number(((percentage / 100) * effectiveAmount).toFixed(2));
-          const status = getSettlementStatus(pp);
-          return {
-            user: pp.user ? String(pp.user) : undefined,
-            email: pp.email ? String(pp.email).toLowerCase() : undefined,
-            percentage,
-            shareAmount,
-            settled: status.settled,
-            settledAt: status.settledAt
-          };
-        });
-        // keep percentages in payload
-        updatePayload.percentages = incomingPerc.map(pp => ({ user: pp.user, email: pp.email, percentage: Number(pp.percentage || 0) }));
-      }
-    } else if (effectiveType === 'payer_single') {
-      // only creator: single participant = creator
-      const creatorStatus = getSettlementStatus({ user: String(req.user._id) });
-      participantsBuilt = [{
-        user: String(req.user._id),
-        email: req.user.email || undefined,
-        shareAmount: Number(effectiveAmount),
-        percentage: 100,
-        settled: true, // Always settled for single payer
-        settledAt: creatorStatus.settledAt || new Date()
-      }];
-    } else {
-      // fallback: if there are normalizedInputs, divide among them; else keep original behavior
-      if (normalizedInputs.length > 0) {
-        const per = normalizedInputs.length ? Number((effectiveAmount / normalizedInputs.length).toFixed(2)) : 0;
-        participantsBuilt = normalizedInputs.map(p => {
-          const status = getSettlementStatus(p);
-          return {
-            user: p.user,
-            email: p.email,
-            shareAmount: per,
-            percentage: 0,
-            settled: status.settled,
-            settledAt: status.settledAt
-          };
-        });
-      } else {
-        participantsBuilt = original.participants || [];
-      }
-    }
-
-    // assign built participants into payload so DB update persists correct shares
-    updatePayload.participants = participantsBuilt;
-
-    // ensure amount/type fields set as numbers/strings
-    updatePayload.amount = Number(effectiveAmount);
-    updatePayload.transactionType = effectiveType;
-
-    // apply update and return new document
-    const updated = await Transaction.findByIdAndUpdate(txId, updatePayload, { new: true }).lean();
-    if (!updated) return res.status(500).json({ message: 'Failed to update transaction' });
-
-    // Compare original vs updated to craft notification
-    const prevAmount = Number(original.amount || 0);
-    const newAmount = Number(updated.amount || 0);
-    const diff = Number((newAmount - prevAmount).toFixed(2));
-    const amountChanged = Math.abs(diff) > 0.001;
-    const prevType = original.transactionType || '';
-    const newType = updated.transactionType || '';
-    const typeChanged = prevType !== newType;
-
-    // Helper to compare participants / percentages to detect debt distribution change
-    const participantsChanged = () => {
-      const pA = Array.isArray(original.participants) ? original.participants : [];
-      const pB = Array.isArray(updated.participants) ? updated.participants : [];
-      if (pA.length !== pB.length) return true;
-      const normalize = p => ({
-        id: p.user ? String(p.user._id || p.user) : (p.email || '').toLowerCase(),
-        share: Number(p.shareAmount || p.share || 0),
-        perc: Number(p.percentage || 0)
-      });
-      const mapB = new Map(pB.map(x => [normalize(x).id, normalize(x)]));
-      for (const a of pA) {
-        const na = normalize(a);
-        const nb = mapB.get(na.id);
-        if (!nb) return true;
-        if (Math.abs(na.share - nb.share) > 0.01) return true;
-        if (Math.abs(na.perc - nb.perc) > 0.01) return true;
-      }
-      return false;
-    };
-    const debtChanged = participantsChanged() || amountChanged || typeChanged;
-
-    // Craft readable message and structured data
-    const actorName = (req.user && (req.user.name || req.user.email)) || 'Người dùng';
-    const txTitle = updated.title || 'Giao dịch';
-    const messageParts = [];
-    messageParts.push(`${actorName} đã chỉnh sửa giao dịch "${txTitle}"`);
-    if (amountChanged) messageParts.push(`Số tiền: ${prevAmount} → ${newAmount} (Δ ${diff >= 0 ? '+' : ''}${diff})`);
-    if (typeChanged) messageParts.push(`Kiểu giao dịch: ${prevType || 'n/a'} → ${newType || 'n/a'}`);
-    if (debtChanged) messageParts.push('Phân bổ nợ đã thay đổi');
-    const message = messageParts.join(' — ');
-
-    const notifData = {
-      transactionId: String(updated._id || updated.id),
-      groupId: String(groupId),
-      title: txTitle,
-      previousAmount: prevAmount,
-      newAmount: newAmount,
-      difference: diff,
-      previousType: prevType,
-      newType: newType,
-      debtChanged: !!debtChanged,
-      updatedBy: { id: String(updater), name: actorName }
-    };
-
-    // Attempt to notify group members (lookup group members list)
-    try {
-      const Group = require('../models/Group');
-      const groupDoc = await Group.findById(groupId).lean();
-      if (groupDoc && Array.isArray(groupDoc.members)) {
-        for (const m of groupDoc.members) {
-          // only notify members who have a linked user id
-          if (m.user) {
-            // Optionally skip notifying the actor themself
-            if (String(m.user) === String(updater)) continue;
-            try {
-              const notif = await Notification.create({
-                recipient: m.user,
-                sender: updater,
-                type: 'group.transaction.edited',
-                message,
-                data: notifData
-              });
-              // Emit realtime notification immediately if io available
-              try {
-                const io = req.app.get('io');
-                if (io) io.to(String(m.user)).emit('notification', notif);
-              } catch (emitErr) { /* ignore */ }
-            } catch (e) {
-              console.warn('Failed to create notif for member', m.user, e && e.message);
-            }
+    // Nếu thay đổi ví
+    if (req.body.walletId && req.body.walletId !== String(oldWalletId)) {
+      transaction.wallet = req.body.walletId;
+      // Hoàn tiền về ví cũ
+      if (oldWalletId) {
+        const oldWallet = await Wallet.findById(oldWalletId);
+        if (oldWallet) {
+          // Tính số tiền đã trừ khỏi ví cũ
+          let oldDeducted = Number(oldAmount);
+          if (oldType === 'payer_for_others') {
+            oldDeducted = Number(oldAmount) * (oldParticipants + 1);
           }
+          oldWallet.initialBalance += oldDeducted;
+          await oldWallet.save();
         }
       }
-    } catch (innerErr) {
-      console.warn('Could not fetch group members to notify:', innerErr && innerErr.message);
     }
 
-    // return updated transaction (existing response format)
-    return res.json({ transaction: updated });
+    // Tính lại số tiền cần trừ khỏi ví mới
+    let newDeducted = Number(transaction.amount);
+    let participantsCount = Array.isArray(transaction.participants) ? transaction.participants.length : 0;
+    if (transaction.transactionType === 'payer_for_others') {
+      newDeducted = Number(transaction.amount) * (participantsCount + 1);
+    }
+    // Trừ tiền từ ví mới
+    if (transaction.wallet) {
+      const newWallet = await Wallet.findById(transaction.wallet);
+      if (!newWallet) {
+        return res.status(404).json({ message: 'Wallet not found' });
+      }
+      if (newWallet.initialBalance < newDeducted) {
+        return res.status(400).json({ message: 'Insufficient wallet balance' });
+      }
+      newWallet.initialBalance -= newDeducted;
+      await newWallet.save();
+    }
+
+    // Nếu sửa kiểu giao dịch hoặc participants/percentages thì cập nhật lại shareAmount cho từng participant
+    if (req.body.transactionType || req.body.participants || req.body.percentages || req.body.amount) {
+      let updatedParticipants = Array.isArray(transaction.participants) ? transaction.participants : [];
+      if (transaction.transactionType === 'payer_for_others') {
+        updatedParticipants = updatedParticipants.map(p => ({
+          ...p,
+          shareAmount: Number(transaction.amount),
+          percentage: 0,
+          settled: false
+        }));
+      } else if (transaction.transactionType === 'equal_split') {
+        const total = updatedParticipants.length + 1;
+        const per = Number(transaction.amount) / total;
+        updatedParticipants = updatedParticipants.map(p => ({
+          ...p,
+          shareAmount: Number(per.toFixed(2)),
+          percentage: 0,
+          settled: false
+        }));
+      } else if (transaction.transactionType === 'percentage_split' && Array.isArray(transaction.percentages)) {
+        const percMap = new Map();
+        transaction.percentages.forEach(pp => {
+          const key = (pp.email || pp.user || '').toString().toLowerCase();
+          percMap.set(key, Number(pp.percentage || 0));
+        });
+        updatedParticipants = updatedParticipants.map(p => {
+          const key = (p.email || p.user || '').toString().toLowerCase();
+          const perc = percMap.get(key) || 0;
+          return {
+            ...p,
+            shareAmount: Number(((perc / 100) * Number(transaction.amount)).toFixed(2)),
+            percentage: perc,
+            settled: false
+          };
+        });
+      } else if (transaction.transactionType === 'payer_single') {
+        updatedParticipants = updatedParticipants.map(p => ({
+          ...p,
+          shareAmount: Number(transaction.amount),
+          percentage: 100,
+          settled: true
+        }));
+      }
+      transaction.participants = updatedParticipants;
+    }
+
+    await transaction.save();
+
+    res.json({ message: 'Cập nhật giao dịch thành công', transaction });
   } catch (err) {
-    console.error('Transaction update error', err);
-    return res.status(500).json({ message: 'Server error', error: err.message });
+    console.error('Update group transaction error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
@@ -1041,22 +897,54 @@ router.delete('/:groupId/transactions/:txId', auth, async (req, res) => {
       return res.status(400).json({ message: 'Invalid ID format' });
     }
 
-    // Find the transaction
     const transaction = await GroupTransaction.findById(txId);
     if (!transaction) {
       return res.status(404).json({ message: 'Transaction not found' });
     }
 
-    // Verify the transaction belongs to this group
     if (!belongsToGroup(transaction, groupId)) {
       return res.status(400).json({ message: 'Transaction does not belong to this group' });
     }
 
-    // Only the creator can delete
     if (String(transaction.createdBy) !== String(req.user._id)) {
       return res.status(403).json({ message: 'Only the creator can delete this transaction' });
     }
-    
+
+    const Wallet = mongoose.model('Wallet');
+
+    let totalUnsettled = 0;
+    let payerRefund = 0;
+
+    // Đối với payer_for_others: tổng số tiền đã trừ là amount * (participants.length + 1)
+    let totalDeducted = Number(transaction.amount);
+    if (transaction.transactionType === 'payer_for_others') {
+      totalDeducted = Number(transaction.amount) * (transaction.participants.length + 1);
+    }
+
+    // Tính tổng đã trả nợ (settled) và hoàn lại cho participant
+    let totalSettled = 0;
+    for (const participant of transaction.participants) {
+      if (participant.settled && participant.wallet) {
+        const participantWallet = await Wallet.findById(participant.wallet);
+        if (participantWallet) {
+          participantWallet.initialBalance += participant.shareAmount;
+          await participantWallet.save();
+          totalSettled += participant.shareAmount;
+        }
+      }
+    }
+
+    // Số tiền hoàn lại cho payer là tổng đã trừ - tổng đã trả nợ
+    payerRefund = totalDeducted - totalSettled;
+
+    if (payerRefund > 0 && transaction.wallet) {
+      const payerWallet = await Wallet.findById(transaction.wallet);
+      if (payerWallet) {
+        payerWallet.initialBalance += payerRefund;
+        await payerWallet.save();
+      }
+    }
+
     // Get information needed for notifications before deleting
     const title = transaction.title || 'Không tiêu đề';
     const unsettledParticipants = transaction.participants
@@ -1424,6 +1312,112 @@ router.post('/:groupId/settle-optimized', auth, async (req, res) => {
   } catch (err) {
     console.error('Error settling optimized debts:', err);
     return res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// POST /api/groups/:groupId/transactions/:txId/repay
+// API để trả nợ cho người bị nợ
+router.post('/:groupId/transactions/:txId/repay', auth, async (req, res) => {
+  try {
+    const { groupId, txId } = req.params;
+    const { walletId } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(groupId) || !mongoose.Types.ObjectId.isValid(txId)) {
+      return res.status(400).json({ message: 'Invalid groupId or txId' });
+    }
+
+    if (!walletId) {
+      return res.status(400).json({ message: 'Wallet ID is required' });
+    }
+
+    const transaction = await GroupTransaction.findById(txId)
+      .populate('payer', 'name email')
+      .populate('participants.user', 'name email')
+      .populate('wallet', 'name initialBalance')
+      .lean();
+
+    if (!transaction) {
+      return res.status(404).json({ message: 'Transaction not found' });
+    }
+
+    if (!belongsToGroup(transaction, groupId)) {
+      return res.status(400).json({ message: 'Transaction does not belong to this group' });
+    }
+
+    const participant = transaction.participants.find(p => 
+      p.user && String(p.user._id || p.user) === String(req.user._id) && !p.settled
+    );
+
+    if (!participant) {
+      return res.status(400).json({ message: 'You have no unsettled debt in this transaction' });
+    }
+
+    const Wallet = mongoose.model('Wallet');
+
+    // Lấy ví của người trả nợ
+    const userWallet = await Wallet.findOne({ _id: walletId, owner: req.user._id });
+    if (!userWallet) {
+      return res.status(404).json({ message: 'Wallet not found' });
+    }
+
+    if (userWallet.initialBalance < participant.shareAmount) {
+      return res.status(400).json({ message: 'Insufficient wallet balance' });
+    }
+
+    // Lấy ví của người nhận tiền (payer)
+    const payerWallet = await Wallet.findById(transaction.wallet);
+    if (!payerWallet) {
+      return res.status(404).json({ message: 'Payer\'s wallet not found' });
+    }
+
+    // Trừ tiền từ ví của người trả nợ
+    userWallet.initialBalance -= participant.shareAmount;
+    await userWallet.save();
+
+    // Cộng tiền vào ví của người nhận
+    payerWallet.initialBalance += participant.shareAmount;
+    await payerWallet.save();
+
+    // Đánh dấu participant đã trả nợ
+    participant.settled = true;
+    participant.settledAt = new Date();
+    participant.wallet = walletId;
+
+    await GroupTransaction.findByIdAndUpdate(txId, { participants: transaction.participants });
+
+    // Gửi thông báo cho người nhận
+    try {
+      const Notification = mongoose.model('Notification');
+      const formattedAmount = participant.shareAmount.toLocaleString('vi-VN');
+      await Notification.create({
+        recipient: transaction.payer._id,
+        sender: req.user._id,
+        type: 'group.transaction.debt.paid', // Sửa lại cho đúng enum
+        message: `${req.user.name || 'Người dùng'} đã trả ${formattedAmount} đồng cho giao dịch "${transaction.title}"`,
+        data: {
+          transactionId: txId,
+          groupId,
+          amount: participant.shareAmount,
+          title: transaction.title
+        }
+      });
+
+      const io = req.app.get('io');
+      if (io) {
+        io.to(String(transaction.payer._id)).emit('notification', {
+          type: 'group.transaction.debt.paid',
+          message: `${req.user.name || 'Người dùng'} đã trả ${formattedAmount} đồng cho giao dịch "${transaction.title}"`,
+          data: { transactionId: txId, groupId, amount: participant.shareAmount }
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to send notification for repayment:', err);
+    }
+
+    res.json({ message: 'Debt repaid successfully', transactionId: txId });
+  } catch (err) {
+    console.error('Repay debt error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
