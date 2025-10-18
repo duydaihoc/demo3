@@ -97,42 +97,17 @@ router.get('/', requireAuth, async (req, res) => {
       filter.wallet = { $in: wallets.map(w => w._id) };
     }
 
-    // Fetch regular transactions
+    // Fetch only regular (personal) transactions
     const txs = await Transaction.find(filter)
       .sort({ date: -1 })
       .populate('wallet')
       .populate('category')
       .lean();
 
-    // Fetch group transactions related to the wallets
-    const groupTransactions = await GroupTransaction.find({
-      wallet: { $in: filter.wallet.$in }
-    })
-      .populate('groupId', 'name')
-      .populate('participants.user', 'name email')
-      .lean();
+    // Remove group transaction merging here
+    // (No group transaction logic)
 
-    // Combine regular transactions and group transactions
-    const allTransactions = [
-      ...txs.map(tx => ({ ...tx, type: 'regular' })),
-      ...groupTransactions.map(groupTx => ({
-        ...groupTx,
-        type: 'group',
-        groupTransaction: {
-          groupId: groupTx.groupId?._id,
-          groupName: groupTx.groupId?.name,
-          transactionId: groupTx._id,
-          title: groupTx.title,
-          amount: groupTx.amount,
-          participants: groupTx.participants
-        }
-      }))
-    ];
-
-    // Sort combined transactions by date
-    allTransactions.sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt));
-
-    res.json(allTransactions);
+    res.json(txs);
   } catch (err) {
     console.error('List transactions error:', err);
     res.status(500).json({ message: 'Server Error', error: err.message });

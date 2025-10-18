@@ -593,41 +593,40 @@ function TransactionsPage() {
                 <th>Loại</th>
                 <th>Danh mục</th>
                 <th>Số tiền</th>
-                <th>Nhóm</th>
+                {/* Loại bỏ cột nhóm */}
+                {/* <th>Nhóm</th> */}
                 <th>Thao tác</th>
               </tr>
             </thead>
             <tbody>
               {loadingTransactions ? (
-                <tr><td colSpan={showWalletColumn ? 8 : 7} style={{ textAlign: 'center', color: '#888' }}>Đang tải...</td></tr>
+                <tr><td colSpan={showWalletColumn ? 7 : 6} style={{ textAlign: 'center', color: '#888' }}>Đang tải...</td></tr>
               ) : filteredTransactions.length === 0 ? (
-                <tr><td colSpan={showWalletColumn ? 8 : 7} style={{ textAlign: 'center', color: '#888' }}>(Chưa có giao dịch)</td></tr>
-              ) : filteredTransactions.map(tx => {
-                const titleText = tx.title || tx.description || '—';
-                const categoryLabel = tx.category ? (tx.category.name || tx.category) : '';
-                const walletObj = tx.wallet && (typeof tx.wallet === 'string' ? null : tx.wallet);
-                const currency = walletObj && walletObj.currency ? walletObj.currency : 'VND';
-                let walletName = '';
-                if (walletObj && walletObj.name) walletName = walletObj.name;
-                else if (typeof tx.wallet === 'string') {
-                  const w = wallets.find(wt => String(wt._id) === String(tx.wallet));
-                  walletName = w ? w.name : '';
-                }
-                const amountFormatted = formatCurrency(tx.amount, currency);
+                <tr><td colSpan={showWalletColumn ? 7 : 6} style={{ textAlign: 'center', color: '#888' }}>(Chưa có giao dịch)</td></tr>
+              ) : filteredTransactions
+                // Lọc bỏ giao dịch nhóm, chỉ giữ giao dịch cá nhân
+                .filter(tx => !tx.groupTransaction)
+                .map(tx => {
+                  const titleText = tx.title || tx.description || '—';
+                  const categoryLabel = tx.category ? (tx.category.name || tx.category) : '';
+                  const walletObj = tx.wallet && (typeof tx.wallet === 'string' ? null : tx.wallet);
+                  const currency = walletObj && walletObj.currency ? walletObj.currency : 'VND';
+                  let walletName = '';
+                  if (walletObj && walletObj.name) walletName = walletObj.name;
+                  else if (typeof tx.wallet === 'string') {
+                    const w = wallets.find(wt => String(wt._id) === String(tx.wallet));
+                    walletName = w ? w.name : '';
+                  }
+                  const amountFormatted = formatCurrency(tx.amount, currency);
 
-                const groupInfo = tx.groupTransaction
-                  ? `${tx.groupTransaction.groupName || 'Nhóm không xác định'} (${tx.groupTransaction.title || 'Không tiêu đề'})`
-                  : '—';
-
-                return (
-                  <tr key={tx._id}>
-                    <td>{new Date(tx.date).toLocaleDateString()}</td>
-                    <td>{titleText}</td>
-                    {showWalletColumn && <td>{walletName}</td>}
+                  return (
+                    <tr key={tx._id}>
+                      <td>{new Date(tx.date).toLocaleDateString()}</td>
+                      <td>{titleText}</td>
+                      {showWalletColumn && <td>{walletName}</td>}
                     <td style={{ textTransform: 'capitalize' }}>{tx.type}</td>
                     <td>{categoryLabel}</td>
                     <td>{amountFormatted}</td>
-                    <td>{groupInfo}</td>
                     <td className="tx-actions">
                       {/* Ẩn nút sửa và xóa nếu giao dịch thuộc về nhóm */}
                       {!tx.groupTransaction && (

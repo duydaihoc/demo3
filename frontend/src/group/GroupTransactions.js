@@ -454,31 +454,7 @@ export default function GroupTransactions() {
     });
   };
 
-  // Đánh dấu đã thanh toán cho một giao dịch (gọi API)
-  const handleSettle = async (txId, userId) => {
-    if (!token || !txId) return;
-    
-    try {
-      const res = await fetch(`${API_BASE}/api/groups/${groupId}/transactions/${txId}/settle`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ userId: userId || currentUser?.id })
-      });
-      
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        alert(errorData.message || 'Lỗi khi đánh dấu đã thanh toán');
-        return;
-      }
-      
-      // Refresh transactions list
-      fetchTxs();
-      
-    } catch (err) {
-      console.error("Error settling transaction:", err);
-      alert('Đã xảy ra lỗi khi thực hiện thanh toán');
-    }
-  };
+  
 
   // Tìm danh mục theo ID
   const getCategoryById = (categoryId) => {
@@ -1665,21 +1641,13 @@ export default function GroupTransactions() {
                                            p.settled ? (<><i className="fas fa-check-circle"></i> Đã thanh toán</>) : (<><i className="fas fa-clock"></i> Chưa thanh toán</>)
                                          )}
                                        </div>
-                                       {/* Nếu participant là creator -> không hiển thị button trả/xác nhận */}
+                                       {/* Keeping only the "Trả tiền" button, removing the confirmation button */}
                                        {!isCreatorParticipant && isCurrentUserParticipant && !p.settled && (
-                                        <button 
-                                          className="gt-settle-btn"
-                                          onClick={() => handleRepayClick(tx)} // Sửa lại: mở modal chọn ví
-                                        >
-                                          <i className="fas fa-hand-holding-usd"></i> Trả tiền
-                                        </button>
-                                       )}
-                                       {!isCreatorParticipant && isPayer && !p.settled && !isCurrentUserParticipant && (
                                          <button 
                                            className="gt-settle-btn"
-                                           onClick={() => handleSettle(tx._id || tx.id, p.user ? (p.user._id || p.user) : null)}
+                                           onClick={() => handleRepayClick(tx)}
                                          >
-                                           <i className="fas fa-check"></i> Xác nhận
+                                           <i className="fas fa-hand-holding-usd"></i> Trả tiền
                                          </button>
                                        )}
                                      </div>
@@ -1716,14 +1684,7 @@ export default function GroupTransactions() {
                                    <span className="gt-percentage-info"> ({userParticipation.percentage}%)</span>
                                  )}
                                </div>
-                               <button 
-                                className="gt-settle-btn"
-                                onClick={() => handleSettle(tx._id || tx.id, (userParticipation ? (userParticipation.user ? (userParticipation.user._id || userParticipation.user) : userParticipation.email) : currentUser?.id))}
-                                disabled={userParticipation ? !!userParticipation.settled : false}
-                                title={userParticipation && userParticipation.settled ? 'Bạn đã đánh dấu đã trả' : 'Đánh dấu đã trả'}
-                               >
-                                Đánh dấu đã trả
-                               </button>
+                               {/* Removed "Đánh dấu đã trả" button that was here */}
                              </div>
                            )}
                         </div>
