@@ -766,6 +766,29 @@ router.get('/:groupId/transactions/:txId', auth, async (req, res) => {
   }
 });
 
+// Helper: Tính số tiền cần hoàn lại cho ví khi hoàn tác giao dịch nhóm
+function getWalletRefundAmount(transaction) {
+  if (!transaction) return 0;
+  const amount = Number(transaction.amount) || 0;
+  const participantsCount = Array.isArray(transaction.participants) ? transaction.participants.length : 0;
+  switch (transaction.transactionType) {
+    case 'payer_for_others':
+      // Trả giúp: mỗi người nợ full amount, creator đã trả tổng = amount * (participantsCount + 1)
+      return amount * (participantsCount + 1);
+    case 'equal_split':
+      // Chia đều: tổng amount đã trừ khỏi ví
+      return amount;
+    case 'percentage_split':
+      // Chia phần trăm: tổng amount đã trừ khỏi ví
+      return amount;
+    case 'payer_single':
+      // Trả đơn: tổng amount đã trừ khỏi ví
+      return amount;
+    default:
+      return amount;
+  }
+}
+
 // PUT /api/groups/:groupId/transactions/:txId - Sửa giao dịch nhóm
 router.put('/:groupId/transactions/:txId', auth, async (req, res) => {
   try {
@@ -785,9 +808,26 @@ router.put('/:groupId/transactions/:txId', auth, async (req, res) => {
 
     // Lưu lại thông tin ví cũ và số tiền cũ
     const oldWalletId = transaction.wallet;
-    const oldAmount = transaction.amount;
-    const oldType = transaction.transactionType;
-    const oldParticipants = Array.isArray(transaction.participants) ? transaction.participants.length : 0;
+    const oldRefundAmount = getWalletRefundAmount(transaction);
+
+    // Nếu thay đổi ví, hoàn lại tiền cho ví cũ
+    if (req.body.walletId && req.body.walletId !== String(oldWalletId)) {
+      if (oldWalletId) {
+        const oldWallet = await Wallet.findById(oldWalletId);
+        if (oldWallet) {
+          oldWallet.initialBalance += oldRefundAmount;
+          await oldWallet.save();
+        }
+      }
+      transaction.wallet = req.body.walletId;
+    } else if (oldWalletId) {
+      // Nếu không đổi ví, hoàn lại tiền cho ví cũ trước khi cập nhật
+      const oldWallet = await Wallet.findById(oldWalletId);
+      if (oldWallet) {
+        oldWallet.initialBalance += oldRefundAmount;
+        await oldWallet.save();
+      }
+    }
 
     // Cập nhật các trường cơ bản
     if (req.body.transactionType) transaction.transactionType = req.body.transactionType;
@@ -797,33 +837,13 @@ router.put('/:groupId/transactions/:txId', auth, async (req, res) => {
     if (req.body.participants) transaction.participants = req.body.participants;
     if (req.body.percentages) transaction.percentages = req.body.percentages;
 
-    // Nếu thay đổi ví
-    if (req.body.walletId && req.body.walletId !== String(oldWalletId)) {
-      transaction.wallet = req.body.walletId;
-      // Hoàn tiền về ví cũ
-      if (oldWalletId) {
-        const oldWallet = await Wallet.findById(oldWalletId);
-        if (oldWallet) {
-          // Tính số tiền đã trừ khỏi ví cũ
-          let oldDeducted = Number(oldAmount);
-          if (oldType === 'payer_for_others') {
-            oldDeducted = Number(oldAmount) * (oldParticipants + 1);
-          }
-          oldWallet.initialBalance += oldDeducted;
-          await oldWallet.save();
-        }
-      }
-    }
-
     // Tính lại số tiền cần trừ khỏi ví mới
-    let newDeducted = Number(transaction.amount);
-    let participantsCount = Array.isArray(transaction.participants) ? transaction.participants.length : 0;
-    if (transaction.transactionType === 'payer_for_others') {
-      newDeducted = Number(transaction.amount) * (participantsCount + 1);
-    }
+    const newWalletId = transaction.wallet;
+    const newDeducted = getWalletRefundAmount(transaction);
+
     // Trừ tiền từ ví mới
-    if (transaction.wallet) {
-      const newWallet = await Wallet.findById(transaction.wallet);
+    if (newWalletId) {
+      const newWallet = await Wallet.findById(newWalletId);
       if (!newWallet) {
         return res.status(404).json({ message: 'Wallet not found' });
       }
@@ -834,7 +854,7 @@ router.put('/:groupId/transactions/:txId', auth, async (req, res) => {
       await newWallet.save();
     }
 
-    // Nếu sửa kiểu giao dịch hoặc participants/percentages thì cập nhật lại shareAmount cho từng participant
+    // Cập nhật lại shareAmount cho từng participant
     if (req.body.transactionType || req.body.participants || req.body.percentages || req.body.amount) {
       let updatedParticipants = Array.isArray(transaction.participants) ? transaction.participants : [];
       if (transaction.transactionType === 'payer_for_others') {
@@ -889,133 +909,30 @@ router.put('/:groupId/transactions/:txId', auth, async (req, res) => {
   }
 });
 
-// DELETE /api/groups/:groupId/transactions/:txId - Delete transaction
+// DELETE /api/groups/:groupId/transactions/:txId - Xóa giao dịch nhóm
 router.delete('/:groupId/transactions/:txId', auth, async (req, res) => {
   try {
     const { groupId, txId } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(groupId) || !mongoose.Types.ObjectId.isValid(txId)) {
-      return res.status(400).json({ message: 'Invalid ID format' });
-    }
-
-    const transaction = await GroupTransaction.findById(txId);
+    const Transaction = require('../models/GroupTransaction');
+    const Wallet = mongoose.model('Wallet');
+    const transaction = await Transaction.findById(txId);
     if (!transaction) {
       return res.status(404).json({ message: 'Transaction not found' });
     }
 
-    if (!belongsToGroup(transaction, groupId)) {
-      return res.status(400).json({ message: 'Transaction does not belong to this group' });
-    }
-
-    if (String(transaction.createdBy) !== String(req.user._id)) {
-      return res.status(403).json({ message: 'Only the creator can delete this transaction' });
-    }
-
-    const Wallet = mongoose.model('Wallet');
-
-    let totalUnsettled = 0;
-    let payerRefund = 0;
-
-    // Đối với payer_for_others: tổng số tiền đã trừ là amount * (participants.length + 1)
-    let totalDeducted = Number(transaction.amount);
-    if (transaction.transactionType === 'payer_for_others') {
-      totalDeducted = Number(transaction.amount) * (transaction.participants.length + 1);
-    }
-
-    // Tính tổng đã trả nợ (settled) và hoàn lại cho participant
-    let totalSettled = 0;
-    for (const participant of transaction.participants) {
-      if (participant.settled && participant.wallet) {
-        const participantWallet = await Wallet.findById(participant.wallet);
-        if (participantWallet) {
-          participantWallet.initialBalance += participant.shareAmount;
-          await participantWallet.save();
-          totalSettled += participant.shareAmount;
-        }
+    // Hoàn lại tiền cho ví khi xóa giao dịch
+    const refundAmount = getWalletRefundAmount(transaction);
+    if (transaction.wallet) {
+      const wallet = await Wallet.findById(transaction.wallet);
+      if (wallet) {
+        wallet.initialBalance += refundAmount;
+        await wallet.save();
       }
     }
 
-    // Số tiền hoàn lại cho payer là tổng đã trừ - tổng đã trả nợ
-    payerRefund = totalDeducted - totalSettled;
+    await Transaction.findByIdAndDelete(txId);
 
-    if (payerRefund > 0 && transaction.wallet) {
-      const payerWallet = await Wallet.findById(transaction.wallet);
-      if (payerWallet) {
-        payerWallet.initialBalance += payerRefund;
-        await payerWallet.save();
-      }
-    }
-
-    // Get information needed for notifications before deleting
-    const title = transaction.title || 'Không tiêu đề';
-    const unsettledParticipants = transaction.participants
-      ? transaction.participants.filter(p => !p.settled && p.user)
-      : [];
-    
-    // Delete the transaction
-    await transaction.deleteOne();
-    
-    // Notify unsettled participants that their debt has been cleared
-    for (const participant of unsettledParticipants) {
-      if (!participant.user) continue;
-      
-      try {
-        await Notification.create({
-          recipient: participant.user,
-          sender: req.user._id,
-          type: 'group.transaction.deleted',
-          message: `${req.user.name || 'Người dùng'} đã xóa giao dịch "${title}". Khoản nợ ${participant.shareAmount.toLocaleString('vi-VN')}đ của bạn đã được hủy.`,
-          data: {
-            previousTransactionId: txId,
-            groupId,
-            amount: participant.shareAmount,
-            title,
-            deletedBy: req.user._id,
-            userName: req.user.name || req.user.email || 'Người dùng',
-            deletedAt: new Date()
-          }
-        });
-        
-        // Add real-time notification
-        const io = req.app.get('io');
-        if (io) io.to(String(participant.user)).emit('notification', {
-          type: 'group.transaction.deleted',
-          message: `Giao dịch "${title}" đã bị xóa, khoản nợ ${participant.shareAmount.toLocaleString('vi-VN')}đ của bạn đã được hủy`,
-        });
-        
-      } catch (e) { 
-        console.warn('Failed to notify participant about transaction deletion', e);
-      }
-    }
-
-    // After notifying unsettled participants
-    // Notify the deleting user as well
-    try {
-      await Notification.create({
-        recipient: req.user._id,
-        sender: req.user._id,
-        type: 'group.transaction.deleted',
-        message: `Bạn đã xóa giao dịch "${title}" trong nhóm`,
-        data: {
-          previousTransactionId: txId,
-          groupId,
-          title,
-          deletedAt: new Date()
-        }
-      });
-      
-      // Send real-time notification if socket.io is available
-      const io = req.app.get('io');
-      if (io) {
-        io.to(String(req.user._id)).emit('notification', {
-          type: 'group.transaction.deleted',
-          message: `Bạn đã xóa giao dịch "${title}" trong nhóm`
-        });
-      }
-    } catch (e) {
-      console.warn('Failed to notify deleter about their own action', e);
-    }
-    
-    res.json({ message: 'Transaction deleted successfully' });
+    res.json({ message: 'Giao dịch đã được xóa thành công' });
   } catch (err) {
     console.error('Delete group transaction error:', err);
     res.status(500).json({ message: 'Server error', error: err.message });
