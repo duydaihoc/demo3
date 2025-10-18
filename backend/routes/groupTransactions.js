@@ -920,13 +920,74 @@ router.delete('/:groupId/transactions/:txId', auth, async (req, res) => {
       return res.status(404).json({ message: 'Transaction not found' });
     }
 
-    // Hoàn lại tiền cho ví khi xóa giao dịch
-    const refundAmount = getWalletRefundAmount(transaction);
-    if (transaction.wallet) {
-      const wallet = await Wallet.findById(transaction.wallet);
-      if (wallet) {
-        wallet.initialBalance += refundAmount;
-        await wallet.save();
+    // Xử lý hoàn tiền dựa trên transactionType và trạng thái settled
+    const transactionType = transaction.transactionType;
+    const amount = Number(transaction.amount) || 0;
+    
+    if (transactionType === 'payer_single') {
+      // Kiểu trả đơn: Chỉ hoàn lại tiền cho người tạo
+      if (transaction.wallet) {
+        const wallet = await Wallet.findById(transaction.wallet);
+        if (wallet) {
+          wallet.initialBalance += amount;
+          await wallet.save();
+        }
+      }
+    } else {
+      // Kiểu có nợ: payer_for_others, equal_split, percentage_split
+      const participants = Array.isArray(transaction.participants) ? transaction.participants : [];
+      const settledParticipants = participants.filter(p => p.settled);
+      const hasSettled = settledParticipants.length > 0;
+
+      if (!hasSettled) {
+        // Chưa có ai trả nợ: Hoàn tổng tiền cho người tạo
+        const totalRefund = getWalletRefundAmount(transaction);
+        if (transaction.wallet) {
+          const wallet = await Wallet.findById(transaction.wallet);
+          if (wallet) {
+            wallet.initialBalance += totalRefund;
+            await wallet.save();
+          }
+        }
+      } else {
+        // Đã có người trả nợ: Hoàn tiền cho người tạo và người đã trả
+        
+        // 1. Tính tổng tiền đã nhận từ người trả nợ
+        let totalReceived = 0;
+        for (const p of settledParticipants) {
+          totalReceived += (Number(p.shareAmount) || 0);
+        }
+
+        // 2. Tính số tiền ban đầu người tạo đã trả
+        let initialPaid = 0;
+        if (transactionType === 'payer_for_others') {
+          // Trả giúp: người tạo đã trả amount * (số người + 1)
+          initialPaid = amount * (participants.length + 1);
+        } else {
+          // equal_split hoặc percentage_split: người tạo đã trả đúng amount
+          initialPaid = amount;
+        }
+
+        // 3. Hoàn tiền cho người tạo (số tiền ban đầu - số tiền đã nhận)
+        const refundToPayer = initialPaid - totalReceived;
+        if (refundToPayer > 0 && transaction.wallet) {
+          const payerWallet = await Wallet.findById(transaction.wallet);
+          if (payerWallet) {
+            payerWallet.initialBalance += refundToPayer;
+            await payerWallet.save();
+          }
+        }
+
+        // 4. Hoàn tiền cho từng người đã trả nợ
+        for (const p of settledParticipants) {
+          if (p.wallet) {
+            const debtorWallet = await Wallet.findById(p.wallet);
+            if (debtorWallet) {
+              debtorWallet.initialBalance += (Number(p.shareAmount) || 0);
+              await debtorWallet.save();
+            }
+          }
+        }
       }
     }
 
