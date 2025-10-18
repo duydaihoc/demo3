@@ -97,17 +97,160 @@ router.get('/', requireAuth, async (req, res) => {
       filter.wallet = { $in: wallets.map(w => w._id) };
     }
 
-    // Fetch only regular (personal) transactions
+    // Fetch regular (personal) transactions
     const txs = await Transaction.find(filter)
       .sort({ date: -1 })
       .populate('wallet')
       .populate('category')
       .lean();
 
-    // Remove group transaction merging here
-    // (No group transaction logic)
+    // Fetch group transactions where the current user is involved
+    const currentUserId = req.user._id;
+    const currentUserEmail = req.user.email;
+    const groupTxs = await GroupTransaction.find({
+      $or: [
+        { createdBy: currentUserId },  // User created the transaction
+        { 'participants.user': currentUserId }, // User is a participant
+        { 'participants.email': currentUserEmail } // User's email is in participants
+      ]
+    })
+    .populate('wallet')
+    .populate('category')
+    .populate('createdBy', 'name email')
+    .lean();
 
-    res.json(txs);
+    // Fetch group information for these transactions
+    const groupIds = [...new Set(groupTxs.map(tx => tx.groupId ? tx.groupId.toString() : null).filter(Boolean))];
+    const groups = await mongoose.model('Group').find({ _id: { $in: groupIds } }).lean();
+    const groupMap = new Map(groups.map(g => [g._id.toString(), g]));
+
+    // Transform group transactions to format compatible with personal transactions
+    const transformedGroupTxs = groupTxs.map(gtx => {
+      // Determine if this user is the creator/payer
+      const isPayer = String(gtx.createdBy?._id || gtx.createdBy) === String(currentUserId);
+      
+      // Get the group info
+      const group = gtx.groupId ? groupMap.get(gtx.groupId.toString()) : null;
+      const groupName = group ? group.name : 'Nhóm';
+      
+      // Find user's participation record
+      const userParticipation = gtx.participants?.find(p => 
+        (p.user && String(p.user) === String(currentUserId)) ||
+        (p.email && p.email.toLowerCase() === currentUserEmail.toLowerCase())
+      );
+      
+      // Build transaction entries based on user's role and transaction type
+      const entries = [];
+      
+      if (isPayer) {
+        // Creator/Payer: Always show initial expense with TOTAL amount
+        entries.push({
+          ...gtx,
+          _id: `${gtx._id}_expense`,
+          title: `[${groupName}] ${gtx.title || 'Giao dịch nhóm'}`,
+          description: gtx.description || '',
+          type: 'expense', // Always an expense for creator initially
+          amount: gtx.amount, // TOTAL amount of the transaction
+          totalAmount: gtx.amount, // Store original total amount
+          date: gtx.date || gtx.createdAt,
+          groupTransaction: true,
+          groupTransactionType: gtx.transactionType,
+          groupId: gtx.groupId,
+          groupName: groupName,
+          groupRole: 'payer',
+          groupActionType: 'paid',
+          participantsCount: gtx.participants?.length || 0,
+          displayDetails: `Đã trả cho ${gtx.participants?.length || 0} người`
+        });
+        
+        // If any participants settled (repaid), show as income with exact repaid amount
+        const settledParticipants = (gtx.participants || []).filter(p => p.settled);
+        if (settledParticipants.length > 0) {
+          settledParticipants.forEach(p => {
+            // Get participant name
+            let participantName = p.email || 'thành viên';
+            if (p.user && typeof p.user === 'object') {
+              participantName = p.user.name || p.user.email || p.email || 'thành viên';
+            }
+            
+            entries.push({
+              ...gtx,
+              _id: `${gtx._id}_income_${p.user || p._id}`,
+              title: `[${groupName}] Nhận từ ${participantName}`,
+              description: `Thanh toán cho: ${gtx.title || 'Giao dịch nhóm'}`,
+              type: 'income', // Income when someone repays
+              amount: p.shareAmount || 0, // Amount received from this participant
+              totalAmount: gtx.amount, // Original total transaction amount
+              date: p.settledAt || gtx.date || gtx.createdAt,
+              groupTransaction: true,
+              groupTransactionType: gtx.transactionType,
+              groupId: gtx.groupId,
+              groupName: groupName,
+              groupRole: 'receiver',
+              groupActionType: 'received',
+              fromParticipant: participantName,
+              displayDetails: `Nhận ${p.shareAmount} từ ${participantName}`
+            });
+          });
+        }
+      } else if (userParticipation) {
+        // Participant role
+        // Get payer name
+        const payerName = gtx.createdBy?.name || gtx.createdBy?.email || 'người tạo';
+        
+        if (userParticipation.settled) {
+          // If already paid, show as expense with exact paid amount
+          entries.push({
+            ...gtx,
+            _id: `${gtx._id}_participant_paid`,
+            title: `[${groupName}] Đã trả cho ${payerName}`,
+            description: `Thanh toán cho: ${gtx.title || 'Giao dịch nhóm'}`,
+            type: 'expense', // Expense when paying debt
+            amount: userParticipation.shareAmount || 0, // Amount this user paid
+            totalAmount: gtx.amount, // Original total transaction amount
+            date: userParticipation.settledAt || gtx.date || gtx.createdAt,
+            groupTransaction: true,
+            groupTransactionType: gtx.transactionType,
+            groupId: gtx.groupId,
+            groupName: groupName,
+            groupRole: 'participant',
+            groupActionType: 'paid',
+            toPayer: payerName,
+            displayDetails: `Đã trả ${userParticipation.shareAmount} cho ${payerName}`
+          });
+        } else {
+          // If not paid yet, show as pending with exact owed amount
+          entries.push({
+            ...gtx,
+            _id: `${gtx._id}_participant_pending`,
+            title: `[${groupName}] Cần trả cho ${payerName}`,
+            description: `Cho: ${gtx.title || 'Giao dịch nhóm'}`,
+            type: 'expense',
+            amount: userParticipation.shareAmount || 0, // Amount this user owes
+            totalAmount: gtx.amount, // Original total transaction amount
+            date: gtx.date || gtx.createdAt,
+            groupTransaction: true,
+            groupTransactionType: gtx.transactionType,
+            groupId: gtx.groupId,
+            groupName: groupName,
+            groupRole: 'participant',
+            groupActionType: 'pending',
+            toPayer: payerName,
+            isPending: true, // Mark as pending, not affecting balance
+            displayDetails: `Còn nợ ${userParticipation.shareAmount} cho ${payerName}`
+          });
+        }
+      }
+      
+      return entries;
+    }).flat(); // Flatten the array of arrays
+
+    // Combine transactions and sort by date
+    const allTransactions = [...txs, ...transformedGroupTxs].sort((a, b) => 
+      new Date(b.date) - new Date(a.date)
+    );
+
+    res.json(allTransactions);
   } catch (err) {
     console.error('List transactions error:', err);
     res.status(500).json({ message: 'Server Error', error: err.message });

@@ -1954,7 +1954,8 @@ export default function GroupTransactions() {
                               <div className="gt-selected-member-info">
                                 <div className="gt-selected-member-name">{member.name || member.email}</div>
                                 <div className="gt-selected-member-amount">
-                                  {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(editAmount || 0)}
+                                  {/* Hiển thị đúng số tiền shareAmount đã được cập nhật động */}
+                                  {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(member.shareAmount || 0)}
                                 </div>
                               </div>
                               <div className="gt-selected-member-actions">
@@ -2154,7 +2155,6 @@ export default function GroupTransactions() {
                 <p>Bạn đang trả nợ cho giao dịch: <strong>{repayTransaction.title || 'Không tiêu đề'}</strong></p>
                 <p>Số tiền cần trả: <strong>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(repayTransaction.participants.find(p => p.user && String(p.user._id || p.user) === String(currentUser.id))?.shareAmount || 0)}</strong></p>
                 <div className="gt-form-group">
-                  <label>Chọn ví để trả</label>
                   <select
                     value={repayWallet}
                     onChange={(e) => setRepayWallet(e.target.value)}

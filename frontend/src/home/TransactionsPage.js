@@ -166,6 +166,8 @@ function TransactionsPage() {
         if (txDate > ed) return false;
       }
     }
+    
+    // Không lọc theo groupTransaction, giữ tất cả các loại giao dịch
     return true;
   });
 
@@ -370,6 +372,10 @@ function TransactionsPage() {
         const wid = tx.wallet && (typeof tx.wallet === 'string' ? tx.wallet : tx.wallet._id);
         if (String(wid) !== String(walletFilter)) return false;
       }
+      
+      // Loại bỏ giao dịch nhóm đang pending (chưa thanh toán) khi tính toán số dư
+      if (tx.isPending) return false;
+      
       if (startDate || endDate) {
         const txDate = tx.date ? new Date(tx.date) : null;
         if (!txDate) return false;
@@ -603,37 +609,85 @@ function TransactionsPage() {
                 <tr><td colSpan={showWalletColumn ? 7 : 6} style={{ textAlign: 'center', color: '#888' }}>Đang tải...</td></tr>
               ) : filteredTransactions.length === 0 ? (
                 <tr><td colSpan={showWalletColumn ? 7 : 6} style={{ textAlign: 'center', color: '#888' }}>(Chưa có giao dịch)</td></tr>
-              ) : filteredTransactions
-                // Lọc bỏ giao dịch nhóm, chỉ giữ giao dịch cá nhân
-                .filter(tx => !tx.groupTransaction)
-                .map(tx => {
-                  const titleText = tx.title || tx.description || '—';
-                  const categoryLabel = tx.category ? (tx.category.name || tx.category) : '';
-                  const walletObj = tx.wallet && (typeof tx.wallet === 'string' ? null : tx.wallet);
-                  const currency = walletObj && walletObj.currency ? walletObj.currency : 'VND';
-                  let walletName = '';
-                  if (walletObj && walletObj.name) walletName = walletObj.name;
-                  else if (typeof tx.wallet === 'string') {
-                    const w = wallets.find(wt => String(wt._id) === String(tx.wallet));
-                    walletName = w ? w.name : '';
+              ) : filteredTransactions.map(tx => {
+                const titleText = tx.title || tx.description || '—';
+                const categoryLabel = tx.category ? (tx.category.name || tx.category) : '';
+                const walletObj = tx.wallet && (typeof tx.wallet === 'string' ? null : tx.wallet);
+                const currency = walletObj && walletObj.currency ? walletObj.currency : 'VND';
+                let walletName = '';
+                if (walletObj && walletObj.name) walletName = walletObj.name;
+                else if (typeof tx.wallet === 'string') {
+                  const w = wallets.find(wt => String(wt._id) === String(tx.wallet));
+                  walletName = w ? w.name : '';
+                }
+                const amountFormatted = formatCurrency(tx.amount, currency);
+                
+                // Xác định kiểu hiển thị và style cho giao dịch nhóm
+                const isGroupTx = tx.groupTransaction === true;
+                const isPending = tx.isPending === true;
+                
+                // Tính toán style và icon cho giao dịch nhóm
+                let rowStyle = {};
+                let actionIcon = '';
+                let detailText = '';
+                
+                if (isGroupTx) {
+                  detailText = tx.displayDetails || '';
+                  
+                  // Style cho các loại giao dịch nhóm khác nhau
+                  if (tx.groupRole === 'payer' && tx.groupActionType === 'paid') {
+                    rowStyle = { backgroundColor: '#fff8e1' }; // Màu vàng nhạt cho người trả tiền
+                    actionIcon = '💰 ';
+                  } else if (tx.groupRole === 'receiver') {
+                    rowStyle = { backgroundColor: '#e8f5e9' }; // Màu xanh nhạt cho người nhận
+                    actionIcon = '💸 ';
+                  } else if (tx.groupRole === 'participant' && tx.groupActionType === 'paid') {
+                    rowStyle = { backgroundColor: '#ffebee' }; // Màu đỏ nhạt cho người đã trả
+                    actionIcon = '✅ ';
+                  } else if (isPending) {
+                    rowStyle = { backgroundColor: '#f5f5f5', color: '#757575' }; // Màu xám cho giao dịch chưa thanh toán
+                    actionIcon = '⏱️ ';
                   }
-                  const amountFormatted = formatCurrency(tx.amount, currency);
+                }
 
-                  return (
-                    <tr key={tx._id}>
-                      <td>{new Date(tx.date).toLocaleDateString()}</td>
-                      <td>{titleText}</td>
-                      {showWalletColumn && <td>{walletName}</td>}
+                // Format tổng số tiền giao dịch nếu có
+                const totalAmountFormatted = tx.totalAmount && tx.totalAmount !== tx.amount ? 
+                  formatCurrency(tx.totalAmount, currency) : null;
+
+                return (
+                  <tr key={tx._id} style={rowStyle}>
+                    <td>{new Date(tx.date).toLocaleDateString()}</td>
+                    <td>
+                      {isGroupTx && actionIcon}
+                      <span style={isPending ? { fontStyle: 'italic' } : {}}>{titleText}</span>
+                      {isPending && <span style={{ color: '#f57c00', marginLeft: '5px' }}>(Chưa thanh toán)</span>}
+                      {isGroupTx && (
+                        <div style={{ fontSize: '12px', color: '#666', marginTop: '3px' }}>
+                          {detailText}
+                          {totalAmountFormatted && <span style={{ marginLeft: '5px' }}>- Tổng: {totalAmountFormatted}</span>}
+                        </div>
+                      )}
+                    </td>
+                    {showWalletColumn && <td>{walletName}</td>}
                     <td style={{ textTransform: 'capitalize' }}>{tx.type}</td>
                     <td>{categoryLabel}</td>
-                    <td>{amountFormatted}</td>
+                    <td style={isPending ? { color: '#757575', fontStyle: 'italic' } : {}}>{amountFormatted}</td>
                     <td className="tx-actions">
-                      {/* Ẩn nút sửa và xóa nếu giao dịch thuộc về nhóm */}
-                      {!tx.groupTransaction && (
+                      {/* Chỉ hiển thị nút Sửa/Xóa cho giao dịch cá nhân */}
+                      {!isGroupTx && (
                         <>
                           <button className="tx-edit-btn" onClick={() => openEdit(tx)}>Sửa</button>
                           <button className="tx-delete-btn" onClick={() => openDeleteConfirm(tx)}>Xóa</button>
                         </>
+                      )}
+                      {/* Hiển thị nút Xem chi tiết cho giao dịch nhóm */}
+                      {isGroupTx && (
+                        <button 
+                          className="tx-view-btn" 
+                          onClick={() => window.location.href = `/group/${tx.groupId}/transactions`}
+                        >
+                          Xem
+                        </button>
                       )}
                     </td>
                   </tr>
