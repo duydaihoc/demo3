@@ -650,10 +650,6 @@ function TransactionsPage() {
                   }
                 }
 
-                // Format tổng số tiền giao dịch nếu có
-                const totalAmountFormatted = tx.totalAmount && tx.totalAmount !== tx.amount ? 
-                  formatCurrency(tx.totalAmount, currency) : null;
-
                 return (
                   <tr key={tx._id} style={rowStyle}>
                     <td>{new Date(tx.date).toLocaleDateString()}</td>
@@ -661,17 +657,35 @@ function TransactionsPage() {
                       {isGroupTx && actionIcon}
                       <span style={isPending ? { fontStyle: 'italic' } : {}}>{titleText}</span>
                       {isPending && <span style={{ color: '#f57c00', marginLeft: '5px' }}>(Chưa thanh toán)</span>}
-                      {isGroupTx && (
+                      {isGroupTx && detailText && (
                         <div style={{ fontSize: '12px', color: '#666', marginTop: '3px' }}>
                           {detailText}
-                          {totalAmountFormatted && <span style={{ marginLeft: '5px' }}>- Tổng: {totalAmountFormatted}</span>}
                         </div>
                       )}
                     </td>
                     {showWalletColumn && <td>{walletName}</td>}
-                    <td style={{ textTransform: 'capitalize' }}>{tx.type}</td>
+                    <td style={{ textTransform: 'capitalize' }}>
+                      {tx.type === 'income' ? 'Thu nhập' : 'Chi tiêu'}
+                      {isGroupTx && (
+                        <div style={{ fontSize: '11px', color: '#999', marginTop: '2px' }}>
+                          ({tx.groupRole === 'payer' ? 'Người tạo' : 
+                            tx.groupRole === 'receiver' ? 'Người nhận' : 
+                            tx.groupRole === 'participant' ? 'Người nợ' : ''})
+                        </div>
+                      )}
+                    </td>
                     <td>{categoryLabel}</td>
-                    <td style={isPending ? { color: '#757575', fontStyle: 'italic' } : {}}>{amountFormatted}</td>
+                    <td style={isPending ? { color: '#757575', fontStyle: 'italic' } : {}}>
+                      {amountFormatted}
+                      {isGroupTx && tx.groupTransactionType && (
+                        <div style={{ fontSize: '11px', color: '#999', marginTop: '2px' }}>
+                          {tx.groupTransactionType === 'payer_for_others' ? 'Trả giúp' :
+                           tx.groupTransactionType === 'equal_split' ? 'Chia đều' :
+                           tx.groupTransactionType === 'percentage_split' ? 'Chia %' :
+                           tx.groupTransactionType === 'payer_single' ? 'Trả đơn' : ''}
+                        </div>
+                      )}
+                    </td>
                     <td className="tx-actions">
                       {/* Chỉ hiển thị nút Sửa/Xóa cho giao dịch cá nhân */}
                       {!isGroupTx && (
@@ -684,7 +698,7 @@ function TransactionsPage() {
                       {isGroupTx && (
                         <button 
                           className="tx-view-btn" 
-                          onClick={() => window.location.href = `/group/${tx.groupId}/transactions`}
+                          onClick={() => window.location.href = `/groups/${tx.groupId}/transactions`}
                         >
                           Xem
                         </button>

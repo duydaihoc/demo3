@@ -139,19 +139,61 @@ router.get('/', requireAuth, async (req, res) => {
         (p.email && p.email.toLowerCase() === currentUserEmail.toLowerCase())
       );
       
+      // Helper: get transaction type label in Vietnamese
+      const getTransactionTypeLabel = (type) => {
+        switch(type) {
+          case 'payer_for_others': return 'Trả giúp';
+          case 'equal_split': return 'Chia đều';
+          case 'percentage_split': return 'Chia %';
+          case 'payer_single': return 'Trả đơn';
+          default: return '';
+        }
+      };
+      
+      // Calculate actual amount paid by creator based on transaction type
+      const calculateCreatorPaidAmount = () => {
+        const participantsCount = gtx.participants?.length || 0;
+        switch(gtx.transactionType) {
+          case 'payer_for_others':
+            // Trả giúp: người tạo trả amount * (số người + 1)
+            return gtx.amount * (participantsCount + 1);
+          case 'equal_split':
+          case 'percentage_split':
+          case 'payer_single':
+          default:
+            // Các loại khác: người tạo trả đúng amount
+            return gtx.amount;
+        }
+      };
+      
       // Build transaction entries based on user's role and transaction type
       const entries = [];
       
       if (isPayer) {
-        // Creator/Payer: Always show initial expense with TOTAL amount
+        // Creator/Payer: Show initial expense with actual paid amount
+        const actualPaidAmount = calculateCreatorPaidAmount();
+        const transactionTypeLabel = getTransactionTypeLabel(gtx.transactionType);
+        const participantsCount = gtx.participants?.length || 0;
+        
+        let detailText = '';
+        if (gtx.transactionType === 'payer_for_others') {
+          detailText = `Đã trả giúp ${participantsCount} người, mỗi người ${gtx.amount.toLocaleString('vi-VN')}₫`;
+        } else if (gtx.transactionType === 'equal_split') {
+          detailText = `Chia đều cho ${participantsCount + 1} người`;
+        } else if (gtx.transactionType === 'percentage_split') {
+          detailText = `Chia theo % cho ${participantsCount} người`;
+        } else if (gtx.transactionType === 'payer_single') {
+          detailText = `Chi tiêu cá nhân`;
+        }
+        
         entries.push({
           ...gtx,
           _id: `${gtx._id}_expense`,
-          title: `[${groupName}] ${gtx.title || 'Giao dịch nhóm'}`,
+          title: `[${groupName}] ${gtx.title || 'Giao dịch nhóm'} (${transactionTypeLabel})`,
           description: gtx.description || '',
           type: 'expense', // Always an expense for creator initially
-          amount: gtx.amount, // TOTAL amount of the transaction
-          totalAmount: gtx.amount, // Store original total amount
+          amount: actualPaidAmount, // ACTUAL amount paid by creator
+          totalAmount: gtx.amount, // Store original per-person amount
           date: gtx.date || gtx.createdAt,
           groupTransaction: true,
           groupTransactionType: gtx.transactionType,
@@ -159,8 +201,8 @@ router.get('/', requireAuth, async (req, res) => {
           groupName: groupName,
           groupRole: 'payer',
           groupActionType: 'paid',
-          participantsCount: gtx.participants?.length || 0,
-          displayDetails: `Đã trả cho ${gtx.participants?.length || 0} người`
+          participantsCount: participantsCount,
+          displayDetails: detailText
         });
         
         // If any participants settled (repaid), show as income with exact repaid amount
@@ -189,7 +231,7 @@ router.get('/', requireAuth, async (req, res) => {
               groupRole: 'receiver',
               groupActionType: 'received',
               fromParticipant: participantName,
-              displayDetails: `Nhận ${p.shareAmount} từ ${participantName}`
+              displayDetails: `Nhận ${p.shareAmount.toLocaleString('vi-VN')}₫ từ ${participantName} trong ${groupName}`
             });
           });
         }
@@ -197,13 +239,23 @@ router.get('/', requireAuth, async (req, res) => {
         // Participant role
         // Get payer name
         const payerName = gtx.createdBy?.name || gtx.createdBy?.email || 'người tạo';
+        const transactionTypeLabel = getTransactionTypeLabel(gtx.transactionType);
         
         if (userParticipation.settled) {
           // If already paid, show as expense with exact paid amount
+          let detailText = `Đã trả ${userParticipation.shareAmount.toLocaleString('vi-VN')}₫ cho ${payerName} trong ${groupName}`;
+          if (gtx.transactionType === 'payer_for_others') {
+            detailText += ` (Trả giúp)`;
+          } else if (gtx.transactionType === 'equal_split') {
+            detailText += ` (Chia đều)`;
+          } else if (gtx.transactionType === 'percentage_split') {
+            detailText += ` (Chia ${userParticipation.percentage || 0}%)`;
+          }
+          
           entries.push({
             ...gtx,
             _id: `${gtx._id}_participant_paid`,
-            title: `[${groupName}] Đã trả cho ${payerName}`,
+            title: `[${groupName}] Đã trả cho ${payerName} (${transactionTypeLabel})`,
             description: `Thanh toán cho: ${gtx.title || 'Giao dịch nhóm'}`,
             type: 'expense', // Expense when paying debt
             amount: userParticipation.shareAmount || 0, // Amount this user paid
@@ -216,14 +268,23 @@ router.get('/', requireAuth, async (req, res) => {
             groupRole: 'participant',
             groupActionType: 'paid',
             toPayer: payerName,
-            displayDetails: `Đã trả ${userParticipation.shareAmount} cho ${payerName}`
+            displayDetails: detailText
           });
         } else {
           // If not paid yet, show as pending with exact owed amount
+          let detailText = `Còn nợ ${userParticipation.shareAmount.toLocaleString('vi-VN')}₫ cho ${payerName} trong ${groupName}`;
+          if (gtx.transactionType === 'payer_for_others') {
+            detailText += ` (Trả giúp)`;
+          } else if (gtx.transactionType === 'equal_split') {
+            detailText += ` (Chia đều)`;
+          } else if (gtx.transactionType === 'percentage_split') {
+            detailText += ` (Chia ${userParticipation.percentage || 0}%)`;
+          }
+          
           entries.push({
             ...gtx,
             _id: `${gtx._id}_participant_pending`,
-            title: `[${groupName}] Cần trả cho ${payerName}`,
+            title: `[${groupName}] Cần trả cho ${payerName} (${transactionTypeLabel})`,
             description: `Cho: ${gtx.title || 'Giao dịch nhóm'}`,
             type: 'expense',
             amount: userParticipation.shareAmount || 0, // Amount this user owes
@@ -237,7 +298,7 @@ router.get('/', requireAuth, async (req, res) => {
             groupActionType: 'pending',
             toPayer: payerName,
             isPending: true, // Mark as pending, not affecting balance
-            displayDetails: `Còn nợ ${userParticipation.shareAmount} cho ${payerName}`
+            displayDetails: detailText
           });
         }
       }
