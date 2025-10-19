@@ -4,13 +4,16 @@ import './AiAssistant.css';
 export default function AiAssistant() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
-    { id: 1, text: 'Xin chào! Tôi là trợ lý AI. Tôi có thể giúp bạn phân tích chi tiêu, đưa ra lời khuyên tài chính, hoặc tạo giao dịch. Hãy thử nhập "tạo giao dịch [tên giao dịch]" để bắt đầu!', sender: 'ai' }
+    { 
+      id: 1, 
+      text: 'Xin chào! Tôi là trợ lý AI tài chính.\n\nBạn có thể:\n• Chat tự nhiên: "ăn tối 20k", "cafe 50k", "mua xăng 200k"\n• Xem thống kê: "thống kê", "xem ví"\n• Sửa/xóa: "sửa giao dịch...", "xóa giao dịch..."\n\nTôi sẽ tự động hiểu và tạo giao dịch cho bạn!', 
+      sender: 'ai' 
+    }
   ]);
   const [input, setInput] = useState('');
   const [wallets, setWallets] = useState([]);
   const [awaitingWalletSelection, setAwaitingWalletSelection] = useState(false);
   const [pendingTransactionTitle, setPendingTransactionTitle] = useState('');
-  const [awaitingAmount, setAwaitingAmount] = useState(false);
   const [pendingTransactionAmount, setPendingTransactionAmount] = useState(null);
   const [awaitingEditInstruction, setAwaitingEditInstruction] = useState(false);
   const [pendingEditTransaction, setPendingEditTransaction] = useState(null);
@@ -178,68 +181,173 @@ export default function AiAssistant() {
       return;
     }
 
-    // Check if user wants to create transaction
-    if (lowerInput.startsWith('tạo giao dịch ')) {
-      const title = input.substring(14).trim(); // Remove "tạo giao dịch "
-      if (!title) {
+    // Tự động phát hiện giao dịch từ câu chat tự nhiên
+    const detectTransaction = () => {
+      const extractedAmount = extractAmount(input);
+      
+      // Các từ khóa giao dịch phổ biến
+      const transactionKeywords = [
+        'ăn', 'uống', 'cafe', 'cà phê', 'cơm', 'phở', 'bún',
+        'mua', 'xăng', 'điện', 'nước', 'internet', 'thuê',
+        'học', 'sách', 'thuốc', 'khám', 'phim', 'du lịch',
+        'lương', 'thưởng', 'nhận', 'thu'
+      ];
+      
+      const hasKeyword = transactionKeywords.some(k => lowerInput.includes(k));
+      
+      // Nếu có số tiền HOẶC có từ khóa giao dịch -> coi như muốn tạo giao dịch
+      return (extractedAmount && extractedAmount > 0) || hasKeyword;
+    };
+
+    // Check if user wants to EDIT transaction (UU TIEN CHECK TRUOC!)
+    if (lowerInput.startsWith('sửa ') || lowerInput.startsWith('sửa giao dịch ')) {
+      const editQuery = lowerInput.startsWith('sửa giao dịch ') 
+        ? input.substring(14).trim() 
+        : input.substring(4).trim();
+      
+      if (!editQuery) {
         setTimeout(() => {
-          setMessages(prev => [...prev, { id: Date.now(), text: 'Vui lòng nhập tên giao dịch sau "tạo giao dịch". Ví dụ: tạo giao dịch mua cà phê', sender: 'ai' }]);
+          setMessages(prev => [...prev, { id: Date.now(), text: '❌ Vui lòng nhập nội dung. Ví dụ: "sửa ăn tối thành 50k"', sender: 'ai' }]);
         }, 500);
         return;
       }
 
-      // Trích xuất số tiền
-      const extractedAmount = extractAmount(title);
-      if (extractedAmount) {
-        // Có số tiền, hỏi chọn ví
-        setPendingTransactionTitle(title);
-        setPendingTransactionAmount(extractedAmount);
-        setAwaitingWalletSelection(true);
-        setTimeout(() => {
-          const walletOptions = wallets.map(w => `${w.name} (ID: ${w._id})`).join('\n');
-          setMessages(prev => [...prev, { id: Date.now(), text: `Tôi đã trích xuất số tiền ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(extractedAmount)} từ "${title}".\nChọn ví cho giao dịch:\n${walletOptions}\n\nTrả lời bằng tên ví (ví dụ: ${wallets[0]?.name || 'Ví chính'})`, sender: 'ai' }]);
-        }, 500);
-      } else {
-        // Không có số tiền, hỏi số tiền trước
-        setPendingTransactionTitle(title);
-        setAwaitingAmount(true);
-        setTimeout(() => {
-          setMessages(prev => [...prev, { id: Date.now(), text: `Tôi hiểu bạn muốn tạo giao dịch "${title}". Số tiền là bao nhiêu? (Ví dụ: 50k, 100000, 50 nghìn)`, sender: 'ai' }]);
-        }, 500);
-      }
+      // Parse: "sửa ăn tối thành 50k" -> query="ăn tối", newAmount=50000
+      const parseEditCommand = (cmd) => {
+        const lowerCmd = cmd.toLowerCase();
+        let searchQuery = '';
+        let newAmount = null;
+        let newTitle = null;
+        let newCategory = null;
+        
+        // Pattern: "<search> thành <amount>"
+        const amountMatch = lowerCmd.match(/(.+?)\s+thành\s+(.+)/);
+        if (amountMatch) {
+          searchQuery = amountMatch[1].trim();
+          const updatePart = amountMatch[2].trim();
+          
+          // Thử extract amount
+          const extractedAmount = extractAmount(updatePart);
+          if (extractedAmount) {
+            newAmount = extractedAmount;
+          } else {
+            // Nếu không phải số tiền, có thể là tên mới
+            newTitle = updatePart;
+          }
+        } else {
+          searchQuery = cmd;
+        }
+        
+        return { searchQuery, newAmount, newTitle, newCategory };
+      };
+      
+      const parsed = parseEditCommand(editQuery);
+      
+      // Tìm kiếm giao dịch qua API
+      searchAndEditTransaction(parsed);
       return;
     }
 
-    // Nếu đang chờ số tiền
-    if (awaitingAmount) {
-      const amountStr = input.trim();
-      const extractedAmount = extractAmount(amountStr);
-      if (extractedAmount) {
-        setPendingTransactionAmount(extractedAmount);
-        setAwaitingAmount(false);
-        setAwaitingWalletSelection(true);
+    // Check if user wants to DELETE transaction (UU TIEN CHECK TRUOC!)
+    if (lowerInput.startsWith('xóa ') || lowerInput.startsWith('xóa giao dịch ')) {
+      const deleteQuery = lowerInput.startsWith('xóa giao dịch ') 
+        ? input.substring(14).trim() 
+        : input.substring(4).trim();
+      
+      if (!deleteQuery) {
         setTimeout(() => {
-          const walletOptions = wallets.map(w => `${w.name} (ID: ${w._id})`).join('\n');
-          setMessages(prev => [...prev, { id: Date.now(), text: `Đã hiểu số tiền ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(extractedAmount)}. Chọn ví:\n${walletOptions}\n\nTrả lời bằng tên ví (ví dụ: ${wallets[0]?.name || 'Ví chính'})`, sender: 'ai' }]);
+          setMessages(prev => [...prev, { id: Date.now(), text: '❌ Vui lòng nhập nội dung. Ví dụ: "xóa ăn tối"', sender: 'ai' }]);
         }, 500);
-      } else {
-        setTimeout(() => {
-          setMessages(prev => [...prev, { id: Date.now(), text: 'Tôi không hiểu số tiền. Vui lòng nhập lại (ví dụ: 50k, 100000, 50 nghìn)', sender: 'ai' }]);
-        }, 500);
+        return;
       }
+      
+      // Sử dụng API search mới
+      searchAndDeleteTransaction(deleteQuery);
       return;
     }
+
+    // Check if user wants to create transaction (prefix)
+    if (lowerInput.startsWith('tạo giao dịch ') || lowerInput.startsWith('tạo ')) {
+      const title = lowerInput.startsWith('tạo giao dịch ') ? input.substring(14).trim() : input.substring(4).trim();
+      if (!title) {
+        setTimeout(() => {
+          setMessages(prev => [...prev, { id: Date.now(), text: '❌ Vui lòng nhập nội dung giao dịch. Ví dụ: "tạo ăn tối 50k"', sender: 'ai' }]);
+        }, 500);
+        return;
+      }
+
+      const extractedAmount = extractAmount(title);
+      setPendingTransactionTitle(title);
+      setPendingTransactionAmount(extractedAmount);
+      setAwaitingWalletSelection(true);
+      
+      setTimeout(() => {
+        const walletButtons = wallets.map((w, i) => `${i + 1}. ${w.name}`);
+        const amountText = extractedAmount 
+          ? `💰 Số tiền: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(extractedAmount)}` 
+          : '⚠️ Chưa phát hiện số tiền (sẽ để 0đ)';
+        
+        setMessages(prev => [...prev, { 
+          id: Date.now(), 
+          text: `✅ Đã hiểu: "${title}"\n${amountText}\n\n📂 Chọn ví:\n${walletButtons.join('\n')}\n\nTrả lời số thứ tự hoặc tên ví.`, 
+          sender: 'ai' 
+        }]);
+      }, 500);
+      return;
+    }
+    
+    // Tự động phát hiện giao dịch từ câu chat tự nhiên (CHECK CUỐI CÙNG!)
+    if (!awaitingWalletSelection && !awaitingEditInstruction && 
+        !awaitingTransactionSelection && !awaitingDeleteSelection && 
+        !awaitingDeleteConfirmation && detectTransaction()) {
+      
+      const extractedAmount = extractAmount(input);
+      setPendingTransactionTitle(input.trim());
+      setPendingTransactionAmount(extractedAmount);
+      setAwaitingWalletSelection(true);
+      
+      setTimeout(() => {
+        const walletButtons = wallets.map((w, i) => `${i + 1}. ${w.name}`);
+        const amountText = extractedAmount 
+          ? `💰 Số tiền: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(extractedAmount)}` 
+          : '⚠️ Chưa phát hiện số tiền (sẽ để 0đ)';
+        
+        setMessages(prev => [...prev, { 
+          id: Date.now(), 
+          text: `🤖 Tôi hiểu bạn muốn tạo giao dịch:\n📝 Nội dung: "${input}"\n${amountText}\n\n📂 Chọn ví:\n${walletButtons.join('\n')}\n\nTrả lời số thứ tự hoặc tên ví.`, 
+          sender: 'ai' 
+        }]);
+      }, 500);
+      return;
+    }
+
+    // Đã xóa awaitingAmount flow - không cần nữa
 
     // Nếu awaiting wallet selection
     if (awaitingWalletSelection) {
-      const selectedWalletName = input.trim();
-      const selectedWallet = wallets.find(w => w.name.toLowerCase() === selectedWalletName.toLowerCase());
+      const inputTrimmed = input.trim();
+      
+      // Hỗ trợ chọn bằng số thứ tự
+      let selectedWallet = null;
+      const walletNumber = parseInt(inputTrimmed);
+      if (!isNaN(walletNumber) && walletNumber > 0 && walletNumber <= wallets.length) {
+        selectedWallet = wallets[walletNumber - 1];
+      } else {
+        // Chọn bằng tên
+        selectedWallet = wallets.find(w => w.name.toLowerCase() === inputTrimmed.toLowerCase());
+      }
+      
       if (!selectedWallet) {
         setTimeout(() => {
-          setMessages(prev => [...prev, { id: Date.now(), text: 'Tên ví không hợp lệ. Vui lòng thử lại.', sender: 'ai' }]);
+          setMessages(prev => [...prev, { id: Date.now(), text: '❌ Ví không hợp lệ. Vui lòng chọn lại số thứ tự hoặc tên ví.', sender: 'ai' }]);
         }, 500);
         return;
       }
+
+      // Hiển thị đang xử lý
+      setTimeout(() => {
+        setMessages(prev => [...prev, { id: Date.now(), text: '⏳ Đang tạo giao dịch...', sender: 'ai' }]);
+      }, 300);
 
       // Call API to create transaction
       createTransaction(pendingTransactionTitle, selectedWallet._id, pendingTransactionAmount);
@@ -249,82 +357,78 @@ export default function AiAssistant() {
       return;
     }
 
-    // Check if user wants to edit transaction
-    if (lowerInput.startsWith('sửa giao dịch ')) {
-      const editQuery = input.substring(14).trim();
-      if (!editQuery) {
-        setTimeout(() => {
-          setMessages(prev => [...prev, { id: Date.now(), text: 'Vui lòng nhập mô tả giao dịch cần sửa.', sender: 'ai' }]);
-        }, 500);
-        return;
-      }
+    // Đã di chuyển logic "sửa" lên trên
 
-      // Parse edit query: "ăn uống 50k trong ví chính"
-      const foundTransactions = findTransactionsToEdit(editQuery);
-      if (foundTransactions.length === 0) {
-        setTimeout(() => {
-          setMessages(prev => [...prev, { id: Date.now(), text: 'Không tìm thấy giao dịch phù hợp. Vui lòng kiểm tra lại mô tả.', sender: 'ai' }]);
-        }, 500);
-        return;
-      }
-
-      if (foundTransactions.length === 1) {
-        // Chỉ có một, trực tiếp hỏi sửa gì
-        setPendingEditTransaction(foundTransactions[0]);
-        setAwaitingEditInstruction(true);
-        setTimeout(() => {
-          setMessages(prev => [...prev, {
-            id: Date.now(),
-            text: `Tôi đã tìm thấy giao dịch:\n- Tên: ${foundTransactions[0].title}\n- Số tiền: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(foundTransactions[0].amount)}\n- Ngày: ${new Date(foundTransactions[0].date || foundTransactions[0].createdAt).toLocaleDateString('vi-VN')}\n- Ví: ${foundTransactions[0].wallet?.name || 'N/A'}\n\nBạn muốn sửa gì? (Ví dụ: "thay đổi số tiền thành 60k", "thay đổi danh mục thành ăn uống")`,
-            sender: 'ai'
-          }]);
-        }, 500);
-      } else {
-        // Nhiều giao dịch, hỏi chọn cái nào
-        setMatchingTransactions(foundTransactions);
-        setAwaitingTransactionSelection(true);
-        const options = foundTransactions.map((tx, idx) => `${idx + 1}. ${tx.title} - ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(tx.amount)} (${tx.wallet?.name || 'N/A'}) - ${new Date(tx.date || tx.createdAt).toLocaleDateString('vi-VN')}`).join('\n');
-        setTimeout(() => {
-          setMessages(prev => [...prev, {
-            id: Date.now(),
-            text: `Tôi tìm thấy ${foundTransactions.length} giao dịch phù hợp:\n${options}\n\nNhập số thứ tự để chọn giao dịch cần sửa (ví dụ: 1)`,
-            sender: 'ai'
-          }]);
-        }, 500);
-      }
-      return;
-    }
-
-    // If awaiting transaction selection
+    // If awaiting transaction selection (for edit)
     if (awaitingTransactionSelection) {
       const choice = parseInt(input.trim());
       if (isNaN(choice) || choice < 1 || choice > matchingTransactions.length) {
         setTimeout(() => {
-          setMessages(prev => [...prev, { id: Date.now(), text: 'Số thứ tự không hợp lệ. Vui lòng nhập lại.', sender: 'ai' }]);
+          setMessages(prev => [...prev, { id: Date.now(), text: '❌ Số không hợp lệ. Vui lòng nhập 1-' + matchingTransactions.length, sender: 'ai' }]);
         }, 500);
         return;
       }
 
       const selectedTx = matchingTransactions[choice - 1];
-      setPendingEditTransaction(selectedTx);
+      const parsed = pendingEditTransaction?.parsed;
+      
       setAwaitingTransactionSelection(false);
       setMatchingTransactions([]);
-      setAwaitingEditInstruction(true);
-      setTimeout(() => {
-        setMessages(prev => [...prev, {
-          id: Date.now(),
-          text: `Đã chọn giao dịch:\n- Tên: ${selectedTx.title}\n- Số tiền: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(selectedTx.amount)}\n- Ngày: ${new Date(selectedTx.date || selectedTx.createdAt).toLocaleDateString('vi-VN')}\n- Ví: ${selectedTx.wallet?.name || 'N/A'}\n\nBạn muốn sửa gì? (Ví dụ: "thay đổi số tiền thành 60k", "thay đổi danh mục thành ăn uống")`,
-          sender: 'ai'
-        }]);
-      }, 500);
+      setPendingEditTransaction(null);
+      
+      // Nếu có parsed (từ auto-detect), tự động sửa
+      if (parsed && (parsed.newAmount !== null || parsed.newTitle)) {
+        const updates = {};
+        if (parsed.newAmount !== null) updates.amount = parsed.newAmount;
+        if (parsed.newTitle) updates.title = parsed.newTitle;
+        
+        editTransactionAI(selectedTx._id, updates, selectedTx);
+      } else {
+        // Không có parsed, hỏi muốn sửa gì
+        setPendingEditTransaction(selectedTx);
+        setAwaitingEditInstruction(true);
+        setTimeout(() => {
+          setMessages(prev => [...prev, {
+            id: Date.now(),
+            text: `✅ Đã chọn: "${selectedTx.title}" (${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(selectedTx.amount)})\n\nBạn muốn sửa gì?\nVí dụ: "thành 60k", "thành cafe buoi sang"`,
+            sender: 'ai'
+          }]);
+        }, 500);
+      }
       return;
     }
 
     // If awaiting edit instruction
     if (awaitingEditInstruction && pendingEditTransaction) {
-      editTransaction(pendingEditTransaction, input.trim());
+      const instruction = input.trim();
+      const tx = pendingEditTransaction;
+      
+      // Parse instruction: "thành 60k" or "thành cafe"
+      const updates = {};
+      
+      if (instruction.toLowerCase().startsWith('thành ')) {
+        const newValue = instruction.substring(5).trim();
+        const extractedAmount = extractAmount(newValue);
+        
+        if (extractedAmount) {
+          updates.amount = extractedAmount;
+        } else {
+          updates.title = newValue;
+        }
+      } else {
+        // Thử parse tự do
+        const extractedAmount = extractAmount(instruction);
+        if (extractedAmount) {
+          updates.amount = extractedAmount;
+        } else {
+          updates.title = instruction;
+        }
+      }
+      
       setAwaitingEditInstruction(false);
       setPendingEditTransaction(null);
+      
+      editTransactionAI(tx._id, updates, tx);
       return;
     }
 
@@ -401,11 +505,13 @@ export default function AiAssistant() {
 
     // If awaiting delete confirmation
     if (awaitingDeleteConfirmation && pendingEditTransaction) {
-      const confirm = input.trim().toLowerCase();
-      if (confirm === 'có' || confirm === 'yes' || confirm === 'ok') {
-        deleteTransaction(pendingEditTransaction);
+      const lowerInput = input.toLowerCase().trim();
+      if (lowerInput === 'có' || lowerInput === 'yes' || lowerInput === 'ok' || lowerInput === 'xóa') {
+        deleteTransactionAI(pendingEditTransaction._id, pendingEditTransaction);
+        setAwaitingDeleteConfirmation(false);
+        setPendingEditTransaction(null);
       } else {
-        setMessages(prev => [...prev, { id: Date.now(), text: 'Đã hủy xóa giao dịch.', sender: 'ai' }]);
+        setMessages(prev => [...prev, { id: Date.now(), text: '❌ Đã hủy xóa.', sender: 'ai' }]);
         setAwaitingDeleteConfirmation(false);
         setPendingEditTransaction(null);
       }
@@ -414,11 +520,212 @@ export default function AiAssistant() {
 
     // Default AI response
     setTimeout(() => {
-      const aiResponse = { id: Date.now(), text: 'Cảm ơn bạn đã hỏi! Tôi đang học cách trả lời tốt hơn. Hãy thử tạo giao dịch bằng cách nhập "tạo giao dịch [tên]".', sender: 'ai' };
+      const aiResponse = { id: Date.now(), text: '🤔 Tôi chưa hiểu yêu cầu này. Bạn có thể:\n\n💸 Tạo giao dịch: "ăn tối 50k", "cafe 30k"\n📊 Xem thống kê: "thống kê"\n📂 Xem ví: "xem ví"\n✏️ Sửa/xóa: "sửa giao dịch...", "xóa giao dịch..."', sender: 'ai' };
       setMessages(prev => [...prev, aiResponse]);
     }, 1000);
   };
 
+  // Helper: Search and edit transaction
+  const searchAndEditTransaction = async (parsed) => {
+    try {
+      setMessages(prev => [...prev, { id: Date.now(), text: '⏳ Đang tìm kiếm giao dịch...', sender: 'ai' }]);
+      
+      const res = await fetch(`${API_BASE}/api/ai/search-transactions?query=${encodeURIComponent(parsed.searchQuery)}&limit=5`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (!res.ok) throw new Error('Không thể tìm kiếm giao dịch');
+      
+      const foundTransactions = await res.json();
+      
+      if (foundTransactions.length === 0) {
+        setMessages(prev => [...prev, { 
+          id: Date.now(), 
+          text: `❌ Không tìm thấy giao dịch chứa "${parsed.searchQuery}".\n\n💡 Thử tìm kiếm khác hoặc xem "thống kê"`, 
+          sender: 'ai' 
+        }]);
+        return;
+      }
+      
+      if (foundTransactions.length === 1) {
+        // Chỉ 1 giao dịch -> tự động sửa
+        const tx = foundTransactions[0];
+        const updates = {};
+        if (parsed.newAmount !== null) updates.amount = parsed.newAmount;
+        if (parsed.newTitle) updates.title = parsed.newTitle;
+        
+        await editTransactionAI(tx._id, updates, tx);
+      } else {
+        // Nhiều giao dịch -> cho chọn
+        setMatchingTransactions(foundTransactions);
+        setAwaitingTransactionSelection(true);
+        // Lưu parsed để dùng sau
+        setPendingEditTransaction({ parsed });
+        
+        const options = foundTransactions.map((tx, idx) => 
+          `${idx + 1}. ${tx.title} - ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(tx.amount)} (${tx.wallet?.name || 'N/A'})`
+        ).join('\n');
+        
+        setMessages(prev => [...prev, {
+          id: Date.now(),
+          text: `🔍 Tìm thấy ${foundTransactions.length} giao dịch:\n${options}\n\nChọn số thứ tự (1-${foundTransactions.length}):`,
+          sender: 'ai'
+        }]);
+      }
+    } catch (err) {
+      console.error('Search transaction error:', err);
+      setMessages(prev => [...prev, { id: Date.now(), text: `❌ Lỗi: ${err.message}`, sender: 'ai' }]);
+    }
+  };
+  
+  // Helper: Search and delete transaction
+  const searchAndDeleteTransaction = async (query) => {
+    try {
+      setMessages(prev => [...prev, { id: Date.now(), text: '⏳ Đang tìm kiếm giao dịch...', sender: 'ai' }]);
+      
+      const res = await fetch(`${API_BASE}/api/ai/search-transactions?query=${encodeURIComponent(query)}&limit=5`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (!res.ok) throw new Error('Không thể tìm kiếm giao dịch');
+      
+      const foundTransactions = await res.json();
+      
+      if (foundTransactions.length === 0) {
+        setMessages(prev => [...prev, { 
+          id: Date.now(), 
+          text: `❌ Không tìm thấy giao dịch chứa "${query}".`, 
+          sender: 'ai' 
+        }]);
+        return;
+      }
+      
+      if (foundTransactions.length === 1) {
+        // Chỉ 1 giao dịch -> hỏi xác nhận
+        const tx = foundTransactions[0];
+        setPendingEditTransaction(tx);
+        setAwaitingDeleteConfirmation(true);
+        
+        setTimeout(() => {
+          setMessages(prev => [...prev, {
+            id: Date.now(),
+            text: `🗑️ Tìm thấy:\n📝 ${tx.title}\n💰 ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(tx.amount)}\n💼 ${tx.wallet?.name || 'N/A'}\n\nXác nhận xóa? (Trả lời "có" hoặc "không")`,
+            sender: 'ai'
+          }]);
+        }, 500);
+      } else {
+        // Nhiều giao dịch -> cho chọn
+        setDeleteMatchingTransactions(foundTransactions);
+        setAwaitingDeleteSelection(true);
+        
+        const options = foundTransactions.map((tx, idx) => 
+          `${idx + 1}. ${tx.title} - ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(tx.amount)} (${tx.wallet?.name || 'N/A'})`
+        ).join('\n');
+        
+        setMessages(prev => [...prev, {
+          id: Date.now(),
+          text: `🔍 Tìm thấy ${foundTransactions.length} giao dịch:\n${options}\n\nChọn số thứ tự (1-${foundTransactions.length}):`,
+          sender: 'ai'
+        }]);
+      }
+    } catch (err) {
+      console.error('Search transaction error:', err);
+      setMessages(prev => [...prev, { id: Date.now(), text: `❌ Lỗi: ${err.message}`, sender: 'ai' }]);
+    }
+  };
+  
+  // Helper: Delete transaction using AI API
+  const deleteTransactionAI = async (transactionId, txInfo) => {
+    try {
+      setMessages(prev => [...prev, { id: Date.now(), text: '⏳ Đang xóa giao dịch...', sender: 'ai' }]);
+      
+      const res = await fetch(`${API_BASE}/api/ai/delete-transaction`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ transactionId })
+      });
+      
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.message || 'Lỗi xóa giao dịch');
+      }
+      
+      const data = await res.json();
+      
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        text: `✅ Đã xóa giao dịch thành công!\n\n🗑️ Đã xóa: "${data.deletedTransaction.title}"\n💰 Số tiền: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(data.deletedTransaction.amount)}\n\n💼 Ví: ${data.deletedTransaction.wallet}\n🔄 Số dư mới: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(data.aiDecisions.newWalletBalance)}`,
+        sender: 'ai'
+      }]);
+      
+      // Refresh transactions
+      fetch(`${API_BASE}/api/transactions`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(data => setTransactions(data || []));
+        
+    } catch (err) {
+      console.error('Delete transaction AI error:', err);
+      setMessages(prev => [...prev, { id: Date.now(), text: `❌ Lỗi: ${err.message}`, sender: 'ai' }]);
+    }
+  };
+  
+  // Helper: Edit transaction using AI API  
+  const editTransactionAI = async (transactionId, updates, oldTx) => {
+    try {
+      setMessages(prev => [...prev, { id: Date.now(), text: '⏳ Đang cập nhật giao dịch...', sender: 'ai' }]);
+      
+      const res = await fetch(`${API_BASE}/api/ai/edit-transaction`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ transactionId, updates })
+      });
+      
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.message || 'Lỗi cập nhật giao dịch');
+      }
+      
+      const data = await res.json();
+      
+      // Hiển thị kết quả
+      const changedFields = [];
+      if (updates.amount !== undefined) {
+        changedFields.push(`💰 Số tiền: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(oldTx.amount)} → ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(updates.amount)}`);
+      }
+      if (updates.title) {
+        changedFields.push(`📝 Tên: "${oldTx.title}" → "${updates.title}"`);
+      }
+      if (updates.categoryName) {
+        changedFields.push(`📁 Danh mục: → "${updates.categoryName}"`);
+      }
+      
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        text: `✅ Đã cập nhật giao dịch thành công!\n\n${changedFields.join('\n')}\n\n💼 Ví: ${data.transaction.wallet.name}\n🔄 Số dư mới: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(data.transaction.wallet.initialBalance)}`,
+        sender: 'ai'
+      }]);
+      
+      // Refresh transactions
+      fetch(`${API_BASE}/api/transactions`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(data => setTransactions(data || []));
+        
+    } catch (err) {
+      console.error('Edit transaction AI error:', err);
+      setMessages(prev => [...prev, { id: Date.now(), text: `❌ Lỗi: ${err.message}`, sender: 'ai' }]);
+    }
+  };
+  
   const createTransaction = async (title, walletId, amount) => {
     try {
       const res = await fetch(`${API_BASE}/api/ai/create-transaction`, {
@@ -437,9 +744,12 @@ export default function AiAssistant() {
         setMessages(prev => [...prev, { id: Date.now(), text: data.aiMessage, sender: 'ai' }]);
       } else if (res.ok) {
         // Thành công tạo giao dịch
+        const typeEmoji = data.aiDecisions.guessedType === 'income' ? '💰' : '💸';
+        const typeText = data.aiDecisions.guessedType === 'income' ? 'Thu nhập' : 'Chi tiêu';
+        
         setMessages(prev => [...prev, {
           id: Date.now(),
-          text: `✅ Giao dịch "${title}" đã được tạo thành công!\nSố tiền: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount)}\nLoại: ${data.aiDecisions.guessedType}\nDanh mục: ${data.aiDecisions.selectedCategory}\nVí: ${data.transaction.wallet.name}`,
+          text: `✅ Tạo giao dịch thành công!\n\n${typeEmoji} ${typeText}: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount)}\n📁 Danh mục: ${data.aiDecisions.selectedCategory}\n💼 Ví: ${data.transaction.wallet.name}\n📝 Nội dung: "${title}"\n\n🔄 Số dư mới: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format((data.transaction.wallet.balance || 0) + data.aiDecisions.balanceChange)}`,
           sender: 'ai'
         }]);
       } else {
@@ -631,7 +941,7 @@ export default function AiAssistant() {
               <div className="ai-input-container">
                 <input
                   type="text"
-                  placeholder="Nhập câu hỏi hoặc 'tạo giao dịch [tên]'..."
+                  placeholder="Chat tự nhiên: 'ăn tối 50k', 'cafe 30k', 'xem ví'..."
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyPress={handleKeyPress}
