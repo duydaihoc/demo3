@@ -829,6 +829,15 @@ export default function GroupTransactions() {
       participants = participants.map(p => ({ ...p, shareAmount: Number(editAmount) }));
     }
     
+    // Validation: Giao dịch ghi nợ phải có người tham gia
+    const debtTransactionTypes = ['payer_for_others', 'equal_split', 'percentage_split'];
+    if (debtTransactionTypes.includes(editTransactionType)) {
+      if (!participants || participants.length === 0) {
+        alert('⚠️ Giao dịch ghi nợ phải có ít nhất 1 người tham gia.\nVui lòng chọn người tham gia hoặc chuyển sang loại "Trả đơn".');
+        return;
+      }
+    }
+    
     // Build payload
     const payload = {
       title: editTitle,
@@ -1436,8 +1445,51 @@ export default function GroupTransactions() {
                         <div className="gt-item-body">
                           <div className="gt-meta">
                             <div className="gt-payer">
-                              <span className="gt-label">Người trả:</span> 
-                              <strong>{tx.payer ? (tx.payer.name || tx.payer.email || 'Người trả') : 'Chưa xác định'}</strong>
+                              <span className="gt-label">Người tạo:</span> 
+                              <strong>{(() => {
+                                console.log('Transaction debug:', { 
+                                  txId: tx._id, 
+                                  createdBy: tx.createdBy, 
+                                  createdByType: typeof tx.createdBy,
+                                  payer: tx.payer,
+                                  payerType: typeof tx.payer
+                                });
+                                
+                                // 1. Ưu tiên lấy từ createdBy object
+                                if (tx.createdBy && typeof tx.createdBy === 'object') {
+                                  return tx.createdBy.name || (tx.createdBy.email ? tx.createdBy.email.split('@')[0] : 'Người tạo');
+                                }
+                                
+                                // 2. Nếu createdBy là string ID, thử tìm trong group members
+                                if (tx.createdBy && typeof tx.createdBy === 'string') {
+                                  // Kiểm tra xem có phải là current user không
+                                  if (currentUser && String(tx.createdBy) === String(currentUser.id)) {
+                                    return currentUser.name || currentUser.email?.split('@')[0] || 'Bạn';
+                                  }
+                                  // Thử tìm trong group members/owner
+                                  if (group) {
+                                    if (group.owner && String(group.owner._id || group.owner) === String(tx.createdBy)) {
+                                      return group.owner.name || group.owner.email?.split('@')[0] || 'Chủ nhóm';
+                                    }
+                                    if (Array.isArray(group.members)) {
+                                      const member = group.members.find(m => 
+                                        String(m.user?._id || m.user) === String(tx.createdBy)
+                                      );
+                                      if (member && member.user && typeof member.user === 'object') {
+                                        return member.user.name || member.user.email?.split('@')[0] || 'Thành viên';
+                                      }
+                                    }
+                                  }
+                                }
+                                
+                                // 3. Fallback sang payer
+                                if (tx.payer && typeof tx.payer === 'object') {
+                                  return tx.payer.name || (tx.payer.email ? tx.payer.email.split('@')[0] : 'Người trả');
+                                }
+                                
+                                // 4. Cuối cùng mới là "Chưa xác định"
+                                return 'Chưa xác định';
+                              })()}</strong>
                               {isPayer && <span className="gt-current-user-badge">Bạn</span>}
                             </div>
                             

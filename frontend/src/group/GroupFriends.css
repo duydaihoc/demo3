@@ -42,6 +42,7 @@
   color: #1a1a1a;
   font-weight: 700;
   background: linear-gradient(90deg, #1b74e4, #4ecdc4);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -274,6 +275,61 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Debt information styling */
+.friend-debt-info {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.debt-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+.debt-i-owe {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.debt-i-owe .debt-label {
+  color: #b91c1c;
+}
+
+.debt-i-owe .debt-amount {
+  font-weight: 700;
+  color: #991b1b;
+}
+
+.debt-they-owe {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.debt-they-owe .debt-label {
+  color: #166534;
+}
+
+.debt-they-owe .debt-amount {
+  font-weight: 700;
+  color: #14532d;
+}
+
+.debt-label {
+  font-size: 11px;
+  margin-right: 6px;
+}
+
+.debt-amount {
+  font-size: 13px;
 }
 
 .friend-actions {

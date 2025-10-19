@@ -291,6 +291,21 @@ router.post('/:groupId/transactions', auth, async (req, res) => {
       builtTransaction.participants = participantsBuilt;
     }
 
+    // Validation: Các giao dịch ghi nợ bắt buộc phải có người tham gia (ngoài người tạo)
+    const debtTransactionTypes = ['payer_for_others', 'equal_split', 'percentage_split'];
+    if (debtTransactionTypes.includes(transactionType)) {
+      const participantsList = Array.isArray(builtTransaction.participants) ? builtTransaction.participants : [];
+      // Đếm số người tham gia khác người tạo
+      const otherParticipants = participantsList.filter(p => 
+        String(p.user) !== String(req.user._id)
+      );
+      if (otherParticipants.length === 0) {
+        return res.status(400).json({ 
+          message: 'Giao dịch ghi nợ phải có ít nhất 1 người tham gia (ngoài người tạo). Vui lòng chọn người tham gia hoặc chuyển sang loại "Trả đơn".' 
+        });
+      }
+    }
+
     // Xác định số tiền cần trừ khỏi ví của người tạo
     let totalAmountToDeduct = Number(amount);
 
@@ -836,6 +851,17 @@ router.put('/:groupId/transactions/:txId', auth, async (req, res) => {
     if (req.body.description !== undefined) transaction.description = req.body.description;
     if (req.body.participants) transaction.participants = req.body.participants;
     if (req.body.percentages) transaction.percentages = req.body.percentages;
+
+    // Validation: Các giao dịch ghi nợ bắt buộc phải có người tham gia
+    const debtTransactionTypes = ['payer_for_others', 'equal_split', 'percentage_split'];
+    if (debtTransactionTypes.includes(transaction.transactionType)) {
+      const participantsList = Array.isArray(transaction.participants) ? transaction.participants : [];
+      if (participantsList.length === 0) {
+        return res.status(400).json({ 
+          message: 'Giao dịch ghi nợ phải có ít nhất 1 người tham gia. Vui lòng chọn người tham gia hoặc chuyển sang loại "Trả đơn".' 
+        });
+      }
+    }
 
     // Tính lại số tiền cần trừ khỏi ví mới
     const newWalletId = transaction.wallet;

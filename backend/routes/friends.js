@@ -3,6 +3,7 @@ const router = express.Router();
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const FriendRequest = require('../models/FriendRequest');
+const GroupTransaction = require('../models/GroupTransaction');
 const { auth } = require('../middleware/auth');
 
 // POST /api/friends/invite
@@ -148,7 +149,7 @@ router.post('/respond', auth, async (req, res) => {
   }
 });
 
-// NEW: GET /api/friends/list - trả về danh sách bạn bè của user (populated)
+// NEW: GET /api/friends/list - trả về danh sách bạn bè của user (populated) với số nợ
 router.get('/list', auth, async (req, res) => {
   try {
     const user = req.user;
@@ -158,12 +159,66 @@ router.get('/list', auth, async (req, res) => {
     const me = await User.findById(user._id).populate('friends', 'name email').lean();
     if (!me) return res.status(404).json({ message: 'User not found' });
 
-    const friends = Array.isArray(me.friends) ? me.friends.map(f => {
-      if (!f) return null;
-      return { id: (f._id || f.id), name: f.name || f.email || 'Thành viên', email: f.email || '' };
-    }).filter(Boolean) : [];
+    const friendsList = Array.isArray(me.friends) ? me.friends.filter(Boolean) : [];
+    
+    // Tính toán số nợ với từng bạn bè
+    const friendsWithDebt = await Promise.all(friendsList.map(async (friend) => {
+      const friendId = friend._id || friend.id;
+      
+      // Tìm tất cả giao dịch nhóm liên quan đến cả 2 người
+      const transactions = await GroupTransaction.find({
+        $or: [
+          // Transactions where current user is creator and friend is participant
+          {
+            createdBy: user._id,
+            'participants.user': friendId
+          },
+          // Transactions where friend is creator and current user is participant
+          {
+            createdBy: friendId,
+            'participants.user': user._id
+          }
+        ]
+      }).lean();
+      
+      let iOwe = 0; // Số tiền tôi nợ bạn bè này
+      let theyOwe = 0; // Số tiền bạn bè này nợ tôi
+      
+      transactions.forEach(tx => {
+        const isCreator = String(tx.createdBy) === String(user._id);
+        
+        if (isCreator) {
+          // Tôi là người tạo, tính số tiền bạn bè nợ tôi
+          const friendParticipant = (tx.participants || []).find(p => 
+            String(p.user) === String(friendId)
+          );
+          
+          if (friendParticipant && !friendParticipant.settled) {
+            theyOwe += friendParticipant.shareAmount || 0;
+          }
+        } else {
+          // Bạn bè là người tạo, tính số tiền tôi nợ bạn bè
+          const myParticipant = (tx.participants || []).find(p => 
+            String(p.user) === String(user._id)
+          );
+          
+          if (myParticipant && !myParticipant.settled) {
+            iOwe += myParticipant.shareAmount || 0;
+          }
+        }
+      });
+      
+      return {
+        id: friendId,
+        name: friend.name || friend.email || 'Thành viên',
+        email: friend.email || '',
+        iOwe: Number(iOwe.toFixed(2)), // Số tiền tôi nợ bạn này
+        theyOwe: Number(theyOwe.toFixed(2)), // Số tiền bạn này nợ tôi
+        netDebt: Number((iOwe - theyOwe).toFixed(2)) // Số nợ ròng (+ = tôi nợ, - = họ nợ tôi)
+      };
+    }));
 
-    return res.json(friends);
+    return res.json(friendsWithDebt);
   } catch (err) {
     console.error('Friends list error:', err);
     res.status(500).json({ message: 'Server error', error: err.message });

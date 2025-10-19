@@ -27,7 +27,15 @@ export default function GroupFriends() {
       if (listRes.ok) {
         const listData = await listRes.json();
         if (Array.isArray(listData)) {
-          setFriends(listData.map(f => ({ id: f.id || f._id || f._id, name: f.name || f.email || 'Thành viên', email: f.email || '' })));
+          setFriends(listData.map(f => ({ 
+            id: f.id || f._id, 
+            name: f.name || f.email || 'Thành viên', 
+            email: f.email || '',
+            iOwe: f.iOwe || 0,
+            theyOwe: f.theyOwe || 0,
+            netDebt: f.netDebt || 0
+          })));
+          console.log('Friends with debt loaded:', listData);
           return;
         }
       }
@@ -330,12 +338,34 @@ export default function GroupFriends() {
                   <div className="friends-grid">
                     {friends.map(f => {
                       const initial = (f.name || f.email || '?')[0].toUpperCase();
+                      const iOwe = f.iOwe || 0;
+                      const theyOwe = f.theyOwe || 0;
+                      const hasDebt = iOwe > 0 || theyOwe > 0;
+                      
                       return (
                         <div key={f.id || f.email} className="friend-item">
                           <div className="friend-avatar">{initial}</div>
                           <div className="friend-meta">
                             <div className="friend-name">{f.name || 'Thành viên'}</div>
                             <div className="friend-email">{f.email || ''}</div>
+                            
+                            {/* Hiển thị thông tin nợ */}
+                            {hasDebt && (
+                              <div className="friend-debt-info">
+                                {iOwe > 0 && (
+                                  <div className="debt-item debt-i-owe">
+                                    <span className="debt-label">Bạn nợ:</span>
+                                    <span className="debt-amount">{iOwe.toLocaleString('vi-VN')}₫</span>
+                                  </div>
+                                )}
+                                {theyOwe > 0 && (
+                                  <div className="debt-item debt-they-owe">
+                                    <span className="debt-label">Nợ bạn:</span>
+                                    <span className="debt-amount">{theyOwe.toLocaleString('vi-VN')}₫</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                           <div className="friend-actions">
                             <button className="remove-btn" onClick={() => handleRemoveFriend(f.id || f._id || f.email)} title="Xóa bạn bè">

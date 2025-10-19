@@ -206,35 +206,6 @@ export default function GroupMemberPage() {
 		return 'U';
 	};
 
-	// NEW helper: resolve payer info (id + name) for a transaction
-	const getTransactionPayer = (tx) => {
-		if (!tx) return { id: null, name: 'Người trả' };
-		// if populated object, use it
-		if (tx.payer && typeof tx.payer === 'object') {
-			return {
-				id: tx.payer._id || tx.payer.id || null,
-				name: tx.payer.name || tx.payer.email || String(tx.payer._id || tx.payer.id || tx.payer)
-			};
-		}
-		// raw string (could be id or email) or createdBy fallback
-		const raw = tx.payer || tx.createdBy || '';
-		const id = (typeof raw === 'string' && raw) ? raw : (raw && (raw._id || raw.id) ? String(raw._id || raw.id) : null);
-
-		// try to resolve from group (owner or members)
-		if (id && group) {
-			const resolved = getUserNameById(id);
-			if (resolved) return { id, name: resolved };
-		}
-
-		// if raw looks like email, show it
-		if (typeof raw === 'string' && raw.includes('@')) {
-			return { id, name: raw };
-		}
-
-		// fallback: show truncated id
-		return { id, name: id ? `Người trả #${String(id).substring(0,6)}...` : 'Người trả' };
-	};
-
 	// Thêm hàm tra cứu tên/email từ id
 	const getUserNameById = (userId) => {
 		if (!userId) return null;
@@ -251,7 +222,13 @@ export default function GroupMemberPage() {
 				const mUserId = m.user && (m.user._id ? String(m.user._id) : String(m.user));
 				return mUserId && String(mUserId) === String(userId);
 			});
-			if (member) return member.name || member.email || String(userId);
+			if (member) {
+				// Ưu tiên lấy tên từ member.user.name, nếu không có thì member.name, cuối cùng mới là email
+				if (member.user && typeof member.user === 'object') {
+					return member.user.name || member.user.email || member.name || member.email || String(userId);
+				}
+				return member.name || member.email || String(userId);
+			}
 		}
 		return null;
 	};
@@ -571,26 +548,36 @@ export default function GroupMemberPage() {
 												{iOwe.length === 0 ? <div className="gm-empty-state-text">Bạn không nợ ai</div> :
 													<ul className="gm-members-list">
 														{iOwe.map((entry,i) => {
-															const payerInfo = getTransactionPayer(entry.tx);
-															// Nếu payerInfo.name là id, chuyển thành tên/email
-															let payerName = payerInfo.name;
-															if (
-																payerName &&
-																!/[@.]/.test(payerName) && // không phải email
-																payerName.length > 10 // id thường dài
-															) {
-																payerName = getUserNameById(payerInfo.id || payerName);
-															}
+															const tx = entry.tx;
 															const p = entry.participant;
+															
+															// Lấy thông tin người tạo/payer
+															let payerName = 'Người trả';
+															
+															// Ưu tiên lấy từ createdBy (thường được populate đầy đủ hơn)
+															if (tx.createdBy && typeof tx.createdBy === 'object') {
+																payerName = tx.createdBy.name || (tx.createdBy.email ? tx.createdBy.email.split('@')[0] : 'Người trả');
+															} else if (tx.payer && typeof tx.payer === 'object') {
+																payerName = tx.payer.name || (tx.payer.email ? tx.payer.email.split('@')[0] : 'Người trả');
+															} else {
+																// Fallback: thử getUserNameById
+																const payerId = tx.createdBy || tx.payer;
+																const resolved = getUserNameById(payerId);
+																if (resolved) {
+																	// Nếu resolved là email, extract tên
+																	payerName = resolved.includes('@') ? resolved.split('@')[0] : resolved;
+																}
+															}
+															
 															return (
 																<li key={i} className="gm-member-item">
 																	<div style={{flex:1}}>
 																		<div className="gm-member-name">{payerName}</div>
-																		<div className="gm-member-email">Giao dịch: {entry.tx.title || 'Không tiêu đề'}</div>
+																		<div className="gm-member-email">Giao dịch: {tx.title || 'Không tiêu đề'}</div>
 																	</div>
 																	<div style={{textAlign:'right'}}>
 																		<div style={{fontWeight:700}}>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(p.shareAmount || 0)}</div>
-																		<button className="gm-btn primary" onClick={() => handleSettle(entry.tx._id)}>Đã trả</button>
+																		<button className="gm-btn primary" onClick={() => handleSettle(tx._id)}>Đã trả</button>
 																	</div>
 																</li>
 															);
