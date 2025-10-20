@@ -107,17 +107,26 @@ router.get('/', requireAuth, async (req, res) => {
     // Fetch group transactions where the current user is involved
     const currentUserId = req.user._id;
     const currentUserEmail = req.user.email;
+    
+    // Query phải bao gồm TẤT CẢ các trường hợp:
+    // 1. User tạo giao dịch (createdBy)
+    // 2. User là payer
+    // 3. User là participant với user ID
+    // 4. User là participant với email (chưa có account)
     const groupTxs = await GroupTransaction.find({
       $or: [
         { createdBy: currentUserId },  // User created the transaction
-        { 'participants.user': currentUserId }, // User is a participant
-        { 'participants.email': currentUserEmail } // User's email is in participants
+        { payer: currentUserId }, // User is the payer
+        { 'participants.user': currentUserId }, // User is a participant (by ID)
+        { 'participants.email': currentUserEmail } // User is a participant (by email)
       ]
     })
     .populate('wallet')
     .populate('category')
     .populate('createdBy', 'name email')
+    .populate('payer', 'name email')
     .populate('participants.user', 'name email')
+    .populate('participants.wallet') // QUAN TRỌNG: Populate ví của participants
     .lean();
 
     // Fetch group information for these transactions
@@ -135,10 +144,13 @@ router.get('/', requireAuth, async (req, res) => {
       const groupName = group ? group.name : 'Nhóm';
       
       // Find user's participation record
-      const userParticipation = gtx.participants?.find(p => 
-        (p.user && String(p.user) === String(currentUserId)) ||
-        (p.email && p.email.toLowerCase() === currentUserEmail.toLowerCase())
-      );
+      const userParticipation = gtx.participants?.find(p => {
+        const userMatch = p.user && (
+          String(p.user._id || p.user) === String(currentUserId)
+        );
+        const emailMatch = p.email && p.email.toLowerCase() === currentUserEmail.toLowerCase();
+        return userMatch || emailMatch;
+      });
       
       // Helper: get transaction type label in Vietnamese
       const getTransactionTypeLabel = (type) => {
@@ -300,6 +312,7 @@ router.get('/', requireAuth, async (req, res) => {
             amount: userParticipation.shareAmount || 0, // Amount this user paid
             totalAmount: gtx.amount, // Original total transaction amount
             date: userParticipation.settledAt || gtx.date || gtx.createdAt,
+            wallet: userParticipation.wallet || gtx.wallet, // QUAN TRỌNG: Dùng ví của participant, không phải ví của payer!
             groupTransaction: true,
             groupTransactionType: gtx.transactionType,
             groupId: gtx.groupId,
@@ -336,6 +349,7 @@ router.get('/', requireAuth, async (req, res) => {
             amount: userParticipation.shareAmount || 0, // Amount this user owes
             totalAmount: gtx.amount, // Original total transaction amount
             date: gtx.date || gtx.createdAt,
+            wallet: userParticipation.wallet || gtx.wallet, // Dùng ví của participant nếu có
             groupTransaction: true,
             groupTransactionType: gtx.transactionType,
             groupId: gtx.groupId,

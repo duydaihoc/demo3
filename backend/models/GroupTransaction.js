@@ -6,6 +6,7 @@ const participantSchema = new mongoose.Schema({
   shareAmount: { type: Number, default: 0 },
   percentage: { type: Number, default: 0 },
   settled: { type: Boolean, default: false },
+  settledAt: { type: Date, required: false }, // Thời gian trả nợ
   wallet: { type: mongoose.Schema.Types.ObjectId, ref: 'Wallet', required: false } // Thêm trường wallet cho participant
 }, { _id: false });
 

@@ -148,8 +148,15 @@ function TransactionsPage() {
   const filteredTransactions = transactions.filter(tx => {
     // wallet filter
     if (walletFilter && walletFilter !== '') {
-      const wid = tx.wallet && (typeof tx.wallet === 'string' ? tx.wallet : tx.wallet._id);
-      if (String(wid) !== String(walletFilter)) return false;
+      // Pending transactions (chưa trả nợ nhóm) hiển thị cho tất cả ví
+      // vì chưa biết sẽ dùng ví nào để trả
+      if (tx.isPending) {
+        // show for all wallets - don't filter pending debts
+      } else {
+        // Settled transactions: filter theo ví đã dùng
+        const wid = tx.wallet && (typeof tx.wallet === 'string' ? tx.wallet : tx.wallet._id);
+        if (String(wid) !== String(walletFilter)) return false;
+      }
     }
     // date filter: tx.date may be string or Date
     if (startDate || endDate) {
@@ -368,13 +375,14 @@ function TransactionsPage() {
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
     const list = (transactions || []).filter(tx => {
+      // Loại bỏ giao dịch nhóm đang pending (chưa thanh toán) khi tính toán số dư
+      if (tx.isPending) return false;
+      
       if (walletFilter && walletFilter !== '') {
+        // Settled transactions: filter theo ví đã dùng
         const wid = tx.wallet && (typeof tx.wallet === 'string' ? tx.wallet : tx.wallet._id);
         if (String(wid) !== String(walletFilter)) return false;
       }
-      
-      // Loại bỏ giao dịch nhóm đang pending (chưa thanh toán) khi tính toán số dư
-      if (tx.isPending) return false;
       
       if (startDate || endDate) {
         const txDate = tx.date ? new Date(tx.date) : null;
