@@ -55,19 +55,19 @@ export default function GroupCharts({ txs = [], members = [] }) {
 		return map;
 	}, [members]);
 
-	// Generate unique colors for each member
+	// Generate modern gradient colors for each member
 	const memberColors = useMemo(() => {
 		const colors = [
-			'rgba(54, 162, 235, 0.8)',    // Blue
-			'rgba(255, 99, 132, 0.8)',     // Red
-			'rgba(75, 192, 192, 0.8)',     // Green
-			'rgba(255, 159, 64, 0.8)',     // Orange
-			'rgba(153, 102, 255, 0.8)',    // Purple
-			'rgba(255, 205, 86, 0.8)',     // Yellow
-			'rgba(201, 203, 207, 0.8)',    // Grey
-			'rgba(0, 204, 150, 0.8)',      // Teal
-			'rgba(255, 99, 71, 0.8)',      // Tomato
-			'rgba(106, 90, 205, 0.8)',     // SlateBlue
+			'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+			'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+			'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+			'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+			'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+			'linear-gradient(135deg, #30cfd0 0%, #330867 100%)',
+			'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+			'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)',
+			'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
+			'linear-gradient(135deg, #ff6e7f 0%, #bfe9ff 100%)',
 		];
 		
 		const memberIds = Object.keys(memberNameMap);
@@ -264,30 +264,33 @@ export default function GroupCharts({ txs = [], members = [] }) {
 		labels: byDate.keys,
 		datasets: [
 			{
-				label: 'Giao dịch hàng ngày',
-				data: byDate.values,
-				backgroundColor: 'rgba(14,165,233,0.2)',
-				borderColor: 'rgb(14,165,233)',
-				borderWidth: 2,
-				tension: 0.3,
-				pointRadius: 3,
-				pointHoverRadius: 5,
-				pointBackgroundColor: 'rgb(14,165,233)',
-				yAxisID: 'y',
-				fill: true
-			},
-			{
-				label: 'Tổng cộng dồn',
-				data: byDate.cumulative,
-				backgroundColor: 'rgba(236,72,153,0.1)',
-				borderColor: 'rgb(236,72,153)',
-				borderWidth: 2,
-				tension: 0.4,
-				pointRadius: 0,
-				pointHoverRadius: 4,
-				yAxisID: 'y1',
-				borderDash: []
-			}
+			label: 'Giao dịch hàng ngày',
+			data: byDate.values,
+			backgroundColor: 'rgba(102, 126, 234, 0.15)',
+			borderColor: 'rgb(102, 126, 234)',
+			borderWidth: 3,
+			tension: 0.4,
+			pointRadius: 4,
+			pointHoverRadius: 7,
+			pointBackgroundColor: 'rgb(102, 126, 234)',
+			pointBorderColor: '#fff',
+			pointBorderWidth: 2,
+			yAxisID: 'y',
+			fill: true
+		},
+		{
+			label: 'Tổng cộng dồn',
+			data: byDate.cumulative,
+			backgroundColor: 'rgba(118, 75, 162, 0.1)',
+			borderColor: 'rgb(118, 75, 162)',
+			borderWidth: 3,
+			tension: 0.4,
+			pointRadius: 0,
+			pointHoverRadius: 5,
+			pointBackgroundColor: 'rgb(118, 75, 162)',
+			yAxisID: 'y1',
+			borderDash: [5, 5]
+		}
 		]
 	};
 	
@@ -396,15 +399,29 @@ export default function GroupCharts({ txs = [], members = [] }) {
 			{
 				label: 'Số tiền nợ',
 				data: debtBalances.slice(0, 8).map(d => d.amount),
-				backgroundColor: debtBalances.slice(0, 8).map((_, idx) => 
-					`hsla(${(idx * 35) % 360}, 85%, 65%, 0.85)`
-				),
-				borderColor: debtBalances.slice(0, 8).map((_, idx) => 
-					`hsla(${(idx * 35) % 360}, 90%, 45%, 1)`
-				),
-				borderWidth: 1,
-				barPercentage: 0.75,
-				borderRadius: 6
+				backgroundColor: [
+					'rgba(239, 68, 68, 0.85)',
+					'rgba(249, 115, 22, 0.85)',
+					'rgba(245, 158, 11, 0.85)',
+					'rgba(234, 179, 8, 0.85)',
+					'rgba(132, 204, 22, 0.85)',
+					'rgba(34, 197, 94, 0.85)',
+					'rgba(20, 184, 166, 0.85)',
+					'rgba(6, 182, 212, 0.85)',
+				],
+				borderColor: [
+					'rgb(220, 38, 38)',
+					'rgb(234, 88, 12)',
+					'rgb(217, 119, 6)',
+					'rgb(202, 138, 4)',
+					'rgb(101, 163, 13)',
+					'rgb(22, 163, 74)',
+					'rgb(15, 118, 110)',
+					'rgb(8, 145, 178)',
+				],
+				borderWidth: 2,
+				barPercentage: 0.8,
+				borderRadius: 8
 			}
 		]
 	};
@@ -474,30 +491,30 @@ export default function GroupCharts({ txs = [], members = [] }) {
 		labels: memberActivity.slice(0, 6).map(m => m.name),
 		datasets: [
 			{
-				label: 'Đã trả',
+				label: '💰 Đã trả',
 				data: memberActivity.slice(0, 6).map(m => m.paid),
-				backgroundColor: 'rgba(16, 185, 129, 0.8)',
-				borderColor: 'rgb(16, 185, 129)',
-				borderWidth: 1,
-				borderRadius: 6,
+				backgroundColor: 'rgba(34, 197, 94, 0.85)',
+				borderColor: 'rgb(22, 163, 74)',
+				borderWidth: 2,
+				borderRadius: 8,
 				stack: 'Stack 0'
 			},
 			{
-				label: 'Đã mượn',
+				label: '🔴 Đã mượn',
 				data: memberActivity.slice(0, 6).map(m => m.borrowed),
-				backgroundColor: 'rgba(239, 68, 68, 0.8)',
-				borderColor: 'rgb(239, 68, 68)',
-				borderWidth: 1,
-				borderRadius: 6,
+				backgroundColor: 'rgba(239, 68, 68, 0.85)',
+				borderColor: 'rgb(220, 38, 38)',
+				borderWidth: 2,
+				borderRadius: 8,
 				stack: 'Stack 1'
 			},
 			{
-				label: 'Được nợ',
+				label: '🔵 Được nợ',
 				data: memberActivity.slice(0, 6).map(m => m.owed),
-				backgroundColor: 'rgba(59, 130, 246, 0.8)',
-				borderColor: 'rgb(59, 130, 246)',
-				borderWidth: 1,
-				borderRadius: 6,
+				backgroundColor: 'rgba(59, 130, 246, 0.85)',
+				borderColor: 'rgb(37, 99, 235)',
+				borderWidth: 2,
+				borderRadius: 8,
 				stack: 'Stack 1'
 			}
 		]

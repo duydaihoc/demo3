@@ -3,6 +3,7 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Group = require('../models/Group');
+const GroupTransaction = require('../models/GroupTransaction');
 const Notification = require('../models/Notification');
 const { auth } = require('../middleware/auth');
 
@@ -265,7 +266,6 @@ router.post('/:groupId/respond', auth, async (req, res) => {
 // owner: xóa thành viên bất kỳ; member: tự rời nhóm
 router.post('/:groupId/remove-member', auth, async (req, res) => {
   try {
-    console.log('REMOVE MEMBER request (raw)', { groupId: req.params.groupId, body: req.body, user: req.user && req.user._id });
     const { groupId } = req.params;
     const rawMember = req.body && req.body.memberId;
     if (!groupId || (typeof rawMember === 'undefined' || rawMember === null)) {
@@ -284,7 +284,6 @@ router.post('/:groupId/remove-member', auth, async (req, res) => {
       if (s.includes('@')) targetEmail = s.toLowerCase().trim();
       else targetId = s;
     }
-    console.log('REMOVE MEMBER normalized', { targetId, targetEmail });
  
     const group = await Group.findById(groupId);
     if (!group) return res.status(404).json({ message: 'Group not found' });
@@ -321,7 +320,47 @@ router.post('/:groupId/remove-member', auth, async (req, res) => {
  
     group.members.splice(idx, 1);
     await group.save();
- 
+
+    // Xóa tất cả giao dịch liên quan đến thành viên này
+    try {
+      const deleteQuery = { groupId: groupId };
+      
+      // Build query to match payer or participant
+      const conditions = [];
+      
+      if (targetId) {
+        conditions.push(
+          { payer: targetId },
+          { 'participants.user': targetId }
+        );
+        
+        // Try to convert to ObjectId if valid
+        if (mongoose.Types.ObjectId.isValid(targetId)) {
+          const objectId = new mongoose.Types.ObjectId(targetId);
+          conditions.push(
+            { payer: objectId },
+            { 'participants.user': objectId }
+          );
+        }
+      }
+      
+      if (targetEmail) {
+        conditions.push(
+          { payer: targetEmail },
+          { 'participants.email': targetEmail }
+        );
+      }
+      
+      if (conditions.length > 0) {
+        deleteQuery.$or = conditions;
+        const deleteResult = await GroupTransaction.deleteMany(deleteQuery);
+        console.log(`Deleted ${deleteResult.deletedCount} transactions for removed member`);
+      }
+    } catch (txErr) {
+      console.error('Error deleting transactions for removed member:', txErr);
+      // Continue even if transaction deletion fails
+    }
+
     // Trả về group mới
     const populated = await Group.findById(group._id)
       .populate('owner', 'name email')
@@ -406,6 +445,15 @@ router.delete('/:groupId', auth, async (req, res) => {
     // Chỉ owner được xóa nhóm
     if (String(group.owner) !== String(req.user._id)) {
       return res.status(403).json({ message: 'Chỉ chủ nhóm mới được xóa nhóm' });
+    }
+
+    // Xóa tất cả giao dịch của nhóm
+    try {
+      const deleteResult = await GroupTransaction.deleteMany({ groupId: groupId });
+      console.log(`Deleted ${deleteResult.deletedCount} transactions when deleting group`);
+    } catch (txErr) {
+      console.error('Error deleting group transactions:', txErr);
+      // Continue even if transaction deletion fails
     }
 
     await group.deleteOne();

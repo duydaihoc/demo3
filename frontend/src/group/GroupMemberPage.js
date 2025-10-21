@@ -441,19 +441,113 @@ export default function GroupMemberPage() {
 									{loadingTxs ? <div className="gm-loading-inline">Đang tải hoạt động...</div> :
 										txError ? <div className="gm-error">{txError}</div> :
 										txs.length === 0 ? <div className="gm-empty-state-text">Chưa có hoạt động</div> :
-										<ul className="gm-members-list">
-											{txs.slice(0,8).map(tx => (
-												<li key={tx._id} className="gm-member-item">
-													<div style={{flex:1}}>
-														<div style={{fontWeight:700}}>{tx.title || 'Giao dịch'}</div>
-														<div style={{fontSize:12, color:'#64748b'}}>{tx.payer ? (tx.payer.name || tx.payer.email) : 'Người trả'} • {new Date(tx.date || tx.createdAt).toLocaleString()}</div>
-													</div>
-													<div style={{textAlign:'right'}}>
-														<div style={{fontWeight:800}}>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(tx.amount || 0)}</div>
-													</div>
-												</li>
-											))}
-										</ul>
+										<>
+											{/* Transaction Type Legend */}
+											<div style={{marginBottom: 16, padding: 12, background: 'linear-gradient(135deg, #f8fafc 0%, #e7e5e4 100%)', borderRadius: 12, fontSize: 12}}>
+												<div style={{fontWeight: 700, marginBottom: 8, color: '#334155'}}><i className="fas fa-info-circle"></i> Loại giao dịch:</div>
+												<div style={{display: 'flex', flexWrap: 'wrap', gap: 8}}>
+													<span style={{padding: '4px 10px', background: '#dbeafe', color: '#1e40af', borderRadius: 8, fontSize: 11, fontWeight: 600}}>
+														<i className="fas fa-divide"></i> Chia đều
+													</span>
+													<span style={{padding: '4px 10px', background: '#d1fae5', color: '#065f46', borderRadius: 8, fontSize: 11, fontWeight: 600}}>
+														<i className="fas fa-user"></i> Trả hộ
+													</span>
+													<span style={{padding: '4px 10px', background: '#fef3c7', color: '#92400e', borderRadius: 8, fontSize: 11, fontWeight: 600}}>
+														<i className="fas fa-percent"></i> Phần trăm
+													</span>
+													<span style={{padding: '4px 10px', background: '#fce7f3', color: '#831843', borderRadius: 8, fontSize: 11, fontWeight: 600}}>
+														<i className="fas fa-wallet"></i> Cá nhân
+													</span>
+													<span style={{padding: '4px 10px', background: '#dcfce7', color: '#14532d', borderRadius: 8, fontSize: 11, fontWeight: 600}}>
+														<i className="fas fa-check-circle"></i> Đã trả nợ
+													</span>
+												</div>
+											</div>
+											
+											<ul className="gm-members-list">
+												{txs.slice(0,12).map(tx => {
+													const getTransactionTypeInfo = (type) => {
+														switch(type) {
+															case 'equal_split':
+																return { icon: 'fa-divide', label: 'Chia đều', color: '#1e40af', bg: '#dbeafe' };
+															case 'payer_for_others':
+																return { icon: 'fa-user', label: 'Trả hộ', color: '#065f46', bg: '#d1fae5' };
+															case 'percentage_split':
+																return { icon: 'fa-percent', label: 'Phần trăm', color: '#92400e', bg: '#fef3c7' };
+															case 'payer_single':
+																return { icon: 'fa-wallet', label: 'Cá nhân', color: '#831843', bg: '#fce7f3' };
+															default:
+																return { icon: 'fa-exchange-alt', label: 'Giao dịch', color: '#64748b', bg: '#f1f5f9' };
+														}
+													};
+													
+													const typeInfo = getTransactionTypeInfo(tx.transactionType);
+													const settledCount = tx.participants?.filter(p => p.settled).length || 0;
+													const totalParticipants = tx.participants?.length || 0;
+													const allSettled = totalParticipants > 0 && settledCount === totalParticipants;
+													
+													return (
+														<li key={tx._id} className="gm-member-item" style={{position: 'relative', overflow: 'visible'}}>
+															{allSettled && (
+																<div style={{
+																	position: 'absolute',
+																	top: -8,
+																	right: -8,
+																	background: '#dcfce7',
+																	color: '#14532d',
+																	padding: '4px 10px',
+																	borderRadius: 12,
+																	fontSize: 11,
+																	fontWeight: 700,
+																	zIndex: 10,
+																	boxShadow: '0 2px 8px rgba(20, 83, 45, 0.2)'
+																}}>
+																	<i className="fas fa-check-circle"></i> Đã thanh toán
+																</div>
+															)}
+															<div style={{flex:1}}>
+																<div style={{display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4}}>
+																	<span style={{
+																		padding: '3px 8px',
+																		background: typeInfo.bg,
+																		color: typeInfo.color,
+																		borderRadius: 6,
+																		fontSize: 10,
+																		fontWeight: 700
+																	}}>
+																		<i className={`fas ${typeInfo.icon}`}></i> {typeInfo.label}
+																	</span>
+																	<div style={{fontWeight:700, color: allSettled ? '#059669' : '#0f172a'}}>
+																		{tx.title || 'Giao dịch'}
+																	</div>
+																</div>
+																<div style={{fontSize:12, color:'#64748b', marginBottom: 4}}>
+																	<i className="fas fa-user"></i> {tx.payer ? (tx.payer.name || tx.payer.email) : 'Người trả'} • {new Date(tx.date || tx.createdAt).toLocaleDateString('vi-VN')}
+																</div>
+																{tx.description && <div style={{marginTop:4,color:'#475569', fontSize: 12}}>{tx.description}</div>}
+																{totalParticipants > 0 && (
+																	<div style={{marginTop: 6, fontSize: 11, color: settledCount === totalParticipants ? '#059669' : '#f59e0b'}}>
+																		<i className={`fas ${settledCount === totalParticipants ? 'fa-check-circle' : 'fa-clock'}`}></i> 
+																		{settledCount}/{totalParticipants} người đã trả
+																	</div>
+																)}
+															</div>
+															<div style={{textAlign:'right'}}>
+																<div style={{fontWeight:800, fontSize: 16, color: allSettled ? '#059669' : '#0f172a'}}>
+																	{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(tx.amount || 0)}
+																</div>
+																{tx.category && (
+																	<div style={{fontSize:11,color:'#64748b', marginTop: 4}}>
+																		{tx.category.icon && <span style={{marginRight: 4}}>{tx.category.icon}</span>}
+																		{tx.category.name}
+																	</div>
+																)}
+															</div>
+														</li>
+													);
+												})}
+											</ul>
+										</>
 									}
 								</div>
 							</div>
