@@ -267,27 +267,78 @@
 /* Stats Grid */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 16px;
 }
 
 .stat-card {
   background-color: #f8fafc;
-  border-radius: 8px;
-  padding: 16px;
+  border-radius: 12px;
+  padding: 20px;
   text-align: center;
+  border: 2px solid transparent;
+  transition: all 0.3s;
+}
+
+.stat-card:hover {
+  border-color: #2a5298;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(42, 82, 152, 0.1);
+}
+
+.stat-card.success {
+  background: linear-gradient(135deg, #dcfce7 0%, #f0fdf4 100%);
+}
+
+.stat-card.info {
+  background: linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%);
+}
+
+.stat-card.warning {
+  background: linear-gradient(135deg, #fef3c7 0%, #fefce8 100%);
+}
+
+.stat-icon {
+  font-size: 24px;
+  color: #2a5298;
+  margin-bottom: 12px;
+}
+
+.stat-card.success .stat-icon {
+  color: #16a34a;
+}
+
+.stat-card.info .stat-icon {
+  color: #0284c7;
+}
+
+.stat-card.warning .stat-icon {
+  color: #f59e0b;
 }
 
 .stat-value {
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 700;
   color: #2a5298;
   margin-bottom: 8px;
 }
 
+.stat-card.success .stat-value {
+  color: #16a34a;
+}
+
+.stat-card.info .stat-value {
+  color: #0284c7;
+}
+
+.stat-card.warning .stat-value {
+  color: #f59e0b;
+}
+
 .stat-label {
   font-size: 13px;
   color: #64748b;
+  font-weight: 500;
 }
 
 /* Members Tab */
@@ -435,8 +486,87 @@
   font-size: 14px;
 }
 
-.tx-title {
+.tx-title-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tx-title-content strong {
+  color: #334155;
+  font-weight: 600;
+}
+
+.tx-title-content small {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.payer-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #2a5298;
   font-weight: 500;
+}
+
+.payer-info i {
+  font-size: 16px;
+  color: #64748b;
+}
+
+.participant-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background-color: #e0f2fe;
+  border-radius: 12px;
+  color: #0369a1;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.settlement-stats {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.settled-count, .pending-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.settled-count {
+  color: #27ae60;
+}
+
+.pending-count {
+  color: #f39c12;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.status-badge.completed {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.status-badge.pending {
+  background-color: #fef3c7;
+  color: #a16207;
 }
 
 .tx-type {
@@ -638,6 +768,16 @@
 
   .stats-grid {
     grid-template-columns: 1fr 1fr;
+  }
+  
+  .stat-value {
+    font-size: 22px;
+  }
+  
+  .settlement-stats {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
   }
   
   .members-table-container, .transactions-table-container {

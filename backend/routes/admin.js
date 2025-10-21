@@ -188,6 +188,120 @@ router.get('/groups/:groupId', auth, async (req, res) => {
   }
 });
 
+// GET /api/admin/groups/:groupId/transactions - Admin endpoint to get group transactions with detailed stats
+router.get('/groups/:groupId/transactions', auth, async (req, res) => {
+  try {
+    // Verify admin role
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    const { groupId } = req.params;
+    if (!groupId) return res.status(400).json({ message: 'Group ID required' });
+
+    // Lấy tất cả giao dịch của nhóm
+    const GroupTransaction = mongoose.model('GroupTransaction');
+    const User = mongoose.model('User');
+    
+    const transactions = await GroupTransaction.find({ groupId })
+      .populate('category', 'name icon')
+      .populate('participants.user', 'name email')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // Collect all user IDs from payer and createdBy (vì chúng là Mixed type)
+    const userIds = new Set();
+    transactions.forEach(tx => {
+      if (tx.payer && mongoose.Types.ObjectId.isValid(tx.payer)) {
+        userIds.add(String(tx.payer));
+      }
+      if (tx.createdBy && mongoose.Types.ObjectId.isValid(tx.createdBy)) {
+        userIds.add(String(tx.createdBy));
+      }
+    });
+
+    // Batch fetch all users
+    const users = await User.find({ _id: { $in: Array.from(userIds) } })
+      .select('name email')
+      .lean();
+    const userMap = new Map(users.map(u => [String(u._id), u]));
+
+    // Thống kê chi tiết
+    let totalAmount = 0;
+    let totalDebt = 0; // Tổng tiền ghi nợ (chưa trả)
+    let totalPaid = 0; // Tổng tiền đã trả nợ
+    let totalParticipants = new Set();
+    
+    const transactionsWithDetails = transactions.map(tx => {
+      // Tổng số tiền giao dịch
+      totalAmount += tx.amount || 0;
+      
+      // Đếm participants
+      if (Array.isArray(tx.participants)) {
+        tx.participants.forEach(p => {
+          const userId = p.user?._id || p.user;
+          if (userId) totalParticipants.add(String(userId));
+          
+          // Tính nợ và đã trả
+          if (p.settled) {
+            totalPaid += p.shareAmount || 0;
+          } else {
+            totalDebt += p.shareAmount || 0;
+          }
+        });
+      }
+      
+      // Lookup payer và createdBy từ userMap
+      const payerId = tx.payer && mongoose.Types.ObjectId.isValid(tx.payer) ? String(tx.payer) : null;
+      const creatorId = tx.createdBy && mongoose.Types.ObjectId.isValid(tx.createdBy) ? String(tx.createdBy) : null;
+      
+      const payerUser = payerId ? userMap.get(payerId) : null;
+      const creatorUser = creatorId ? userMap.get(creatorId) : null;
+      
+      const payerName = payerUser ? (payerUser.name || payerUser.email) : 'Không xác định';
+      const creatorName = creatorUser ? (creatorUser.name || creatorUser.email) : 'Không xác định';
+      
+      const participantCount = tx.participants?.length || 0;
+      const settledCount = tx.participants?.filter(p => p.settled).length || 0;
+      const pendingCount = participantCount - settledCount;
+      
+      return {
+        ...tx,
+        payerName,
+        creatorName,
+        participantCount,
+        settledCount,
+        pendingCount,
+        participants: tx.participants?.map(p => ({
+          ...p,
+          userName: p.user?.name || p.user?.email || p.email || 'Không xác định',
+          userEmail: p.user?.email || p.email || '',
+          status: p.settled ? 'Đã trả' : 'Chưa trả'
+        }))
+      };
+    });
+
+    // Tổng hợp thống kê
+    const stats = {
+      totalTransactions: transactions.length,
+      totalAmount,
+      totalDebt,
+      totalPaid,
+      totalParticipants: totalParticipants.size,
+      settledTransactions: transactionsWithDetails.filter(tx => tx.settledCount === tx.participantCount).length,
+      pendingTransactions: transactionsWithDetails.filter(tx => tx.pendingCount > 0).length
+    };
+
+    res.json({
+      transactions: transactionsWithDetails,
+      stats
+    });
+  } catch (err) {
+    console.error('Admin group transactions fetch error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
 // --- Only keep this admin group-transactions endpoint ---
 // GET /api/admin/group-transactions
 // Admin only: list all group transactions with filters, pagination and sorting.

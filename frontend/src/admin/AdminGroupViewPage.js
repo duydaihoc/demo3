@@ -9,6 +9,7 @@ function AdminGroupViewPage() {
   const navigate = useNavigate();
   const [group, setGroup] = useState(null);
   const [transactions, setTransactions] = useState([]);
+  const [txStats, setTxStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('details');
@@ -59,51 +60,64 @@ function AdminGroupViewPage() {
 
       setGroup(data);
 
-      // Try to fetch transactions data
+      // Try to fetch transactions data with stats
       try {
-        // Try admin endpoint first
+        // Try admin endpoint first (returns detailed stats)
         let txRes = await fetch(`${API_BASE}/api/admin/groups/${groupId}/transactions`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         
-        // If admin endpoint fails, try regular endpoint
-        if (!txRes.ok && txRes.status === 404) {
+        if (txRes.ok) {
+          const txData = await txRes.json();
+          // Admin endpoint returns { transactions, stats }
+          if (txData.transactions) {
+            setTransactions(txData.transactions);
+            setTxStats(txData.stats);
+          } else {
+            // Fallback for old format
+            const normalizedTxs = Array.isArray(txData) ? txData : [txData];
+            setTransactions(normalizedTxs);
+          }
+        } else if (txRes.status === 404) {
+          // Fallback to regular endpoint
           txRes = await fetch(`${API_BASE}/api/groups/${groupId}/transactions`, {
             headers: { Authorization: `Bearer ${token}` }
           });
-        }
-        
-        if (txRes.ok) {
-          const txData = await txRes.json();
-          // Normalize transactions: ensure creatorName exists (try creator / creatorName / createdBy / lookup in members)
-          const membersList = Array.isArray(data.members) ? data.members : [];
-          const normalizeTx = (t) => {
-            const tx = { ...t };
-            let creatorName = '';
-            if (tx.creator && typeof tx.creator === 'object') {
-              creatorName = tx.creator.name || tx.creator.email || '';
-            } else if (tx.creatorName) {
-              creatorName = tx.creatorName;
-            } else if (tx.createdBy && typeof tx.createdBy === 'object') {
-              creatorName = tx.createdBy.name || tx.createdBy.email || '';
-            } else if (tx.createdBy) {
-              const cb = String(tx.createdBy);
-              // try find in members by id or email
-              const found = membersList.find(m => {
-                const mid = m.user && (m.user._id || m.user) ? String(m.user._id || m.user) : null;
-                const memEmail = (m.email || '').toLowerCase();
-                if (mid && String(mid) === cb) return true;
-                if (cb.includes('@') && memEmail && memEmail === cb.toLowerCase()) return true;
-                return false;
-              });
-              if (found) creatorName = (found.user && (found.user.name || found.user.email)) || found.name || found.email || cb;
-              else creatorName = cb;
-            }
-            return { ...tx, creatorName };
-          };
           
-          const normalizedTxs = Array.isArray(txData) ? txData.map(normalizeTx) : [normalizeTx(txData)];
-          setTransactions(normalizedTxs);
+          if (txRes.ok) {
+            const txData = await txRes.json();
+            // Normalize transactions
+            const membersList = Array.isArray(data.members) ? data.members : [];
+            const normalizeTx = (t) => {
+              const tx = { ...t };
+              let creatorName = '';
+              if (tx.creator && typeof tx.creator === 'object') {
+                creatorName = tx.creator.name || tx.creator.email || '';
+              } else if (tx.creatorName) {
+                creatorName = tx.creatorName;
+              } else if (tx.createdBy && typeof tx.createdBy === 'object') {
+                creatorName = tx.createdBy.name || tx.createdBy.email || '';
+              } else if (tx.createdBy) {
+                const cb = String(tx.createdBy);
+                const found = membersList.find(m => {
+                  const mid = m.user && (m.user._id || m.user) ? String(m.user._id || m.user) : null;
+                  const memEmail = (m.email || '').toLowerCase();
+                  if (mid && String(mid) === cb) return true;
+                  if (cb.includes('@') && memEmail && memEmail === cb.toLowerCase()) return true;
+                  return false;
+                });
+                if (found) creatorName = (found.user && (found.user.name || found.user.email)) || found.name || found.email || cb;
+                else creatorName = cb;
+              }
+              return { ...tx, creatorName };
+            };
+            
+            const normalizedTxs = Array.isArray(txData) ? txData.map(normalizeTx) : [normalizeTx(txData)];
+            setTransactions(normalizedTxs);
+          } else {
+            console.warn('Could not fetch transactions', txRes.status);
+            setTransactions([]);
+          }
         } else {
           console.warn('Could not fetch transactions', txRes.status);
           setTransactions([]);
@@ -379,19 +393,51 @@ function AdminGroupViewPage() {
                 </div>
                 
                 <div className="detail-section">
-                  <h3 className="section-title">Thống kê</h3>
+                  <h3 className="section-title">Thống kê giao dịch</h3>
                   <div className="stats-grid">
                     <div className="stat-card">
-                      <div className="stat-value">{group.members ? group.members.length : 0}</div>
-                      <div className="stat-label">Tổng thành viên</div>
-                    </div>
-                    <div className="stat-card">
-                      <div className="stat-value">{group.ownerName || (group.owner && (group.owner.name || group.owner.email)) || '—'}</div>
-                      <div className="stat-label">Chủ nhóm</div>
-                    </div>
-                    <div className="stat-card">
-                      <div className="stat-value">{transactions.length}</div>
+                      <div className="stat-icon"><i className="fas fa-exchange-alt"></i></div>
+                      <div className="stat-value">{txStats?.totalTransactions || transactions.length || 0}</div>
                       <div className="stat-label">Tổng giao dịch</div>
+                    </div>
+                    <div className="stat-card success">
+                      <div className="stat-icon"><i className="fas fa-money-bill-wave"></i></div>
+                      <div className="stat-value">
+                        {txStats?.totalAmount ? 
+                          `${(txStats.totalAmount / 1000000).toFixed(1)}tr` : 
+                          '0₫'}
+                      </div>
+                      <div className="stat-label">Tổng số tiền</div>
+                    </div>
+                    <div className="stat-card info">
+                      <div className="stat-icon"><i className="fas fa-users"></i></div>
+                      <div className="stat-value">{txStats?.totalParticipants || group.members?.length || 0}</div>
+                      <div className="stat-label">Người tham gia</div>
+                    </div>
+                    <div className="stat-card warning">
+                      <div className="stat-icon"><i className="fas fa-hourglass-half"></i></div>
+                      <div className="stat-value">
+                        {txStats?.totalDebt ? 
+                          `${(txStats.totalDebt / 1000).toFixed(0)}k` : 
+                          '0₫'}
+                      </div>
+                      <div className="stat-label">Nợ chưa trả</div>
+                    </div>
+                    <div className="stat-card success">
+                      <div className="stat-icon"><i className="fas fa-check-circle"></i></div>
+                      <div className="stat-value">
+                        {txStats?.totalPaid ? 
+                          `${(txStats.totalPaid / 1000).toFixed(0)}k` : 
+                          '0₫'}
+                      </div>
+                      <div className="stat-label">Đã trả nợ</div>
+                    </div>
+                    <div className="stat-card">
+                      <div className="stat-icon"><i className="fas fa-tasks"></i></div>
+                      <div className="stat-value">
+                        {txStats?.settledTransactions || 0}/{txStats?.totalTransactions || 0}
+                      </div>
+                      <div className="stat-label">Hoàn thành</div>
                     </div>
                   </div>
                 </div>
@@ -477,40 +523,72 @@ function AdminGroupViewPage() {
                   <thead>
                     <tr>
                       <th>Nội dung</th>
-                      <th>Loại</th>
+                      <th>Người trả</th>
                       <th>Số tiền</th>
-                      <th>Người tạo</th>
-                      <th>Ngày</th>
+                      <th>Người tham gia</th>
+                      <th>Đã trả / Chưa trả</th>
+                      <th>Trạng thái</th>
+                      <th>Ngày tạo</th>
                     </tr>
                   </thead>
                   <tbody>
                     {transactions && transactions.length > 0 ? (
                       transactions.map((tx, index) => (
                         <tr key={index}>
-                          <td className="tx-title">{tx.title || tx.description || 'Không có tiêu đề'}</td>
-                          <td className={`tx-type ${tx.type}`}>
-                            <span className="type-badge">
-                              {tx.type === 'expense' ? 'Chi tiêu' : 
-                               tx.type === 'income' ? 'Thu nhập' : tx.type}
+                          <td className="tx-title">
+                            <div className="tx-title-content">
+                              <strong>{tx.title || 'Giao dịch nhóm'}</strong>
+                              {tx.description && <small>{tx.description}</small>}
+                            </div>
+                          </td>
+                          <td className="tx-payer">
+                            <div className="payer-info">
+                              <i className="fas fa-user-circle"></i>
+                              {tx.payerName || 'Không xác định'}
+                            </div>
+                          </td>
+                          <td className={`tx-amount`}>
+                            <strong>
+                              {new Intl.NumberFormat('vi-VN', { 
+                                style: 'currency', 
+                                currency: 'VND' 
+                              }).format(tx.amount || 0)}
+                            </strong>
+                          </td>
+                          <td className="tx-participants">
+                            <span className="participant-count">
+                              <i className="fas fa-users"></i> {tx.participantCount || 0} người
                             </span>
                           </td>
-                          <td className={`tx-amount ${tx.type}`}>
-                            {new Intl.NumberFormat('vi-VN', { 
-                              style: 'currency', 
-                              currency: 'VND' 
-                            }).format(tx.amount || 0)}
+                          <td className="tx-settlement">
+                            <div className="settlement-stats">
+                              <span className="settled-count">
+                                <i className="fas fa-check-circle" style={{color: '#27ae60'}}></i> 
+                                {tx.settledCount || 0}
+                              </span>
+                              <span className="pending-count">
+                                <i className="fas fa-clock" style={{color: '#f39c12'}}></i> 
+                                {tx.pendingCount || 0}
+                              </span>
+                            </div>
                           </td>
-                          <td className="tx-creator">
-                            {tx.creatorName && tx.creatorName !== '' 
-                              ? tx.creatorName 
-                              : (tx.createdBy && typeof tx.createdBy === 'object' ? (tx.createdBy.name || tx.createdBy.email) : 'Không xác định')}
+                          <td className="tx-status">
+                            {tx.pendingCount === 0 ? (
+                              <span className="status-badge completed">
+                                <i className="fas fa-check-double"></i> Hoàn thành
+                              </span>
+                            ) : (
+                              <span className="status-badge pending">
+                                <i className="fas fa-hourglass-half"></i> Còn nợ
+                              </span>
+                            )}
                           </td>
                           <td className="tx-date">{formatDate(tx.date || tx.createdAt)}</td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan="5" className="no-data">Không có giao dịch nào</td>
+                        <td colSpan="7" className="no-data">Không có giao dịch nào</td>
                       </tr>
                     )}
                   </tbody>
