@@ -1604,3 +1604,495 @@
     padding: 20px;
   }
 }
+
+/* Wallet Linking Styles */
+.ft-wallet-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  animation: walletPulse 2s ease-in-out infinite;
+}
+
+.ft-wallet-badge.linked {
+  background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%);
+  box-shadow: 0 2px 8px rgba(78, 205, 196, 0.3);
+}
+
+@keyframes walletPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+
+.ft-action-btn.link {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+}
+
+.ft-action-btn.link:hover {
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.ft-action-btn.unlink {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+  border: none;
+}
+
+.ft-action-btn.unlink:hover {
+  background: linear-gradient(135deg, #f5576c 0%, #f093fb 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(245, 87, 108, 0.4);
+}
+
+.ft-action-btn.unlink:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Wallet Modal Body */
+.ft-wallet-modal-body {
+  padding: 24px;
+  max-height: 500px;
+  overflow-y: auto;
+  position: relative;
+}
+
+.ft-transaction-summary {
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  padding: 20px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.ft-transaction-summary h4 {
+  margin: 0 0 12px 0;
+  color: #1e293b;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.ft-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.ft-summary-row:last-child {
+  border-bottom: none;
+}
+
+.ft-summary-row span {
+  color: #64748b;
+  font-size: 14px;
+}
+
+.ft-summary-row strong {
+  color: #1e293b;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.ft-summary-row strong.expense {
+  color: #ef4444;
+}
+
+.ft-summary-row strong.income {
+  color: #10b981;
+}
+
+/* Wallets Grid */
+.ft-wallets-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.ft-wallet-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border: 2px solid #e2e8f0;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.ft-wallet-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #4ecdc4 0%, #667eea 100%);
+  transform: scaleX(0);
+  transition: transform 0.3s ease;
+}
+
+.ft-wallet-card:hover {
+  border-color: #4ecdc4;
+  box-shadow: 0 8px 24px rgba(78, 205, 196, 0.3);
+  transform: translateY(-4px);
+}
+
+.ft-wallet-card:hover::before {
+  transform: scaleX(1);
+}
+
+.ft-wallet-icon {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  color: white;
+  font-size: 24px;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.ft-wallet-info {
+  flex: 1;
+}
+
+.ft-wallet-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 6px;
+}
+
+.ft-wallet-balance {
+  font-size: 14px;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.ft-wallet-currency {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.ft-wallet-select {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #cbd5e1;
+  font-size: 20px;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.ft-wallet-card:hover .ft-wallet-select {
+  background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%);
+  color: white;
+  transform: scale(1.1);
+}
+
+/* Empty Wallets State */
+.ft-empty-wallets {
+  text-align: center;
+  padding: 60px 20px;
+  color: #64748b;
+}
+
+.ft-empty-wallets i {
+  font-size: 64px;
+  color: #cbd5e1;
+  margin-bottom: 20px;
+  display: block;
+}
+
+.ft-empty-wallets p {
+  font-size: 16px;
+  margin: 0;
+}
+
+/* No More Wallets */
+.ft-no-more-wallets {
+  text-align: center;
+  padding: 40px 20px;
+  color: #64748b;
+  background: #f8fafc;
+  border-radius: 12px;
+  margin-top: 16px;
+}
+
+.ft-no-more-wallets i {
+  font-size: 32px;
+  color: #94a3b8;
+  margin-bottom: 12px;
+  display: block;
+}
+
+.ft-no-more-wallets p {
+  font-size: 14px;
+  margin: 0;
+  color: #64748b;
+}
+
+/* Linking Overlay */
+.ft-linking-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 600;
+  color: #667eea;
+  z-index: 10;
+  border-radius: 12px;
+}
+
+.ft-linking-overlay i {
+  margin-right: 12px;
+  font-size: 24px;
+}
+
+/* Loading inline for wallet modal */
+.ft-loading-inline {
+  text-align: center;
+  padding: 40px 20px;
+  color: #64748b;
+  font-size: 16px;
+}
+
+.ft-loading-inline i {
+  font-size: 32px;
+  color: #4ecdc4;
+  margin-bottom: 12px;
+  display: block;
+}
+
+/* Responsive for wallet modal */
+@media (max-width: 768px) {
+  .ft-wallets-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .ft-wallet-modal-body {
+    max-height: 400px;
+  }
+}
+
+/* Wallet Status Bar */
+.ft-wallet-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border: 2px solid #10b981;
+  border-radius: 12px;
+  color: #065f46;
+  font-size: 14px;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+}
+
+.ft-wallet-status i.fa-wallet {
+  font-size: 18px;
+  color: #10b981;
+}
+
+.ft-wallet-status span {
+  flex: 1;
+}
+
+.ft-wallet-status strong {
+  color: #065f46;
+  font-weight: 700;
+}
+
+.ft-btn-icon {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  border: 2px solid #10b981;
+  border-radius: 8px;
+  color: #10b981;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 14px;
+}
+
+.ft-btn-icon:hover {
+  background: #10b981;
+  color: white;
+  transform: scale(1.1);
+}
+
+/* Auto-link Controls */
+.ft-auto-link-control {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.ft-auto-link-control .ft-btn {
+  white-space: nowrap;
+  min-width: auto;
+}
+
+.ft-btn.success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border: none;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.ft-btn.success:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+}
+
+/* Auto-link Info Box */
+.ft-auto-link-info {
+  display: flex;
+  gap: 16px;
+  padding: 20px;
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  border-radius: 12px;
+  margin-bottom: 24px;
+  border-left: 4px solid #3b82f6;
+}
+
+.ft-auto-link-info i {
+  font-size: 24px;
+  color: #3b82f6;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.ft-auto-link-info p {
+  margin: 0;
+  color: #1e40af;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.ft-auto-link-info strong {
+  font-weight: 700;
+  color: #1e3a8a;
+}
+
+/* Current Wallet Display */
+.ft-current-wallet {
+  margin-bottom: 24px;
+  padding: 20px;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border-radius: 12px;
+  border: 2px solid #10b981;
+}
+
+.ft-current-wallet h4 {
+  margin: 0 0 16px 0;
+  color: #065f46;
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ft-wallet-card.active {
+  border-color: #10b981;
+  background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%);
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.2);
+}
+
+.ft-wallet-card.active::before {
+  background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+  transform: scaleX(1);
+}
+
+.ft-wallet-check {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+/* Responsive for auto-link controls */
+@media (max-width: 1024px) {
+  .ft-auto-link-control {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  
+  .ft-auto-link-control .ft-btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .ft-actions {
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .ft-auto-link-control {
+    width: 100%;
+  }
+  
+  .ft-wallet-status {
+    flex-wrap: wrap;
+    font-size: 13px;
+    padding: 10px 16px;
+  }
+  
+  .ft-wallet-status span {
+    flex-basis: 100%;
+    margin-bottom: 8px;
+  }
+  
+  .ft-auto-link-info {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .ft-auto-link-info i {
+    margin: 0 auto 8px;
+  }
+}

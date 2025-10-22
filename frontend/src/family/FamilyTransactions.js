@@ -225,6 +225,14 @@ export default function FamilyTransactions() {
       return;
     }
     
+    // Kiểm tra ví cho giao dịch cá nhân
+    if (formData.transactionScope === 'personal') {
+      if (!autoLinkEnabled || !defaultWallet) {
+        showNotification('Vui lòng chọn ví liên kết trước khi tạo giao dịch cá nhân', 'error');
+        return;
+      }
+    }
+    
     // Kiểm tra số dư nếu là chi tiêu
     if (activeTab === 'expense') {
       const amount = Number(formData.amount);
@@ -234,10 +242,9 @@ export default function FamilyTransactions() {
           return;
         }
       } else {
-        // Cải thiện kiểm tra số dư cá nhân
-        const currentBalance = getCurrentUserBalance();
-        if (currentBalance < amount) {
-          showNotification(`Số dư cá nhân không đủ. Hiện tại: ${formatCurrency(currentBalance)}`, 'error');
+        // Kiểm tra số dư ví thực tế
+        if (defaultWallet && defaultWallet.currentBalance < amount) {
+          showNotification(`Số dư ví không đủ. Hiện tại: ${formatCurrency(defaultWallet.currentBalance)}`, 'error');
           return;
         }
       }
@@ -252,6 +259,11 @@ export default function FamilyTransactions() {
         type: activeTab
       };
       
+      // Thêm walletId nếu là giao dịch personal và có wallet được chọn
+      if (formData.transactionScope === 'personal' && autoLinkEnabled && defaultWallet) {
+        payload.walletId = defaultWallet._id;
+      }
+      
       const res = await fetch(`${API_BASE}/api/family/transactions`, {
         method: 'POST',
         headers: {
@@ -265,6 +277,8 @@ export default function FamilyTransactions() {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.message || 'Không thể tạo giao dịch');
       }
+      
+      const newTransaction = await res.json();
       
       showNotification('Giao dịch đã được tạo thành công', 'success');
       
@@ -566,6 +580,160 @@ export default function FamilyTransactions() {
   // Thêm state cho sidebar toggle
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
+  // Wallet linking state
+  const [userWallets, setUserWallets] = useState([]);
+  const [loadingWallets, setLoadingWallets] = useState(false);
+  
+  // Auto-link wallet state
+  const [showAutoLinkModal, setShowAutoLinkModal] = useState(false);
+  const [defaultWallet, setDefaultWallet] = useState(null);
+  const [autoLinkEnabled, setAutoLinkEnabled] = useState(false);
+
+  // Load auto-link settings from localStorage
+  useEffect(() => {
+    const savedWallet = localStorage.getItem(`family_${selectedFamilyId}_defaultWallet`);
+    const savedEnabled = localStorage.getItem(`family_${selectedFamilyId}_autoLink`);
+    
+    if (savedWallet) {
+      try {
+        setDefaultWallet(JSON.parse(savedWallet));
+      } catch (e) {
+        console.error('Error parsing saved wallet:', e);
+      }
+    }
+    
+    if (savedEnabled) {
+      setAutoLinkEnabled(savedEnabled === 'true');
+    }
+  }, [selectedFamilyId]);
+
+  // Save auto-link settings
+  const saveAutoLinkSettings = (wallet, enabled) => {
+    if (wallet) {
+      localStorage.setItem(`family_${selectedFamilyId}_defaultWallet`, JSON.stringify(wallet));
+    } else {
+      localStorage.removeItem(`family_${selectedFamilyId}_defaultWallet`);
+    }
+    
+    localStorage.setItem(`family_${selectedFamilyId}_autoLink`, String(enabled));
+    setDefaultWallet(wallet);
+    setAutoLinkEnabled(enabled);
+  };
+
+  // Open auto-link setup modal
+  const handleOpenAutoLinkModal = () => {
+    setShowAutoLinkModal(true);
+    fetchUserWallets();
+  };
+
+  // Reset member balance to 0
+  const resetMemberBalance = async () => {
+    if (!selectedFamilyId) return;
+    
+    try {
+      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/reset-member-balance`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        }
+      });
+      
+      if (!res.ok) {
+        throw new Error('Không thể reset số dư');
+      }
+      
+      const data = await res.json();
+      
+      // Refresh balance
+      fetchBalance();
+      
+      return data;
+    } catch (err) {
+      console.error('Error resetting member balance:', err);
+      showNotification('Không thể reset số dư cá nhân', 'error');
+    }
+  };
+
+  // Sync wallet balance to family
+  const syncWalletBalance = async (walletId) => {
+    if (!selectedFamilyId || !walletId) return;
+    
+    try {
+      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/sync-wallet-balance`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ walletId })
+      });
+      
+      if (!res.ok) {
+        throw new Error('Không thể đồng bộ số dư');
+      }
+      
+      const data = await res.json();
+      
+      // Refresh balance
+      fetchBalance();
+      
+      return data;
+    } catch (err) {
+      console.error('Error syncing wallet balance:', err);
+      showNotification('Không thể đồng bộ số dư từ ví', 'error');
+    }
+  };
+
+  // Set default wallet for auto-linking
+  const handleSetDefaultWallet = async (wallet) => {
+    saveAutoLinkSettings(wallet, true);
+    
+    // Auto sync balance when setting default wallet
+    await syncWalletBalance(wallet._id);
+    
+    setShowAutoLinkModal(false);
+    showNotification(`Đã cài đặt ví mặc định: ${wallet.name} và đồng bộ số dư`, 'success');
+  };
+
+  // Disconnect wallet
+  const handleDisconnectWallet = async () => {
+    if (!window.confirm('Bạn có chắc muốn ngắt kết nối với ví này? Số dư cá nhân sẽ được reset về 0.')) {
+      return;
+    }
+    
+    // Reset balance về 0
+    await resetMemberBalance();
+    
+    // Xóa cài đặt
+    saveAutoLinkSettings(null, false);
+    
+    showNotification('Đã ngắt kết nối ví và reset số dư về 0', 'info');
+  };
+
+  // Fetch user wallets
+  const fetchUserWallets = useCallback(async () => {
+    if (!token) return;
+    setLoadingWallets(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/family/wallets/user`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (!res.ok) {
+        throw new Error('Không thể tải danh sách ví');
+      }
+      
+      const data = await res.json();
+      setUserWallets(data);
+    } catch (err) {
+      console.error("Error fetching user wallets:", err);
+      showNotification('Không thể tải danh sách ví', 'error');
+    } finally {
+      setLoadingWallets(false);
+    }
+  }, [token, API_BASE]);
+
   return (
     <div className="family-page">
       {/* Animated background elements */}
@@ -599,6 +767,28 @@ export default function FamilyTransactions() {
           <p>Quản lý thu nhập và chi tiêu của gia đình</p>
           
           <div className="ft-actions">
+            {/* Wallet connection status */}
+            {defaultWallet && autoLinkEnabled ? (
+              <div className="ft-wallet-status">
+                <i className="fas fa-wallet"></i>
+                <span>Đang kết nối với ví: <strong>{defaultWallet.name}</strong></span>
+                <button 
+                  className="ft-btn-icon"
+                  onClick={handleOpenAutoLinkModal}
+                  title="Thay đổi ví"
+                >
+                  <i className="fas fa-cog"></i>
+                </button>
+              </div>
+            ) : (
+              <button 
+                className="ft-btn secondary"
+                onClick={handleOpenAutoLinkModal}
+              >
+                <i className="fas fa-wallet"></i> Chọn ví liên kết
+              </button>
+            )}
+            
             <button 
               className="ft-btn primary"
               onClick={() => setShowForm(true)}
@@ -939,6 +1129,136 @@ export default function FamilyTransactions() {
           </div>
         )}
 
+        {/* Auto-link Setup Modal */}
+        {showAutoLinkModal && (
+          <div className="ft-modal-overlay">
+            <div className="ft-modal">
+              <div className="ft-modal-header">
+                <h3>Chọn ví liên kết</h3>
+                <button 
+                  className="ft-modal-close"
+                  onClick={() => setShowAutoLinkModal(false)}
+                >
+                  &times;
+                </button>
+              </div>
+              
+              <div className="ft-wallet-modal-body">
+                <div className="ft-auto-link-info">
+                  <i className="fas fa-info-circle"></i>
+                  <p>
+                    Chọn ví để liên kết với giao dịch gia đình của bạn. Số dư cá nhân sẽ được 
+                    đồng bộ với ví và tất cả giao dịch <strong>Cá nhân</strong> mới sẽ tự động 
+                    được liên kết với ví này.
+                  </p>
+                </div>
+
+                {/* Current status */}
+                {defaultWallet && (
+                  <div className="ft-current-wallet">
+                    <h4>Ví mặc định hiện tại:</h4>
+                    <div className="ft-wallet-card active">
+                      <div className="ft-wallet-icon">
+                        <i className="fas fa-wallet"></i>
+                      </div>
+                      <div className="ft-wallet-info">
+                        <div className="ft-wallet-name">{defaultWallet.name}</div>
+                        <div className="ft-wallet-balance">
+                          Số dư: {formatCurrency(defaultWallet.currentBalance || 0)}
+                        </div>
+                      </div>
+                      <div className="ft-wallet-check">
+                        <i className="fas fa-check-circle"></i>
+                      </div>
+                    </div>
+                    <button
+                      className="ft-btn success"
+                      onClick={() => {
+                        syncWalletBalance(defaultWallet._id);
+                        showNotification('Đang đồng bộ số dư...', 'info');
+                      }}
+                      style={{marginTop: 12, width: '100%'}}
+                    >
+                      <i className="fas fa-sync-alt"></i> Đồng bộ số dư từ ví
+                    </button>
+                  </div>
+                )}
+
+                <h4 style={{marginTop: 24, marginBottom: 16}}>
+                  {defaultWallet ? 'Thay đổi ví liên kết:' : 'Chọn ví liên kết:'}
+                </h4>
+                
+                {loadingWallets ? (
+                  <div className="ft-loading-inline">
+                    <i className="fas fa-spinner fa-spin"></i> Đang tải danh sách ví...
+                  </div>
+                ) : userWallets.length === 0 ? (
+                  <div className="ft-empty-wallets">
+                    <i className="fas fa-wallet"></i>
+                    <p>Bạn chưa có ví nào. Hãy tạo ví trong trang Ví của bạn.</p>
+                  </div>
+                ) : (
+                  <div className="ft-wallets-grid">
+                    {userWallets
+                      .filter(wallet => !defaultWallet || wallet._id !== defaultWallet._id)
+                      .map(wallet => (
+                        <div 
+                          key={wallet._id} 
+                          className="ft-wallet-card"
+                          onClick={() => handleSetDefaultWallet(wallet)}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          <div className="ft-wallet-icon">
+                            <i className="fas fa-wallet"></i>
+                          </div>
+                          <div className="ft-wallet-info">
+                            <div className="ft-wallet-name">{wallet.name}</div>
+                            <div className="ft-wallet-balance">
+                              Số dư: {formatCurrency(wallet.currentBalance || 0)}
+                            </div>
+                            <div className="ft-wallet-currency">{wallet.currency || 'VND'}</div>
+                          </div>
+                          <div className="ft-wallet-select">
+                            <i className="fas fa-check-circle"></i>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+                
+                {defaultWallet && userWallets.filter(w => w._id !== defaultWallet._id).length === 0 && (
+                  <div className="ft-no-more-wallets">
+                    <i className="fas fa-info-circle"></i>
+                    <p>Không có ví khác để thay đổi</p>
+                  </div>
+                )}
+              </div>
+              
+              <div className="ft-form-actions">
+                {defaultWallet && (
+                  <button 
+                    type="button" 
+                    className="ft-btn danger"
+                    onClick={() => {
+                      setShowAutoLinkModal(false);
+                      handleDisconnectWallet();
+                    }}
+                  >
+                    <i className="fas fa-unlink"></i> Ngắt kết nối ví
+                  </button>
+                )}
+                <button 
+                  type="button" 
+                  className="ft-btn secondary"
+                  onClick={() => setShowAutoLinkModal(false)}
+                >
+                  Đóng
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Transactions List */}
         <div className="ft-content">
           {loading ? (
@@ -1004,6 +1324,12 @@ export default function FamilyTransactions() {
                                 {transaction.creatorRole && (
                                   <span className="ft-creator-role">({transaction.creatorRole})</span>
                                 )}
+                              </span>
+                            )}
+                            {/* Wallet Link Badge */}
+                            {transaction.isLinkedToWallet && transaction.linkedWallet && (
+                              <span className="ft-wallet-badge linked">
+                                <i className="fas fa-wallet"></i> {transaction.linkedWallet.name || 'Ví cá nhân'}
                               </span>
                             )}
                           </div>

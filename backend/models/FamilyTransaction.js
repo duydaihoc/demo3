@@ -53,7 +53,22 @@ const familyTransactionSchema = new mongoose.Schema({
       default: Date.now
     }
   }],
-  tags: [String]
+  tags: [String],
+  // Liên kết với Wallet cá nhân
+  linkedWallet: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Wallet',
+    default: null
+  },
+  linkedTransaction: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Transaction',
+    default: null
+  },
+  isLinkedToWallet: {
+    type: Boolean,
+    default: false
+  }
 }, {
   timestamps: true
 });
@@ -62,6 +77,8 @@ const familyTransactionSchema = new mongoose.Schema({
 familyTransactionSchema.index({ familyId: 1, date: -1 });
 familyTransactionSchema.index({ createdBy: 1 });
 familyTransactionSchema.index({ type: 1 });
+familyTransactionSchema.index({ linkedWallet: 1 });
+familyTransactionSchema.index({ linkedTransaction: 1 });
 
 // Phương thức để tạo ra danh sách giao dịch theo tháng/năm
 familyTransactionSchema.statics.getMonthlyTransactions = async function(familyId, year, month) {
