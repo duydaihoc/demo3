@@ -961,7 +961,7 @@ router.get('/wallets/user', authenticateToken, async (req, res) => {
     const userId = req.user.id || req.user._id;
     
     const wallets = await Wallet.find({ owner: userId })
-      .select('name currency initialBalance')
+      .select('name currency initialBalance createdAt updatedAt')
       .sort({ createdAt: -1 });
     
     // Trả về wallets với currentBalance = initialBalance (đã được cập nhật)
@@ -970,7 +970,9 @@ router.get('/wallets/user', authenticateToken, async (req, res) => {
       name: wallet.name,
       currency: wallet.currency,
       initialBalance: wallet.initialBalance,
-      currentBalance: wallet.initialBalance  // initialBalance đã là số dư hiện tại
+      currentBalance: wallet.initialBalance,  // initialBalance đã là số dư hiện tại
+      createdAt: wallet.createdAt,
+      updatedAt: wallet.updatedAt
     }));
     
     res.json(walletsWithBalance);
@@ -1082,6 +1084,193 @@ router.post('/:familyId/sync-wallet-balance', authenticateToken, isFamilyMember,
     });
   } catch (error) {
     console.error('Error syncing wallet balance:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// POST /api/family/:familyId/transfer-to-family - Chuyển tiền từ ví cá nhân vào quỹ gia đình
+router.post('/:familyId/transfer-to-family', authenticateToken, isFamilyMember, async (req, res) => {
+  try {
+    const { familyId } = req.params;
+    const { amount, walletId, description } = req.body;
+    
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ message: 'Số tiền phải lớn hơn 0' });
+    }
+    
+    if (!walletId) {
+      return res.status(400).json({ message: 'Vui lòng chọn ví để chuyển tiền' });
+    }
+    
+    const userId = req.user.id || req.user._id;
+    
+    // Kiểm tra wallet
+    const wallet = await Wallet.findById(walletId);
+    if (!wallet) {
+      return res.status(404).json({ message: 'Ví không tồn tại' });
+    }
+    
+    if (String(wallet.owner) !== String(userId)) {
+      return res.status(403).json({ message: 'Bạn không có quyền sử dụng ví này' });
+    }
+    
+    // Kiểm tra số dư ví
+    if (wallet.initialBalance < amount) {
+      return res.status(400).json({ 
+        message: `Số dư ví không đủ. Hiện tại: ${wallet.initialBalance}₫` 
+      });
+    }
+    
+    // Trừ tiền từ ví và cập nhật updatedAt
+    wallet.initialBalance -= amount;
+    wallet.updatedAt = new Date();
+    await wallet.save();
+    
+    // Tạo wallet transaction (chi tiêu - chuyển cho gia đình)
+    const walletTransaction = new Transaction({
+      wallet: walletId,
+      type: 'expense',
+      amount: amount,
+      category: null, // Không có category cho transfer
+      title: description || 'Chuyển tiền vào quỹ gia đình',
+      description: description || 'Chuyển tiền vào quỹ gia đình',
+      date: new Date()
+    });
+    await walletTransaction.save();
+    
+    // Cộng tiền vào family balance
+    await FamilyBalance.updateBalance(familyId, userId, amount, 'income', 'family');
+    
+    // Cập nhật số dư cá nhân = số dư ví sau khi chuyển
+    let familyBalance = await FamilyBalance.findOne({ familyId });
+    if (familyBalance) {
+      const memberIndex = familyBalance.memberBalances.findIndex(
+        m => String(m.userId) === String(userId)
+      );
+      
+      if (memberIndex >= 0) {
+        familyBalance.memberBalances[memberIndex].balance = wallet.initialBalance;
+        familyBalance.updatedAt = new Date();
+        await familyBalance.save();
+      }
+    }
+    
+    // Lấy family balance mới nhất
+    const updatedFamilyBalance = await FamilyBalance.getBalance(familyId);
+    
+    res.json({
+      message: 'Chuyển tiền thành công',
+      walletBalance: wallet.initialBalance,
+      familyBalance: updatedFamilyBalance.familyBalance,
+      memberBalance: wallet.initialBalance,
+      amount: amount,
+      wallet: {
+        _id: wallet._id,
+        name: wallet.name,
+        currency: wallet.currency,
+        initialBalance: wallet.initialBalance,
+        currentBalance: wallet.initialBalance,
+        updatedAt: wallet.updatedAt
+      }
+    });
+  } catch (error) {
+    console.error('Error transferring to family:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// POST /api/family/:familyId/transfer-from-family - Chuyển tiền từ quỹ gia đình về ví cá nhân
+router.post('/:familyId/transfer-from-family', authenticateToken, isFamilyMember, async (req, res) => {
+  try {
+    const { familyId } = req.params;
+    const { amount, walletId, description } = req.body;
+    
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ message: 'Số tiền phải lớn hơn 0' });
+    }
+    
+    if (!walletId) {
+      return res.status(400).json({ message: 'Vui lòng chọn ví để nhận tiền' });
+    }
+    
+    const userId = req.user.id || req.user._id;
+    
+    // Kiểm tra wallet
+    const wallet = await Wallet.findById(walletId);
+    if (!wallet) {
+      return res.status(404).json({ message: 'Ví không tồn tại' });
+    }
+    
+    if (String(wallet.owner) !== String(userId)) {
+      return res.status(403).json({ message: 'Bạn không có quyền sử dụng ví này' });
+    }
+    
+    // Kiểm tra số dư quỹ gia đình
+    const familyBalance = await FamilyBalance.findOne({ familyId });
+    if (!familyBalance) {
+      return res.status(404).json({ message: 'Không tìm thấy thông tin số dư gia đình' });
+    }
+    
+    if (familyBalance.familyBalance < amount) {
+      return res.status(400).json({ 
+        message: `Số dư quỹ gia đình không đủ. Hiện tại: ${familyBalance.familyBalance}₫` 
+      });
+    }
+    
+    // Trừ tiền từ quỹ gia đình
+    await FamilyBalance.updateBalance(familyId, userId, amount, 'expense', 'family');
+    
+    // Cộng tiền vào ví và cập nhật updatedAt
+    wallet.initialBalance += amount;
+    wallet.updatedAt = new Date();
+    await wallet.save();
+    
+    // Tạo wallet transaction (thu nhập - nhận từ gia đình)
+    const walletTransaction = new Transaction({
+      wallet: walletId,
+      type: 'income',
+      amount: amount,
+      category: null, // Không có category cho transfer
+      title: description || 'Nhận tiền từ quỹ gia đình',
+      description: description || 'Nhận tiền từ quỹ gia đình',
+      date: new Date()
+    });
+    await walletTransaction.save();
+    
+    // Cập nhật số dư cá nhân = số dư ví sau khi nhận
+    const updatedFamilyBalance = await FamilyBalance.findOne({ familyId });
+    if (updatedFamilyBalance) {
+      const memberIndex = updatedFamilyBalance.memberBalances.findIndex(
+        m => String(m.userId) === String(userId)
+      );
+      
+      if (memberIndex >= 0) {
+        updatedFamilyBalance.memberBalances[memberIndex].balance = wallet.initialBalance;
+        updatedFamilyBalance.updatedAt = new Date();
+        await updatedFamilyBalance.save();
+      }
+    }
+    
+    // Lấy family balance mới nhất
+    const finalFamilyBalance = await FamilyBalance.getBalance(familyId);
+    
+    res.json({
+      message: 'Chuyển tiền thành công',
+      walletBalance: wallet.initialBalance,
+      familyBalance: finalFamilyBalance.familyBalance,
+      memberBalance: wallet.initialBalance,
+      amount: amount,
+      wallet: {
+        _id: wallet._id,
+        name: wallet.name,
+        currency: wallet.currency,
+        initialBalance: wallet.initialBalance,
+        currentBalance: wallet.initialBalance,
+        updatedAt: wallet.updatedAt
+      }
+    });
+  } catch (error) {
+    console.error('Error transferring from family:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });

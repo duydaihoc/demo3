@@ -588,6 +588,18 @@ export default function FamilyTransactions() {
   const [showAutoLinkModal, setShowAutoLinkModal] = useState(false);
   const [defaultWallet, setDefaultWallet] = useState(null);
   const [autoLinkEnabled, setAutoLinkEnabled] = useState(false);
+  
+  // Transfer to family state
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferAmount, setTransferAmount] = useState('');
+  const [transferDescription, setTransferDescription] = useState('');
+  const [isTransferring, setIsTransferring] = useState(false);
+  
+  // Transfer from family state
+  const [showTransferFromModal, setShowTransferFromModal] = useState(false);
+  const [transferFromAmount, setTransferFromAmount] = useState('');
+  const [transferFromDescription, setTransferFromDescription] = useState('');
+  const [isTransferringFrom, setIsTransferringFrom] = useState(false);
 
   // Load auto-link settings from localStorage
   useEffect(() => {
@@ -726,13 +738,149 @@ export default function FamilyTransactions() {
       
       const data = await res.json();
       setUserWallets(data);
+      
+      // Cập nhật defaultWallet nếu nó có trong danh sách
+      if (defaultWallet) {
+        const updatedWallet = data.find(w => w._id === defaultWallet._id);
+        if (updatedWallet) {
+          setDefaultWallet(updatedWallet);
+          // Cập nhật localStorage
+          localStorage.setItem(`family_${selectedFamilyId}_defaultWallet`, JSON.stringify(updatedWallet));
+        }
+      }
     } catch (err) {
       console.error("Error fetching user wallets:", err);
       showNotification('Không thể tải danh sách ví', 'error');
     } finally {
       setLoadingWallets(false);
     }
-  }, [token, API_BASE]);
+  }, [token, API_BASE, defaultWallet, selectedFamilyId]);
+
+  // Handle transfer to family
+  const handleTransferToFamily = async (e) => {
+    e.preventDefault();
+    
+    if (!transferAmount || Number(transferAmount) <= 0) {
+      showNotification('Vui lòng nhập số tiền hợp lệ', 'error');
+      return;
+    }
+    
+    if (!defaultWallet) {
+      showNotification('Vui lòng chọn ví trước', 'error');
+      return;
+    }
+    
+    const amount = Number(transferAmount);
+    if (defaultWallet.currentBalance < amount) {
+      showNotification(`Số dư ví không đủ. Hiện tại: ${formatCurrency(defaultWallet.currentBalance)}`, 'error');
+      return;
+    }
+    
+    setIsTransferring(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/transfer-to-family`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          amount,
+          walletId: defaultWallet._id,
+          description: transferDescription || 'Chuyển tiền vào quỹ gia đình'
+        })
+      });
+      
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || 'Không thể chuyển tiền');
+      }
+      
+      const data = await res.json();
+      
+      showNotification(`Đã chuyển ${formatCurrency(amount)} vào quỹ gia đình`, 'success');
+      
+      // Reset form
+      setTransferAmount('');
+      setTransferDescription('');
+      setShowTransferModal(false);
+      
+      // Refresh data
+      await Promise.all([
+        fetchBalance(),
+        fetchUserWallets(), // Đây sẽ tự động cập nhật defaultWallet
+        fetchTransactions()
+      ]);
+    } catch (err) {
+      console.error("Error transferring to family:", err);
+      showNotification(err.message || 'Đã xảy ra lỗi khi chuyển tiền', 'error');
+    } finally {
+      setIsTransferring(false);
+    }
+  };
+
+  // Handle transfer from family
+  const handleTransferFromFamily = async (e) => {
+    e.preventDefault();
+    
+    if (!transferFromAmount || Number(transferFromAmount) <= 0) {
+      showNotification('Vui lòng nhập số tiền hợp lệ', 'error');
+      return;
+    }
+    
+    if (!defaultWallet) {
+      showNotification('Vui lòng chọn ví trước', 'error');
+      return;
+    }
+    
+    const amount = Number(transferFromAmount);
+    if (familyBalance && familyBalance.familyBalance < amount) {
+      showNotification(`Số dư quỹ gia đình không đủ. Hiện tại: ${formatCurrency(familyBalance.familyBalance)}`, 'error');
+      return;
+    }
+    
+    setIsTransferringFrom(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/transfer-from-family`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          amount,
+          walletId: defaultWallet._id,
+          description: transferFromDescription || 'Nhận tiền từ quỹ gia đình'
+        })
+      });
+      
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || 'Không thể chuyển tiền');
+      }
+      
+      const data = await res.json();
+      
+      showNotification(`Đã nhận ${formatCurrency(amount)} từ quỹ gia đình`, 'success');
+      
+      // Reset form
+      setTransferFromAmount('');
+      setTransferFromDescription('');
+      setShowTransferFromModal(false);
+      
+      // Refresh data
+      await Promise.all([
+        fetchBalance(),
+        fetchUserWallets(), // Đây sẽ tự động cập nhật defaultWallet
+        fetchTransactions()
+      ]);
+    } catch (err) {
+      console.error("Error transferring from family:", err);
+      showNotification(err.message || 'Đã xảy ra lỗi khi chuyển tiền', 'error');
+    } finally {
+      setIsTransferringFrom(false);
+    }
+  };
 
   return (
     <div className="family-page">
@@ -787,6 +935,23 @@ export default function FamilyTransactions() {
               >
                 <i className="fas fa-wallet"></i> Chọn ví liên kết
               </button>
+            )}
+            
+            {autoLinkEnabled && defaultWallet && (
+              <>
+                <button 
+                  className="ft-btn secondary"
+                  onClick={() => setShowTransferModal(true)}
+                >
+                  <i className="fas fa-arrow-up"></i> Nạp vào quỹ
+                </button>
+                <button 
+                  className="ft-btn secondary"
+                  onClick={() => setShowTransferFromModal(true)}
+                >
+                  <i className="fas fa-arrow-down"></i> Rút về ví
+                </button>
+              </>
             )}
             
             <button 
@@ -1255,6 +1420,220 @@ export default function FamilyTransactions() {
                   Đóng
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Transfer to Family Modal */}
+        {showTransferModal && (
+          <div className="ft-modal-overlay">
+            <div className="ft-modal">
+              <div className="ft-modal-header">
+                <h3>Chuyển tiền vào quỹ gia đình</h3>
+                <button 
+                  className="ft-modal-close"
+                  onClick={() => {
+                    setShowTransferModal(false);
+                    setTransferAmount('');
+                    setTransferDescription('');
+                  }}
+                >
+                  &times;
+                </button>
+              </div>
+              
+              <form onSubmit={handleTransferToFamily} className="ft-form">
+                <div className="ft-transfer-info">
+                  <div className="ft-wallet-info-card">
+                    <div className="ft-wallet-icon">
+                      <i className="fas fa-wallet"></i>
+                    </div>
+                    <div>
+                      <div className="ft-wallet-name">{defaultWallet?.name}</div>
+                      <div className="ft-wallet-balance">
+                        Số dư hiện tại: {formatCurrency(defaultWallet?.currentBalance || 0)}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="ft-transfer-arrow">
+                    <i className="fas fa-arrow-down"></i>
+                  </div>
+                  
+                  <div className="ft-family-info-card">
+                    <div className="ft-family-icon">
+                      <i className="fas fa-home"></i>
+                    </div>
+                    <div>
+                      <div className="ft-family-name">Quỹ gia đình</div>
+                      <div className="ft-family-balance">
+                        Số dư hiện tại: {formatCurrency(familyBalance?.familyBalance || 0)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="ft-form-group">
+                  <label>Số tiền chuyển <span className="required">*</span></label>
+                  <input 
+                    type="number"
+                    className="ft-input"
+                    value={transferAmount}
+                    onChange={(e) => setTransferAmount(e.target.value)}
+                    placeholder="Nhập số tiền"
+                    min="1"
+                    required
+                  />
+                </div>
+                
+                <div className="ft-form-group">
+                  <label>Ghi chú</label>
+                  <textarea 
+                    className="ft-input"
+                    value={transferDescription}
+                    onChange={(e) => setTransferDescription(e.target.value)}
+                    placeholder="Ghi chú về giao dịch (tùy chọn)"
+                    rows="3"
+                  />
+                </div>
+                
+                <div className="ft-form-actions">
+                  <button 
+                    type="button" 
+                    className="ft-btn secondary"
+                    onClick={() => {
+                      setShowTransferModal(false);
+                      setTransferAmount('');
+                      setTransferDescription('');
+                    }}
+                    disabled={isTransferring}
+                  >
+                    Hủy
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="ft-btn primary"
+                    disabled={isTransferring}
+                  >
+                    {isTransferring ? (
+                      <>
+                        <i className="fas fa-spinner fa-spin"></i> Đang chuyển...
+                      </>
+                    ) : (
+                      <>
+                        <i className="fas fa-exchange-alt"></i> Chuyển tiền
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Transfer from Family Modal */}
+        {showTransferFromModal && (
+          <div className="ft-modal-overlay">
+            <div className="ft-modal">
+              <div className="ft-modal-header">
+                <h3>Rút tiền từ quỹ gia đình về ví</h3>
+                <button 
+                  className="ft-modal-close"
+                  onClick={() => {
+                    setShowTransferFromModal(false);
+                    setTransferFromAmount('');
+                    setTransferFromDescription('');
+                  }}
+                >
+                  &times;
+                </button>
+              </div>
+              
+              <form onSubmit={handleTransferFromFamily} className="ft-form">
+                <div className="ft-transfer-info">
+                  <div className="ft-family-info-card">
+                    <div className="ft-family-icon">
+                      <i className="fas fa-home"></i>
+                    </div>
+                    <div>
+                      <div className="ft-family-name">Quỹ gia đình</div>
+                      <div className="ft-family-balance">
+                        Số dư hiện tại: {formatCurrency(familyBalance?.familyBalance || 0)}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="ft-transfer-arrow">
+                    <i className="fas fa-arrow-down"></i>
+                  </div>
+                  
+                  <div className="ft-wallet-info-card">
+                    <div className="ft-wallet-icon">
+                      <i className="fas fa-wallet"></i>
+                    </div>
+                    <div>
+                      <div className="ft-wallet-name">{defaultWallet?.name}</div>
+                      <div className="ft-wallet-balance">
+                        Số dư hiện tại: {formatCurrency(defaultWallet?.currentBalance || 0)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="ft-form-group">
+                  <label>Số tiền rút <span className="required">*</span></label>
+                  <input 
+                    type="number"
+                    className="ft-input"
+                    value={transferFromAmount}
+                    onChange={(e) => setTransferFromAmount(e.target.value)}
+                    placeholder="Nhập số tiền"
+                    min="1"
+                    required
+                  />
+                </div>
+                
+                <div className="ft-form-group">
+                  <label>Ghi chú</label>
+                  <textarea 
+                    className="ft-input"
+                    value={transferFromDescription}
+                    onChange={(e) => setTransferFromDescription(e.target.value)}
+                    placeholder="Ghi chú về giao dịch (tùy chọn)"
+                    rows="3"
+                  />
+                </div>
+                
+                <div className="ft-form-actions">
+                  <button 
+                    type="button" 
+                    className="ft-btn secondary"
+                    onClick={() => {
+                      setShowTransferFromModal(false);
+                      setTransferFromAmount('');
+                      setTransferFromDescription('');
+                    }}
+                    disabled={isTransferringFrom}
+                  >
+                    Hủy
+                  </button>
+                  <button 
+                    type="submit" 
+                    className="ft-btn primary"
+                    disabled={isTransferringFrom}
+                  >
+                    {isTransferringFrom ? (
+                      <>
+                        <i className="fas fa-spinner fa-spin"></i> Đang rút...
+                      </>
+                    ) : (
+                      <>
+                        <i className="fas fa-arrow-down"></i> Rút tiền
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}
