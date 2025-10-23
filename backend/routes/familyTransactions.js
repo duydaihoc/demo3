@@ -74,7 +74,8 @@ router.get('/:familyId/transactions', authenticateToken, isFamilyMember, async (
       category, 
       sort = 'date',
       order = 'desc',
-      transactionScope
+      transactionScope,
+      excludeActivities // new query param
     } = req.query;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -85,6 +86,12 @@ router.get('/:familyId/transactions', authenticateToken, isFamilyMember, async (
     if (type) filter.type = type;
     if (category) filter.category = category;
     if (transactionScope) filter.transactionScope = transactionScope;
+    
+    // Nếu có yêu cầu loại trừ "activity" (transfer) thì bỏ các giao dịch có tag 'transfer'
+    if (excludeActivities === 'true' || excludeActivities === '1') {
+      // ensure we exclude documents where tags array contains 'transfer'
+      filter.tags = { $ne: 'transfer' };
+    }
     
     if (startDate || endDate) {
       filter.date = {};
@@ -1141,6 +1148,22 @@ router.post('/:familyId/transfer-to-family', authenticateToken, isFamilyMember, 
     // Cộng tiền vào family balance
     await FamilyBalance.updateBalance(familyId, userId, amount, 'income', 'family');
     
+    // --- NEW: tạo FamilyTransaction cho hoạt động nạp vào quỹ (để owner có thể xem) ---
+    const familyTx = new FamilyTransaction({
+      familyId,
+      type: 'income',               // gia tăng quỹ
+      amount,
+      category: null,               // transfer không có category cụ thể
+      description: description || `Nạp từ ví ${wallet.name}`,
+      transactionScope: 'family',
+      date: new Date(),
+      createdBy: userId,
+      creatorName: req.user.name || '',
+      tags: ['transfer', 'to-family']
+    });
+    await familyTx.save();
+    // --- end NEW ---
+    
     // Cập nhật số dư cá nhân = số dư ví sau khi chuyển
     let familyBalance = await FamilyBalance.findOne({ familyId });
     if (familyBalance) {
@@ -1171,7 +1194,8 @@ router.post('/:familyId/transfer-to-family', authenticateToken, isFamilyMember, 
         initialBalance: wallet.initialBalance,
         currentBalance: wallet.initialBalance,
         updatedAt: wallet.updatedAt
-      }
+      },
+      familyTransaction: familyTx // trả về transaction mới tạo
     });
   } catch (error) {
     console.error('Error transferring to family:', error);
@@ -1236,6 +1260,22 @@ router.post('/:familyId/transfer-from-family', authenticateToken, isFamilyMember
       date: new Date()
     });
     await walletTransaction.save();
+
+    // --- NEW: tạo FamilyTransaction cho hoạt động rút tiền khỏi quỹ (để owner có thể xem) ---
+    const familyTx = new FamilyTransaction({
+      familyId,
+      type: 'expense',             // quỹ giảm
+      amount,
+      category: null,
+      description: description || `Rút về ví ${wallet.name}`,
+      transactionScope: 'family',
+      date: new Date(),
+      createdBy: userId,
+      creatorName: req.user.name || '',
+      tags: ['transfer', 'from-family']
+    });
+    await familyTx.save();
+    // --- end NEW ---
     
     // Cập nhật số dư cá nhân = số dư ví sau khi nhận
     const updatedFamilyBalance = await FamilyBalance.findOne({ familyId });
@@ -1267,7 +1307,8 @@ router.post('/:familyId/transfer-from-family', authenticateToken, isFamilyMember
         initialBalance: wallet.initialBalance,
         currentBalance: wallet.initialBalance,
         updatedAt: wallet.updatedAt
-      }
+      },
+      familyTransaction: familyTx // trả về transaction mới tạo
     });
   } catch (error) {
     console.error('Error transferring from family:', error);

@@ -1504,6 +1504,76 @@
   transition: transform 0.3s ease;
 }
 
+/* Activity table styles */
+.ft-activity-table-wrap {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.ft-activity-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 800px;
+  font-size: 14px;
+}
+
+.ft-activity-table thead th {
+  text-align: left;
+  padding: 12px 16px;
+  background: rgba(255,255,255,0.03);
+  color: #cbd5e1;
+  font-weight: 700;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.ft-activity-table tbody td {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  color: #e6eef8;
+  vertical-align: middle;
+}
+
+.ft-activity-table tbody tr:hover {
+  background: rgba(255,255,255,0.02);
+  transform: translateX(4px);
+}
+
+.ft-activity-table td .ft-btn {
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+/* Color classes for amounts inside table */
+.ft-activity-table td.income, .ft-activity-table td.income * {
+  color: #10b981;
+  font-weight: 700;
+}
+
+.ft-activity-table td.expense, .ft-activity-table td.expense * {
+  color: #ef4444;
+  font-weight: 700;
+}
+
+/* Activity modal specific adjustments */
+.ft-activity-modal .ft-modal-header,
+.ft-activity-modal .ft-modal {
+  max-width: 1000px;
+}
+
+/* Make preview values wrap better */
+.ft-transaction-preview .ft-preview-value {
+  word-break: break-word;
+  white-space: normal;
+}
+
+/* Responsive: small screen reduce min-width so table scrolls horizontally */
+@media (max-width: 768px) {
+  .ft-activity-table {
+    min-width: 640px;
+  }
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .family-main {

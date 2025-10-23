@@ -19,7 +19,7 @@ const familyTransactionSchema = new mongoose.Schema({
   category: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Category',
-    required: true
+    default: null
   },
   description: {
     type: String,
@@ -101,6 +101,8 @@ familyTransactionSchema.statics.getCategorySummary = async function(familyId, st
       $match: {
         familyId: mongoose.Types.ObjectId(familyId),
         type,
+        // exclude transactions without a category to avoid $unwind errors
+        category: { $ne: null },
         date: { $gte: new Date(startDate), $lte: new Date(endDate) }
       }
     },
