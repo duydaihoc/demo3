@@ -126,10 +126,12 @@ familyBalanceSchema.statics.getBalance = async function(familyId) {
     // Tính toán thu nhập và chi tiêu gia đình từ giao dịch
     const FamilyTransaction = require('./FamilyTransaction');
     
-    // Lấy tất cả giao dịch gia đình
-    const familyTransactions = await FamilyTransaction.find({ 
-      familyId, 
-      transactionScope: 'family' 
+    // Lấy tất cả giao dịch gia đình EXCLUDE transfer activities (nạp/rút)
+    const familyTransactions = await FamilyTransaction.find({
+      familyId,
+      transactionScope: 'family',
+      // loại trừ các giao dịch có tag 'transfer' (nạp/rút)
+      tags: { $ne: 'transfer' }
     });
     
     let familyIncome = 0;

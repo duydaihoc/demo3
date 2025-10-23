@@ -69,7 +69,8 @@ export default function FamilyHome() {
     setLoadingTransactions(true);
     try {
       // Chỉ lấy giao dịch gia đình (transactionScope=family)
-      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/transactions?limit=5&sort=date&order=desc&transactionScope=family`, {
+      // thêm excludeActivities=true để loại trừ các hoạt động nạp/rút (tag 'transfer')
+      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/transactions?limit=5&sort=date&order=desc&transactionScope=family&excludeActivities=true`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       

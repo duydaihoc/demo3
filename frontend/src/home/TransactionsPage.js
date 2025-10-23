@@ -633,15 +633,18 @@ function TransactionsPage() {
                 // Xác định kiểu hiển thị và style cho giao dịch nhóm
                 const isGroupTx = tx.groupTransaction === true;
                 const isPending = tx.isPending === true;
-                
+
+                // NEW: detect family transfer wallet transactions
+                const isFamilyTransfer = tx.metadata && tx.metadata.source === 'family_transfer';
+                const familyName = tx.metadata && tx.metadata.familyName ? tx.metadata.familyName : '';
+                const familyDirection = tx.metadata && tx.metadata.direction ? tx.metadata.direction : ''; // 'to-family' | 'from-family'
+
                 // Tính toán style và icon cho giao dịch nhóm
                 let rowStyle = {};
                 let actionIcon = '';
                 let detailText = '';
                 
                 if (isGroupTx) {
-                  detailText = tx.displayDetails || '';
-                  
                   // Style cho các loại giao dịch nhóm khác nhau
                   if (tx.groupRole === 'payer' && tx.groupActionType === 'paid') {
                     rowStyle = { backgroundColor: '#fff8e1' }; // Màu vàng nhạt cho người trả tiền
@@ -662,6 +665,11 @@ function TransactionsPage() {
                   <tr key={tx._id} style={rowStyle}>
                     <td>{new Date(tx.date).toLocaleDateString()}</td>
                     <td>
+                      {isFamilyTransfer && (
+                        <div style={{ fontSize: 12, color: '#065f46', fontWeight: 700, marginBottom: 4 }}>
+                          {familyDirection === 'to-family' ? 'Nạp vào quỹ:' : familyDirection === 'from-family' ? 'Nhận từ quỹ:' : 'Quỹ:'} {familyName || tx.metadata.familyId || ''}
+                        </div>
+                      )}
                       {isGroupTx && <span style={{ marginRight: '5px' }}>{actionIcon}</span>}
                       <strong style={isPending ? { fontStyle: 'italic' } : {}}>{titleText}</strong>
                       {isPending && <span style={{ color: '#f57c00', marginLeft: '5px', fontSize: '12px' }}>(Chưa thanh toán)</span>}
@@ -705,8 +713,8 @@ function TransactionsPage() {
                       )}
                     </td>
                     <td className="tx-actions">
-                      {/* Chỉ hiển thị nút Sửa/Xóa cho giao dịch cá nhân */}
-                      {!isGroupTx && (
+                      {/* Chỉ hiển thị nút Sửa/Xóa cho giao dịch cá nhân VÀ không phải transfer quỹ */}
+                      {!isGroupTx && !isFamilyTransfer && (
                         <>
                           <button className="tx-edit-btn" onClick={() => openEdit(tx)}>Sửa</button>
                           <button className="tx-delete-btn" onClick={() => openDeleteConfirm(tx)}>Xóa</button>

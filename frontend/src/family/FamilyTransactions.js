@@ -897,7 +897,8 @@ export default function FamilyTransactions() {
 		if (!token || !selectedFamilyId) return;
 		setLoadingActivities(true);
 		try {
-			const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/transactions?transactionScope=family&limit=200&page=1`, {
+			// request only transfer activities (nạp/rút) for the family
+			const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/transactions?transactionScope=family&includeActivities=true&limit=200&page=1`, {
 				headers: { Authorization: `Bearer ${token}` }
 			});
 			if (!res.ok) throw new Error('Không thể tải hoạt động');
@@ -1987,6 +1988,7 @@ export default function FamilyTransactions() {
 									)}
 								</div>
 								
+															
 								<div className="ft-modal-footer">
 									<button 
 										className="ft-btn secondary"
