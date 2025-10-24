@@ -6,6 +6,7 @@ const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const FamilyTransaction = require('../models/FamilyTransaction');
+const Transaction = require('../models/Transaction'); // wallet transactions model
 const FamilyBalance = require('../models/FamilyBalance');
 
 // Middleware xác thực token
@@ -381,14 +382,27 @@ router.delete('/:familyId/remove-member', authenticateToken, async (req, res) =>
     }
 
     // Xóa tất cả giao dịch của thành viên này và hoàn tác số dư
-    const transactionsToDelete = await FamilyTransaction.find({ familyId, createdBy: memberId });
+    // Xóa tất cả giao dịch của thành viên này và hoàn tác số dư
+    const transactionsToDelete = await FamilyTransaction.find({ familyId, createdBy: memberId }).select('_id type amount transactionScope linkedTransaction');
+    const memberFamilyTxIds = transactionsToDelete.map(t => String(t._id)).filter(Boolean);
+    const memberLinkedTxIds = transactionsToDelete.map(t => t.linkedTransaction).filter(Boolean);
+
     for (const tx of transactionsToDelete) {
       // Hoàn tác số dư: nếu income thì trừ amount, nếu expense thì cộng lại amount
       const updateAmount = tx.type === 'income' ? -tx.amount : tx.amount;
       await FamilyBalance.updateBalance(familyId, memberId, updateAmount, 'income', tx.transactionScope);
     }
-    // Xóa tất cả giao dịch của thành viên
+    // Xóa FamilyTransaction của member
     await FamilyTransaction.deleteMany({ familyId, createdBy: memberId });
+
+    // Xóa wallet transactions liên quan do member tạo (linkedTransaction hoặc metadata.familyTransactionId)
+    await Transaction.deleteMany({
+      $or: [
+        { _id: { $in: memberLinkedTxIds } },
+        { 'metadata.familyTransactionId': { $in: memberFamilyTxIds } },
+        { $and: [ { 'metadata.familyId': familyId }, { createdBy: memberId } ] }
+      ]
+    });
 
     // { added: Xóa số dư cá nhân của thành viên khỏi FamilyBalance }
     await FamilyBalance.updateOne(
@@ -540,10 +554,28 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Bạn không có quyền xóa gia đình này' });
     }
     
-    // { added: Xóa tất cả dữ liệu liên quan đến gia đình }
-    // Xóa tất cả giao dịch của gia đình
+    // { added: Xóa tất cả giao dịch của gia đình và các wallet transactions liên quan }
+    // Lấy tất cả FamilyTransaction trước để biết các linkedTransaction / ids
+    const familyTxs = await FamilyTransaction.find({ familyId }).select('_id linkedTransaction');
+    const familyTxIds = familyTxs.map(t => String(t._id)).filter(Boolean);
+    const linkedTxIds = familyTxs.map(t => t.linkedTransaction).filter(Boolean);
+
+    // Xóa FamilyTransaction của gia đình
     await FamilyTransaction.deleteMany({ familyId });
-    
+
+    // Xóa tất cả wallet transactions liên quan:
+    // - transaction documents có metadata.familyId = familyId
+    // - transaction documents có metadata.familyTransactionId trong familyTxIds
+    // - transaction documents whose _id matches any linkedTransaction
+    const txDeleteFilter = {
+      $or: [
+        { _id: { $in: linkedTxIds } },
+        { 'metadata.familyId': familyId },
+        { 'metadata.familyTransactionId': { $in: familyTxIds } }
+      ]
+    };
+    await Transaction.deleteMany(txDeleteFilter);
+
     // Xóa tất cả lời mời của gia đình
     await FamilyInvitation.deleteMany({ family: familyId });
     
@@ -612,20 +644,26 @@ router.post('/:id/leave', authenticateToken, async (req, res) => {
     }
 
     // { added: Xóa tất cả giao dịch của thành viên này và hoàn tác số dư }
-    const transactionsToDelete = await FamilyTransaction.find({ familyId, createdBy: userId });
+    const transactionsToDelete = await FamilyTransaction.find({ familyId, createdBy: userId }).select('_id type amount transactionScope linkedTransaction');
+    const memberFamilyTxIds = transactionsToDelete.map(t => String(t._id)).filter(Boolean);
+    const memberLinkedTxIds = transactionsToDelete.map(t => t.linkedTransaction).filter(Boolean);
+
     for (const tx of transactionsToDelete) {
       // Hoàn tác số dư: nếu income thì trừ amount, nếu expense thì cộng lại amount
       const updateAmount = tx.type === 'income' ? -tx.amount : tx.amount;
       await FamilyBalance.updateBalance(familyId, userId, updateAmount, 'income', tx.transactionScope);
     }
-    // Xóa tất cả giao dịch của thành viên
+    // Xóa FamilyTransaction của member
     await FamilyTransaction.deleteMany({ familyId, createdBy: userId });
 
-    // { added: Xóa số dư cá nhân của thành viên khỏi FamilyBalance }
-    await FamilyBalance.updateOne(
-      { familyId },
-      { $pull: { memberBalances: { userId: userId } } }
-    );
+    // Xóa wallet transactions liên quan do member tạo (linkedTransaction hoặc metadata.familyTransactionId)
+    await Transaction.deleteMany({
+      $or: [
+        { _id: { $in: memberLinkedTxIds } },
+        { 'metadata.familyTransactionId': { $in: memberFamilyTxIds } },
+        { $and: [ { 'metadata.familyId': familyId }, { createdBy: userId } ] }
+      ]
+    });
 
     res.status(200).json({ message: 'Đã rời khỏi gia đình thành công' });
   } catch (error) {
