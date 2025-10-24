@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose'); // <--- THÊM DÒNG NÀY
 const router = express.Router();
 const Family = require('../models/family');
 const FamilyInvitation = require('../models/FamilyInvitation');
@@ -8,6 +9,7 @@ const crypto = require('crypto');
 const FamilyTransaction = require('../models/FamilyTransaction');
 const Transaction = require('../models/Transaction'); // wallet transactions model
 const FamilyBalance = require('../models/FamilyBalance');
+const Category = require('../models/Category'); // cần để validate category
 
 // Middleware xác thực token
 const authenticateToken = (req, res, next) => {
@@ -753,6 +755,163 @@ router.put('/:familyId/my-role', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error updating owner role:', error);
     res.status(500).json({ message: 'Lỗi server khi cập nhật vai trò' });
+  }
+});
+
+// Thêm schema ngân sách vào Family nếu chưa có (chỉ cần chạy 1 lần khi deploy, ở đây để an toàn)
+if (!Family.schema.paths.budgets) {
+  Family.schema.add({
+    budgets: [{
+      category: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', required: true },
+      amount: { type: Number, required: true },
+      date: { type: Date, required: true },
+      note: { type: String, default: '' },
+      createdAt: { type: Date, default: Date.now }
+    }]
+  });
+}
+
+// API: Tạo ngân sách cho gia đình
+router.post('/:familyId/budget', authenticateToken, async (req, res) => {
+  try {
+    const { familyId } = req.params;
+    const { category, amount, date, note } = req.body;
+    const userId = req.user.id || req.user._id;
+
+    // Kiểm tra quyền truy cập
+    // Cho phép cả owner và member thêm ngân sách
+    const family = await Family.findOne({
+      _id: familyId,
+      $or: [
+        { 'members.user': userId },
+        { owner: userId }
+      ]
+    });
+    if (!family) return res.status(403).json({ message: 'Bạn không có quyền với gia đình này' });
+
+    // Validate
+    if (!category || !mongoose.Types.ObjectId.isValid(category)) {
+      return res.status(400).json({ message: 'Danh mục không hợp lệ' });
+    }
+    if (!amount || isNaN(amount) || amount <= 0) {
+      return res.status(400).json({ message: 'Số tiền phải lớn hơn 0' });
+    }
+    if (!date) {
+      return res.status(400).json({ message: 'Ngày là bắt buộc' });
+    }
+    const cat = await Category.findById(category);
+    if (!cat) return res.status(404).json({ message: 'Không tìm thấy danh mục' });
+
+    // Thêm ngân sách vào mảng budgets
+    family.budgets = Array.isArray(family.budgets) ? family.budgets : [];
+    family.budgets.push({
+      category,
+      amount,
+      date,
+      note: note || '',
+      createdAt: new Date()
+    });
+    await family.save();
+
+    // Populate category cho ngân sách vừa tạo
+    const lastBudget = family.budgets[family.budgets.length - 1];
+    await Family.populate(lastBudget, { path: 'category', select: 'name icon type' });
+
+    res.status(201).json(lastBudget);
+  } catch (err) {
+    console.error('Create family budget error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// API: Lấy danh sách ngân sách của gia đình
+router.get('/:familyId/budget', authenticateToken, async (req, res) => {
+  try {
+    const { familyId } = req.params;
+    const userId = req.user.id || req.user._id;
+
+    const family = await Family.findOne({ _id: familyId, 'members.user': userId })
+      .populate('budgets.category', 'name icon type');
+    if (!family) return res.status(403).json({ message: 'Bạn không có quyền với gia đình này' });
+
+    res.json(family.budgets || []);
+  } catch (err) {
+    console.error('Get family budgets error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// API: Sửa ngân sách (chỉ cho phép sửa amount và date)
+router.put('/:familyId/budget/:budgetId', authenticateToken, async (req, res) => {
+  try {
+    const { familyId, budgetId } = req.params;
+    const { amount, date } = req.body;
+    const userId = req.user.id || req.user._id;
+
+    // Kiểm tra quyền truy cập - CHỈ OWNER mới được sửa
+    const family = await Family.findOne({
+      _id: familyId,
+      owner: userId
+    });
+    if (!family) return res.status(403).json({ message: 'Chỉ chủ gia đình mới có quyền sửa ngân sách' });
+
+    // Tìm budget trong mảng budgets
+    const budget = family.budgets.id(budgetId);
+    if (!budget) return res.status(404).json({ message: 'Không tìm thấy ngân sách' });
+
+    // Validate amount nếu có
+    if (amount !== undefined) {
+      if (isNaN(amount) || amount <= 0) {
+        return res.status(400).json({ message: 'Số tiền phải lớn hơn 0' });
+      }
+      budget.amount = Number(amount);
+    }
+
+    // Validate date nếu có
+    if (date !== undefined) {
+      if (!date) {
+        return res.status(400).json({ message: 'Ngày không hợp lệ' });
+      }
+      budget.date = new Date(date);
+    }
+
+    await family.save();
+
+    // Populate category cho budget đã update
+    await Family.populate(budget, { path: 'category', select: 'name icon type' });
+
+    res.json(budget);
+  } catch (err) {
+    console.error('Update family budget error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// API: Xóa ngân sách
+router.delete('/:familyId/budget/:budgetId', authenticateToken, async (req, res) => {
+  try {
+    const { familyId, budgetId } = req.params;
+    const userId = req.user.id || req.user._id;
+
+    // Kiểm tra quyền truy cập - CHỈ OWNER mới được xóa
+    const family = await Family.findOne({
+      _id: familyId,
+      owner: userId
+    });
+    if (!family) return res.status(403).json({ message: 'Chỉ chủ gia đình mới có quyền xóa ngân sách' });
+
+    // Tìm budget trong mảng budgets
+    const budget = family.budgets.id(budgetId);
+    if (!budget) return res.status(404).json({ message: 'Không tìm thấy ngân sách' });
+
+    // Xóa budget khỏi mảng - dùng pull() thay vì remove()
+    family.budgets.pull(budgetId);
+    await family.save();
+
+    res.json({ message: 'Đã xóa ngân sách thành công' });
+  } catch (err) {
+    console.error('Delete family budget error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 

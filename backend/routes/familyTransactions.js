@@ -1364,4 +1364,40 @@ router.post('/:familyId/transfer-from-family', authenticateToken, isFamilyMember
   }
 });
 
+// GET /api/family/:familyId/budget-progress - Lấy tiến độ ngân sách (tổng chi tiêu theo danh mục trong tháng)
+router.get('/:familyId/budget-progress', authenticateToken, isFamilyMember, async (req, res) => {
+  try {
+    const { familyId } = req.params;
+    
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    
+    // Lấy tất cả giao dịch chi tiêu gia đình trong tháng, loại trừ transfer
+    const transactions = await FamilyTransaction.find({
+      familyId,
+      type: 'expense',
+      transactionScope: 'family',
+      tags: { $ne: 'transfer' },
+      date: { $gte: startOfMonth, $lte: endOfMonth }
+    }).populate('category', '_id');
+    
+    // Tính tổng theo category ID
+    const progress = {};
+    transactions.forEach(tx => {
+      const catId = tx.category?._id || tx.category;
+      if (catId) {
+        // Convert ObjectId to string để frontend dễ so sánh
+        const catIdStr = String(catId);
+        progress[catIdStr] = (progress[catIdStr] || 0) + tx.amount;
+      }
+    });
+    
+    res.json(progress);
+  } catch (error) {
+    console.error('Error fetching budget progress:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 module.exports = router;

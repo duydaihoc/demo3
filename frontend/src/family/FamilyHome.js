@@ -16,6 +16,26 @@ export default function FamilyHome() {
   const [recentTransactions, setRecentTransactions] = useState([]);
   const [loadingBalance, setLoadingBalance] = useState(false);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
+  // State cho modal ngân sách
+  const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const [budgetList, setBudgetList] = useState([]);
+  const [loadingBudgets, setLoadingBudgets] = useState(false);
+  const [showAddBudget, setShowAddBudget] = useState(false);
+  const [addBudgetForm, setAddBudgetForm] = useState({ category: '', amount: '', date: '', note: '' });
+  const [addBudgetLoading, setAddBudgetLoading] = useState(false);
+  const [addBudgetError, setAddBudgetError] = useState('');
+  const [categories, setCategories] = useState([]);
+  // State cho edit budget
+  const [editBudgetModal, setEditBudgetModal] = useState({ show: false, budget: null });
+  const [editBudgetForm, setEditBudgetForm] = useState({ amount: '', date: '' });
+  const [editBudgetLoading, setEditBudgetLoading] = useState(false);
+  const [editBudgetError, setEditBudgetError] = useState('');
+  // State cho delete budget
+  const [deleteBudgetModal, setDeleteBudgetModal] = useState({ show: false, budget: null });
+  const [deleteBudgetLoading, setDeleteBudgetLoading] = useState(false);
+  // State cho tiến độ ngân sách
+  const [budgetProgress, setBudgetProgress] = useState({});
+  const [loadingProgress, setLoadingProgress] = useState(false);
   
   const API_BASE = 'http://localhost:5000';
   const token = localStorage.getItem('token');
@@ -35,6 +55,26 @@ export default function FamilyHome() {
       return null;
     }
   }, [token]);
+
+  // Lấy danh sách ngân sách thực tế từ API
+  const fetchBudgets = useCallback(async () => {
+    if (!token || !selectedFamilyId) return;
+    setLoadingBudgets(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/budget`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Không thể tải ngân sách');
+      let data = await res.json();
+      // Đảm bảo luôn là mảng, nếu không thì set []
+      if (!Array.isArray(data)) data = [];
+      setBudgetList(data);
+    } catch (err) {
+      setBudgetList([]);
+    } finally {
+      setLoadingBudgets(false);
+    }
+  }, [token, selectedFamilyId, API_BASE]);
 
   // Thêm hàm để lấy số dư gia đình
   const fetchFamilyBalance = useCallback(async () => {
@@ -87,6 +127,26 @@ export default function FamilyHome() {
     }
   }, [token, selectedFamilyId, API_BASE]);
 
+  // Lấy tiến độ ngân sách (tổng chi tiêu theo danh mục trong tháng)
+  const fetchBudgetProgress = useCallback(async () => {
+    if (!token || !selectedFamilyId) return;
+    setLoadingProgress(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/budget-progress`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      console.log('Budget progress data:', data); // Debug: xem data trả về
+      setBudgetProgress(data);
+    } catch (err) {
+      console.error('Error fetching budget progress:', err);
+      setBudgetProgress({});
+    } finally {
+      setLoadingProgress(false);
+    }
+  }, [token, selectedFamilyId, API_BASE]);
+
   // Lấy thông tin gia đình từ API thật
   useEffect(() => {
     const loadData = async () => {
@@ -124,19 +184,14 @@ export default function FamilyHome() {
         const family = await familyRes.json();
         setFamilyData(family);
 
-        // Tạo dữ liệu ngân sách mẫu (sẽ thay thế bằng API thật sau)
-        const sampleBudgets = [
-          { id: "1", category: "Ăn uống", allocated: 5000000, spent: 3500000, icon: "fas fa-utensils" },
-          { id: "2", category: "Tiện ích", allocated: 2000000, spent: 1800000, icon: "fas fa-lightbulb" },
-          { id: "3", category: "Đi lại", allocated: 1500000, spent: 800000, icon: "fas fa-car" },
-          { id: "4", category: "Giải trí", allocated: 1000000, spent: 600000, icon: "fas fa-film" }
-        ];
-        setBudgets(sampleBudgets);
+        // Load ngân sách thực tế
+        await fetchBudgets();
         
         // Gọi các API mới
         await Promise.all([
           fetchFamilyBalance(),
-          fetchRecentTransactions()
+          fetchRecentTransactions(),
+          fetchBudgetProgress()
         ]);
         
       } catch (err) {
@@ -153,8 +208,153 @@ export default function FamilyHome() {
     };
     
     loadData();
-  }, [token, navigate, API_BASE, selectedFamilyId, getCurrentUser, fetchFamilyBalance, fetchRecentTransactions]);
+  }, [token, navigate, API_BASE, selectedFamilyId, getCurrentUser, fetchFamilyBalance, fetchRecentTransactions, fetchBudgets, fetchBudgetProgress]);
   
+  // Reload budget progress khi budgetList thay đổi (sau khi thêm giao dịch)
+  useEffect(() => {
+    if (budgetList.length > 0 && selectedFamilyId && token) {
+      fetchBudgetProgress();
+    }
+  }, [budgetList.length, selectedFamilyId, token, fetchBudgetProgress]);
+
+  // Lấy danh mục chi tiêu (cho form thêm ngân sách)
+  const fetchCategories = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/categories`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setCategories(data.filter(c => c.type === 'expense'));
+    } catch (err) {
+      setCategories([]);
+    }
+  }, [token, API_BASE]);
+
+  // Khi mở modal ngân sách thì load ngân sách và danh mục
+  useEffect(() => {
+    if (showBudgetModal) {
+      fetchBudgets();
+      fetchCategories();
+    }
+  }, [showBudgetModal, fetchBudgets, fetchCategories]);
+
+  // Thêm ngân sách mới
+  const handleAddBudget = async (e) => {
+    e && e.preventDefault();
+    setAddBudgetError('');
+    if (!addBudgetForm.category || !addBudgetForm.amount || !addBudgetForm.date) {
+      setAddBudgetError('Vui lòng nhập đủ thông tin');
+      return;
+    }
+    setAddBudgetLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/budget`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(addBudgetForm)
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Không thể thêm ngân sách');
+      }
+      setShowAddBudget(false);
+      setAddBudgetForm({ category: '', amount: '', date: '', note: '' });
+      // Reload ngân sách trước, sau đó reload progress để đảm bảo tính toán đúng
+      await fetchBudgets();
+      // Thêm timeout nhỏ để đảm bảo budgets đã được set state trước khi fetch progress
+      setTimeout(async () => {
+        await fetchBudgetProgress();
+      }, 100);
+    } catch (err) {
+      setAddBudgetError(err.message || 'Lỗi khi thêm ngân sách');
+    } finally {
+      setAddBudgetLoading(false);
+    }
+  };
+
+  // Mở modal sửa ngân sách
+  const openEditBudget = (budget) => {
+    setEditBudgetForm({
+      amount: budget.amount || '',
+      date: budget.date ? new Date(budget.date).toISOString().slice(0, 10) : ''
+    });
+    setEditBudgetModal({ show: true, budget });
+    setEditBudgetError('');
+  };
+
+  // Sửa ngân sách
+  const handleEditBudget = async (e) => {
+    e && e.preventDefault();
+    setEditBudgetError('');
+    if (!editBudgetForm.amount || !editBudgetForm.date) {
+      setEditBudgetError('Vui lòng nhập đủ thông tin');
+      return;
+    }
+    setEditBudgetLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/budget/${editBudgetModal.budget._id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(editBudgetForm)
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Không thể sửa ngân sách');
+      }
+      setEditBudgetModal({ show: false, budget: null });
+      // Reload budgets, sau đó force reload progress để tính lại % với số tiền mới
+      await fetchBudgets();
+      // Clear progress cũ trước khi fetch mới để trigger re-render
+      setBudgetProgress({});
+      setTimeout(async () => {
+        await fetchBudgetProgress();
+      }, 100);
+    } catch (err) {
+      setEditBudgetError(err.message || 'Lỗi khi sửa ngân sách');
+    } finally {
+      setEditBudgetLoading(false);
+    }
+  };
+
+  // Mở modal xóa ngân sách
+  const openDeleteBudget = (budget) => {
+    setDeleteBudgetModal({ show: true, budget });
+  };
+
+  // Xóa ngân sách
+  const handleDeleteBudget = async () => {
+    setDeleteBudgetLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/budget/${deleteBudgetModal.budget._id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Không thể xóa ngân sách');
+      }
+      setDeleteBudgetModal({ show: false, budget: null });
+      // Reload budgets và progress
+      await fetchBudgets();
+      setBudgetProgress({});
+      setTimeout(async () => {
+        await fetchBudgetProgress();
+      }, 100);
+    } catch (err) {
+      alert(err.message || 'Lỗi khi xóa ngân sách');
+    } finally {
+      setDeleteBudgetLoading(false);
+    }
+  };
+
   // Format currency helper
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
@@ -162,8 +362,16 @@ export default function FamilyHome() {
   
   // Calculate budget percentage
   const calculatePercentage = (spent, allocated) => {
-    return Math.min(Math.round((spent / allocated) * 100), 100);
+    // Trả về % với 1 chữ số thập phân, tối đa 100%
+    return Math.min(Number(((spent / allocated) * 100).toFixed(1)), 100);
   };
+
+  // Kiểm tra user có phải owner không - PHẢI ĐỊNH NGHĨA TRƯỚC CÁC RETURN SỚM
+  const isOwner = useCallback(() => {
+    if (!familyData || !currentUser) return false;
+    const ownerId = familyData.owner?._id || familyData.owner;
+    return String(ownerId) === String(currentUser.id);
+  }, [familyData, currentUser]);
 
   // Nếu không có dữ liệu gia đình và không loading, hiển thị lỗi
   if (!loading && !familyData && !error) {
@@ -207,7 +415,6 @@ export default function FamilyHome() {
   return (
     <div className="family-home">
       <FamilySidebar />
-      
       <main className="fh-main">
         {loading ? (
           <div className="fh-loading">
@@ -233,7 +440,7 @@ export default function FamilyHome() {
                 <button className="fh-btn secondary" onClick={() => navigate('/family/expenses')}>
                   <i className="fas fa-receipt"></i> Thêm chi tiêu
                 </button>
-                <button className="fh-btn primary" onClick={() => navigate('/family/budget')}>
+                <button className="fh-btn primary" onClick={() => setShowBudgetModal(true)}>
                   <i className="fas fa-wallet"></i> Quản lý ngân sách
                 </button>
               </div>
@@ -304,42 +511,68 @@ export default function FamilyHome() {
               <section className="fh-budget-overview">
                 <div className="fh-section-header">
                   <h2><i className="fas fa-chart-pie"></i> Ngân sách tháng này</h2>
-                  <button className="fh-btn-link" onClick={() => navigate('/family/budget')}>
+                  <button className="fh-btn-link" onClick={() => setShowBudgetModal(true)}>
                     Xem tất cả <i className="fas fa-chevron-right"></i>
                   </button>
                 </div>
                 
                 <div className="fh-budget-list">
-                  {budgets.map(budget => {
-                    const percentage = calculatePercentage(budget.spent, budget.allocated);
-                    const status = percentage >= 90 ? 'danger' : percentage >= 70 ? 'warning' : 'good';
+                  {(() => {
+                    // Lọc ngân sách theo tháng hiện tại
+                    const currentMonth = new Date().getMonth();
+                    const currentYear = new Date().getFullYear();
+                    const filteredBudgets = budgetList.filter(b => {
+                      if (!b.date) return false;
+                      const budgetDate = new Date(b.date);
+                      return budgetDate.getMonth() === currentMonth && budgetDate.getFullYear() === currentYear;
+                    });
                     
-                    return (
-                      <div key={budget.id} className="fh-budget-item">
-                        <div className="fh-budget-icon">
-                          <i className={budget.icon}></i>
+                    if (filteredBudgets.length === 0) {
+                      return (
+                        <div className="fh-empty-state">
+                          <i className="fas fa-calendar-alt"></i>
+                          <p>Chưa có ngân sách cho tháng này</p>
                         </div>
-                        
-                        <div className="fh-budget-content">
-                          <div className="fh-budget-title">{budget.category}</div>
-                          
-                          <div className="fh-budget-bar-container">
-                            <div 
-                              className={`fh-budget-bar ${status}`} 
-                              style={{ width: `${percentage}%` }}
-                            ></div>
+                      );
+                    }
+                    
+                    return filteredBudgets.map(budget => {
+                      // Lấy số tiền đã chi tiêu từ progress (theo category ID - convert sang string để so sánh)
+                      const categoryId = budget.category?._id || budget.category;
+                      const categoryIdStr = String(categoryId);
+                      const spent = budgetProgress[categoryIdStr] || 0;
+                      // Debug: log chi tiết để kiểm tra
+                      console.log(`Budget ${budget.category?.name}: categoryId=${categoryIdStr}, spent=${spent}, amount=${budget.amount}, percentage=${calculatePercentage(spent, budget.amount)}%`);
+                      const percentage = calculatePercentage(spent, budget.amount);
+                      const status = percentage >= 90 ? 'danger' : percentage >= 70 ? 'warning' : 'good';
+                      
+                      return (
+                        <div key={budget._id || budget.id} className="fh-budget-item">
+                          <div className="fh-budget-icon">
+                            <i className={budget.category?.icon || 'fas fa-tag'}></i>
                           </div>
                           
-                          <div className="fh-budget-details">
-                            <div className="fh-budget-spent">
-                              {formatCurrency(budget.spent)} / {formatCurrency(budget.allocated)}
+                          <div className="fh-budget-content">
+                            <div className="fh-budget-title">{budget.category?.name || 'Danh mục'}</div>
+                            
+                            <div className="fh-budget-bar-container">
+                              <div 
+                                className={`fh-budget-bar ${status}`} 
+                                style={{ width: `${percentage}%` }}
+                              ></div>
                             </div>
-                            <div className={`fh-budget-percentage ${status}`}>{percentage}%</div>
+                            
+                            <div className="fh-budget-details">
+                              <div className="fh-budget-spent">
+                                {formatCurrency(spent)} / {formatCurrency(budget.amount)}
+                              </div>
+                              <div className={`fh-budget-percentage ${status}`}>{percentage}%</div>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    });
+                  })()}
                 </div>
               </section>
               
@@ -497,6 +730,187 @@ export default function FamilyHome() {
           </>
         )}
       </main>
+      {/* MODAL: Bảng ngân sách */}
+      {showBudgetModal && (
+        <div className="fh-modal-overlay" style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }}>
+          <div className="fh-modal" style={{
+            background: '#fff', borderRadius: 12, padding: 32, minWidth: 340, maxWidth: 680, width: '100%', maxHeight: '90vh', overflowY: 'auto', position: 'relative'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+              <h2 style={{ margin: 0, fontSize: 22, color: '#2a5298' }}><i className="fas fa-wallet"></i> Bảng ngân sách</h2>
+              <button onClick={() => setShowBudgetModal(false)} style={{ background: 'none', border: 'none', fontSize: 26, color: '#888', cursor: 'pointer' }}>&times;</button>
+            </div>
+            {/* Chỉ owner mới thấy nút thêm ngân sách */}
+            {isOwner() && (
+              <div style={{ marginBottom: 18 }}>
+                <button className="fh-btn primary" onClick={() => setShowAddBudget(true)}>
+                  <i className="fas fa-plus"></i> Thêm ngân sách
+                </button>
+              </div>
+            )}
+            {loadingBudgets ? (
+              <div style={{ textAlign: 'center', padding: 24 }}>Đang tải...</div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 18 }}>
+                <thead>
+                  <tr style={{ background: '#f1f5f9' }}>
+                    <th style={{ padding: 8, textAlign: 'left' }}>Danh mục</th>
+                    <th style={{ padding: 8, textAlign: 'right' }}>Số tiền</th>
+                    <th style={{ padding: 8, textAlign: 'center' }}>Ngày</th>
+                    <th style={{ padding: 8, textAlign: 'left' }}>Ghi chú</th>
+                    {isOwner() && <th style={{ padding: 8, textAlign: 'center' }}>Thao tác</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {budgetList.length === 0 ? (
+                    <tr><td colSpan={isOwner() ? 5 : 4} style={{ textAlign: 'center', color: '#888', padding: 18 }}>Chưa có ngân sách</td></tr>
+                  ) : budgetList.map(b => (
+                    <tr key={b._id || b.id}>
+                      <td style={{ padding: 8 }}>
+                        {b.category && typeof b.category === 'object'
+                          ? (<><i className={b.category.icon || 'fas fa-tag'} style={{ marginRight: 6 }}></i> {b.category.name}</>)
+                          : '—'}
+                      </td>
+                      <td style={{ padding: 8, textAlign: 'right', fontWeight: 600 }}>{formatCurrency(b.amount)}</td>
+                      <td style={{ padding: 8, textAlign: 'center' }}>{b.date ? new Date(b.date).toLocaleDateString('vi-VN') : ''}</td>
+                      <td style={{ padding: 8 }}>{b.note || ''}</td>
+                      {/* Chỉ owner mới thấy nút Sửa/Xóa */}
+                      {isOwner() && (
+                        <td style={{ padding: 8, textAlign: 'center' }}>
+                          <button onClick={() => openEditBudget(b)} style={{ padding: '4px 10px', marginRight: 6, background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>
+                            <i className="fas fa-edit"></i> Sửa
+                          </button>
+                          <button onClick={() => openDeleteBudget(b)} style={{ padding: '4px 10px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>
+                            <i className="fas fa-trash"></i> Xóa
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {/* Form thêm ngân sách */}
+            {showAddBudget && (
+              <form onSubmit={handleAddBudget} style={{ background: '#f8fafc', borderRadius: 8, padding: 18, marginBottom: 12 }}>
+                <div style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
+                  <select
+                    value={addBudgetForm.category}
+                    onChange={e => setAddBudgetForm(f => ({ ...f, category: e.target.value }))}
+                    required
+                    style={{ flex: 1, padding: 8, borderRadius: 6, border: '1px solid #d1d5db' }}
+                  >
+                    <option value="">-- Chọn danh mục --</option>
+                    {categories.map(c => (
+                      <option key={c._id} value={c._id}>{c.icon ? `${c.icon} ` : ''}{c.name}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    placeholder="Số tiền"
+                    value={addBudgetForm.amount}
+                    onChange={e => setAddBudgetForm(f => ({ ...f, amount: e.target.value }))}
+                    required
+                    min={0}
+                    style={{ width: 120, padding: 8, borderRadius: 6, border: '1px solid #d1d5db' }}
+                  />
+                  <input
+                    type="date"
+                    value={addBudgetForm.date}
+                    onChange={e => setAddBudgetForm(f => ({ ...f, date: e.target.value }))}
+                    required
+                    style={{ width: 140, padding: 8, borderRadius: 6, border: '1px solid #d1d5db' }}
+                  />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Ghi chú (không bắt buộc)"
+                  value={addBudgetForm.note}
+                  onChange={e => setAddBudgetForm(f => ({ ...f, note: e.target.value }))}
+                  style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #d1d5db', marginBottom: 8 }}
+                />
+                {addBudgetError && <div style={{ color: '#b91c1c', marginBottom: 8 }}>{addBudgetError}</div>}
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button type="button" className="fh-btn secondary" onClick={() => { setShowAddBudget(false); setAddBudgetError(''); }}>Hủy</button>
+                  <button type="submit" className="fh-btn primary" disabled={addBudgetLoading}>
+                    {addBudgetLoading ? 'Đang lưu...' : 'Lưu ngân sách'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* MODAL: Sửa ngân sách */}
+      {editBudgetModal.show && (
+        <div className="fh-modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1001, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="fh-modal" style={{ background: '#fff', borderRadius: 12, padding: 32, minWidth: 340, maxWidth: 480, width: '100%', position: 'relative' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+              <h2 style={{ margin: 0, fontSize: 20, color: '#2a5298' }}><i className="fas fa-edit"></i> Sửa ngân sách</h2>
+              <button onClick={() => setEditBudgetModal({ show: false, budget: null })} style={{ background: 'none', border: 'none', fontSize: 24, color: '#888', cursor: 'pointer' }}>&times;</button>
+            </div>
+            <form onSubmit={handleEditBudget}>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: 'block', marginBottom: 6, fontWeight: 600, color: '#374151' }}>Danh mục (không thể sửa)</label>
+                <div style={{ padding: 8, background: '#f3f4f6', borderRadius: 6, color: '#6b7280' }}>
+                  {editBudgetModal.budget?.category?.icon && <i className={editBudgetModal.budget.category.icon} style={{ marginRight: 6 }}></i>}
+                  {editBudgetModal.budget?.category?.name || '—'}
+                </div>
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: 'block', marginBottom: 6, fontWeight: 600, color: '#374151' }}>Số tiền</label>
+                <input
+                  type="number"
+                  value={editBudgetForm.amount}
+                  onChange={e => setEditBudgetForm(f => ({ ...f, amount: e.target.value }))}
+                  required
+                  min={0}
+                  style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #d1d5db' }}
+                />
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: 'block', marginBottom: 6, fontWeight: 600, color: '#374151' }}>Ngày</label>
+                <input
+                  type="date"
+                  value={editBudgetForm.date}
+                  onChange={e => setEditBudgetForm(f => ({ ...f, date: e.target.value }))}
+                  required
+                  style={{ width: '100%', padding: 8, borderRadius: 6, border: '1px solid #d1d5db' }}
+                />
+              </div>
+              {editBudgetError && <div style={{ color: '#b91c1c', marginBottom: 12 }}>{editBudgetError}</div>}
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button type="button" className="fh-btn secondary" onClick={() => setEditBudgetModal({ show: false, budget: null })}>Hủy</button>
+                <button type="submit" className="fh-btn primary" disabled={editBudgetLoading}>
+                  {editBudgetLoading ? 'Đang lưu...' : 'Lưu thay đổi'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      
+      {/* MODAL: Xác nhận xóa ngân sách */}
+      {deleteBudgetModal.show && (
+        <div className="fh-modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1001, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="fh-modal" style={{ background: '#fff', borderRadius: 12, padding: 32, minWidth: 340, maxWidth: 420, width: '100%', position: 'relative', textAlign: 'center' }}>
+            <i className="fas fa-exclamation-triangle" style={{ fontSize: 48, color: '#ef4444', marginBottom: 16 }}></i>
+            <h2 style={{ margin: '0 0 12px 0', fontSize: 20, color: '#1f2937' }}>Xác nhận xóa ngân sách</h2>
+            <p style={{ margin: '0 0 20px 0', color: '#6b7280' }}>
+              Bạn có chắc chắn muốn xóa ngân sách cho danh mục <strong>{deleteBudgetModal.budget?.category?.name || '—'}</strong> không?
+            </p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button className="fh-btn secondary" onClick={() => setDeleteBudgetModal({ show: false, budget: null })}>Hủy</button>
+              <button className="fh-btn danger" onClick={handleDeleteBudget} disabled={deleteBudgetLoading}>
+                {deleteBudgetLoading ? 'Đang xóa...' : 'Xóa ngân sách'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

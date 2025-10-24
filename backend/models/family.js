@@ -38,6 +38,17 @@ const familySchema = new mongoose.Schema({
       default: Date.now
     }
   }],
+  budget: {
+    type: Number,
+    default: 0
+  },
+  budgets: [{
+    category: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', required: true },
+    amount: { type: Number, required: true },
+    date: { type: Date, required: true },
+    note: { type: String, default: '' },
+    createdAt: { type: Date, default: Date.now }
+  }],
   color: {
     colors: [String],
     direction: {
