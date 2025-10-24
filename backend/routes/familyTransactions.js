@@ -347,6 +347,7 @@ router.post('/transactions', authenticateToken, async (req, res) => {
     if (wallet && transactionScope === 'personal') {
       try {
         // Tạo transaction trong ví
+        // Gắn metadata để frontend biết đây là giao dịch gia đình nhưng thuộc scope "personal"
         const walletTransaction = new Transaction({
           wallet: walletId,
           type: type,
@@ -354,7 +355,13 @@ router.post('/transactions', authenticateToken, async (req, res) => {
           category: category,
           description: description || '',
           date: date || new Date(),
-          tags: tags
+          tags: tags,
+          metadata: {
+            source: 'family_personal',
+            familyId,
+            familyName: req.family?.name || '',
+            familyTransactionId: transaction._id
+          }
         });
         
         await walletTransaction.save();

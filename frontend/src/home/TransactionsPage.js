@@ -1,9 +1,11 @@
 /* eslint-disable no-undef */ // temporary: silence false-positive no-undef errors during build
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom'; // NEW: SPA navigation helper
 import Sidebar from './Sidebar';
 import './TransactionsPage.css';
 
 function TransactionsPage() {
+  const navigate = useNavigate(); // NEW
   const userName = localStorage.getItem('userName') || 'Tên người dùng'; // Get from localStorage with fallback
 
   // new: totals of wallets grouped by currency
@@ -178,6 +180,15 @@ function TransactionsPage() {
     return true;
   });
 
+  // ensure deterministic ordering on the client: prefer createdAt desc, fallback to date
+  const sortedTransactions = (filteredTransactions || []).slice().sort((a, b) => {
+    const aStamp = a && (a.createdAt || a.date) ? (a.createdAt || a.date) : 0;
+    const bStamp = b && (b.createdAt || b.date) ? (b.createdAt || b.date) : 0;
+    const at = Date.parse(aStamp) || 0;
+    const bt = Date.parse(bStamp) || 0;
+    return bt - at;
+  });
+  
   // show wallet column when "Tất cả ví" is selected
   const showWalletColumn = !walletFilter;
 
@@ -615,9 +626,9 @@ function TransactionsPage() {
             <tbody>
               {loadingTransactions ? (
                 <tr><td colSpan={showWalletColumn ? 7 : 6} style={{ textAlign: 'center', color: '#888' }}>Đang tải...</td></tr>
-              ) : filteredTransactions.length === 0 ? (
+              ) : sortedTransactions.length === 0 ? (
                 <tr><td colSpan={showWalletColumn ? 7 : 6} style={{ textAlign: 'center', color: '#888' }}>(Chưa có giao dịch)</td></tr>
-              ) : filteredTransactions.map(tx => {
+              ) : sortedTransactions.map(tx => {
                 const titleText = tx.title || tx.description || '—';
                 const categoryLabel = tx.category ? (tx.category.name || tx.category) : '';
                 const walletObj = tx.wallet && (typeof tx.wallet === 'string' ? null : tx.wallet);
@@ -636,6 +647,8 @@ function TransactionsPage() {
 
                 // NEW: detect family transfer wallet transactions
                 const isFamilyTransfer = tx.metadata && tx.metadata.source === 'family_transfer';
+                // NEW: detect family personal-linked wallet transactions (family personal scope)
+                const isFamilyPersonal = tx.metadata && tx.metadata.source === 'family_personal';
                 const familyName = tx.metadata && tx.metadata.familyName ? tx.metadata.familyName : '';
                 const familyDirection = tx.metadata && tx.metadata.direction ? tx.metadata.direction : ''; // 'to-family' | 'from-family'
 
@@ -665,6 +678,12 @@ function TransactionsPage() {
                   <tr key={tx._id} style={rowStyle}>
                     <td>{new Date(tx.date).toLocaleDateString()}</td>
                     <td>
+                      {/* Hiển thị chú thích khi đây là giao dịch gia đình nhưng linked vào ví cá nhân (personal) */}
+                      {isFamilyPersonal && (
+                        <div style={{ fontSize: 12, color: '#6b7280', fontWeight: 700, marginBottom: 4 }}>
+                          Giao dịch gia đình (Cá nhân): {familyName || tx.metadata.familyId || ''}
+                        </div>
+                      )}
                       {isFamilyTransfer && (
                         <div style={{ fontSize: 12, color: '#065f46', fontWeight: 700, marginBottom: 4 }}>
                           {familyDirection === 'to-family' ? 'Nạp vào quỹ:' : familyDirection === 'from-family' ? 'Nhận từ quỹ:' : 'Quỹ:'} {familyName || tx.metadata.familyId || ''}
@@ -713,12 +732,55 @@ function TransactionsPage() {
                       )}
                     </td>
                     <td className="tx-actions">
-                      {/* Chỉ hiển thị nút Sửa/Xóa cho giao dịch cá nhân VÀ không phải transfer quỹ */}
-                      {!isGroupTx && !isFamilyTransfer && (
+                      {/* Chỉ hiển thị nút Sửa/Xóa cho giao dịch cá nhân VÀ không phải transfer quỹ/không phải family-personal */}
+                      {!isGroupTx && !isFamilyTransfer && !isFamilyPersonal && (
                         <>
                           <button className="tx-edit-btn" onClick={() => openEdit(tx)}>Sửa</button>
                           <button className="tx-delete-btn" onClick={() => openDeleteConfirm(tx)}>Xóa</button>
                         </>
+                      )}
+
+                      {/* NEW: nút dẫn tới trang gia đình nếu transaction liên quan đến family (metadata.familyId).
+                          Điều hướng tới /family/{familyId}/transactions; nếu không có familyId thì fallback sang /family/transactions/{familyTransactionId} */}
+                      {(tx.metadata && (tx.metadata.familyId || tx.metadata.familyTransactionId)) && (
+                        <button
+                          className="tx-family-btn"
+                          onClick={async () => {
+                            try {
+                              const familyId = tx.metadata.familyId;
+                              const familyTxId = tx.metadata.familyTransactionId;
+                              if (familyId) {
+                                // Lưu chọn gia đình rồi điều hướng SPA tới trang gia đình (app đọc localStorage)
+                                localStorage.setItem('selectedFamilyId', familyId);
+                                navigate('/family/transactions');
+                                return;
+                              }
+                              if (familyTxId) {
+                                // Nếu chỉ có familyTransactionId, gọi API để lấy familyId
+                                const token = localStorage.getItem('token');
+                                const headers = token ? { Authorization: `Bearer ${token}` } : {};
+                                const res = await fetch(`http://localhost:5000/api/family/transactions/${familyTxId}`, { headers });
+                                if (!res.ok) throw new Error('Không tìm thấy giao dịch gia đình');
+                                const txDetail = await res.json();
+                                const fid = txDetail.familyId && (txDetail.familyId._id || txDetail.familyId);
+                                if (fid) {
+                                  localStorage.setItem('selectedFamilyId', fid);
+                                  navigate('/family/transactions');
+                                  return;
+                                }
+                                throw new Error('Không xác định được ID gia đình từ giao dịch');
+                              }
+                              // fallback an toàn
+                              showToast('Không có thông tin gia đình để chuyển hướng', 'error');
+                            } catch (err) {
+                              console.error('Navigate to family failed', err);
+                              showToast(err.message || 'Không thể vào trang gia đình', 'error');
+                            }
+                          }}
+                          title="Xem gia đình"
+                        >
+                          Gia đình
+                        </button>
                       )}
                       {/* Hiển thị nút Xem chi tiết cho giao dịch nhóm */}
                       {isGroupTx && (

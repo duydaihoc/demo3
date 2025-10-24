@@ -235,47 +235,52 @@ router.get('/', requireAuth, async (req, res) => {
         });
         
         // If any participants settled (repaid), show as income with exact repaid amount
-        const settledParticipants = (gtx.participants || []).filter(p => p.settled);
-        if (settledParticipants.length > 0) {
-          settledParticipants.forEach(p => {
-            // Get participant name - handle both populated and unpopulated user
-            let participantName = 'thành viên';
-            
-            if (p.user) {
-              if (typeof p.user === 'object' && p.user !== null) {
-                // p.user is populated object
-                participantName = p.user.name || p.user.email || p.email || 'thành viên';
-              } else {
-                // p.user is just an ObjectId string - try to use email instead
-                participantName = p.email || 'thành viên';
+        // Khi payer là người trả, nếu có participant đã trả lại (settled) thì hiển thị income.
+        // Tuy nhiên với loại "payer_single" (chi cá nhân) KHÔNG cần tạo các income entries từ participant —
+        // đó là nguyên nhân gây ra 2 dòng (expense + income) cho 1 giao dịch cá nhân. Bỏ trường hợp đó.
+        if (gtx.transactionType !== 'payer_single') {
+          const settledParticipants = (gtx.participants || []).filter(p => p.settled);
+          if (settledParticipants.length > 0) {
+            settledParticipants.forEach(p => {
+              // Get participant name - handle both populated and unpopulated user
+              let participantName = 'thành viên';
+              
+              if (p.user) {
+                if (typeof p.user === 'object' && p.user !== null) {
+                  // p.user is populated object
+                  participantName = p.user.name || p.user.email || p.email || 'thành viên';
+                } else {
+                  // p.user is just an ObjectId string - try to use email instead
+                  participantName = p.email || 'thành viên';
+                }
+              } else if (p.email) {
+                participantName = p.email;
               }
-            } else if (p.email) {
-              participantName = p.email;
-            }
-            
-            const transactionTypeText = gtx.transactionType === 'payer_for_others' ? 'trả giúp' :
-                                       gtx.transactionType === 'equal_split' ? 'chia đều' :
-                                       gtx.transactionType === 'percentage_split' ? 'chia %' : '';
-            
-            entries.push({
-              ...gtx,
-              _id: `${gtx._id}_income_${p.user || p._id}`,
-              title: `Nhận từ ${participantName} (${gtx.title || 'Giao dịch nhóm'})`,
-              description: `Thanh toán cho: ${gtx.title || 'Giao dịch nhóm'}`,
-              type: 'income', // Income when someone repays
-              amount: p.shareAmount || 0, // Amount received from this participant
-              totalAmount: gtx.amount, // Original total transaction amount
-              date: p.settledAt || gtx.date || gtx.createdAt,
-              groupTransaction: true,
-              groupTransactionType: gtx.transactionType,
-              groupId: gtx.groupId,
-              groupName: groupName,
-              groupRole: 'receiver',
-              groupActionType: 'received',
-              fromParticipant: participantName,
-              displayDetails: `${participantName} đã trả ${p.shareAmount.toLocaleString('vi-VN')}₫ cho "${gtx.title || 'giao dịch'}" (${transactionTypeText}) trong nhóm ${groupName}`
+              
+              const transactionTypeText = gtx.transactionType === 'payer_for_others' ? 'trả giúp' :
+                                         gtx.transactionType === 'equal_split' ? 'chia đều' :
+                                         gtx.transactionType === 'percentage_split' ? 'chia %' : '';
+              
+              entries.push({
+                ...gtx,
+                _id: `${gtx._id}_income_${p.user || p._id}`,
+                title: `Nhận từ ${participantName} (${gtx.title || 'Giao dịch nhóm'})`,
+                description: `Thanh toán cho: ${gtx.title || 'Giao dịch nhóm'}`,
+                type: 'income', // Income when someone repays
+                amount: p.shareAmount || 0, // Amount received from this participant
+                totalAmount: gtx.amount, // Original total transaction amount
+                date: p.settledAt || gtx.date || gtx.createdAt,
+                groupTransaction: true,
+                groupTransactionType: gtx.transactionType,
+                groupId: gtx.groupId,
+                groupName: groupName,
+                groupRole: 'receiver',
+                groupActionType: 'received',
+                fromParticipant: participantName,
+                displayDetails: `${participantName} đã trả ${ (p.shareAmount||0).toLocaleString('vi-VN') }₫ cho "${gtx.title || 'giao dịch'}" (${transactionTypeText}) trong nhóm ${groupName}`
+              });
             });
-          });
+          }
         }
       } else if (userParticipation) {
         // Participant role
@@ -367,12 +372,17 @@ router.get('/', requireAuth, async (req, res) => {
       return entries;
     }).flat(); // Flatten the array of arrays
 
-    // Combine transactions and sort by date
-    const allTransactions = [...txs, ...transformedGroupTxs].sort((a, b) => 
-      new Date(b.date) - new Date(a.date)
-    );
-
-    res.json(allTransactions);
+    // Combine transactions and sort by most reliable timestamp:
+    // prefer createdAt (when the DB record was created), fallback to date field
+    const allTransactions = [...txs, ...transformedGroupTxs].sort((a, b) => {
+      const aStamp = a && (a.createdAt || a.date) ? (a.createdAt || a.date) : 0;
+      const bStamp = b && (b.createdAt || b.date) ? (b.createdAt || b.date) : 0;
+      const aTs = Date.parse(aStamp) || 0;
+      const bTs = Date.parse(bStamp) || 0;
+      return bTs - aTs;
+    });
+ 
+     res.json(allTransactions);
   } catch (err) {
     console.error('List transactions error:', err);
     res.status(500).json({ message: 'Server Error', error: err.message });
