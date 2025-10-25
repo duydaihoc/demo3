@@ -817,7 +817,18 @@ router.post('/:familyId/budget', authenticateToken, async (req, res) => {
     const lastBudget = family.budgets[family.budgets.length - 1];
     await Family.populate(lastBudget, { path: 'category', select: 'name icon type' });
 
-    res.status(201).json(lastBudget);
+    // Attach related transactions for the created budget
+    const budgetObj = (lastBudget.toObject && typeof lastBudget.toObject === 'function') ? lastBudget.toObject() : { ...lastBudget };
+    const d = new Date(budgetObj.date || Date.now());
+    const start = new Date(d.getFullYear(), d.getMonth(), 1);
+    const end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+    const catId = budgetObj.category?._id || budgetObj.category;
+    const txFilter = { familyId, transactionScope: 'family', type: 'expense', tags: { $ne: 'transfer' }, date: { $gte: start, $lte: end } };
+    if (catId) txFilter.category = catId;
+    const relatedTxs = await FamilyTransaction.find(txFilter).populate('createdBy', 'name email').populate('category','name icon type').sort({ date: -1 }).lean();
+    budgetObj.transactions = relatedTxs || [];
+
+    res.status(201).json(budgetObj);
   } catch (err) {
     console.error('Create family budget error:', err);
     res.status(500).json({ message: 'Server error', error: err.message });
@@ -834,7 +845,44 @@ router.get('/:familyId/budget', authenticateToken, async (req, res) => {
       .populate('budgets.category', 'name icon type');
     if (!family) return res.status(403).json({ message: 'Bạn không có quyền với gia đình này' });
 
-    res.json(family.budgets || []);
+    // Attach related family transactions to each budget (same category, same month)
+    const budgetsWithTx = await Promise.all((family.budgets || []).map(async (b) => {
+      // convert to plain object to safely attach transactions
+      const budgetObj = (b.toObject && typeof b.toObject === 'function') ? b.toObject() : { ...b };
+      // determine category id and month range (use budget.date)
+      const categoryId = budgetObj.category?._id || budgetObj.category;
+      let start = new Date();
+      let end = new Date();
+      if (budgetObj.date) {
+        const d = new Date(budgetObj.date);
+        start = new Date(d.getFullYear(), d.getMonth(), 1);
+        end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+      } else {
+        const now = new Date();
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+      }
+
+      const txFilter = {
+        familyId,
+        transactionScope: 'family',
+        type: 'expense',
+        tags: { $ne: 'transfer' }, // ignore transfer activities
+        date: { $gte: start, $lte: end }
+      };
+      if (categoryId) txFilter.category = categoryId;
+
+      const relatedTxs = await FamilyTransaction.find(txFilter)
+        .populate('createdBy', 'name email')
+        .populate('category', 'name icon type')
+        .sort({ date: -1 })
+        .lean();
+
+      budgetObj.transactions = relatedTxs || [];
+      return budgetObj;
+    }));
+
+    res.json(budgetsWithTx);
   } catch (err) {
     console.error('Get family budgets error:', err);
     res.status(500).json({ message: 'Server error', error: err.message });
@@ -880,7 +928,18 @@ router.put('/:familyId/budget/:budgetId', authenticateToken, async (req, res) =>
     // Populate category cho budget đã update
     await Family.populate(budget, { path: 'category', select: 'name icon type' });
 
-    res.json(budget);
+    // Attach related transactions for updated budget
+    const budgetObj = (budget.toObject && typeof budget.toObject === 'function') ? budget.toObject() : { ...budget };
+    const d = new Date(budgetObj.date || Date.now());
+    const start = new Date(d.getFullYear(), d.getMonth(), 1);
+    const end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+    const catId = budgetObj.category?._id || budgetObj.category;
+    const txFilter = { familyId, transactionScope: 'family', type: 'expense', tags: { $ne: 'transfer' }, date: { $gte: start, $lte: end } };
+    if (catId) txFilter.category = catId;
+    const relatedTxs = await FamilyTransaction.find(txFilter).populate('createdBy', 'name email').populate('category','name icon type').sort({ date: -1 }).lean();
+    budgetObj.transactions = relatedTxs || [];
+
+    res.json(budgetObj);
   } catch (err) {
     console.error('Update family budget error:', err);
     res.status(500).json({ message: 'Server error', error: err.message });

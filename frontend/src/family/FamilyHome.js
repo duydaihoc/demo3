@@ -13,9 +13,7 @@ export default function FamilyHome() {
   const [currentUser, setCurrentUser] = useState(null);
   // Thêm state mới
   const [familyBalance, setFamilyBalance] = useState(null);
-  const [recentTransactions, setRecentTransactions] = useState([]);
   const [loadingBalance, setLoadingBalance] = useState(false);
-  const [loadingTransactions, setLoadingTransactions] = useState(false);
   // State cho modal ngân sách
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [budgetList, setBudgetList] = useState([]);
@@ -36,7 +34,17 @@ export default function FamilyHome() {
   // State cho tiến độ ngân sách
   const [budgetProgress, setBudgetProgress] = useState({});
   const [loadingProgress, setLoadingProgress] = useState(false);
-  
+  // State cho modal chi tiết ngân sách
+  const [budgetDetailModal, setBudgetDetailModal] = useState({ show: false, budget: null, transactions: [] });
+  const [budgetDetailLoading, setBudgetDetailLoading] = useState(false);
+  // State + handlers for "Xem tất cả" family transactions modal
+  const [showAllFamilyTxModal, setShowAllFamilyTxModal] = useState(false);
+  const [familyTransactionsAll, setFamilyTransactionsAll] = useState([]);
+  const [loadingFamilyTxAll, setLoadingFamilyTxAll] = useState(false);
+  const [familyTxsError, setFamilyTxsError] = useState(null);
+  // NEW: state cho tổng số lượng giao dịch gia đình (để hiển thị ở card)
+  const [totalFamilyTxCount, setTotalFamilyTxCount] = useState(0);
+
   const API_BASE = 'http://localhost:5000';
   const token = localStorage.getItem('token');
   const selectedFamilyId = localStorage.getItem('selectedFamilyId');
@@ -102,32 +110,7 @@ export default function FamilyHome() {
     }
   }, [token, selectedFamilyId, API_BASE]);
 
-  // Thêm hàm để lấy các giao dịch gần đây của gia đình
-  const fetchRecentTransactions = useCallback(async () => {
-    if (!token || !selectedFamilyId) return;
-    
-    setLoadingTransactions(true);
-    try {
-      // Chỉ lấy giao dịch gia đình (transactionScope=family)
-      // thêm excludeActivities=true để loại trừ các hoạt động nạp/rút (tag 'transfer')
-      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/transactions?limit=5&sort=date&order=desc&transactionScope=family&excludeActivities=true`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      if (!res.ok) {
-        throw new Error('Không thể tải giao dịch gần đây');
-      }
-      
-      const data = await res.json();
-      setRecentTransactions(data.transactions || []);
-    } catch (err) {
-      console.error("Error fetching recent transactions:", err);
-    } finally {
-      setLoadingTransactions(false);
-    }
-  }, [token, selectedFamilyId, API_BASE]);
-
-  // Lấy tiến độ ngân sách (tổng chi tiêu theo danh mục trong tháng)
+  // Thêm hàm fetchBudgetProgress
   const fetchBudgetProgress = useCallback(async () => {
     if (!token || !selectedFamilyId) return;
     setLoadingProgress(true);
@@ -137,13 +120,26 @@ export default function FamilyHome() {
       });
       if (!res.ok) throw new Error();
       const data = await res.json();
-      console.log('Budget progress data:', data); // Debug: xem data trả về
       setBudgetProgress(data);
     } catch (err) {
-      console.error('Error fetching budget progress:', err);
       setBudgetProgress({});
     } finally {
       setLoadingProgress(false);
+    }
+  }, [token, selectedFamilyId, API_BASE]);
+
+  // Thêm hàm fetchTotalFamilyTxCount
+  const fetchTotalFamilyTxCount = useCallback(async () => {
+    if (!token || !selectedFamilyId) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/transactions?limit=1&excludeActivities=true`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setTotalFamilyTxCount(data.pagination?.totalItems || 0);
+    } catch (err) {
+      setTotalFamilyTxCount(0);
     }
   }, [token, selectedFamilyId, API_BASE]);
 
@@ -187,11 +183,11 @@ export default function FamilyHome() {
         // Load ngân sách thực tế
         await fetchBudgets();
         
-        // Gọi các API mới
+        // Gọi các API mới (bao gồm fetchTotalFamilyTxCount)
         await Promise.all([
           fetchFamilyBalance(),
-          fetchRecentTransactions(),
-          fetchBudgetProgress()
+          fetchBudgetProgress(),
+          fetchTotalFamilyTxCount()
         ]);
         
       } catch (err) {
@@ -208,7 +204,7 @@ export default function FamilyHome() {
     };
     
     loadData();
-  }, [token, navigate, API_BASE, selectedFamilyId, getCurrentUser, fetchFamilyBalance, fetchRecentTransactions, fetchBudgets, fetchBudgetProgress]);
+  }, [token, navigate, API_BASE, selectedFamilyId, getCurrentUser, fetchFamilyBalance, fetchBudgets, fetchBudgetProgress, fetchTotalFamilyTxCount]);
   
   // Reload budget progress khi budgetList thay đổi (sau khi thêm giao dịch)
   useEffect(() => {
@@ -373,21 +369,104 @@ export default function FamilyHome() {
     return String(ownerId) === String(currentUser.id);
   }, [familyData, currentUser]);
 
-  // Nếu không có dữ liệu gia đình và không loading, hiển thị lỗi
-  if (!loading && !familyData && !error) {
-    return (
-      <div className="family-page">
-        <FamilySidebar active="home" />
-        <main className="family-main">
-          <div className="fh-error">
-            <i className="fas fa-exclamation-triangle"></i>
-            <p>Bạn chưa tham gia gia đình nào</p>
-            <button onClick={() => navigate('/family-switch')}>Tạo hoặc tham gia gia đình</button>
-          </div>
-        </main>
-      </div>
-    );
-  }
+  // Helper: sort transactions newest-first by createdAt OR date
+  const sortTransactions = (arr = []) => {
+    return (Array.isArray(arr) ? arr.slice() : []).sort((a, b) => {
+      const aTs = Date.parse(a?.createdAt || a?.date || 0) || 0;
+      const bTs = Date.parse(b?.createdAt || b?.date || 0) || 0;
+      return bTs - aTs;
+    });
+  };
+
+  // Lấy giao dịch liên quan tới 1 ngân sách (category + tháng của budget.date)
+  const fetchBudgetTransactions = useCallback(async (budget) => {
+    if (!token || !selectedFamilyId || !budget) return [];
+    setBudgetDetailLoading(true);
+    try {
+      // nếu backend đã trả kèm transactions trong budget object, dùng luôn
+      if (Array.isArray(budget.transactions)) {
+        return sortTransactions(budget.transactions);
+      }
+
+      const categoryId = budget.category?._id || budget.category;
+      const d = budget.date ? new Date(budget.date) : new Date();
+      const start = new Date(d.getFullYear(), d.getMonth(), 1).toISOString();
+      const end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999).toISOString();
+
+      const url = new URL(`${API_BASE}/api/family/${selectedFamilyId}/transactions`);
+      url.searchParams.set('category', categoryId);
+      url.searchParams.set('startDate', start);
+      url.searchParams.set('endDate', end);
+      url.searchParams.set('excludeActivities', 'true'); // loại trừ transfer
+
+      const res = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error('Không thể tải giao dịch ngân sách');
+      const data = await res.json();
+      return sortTransactions(data.transactions || []);
+    } catch (err) {
+      console.error('Error fetching budget transactions:', err);
+      return [];
+    } finally {
+      setBudgetDetailLoading(false);
+    }
+  }, [token, selectedFamilyId, API_BASE]);
+
+  // Mở modal chi tiết ngân sách
+  const openBudgetDetail = async (budget) => {
+    if (!budget) return;
+    setBudgetDetailModal({ show: true, budget, transactions: [] });
+    // fetch transactions (will return immediately if budget already contains .transactions)
+    const txs = await fetchBudgetTransactions(budget);
+    setBudgetDetailModal({ show: true, budget, transactions: sortTransactions(txs) });
+  };
+
+  const closeBudgetDetail = () => {
+    setBudgetDetailModal({ show: false, budget: null, transactions: [] });
+  };
+
+  // Mở modal xem tất cả giao dịch gia đình
+  const openAllFamilyTransactions = async () => {
+    setShowAllFamilyTxModal(true);
+    await fetchAllFamilyTransactions();
+  };
+
+  const closeAllFamilyTransactions = () => {
+    setShowAllFamilyTxModal(false);
+    setFamilyTransactionsAll([]);
+    setFamilyTxsError(null);
+  };
+
+  // Fetch all family transactions (limit optional)
+  const fetchAllFamilyTransactions = useCallback(async (opts = {}) => {
+    if (!token || !selectedFamilyId) return;
+    setLoadingFamilyTxAll(true);
+    setFamilyTxsError(null);
+    try {
+      const limit = opts.limit || 200;
+      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/transactions?limit=${limit}&sort=date&order=desc&excludeActivities=true`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Không thể tải giao dịch gia đình');
+      }
+      const data = await res.json();
+      const list = Array.isArray(data.transactions) ? data.transactions : (Array.isArray(data) ? data : []);
+      setFamilyTransactionsAll(sortTransactions(list));
+    } catch (err) {
+      setFamilyTxsError(err.message || 'Lỗi khi tải giao dịch');
+      setFamilyTransactionsAll([]);
+    } finally {
+      setLoadingFamilyTxAll(false);
+    }
+  }, [token, selectedFamilyId, API_BASE]);
+
+  // Tự động fetch tất cả giao dịch khi vào trang chủ (không cần bấm "Xem tất cả")
+  useEffect(() => {
+    if (token && selectedFamilyId) {
+      fetchAllFamilyTransactions();
+    }
+  }, [token, selectedFamilyId, fetchAllFamilyTransactions]);
 
   // Lấy thông tin owner
   const getOwnerInfo = () => {
@@ -496,10 +575,11 @@ export default function FamilyHome() {
                   <span>Tổng giao dịch gia đình</span>
                 </div>
                 <div className="fh-card-amount">
-                  {loadingTransactions ? (
+                  {loadingFamilyTxAll ? (
                     <div className="fh-loading-spinner small"></div>
                   ) : (
-                    recentTransactions.length
+                    // Hiển thị tổng số giao dịch thực tế (không bị giới hạn bởi limit=5 của recent)
+                    totalFamilyTxCount
                   )}
                 </div>
               </div>
@@ -541,13 +621,18 @@ export default function FamilyHome() {
                       const categoryId = budget.category?._id || budget.category;
                       const categoryIdStr = String(categoryId);
                       const spent = budgetProgress[categoryIdStr] || 0;
-                      // Debug: log chi tiết để kiểm tra
-                      console.log(`Budget ${budget.category?.name}: categoryId=${categoryIdStr}, spent=${spent}, amount=${budget.amount}, percentage=${calculatePercentage(spent, budget.amount)}%`);
-                      const percentage = calculatePercentage(spent, budget.amount);
-                      const status = percentage >= 90 ? 'danger' : percentage >= 70 ? 'warning' : 'good';
-                      
+                       // Debug: log chi tiết để kiểm tra
+                       console.log(`Budget ${budget.category?.name}: categoryId=${categoryIdStr}, spent=${spent}, amount=${budget.amount}, percentage=${calculatePercentage(spent, budget.amount)}%`);
+                       const percentage = calculatePercentage(spent, budget.amount);
+                       const status = percentage >= 90 ? 'danger' : percentage >= 70 ? 'warning' : 'good';
+                       
                       return (
-                        <div key={budget._id || budget.id} className="fh-budget-item">
+                        <div 
+                          key={budget._id || budget.id} 
+                          className="fh-budget-item"
+                          onClick={() => openBudgetDetail(budget)}
+                          style={{ cursor: 'pointer' }}
+                        >
                           <div className="fh-budget-icon">
                             <i className={budget.category?.icon || 'fas fa-tag'}></i>
                           </div>
@@ -580,36 +665,33 @@ export default function FamilyHome() {
               <section className="fh-recent-transactions">
                 <div className="fh-section-header">
                   <h2><i className="fas fa-exchange-alt"></i> Giao dịch gia đình gần đây</h2>
-                  <button className="fh-btn-link" onClick={() => navigate('/family/transactions')}>
+                  <button className="fh-btn-link" onClick={openAllFamilyTransactions}>
                     Xem tất cả <i className="fas fa-chevron-right"></i>
                   </button>
                 </div>
                 
-                {loadingTransactions ? (
+                {loadingFamilyTxAll && showAllFamilyTxModal ? (
                   <div className="fh-loading-inline">
                     <div className="fh-loading-spinner"></div>
                     <p>Đang tải giao dịch gia đình...</p>
                   </div>
-                ) : recentTransactions.length === 0 ? (
+                ) : familyTransactionsAll.length === 0 ? (
                   <div className="fh-empty-state">
                     <i className="fas fa-receipt"></i>
                     <p>Chưa có giao dịch gia đình nào</p>
                   </div>
                 ) : (
                   <div className="fh-transactions-list">
-                    {recentTransactions.map(tx => {
+                    {familyTransactionsAll.slice(0, 5).map(tx => {
                       const categoryInfo = tx.category && typeof tx.category === 'object' 
                         ? { name: tx.category.name, icon: tx.category.icon }
                         : { name: 'Không có', icon: 'fa-receipt' };
-                        
                       const creatorName = tx.creatorName || (tx.createdBy && tx.createdBy.name) || 'Thành viên';
-                      
                       return (
                         <div key={tx._id} className="fh-transaction-item">
                           <div className="fh-transaction-date">
                             {new Date(tx.date || tx.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}
                           </div>
-                          
                           <div className="fh-transaction-content">
                             <div className="fh-transaction-title">{tx.description || 'Giao dịch gia đình'}</div>
                             <div className="fh-transaction-meta">
@@ -622,7 +704,6 @@ export default function FamilyHome() {
                               </span>
                             </div>
                           </div>
-                          
                           <div className={`fh-transaction-amount ${tx.type === 'expense' ? 'expense' : 'income'}`}>
                             {tx.type === 'expense' ? '-' : '+'}{formatCurrency(tx.amount)}
                           </div>
@@ -840,6 +921,119 @@ export default function FamilyHome() {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+      
+      {/* MODAL: Chi tiết ngân sách + giao dịch */}
+      {budgetDetailModal.show && (
+        <div className="fh-modal-overlay" style={{ position: 'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(0,0,0,0.6)', zIndex:1100, display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div className="fh-modal" style={{ background:'#fff', borderRadius:12, padding:24, minWidth:360, maxWidth:800, width:'100%', maxHeight:'85vh', overflowY:'auto', position:'relative' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+              <h3 style={{ margin:0 }}>{budgetDetailModal.budget?.category?.name || 'Chi tiết ngân sách'}</h3>
+              <button onClick={closeBudgetDetail} style={{ background:'none', border:'none', fontSize:22, cursor:'pointer' }}>&times;</button>
+            </div>
+            
+            <div style={{ marginBottom:12, display:'flex', justifyContent:'space-between', alignItems:'center', gap:12 }}>
+              <div>
+                <div style={{ color:'#6b7280', fontSize:13 }}>Ngân sách</div>
+                <div style={{ fontWeight:700, fontSize:18 }}>{formatCurrency(budgetDetailModal.budget?.amount || 0)}</div>
+                <div style={{ color:'#6b7280', marginTop:6 }}>{budgetDetailModal.budget?.date ? new Date(budgetDetailModal.budget.date).toLocaleDateString('vi-VN') : ''}</div>
+              </div>
+              <div style={{ textAlign:'right' }}>
+                <div style={{ color:'#6b7280', fontSize:13 }}>Đã chi</div>
+                <div style={{ fontWeight:700, fontSize:18 }}>{formatCurrency(budgetDetailModal.transactions.reduce((s,t)=>s+(t.amount||0),0) || 0)}</div>
+                <div style={{ color:'#6b7280', marginTop:6 }}>{calculatePercentage(budgetDetailModal.transactions.reduce((s,t)=>s+(t.amount||0),0) || 0, budgetDetailModal.budget?.amount || 1)}%</div>
+              </div>
+            </div>
+            
+            <div style={{ marginBottom:12 }}>
+              <h4 style={{ margin:'8px 0' }}>Giao dịch liên quan</h4>
+              {budgetDetailLoading ? (
+                <div style={{ padding:18, textAlign:'center' }}><div className="fh-loading-spinner small"></div> Đang tải giao dịch...</div>
+              ) : budgetDetailModal.transactions.length === 0 ? (
+                <div style={{ padding:18, color:'#6b7280' }}>Chưa có giao dịch liên quan cho ngân sách này.</div>
+              ) : (
+                <table style={{ width:'100%', borderCollapse:'collapse' }}>
+                  <thead>
+                    <tr style={{ background:'#f1f5f9' }}>
+                      <th style={{ textAlign:'left', padding:8 }}>Ngày</th>
+                      <th style={{ textAlign:'left', padding:8 }}>Mô tả</th>
+                      <th style={{ textAlign:'right', padding:8 }}>Số tiền</th>
+                      <th style={{ textAlign:'left', padding:8 }}>Người tạo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {budgetDetailModal.transactions.map(tx => (
+                      <tr key={tx._id}>
+                        <td style={{ padding:8 }}>{new Date(tx.date || tx.createdAt).toLocaleDateString('vi-VN')}</td>
+                        <td style={{ padding:8 }}>{tx.description || (tx.category && tx.category.name) || '—'}</td>
+                        <td style={{ padding:8, textAlign:'right' }}>{tx.type === 'expense' ? '-' : '+'}{formatCurrency(tx.amount)}</td>
+                        <td style={{ padding:8 }}>{tx.creatorName || (tx.createdBy && tx.createdBy.name) || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div style={{ display:'flex', justifyContent:'flex-end', gap:10 }}>
+              <button className="fh-btn secondary" onClick={closeBudgetDetail}>Đóng</button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* MODAL: All Family Transactions */}
+      {showAllFamilyTxModal && (
+        <div className="fh-modal-overlay" style={{ position: 'fixed', inset: 0, background:'rgba(0,0,0,0.6)', zIndex:1100, display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div className="fh-modal" style={{ background:'#fff', borderRadius:12, padding:20, minWidth:360, maxWidth:1000, width:'95%', maxHeight:'85vh', overflowY:'auto', position:'relative' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+              <h3 style={{ margin:0 }}>Tất cả giao dịch gia đình</h3>
+              <button onClick={closeAllFamilyTransactions} style={{ background:'none', border:'none', fontSize:22, cursor:'pointer' }}>&times;</button>
+            </div>
+            
+            {loadingFamilyTxAll ? (
+              <div style={{ padding:24, textAlign:'center' }}>
+                <div className="fh-loading-spinner small"></div>
+                <div style={{ marginTop:8, color:'#64748b' }}>Đang tải giao dịch...</div>
+              </div>
+            ) : familyTxsError ? (
+              <div style={{ padding:24, textAlign:'center', color:'#b91c1c' }}>{familyTxsError}</div>
+            ) : familyTransactionsAll.length === 0 ? (
+              <div style={{ padding:24, textAlign:'center', color:'#64748b' }}>Chưa có giao dịch gia đình</div>
+            ) : (
+              <div style={{ overflowX:'auto' }}>
+                <table style={{ width:'100%', borderCollapse:'collapse' }}>
+                  <thead>
+                    <tr style={{ background:'#f1f5f9' }}>
+                      <th style={{ padding:8, textAlign:'left' }}>Ngày</th>
+                      <th style={{ padding:8, textAlign:'left' }}>Mô tả</th>
+                      <th style={{ padding:8, textAlign:'left' }}>Danh mục</th>
+                      <th style={{ padding:8, textAlign:'right' }}>Số tiền</th>
+                      <th style={{ padding:8, textAlign:'left' }}>Người tạo</th>
+                      <th style={{ padding:8, textAlign:'left' }}>Phạm vi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {familyTransactionsAll.map(tx => (
+                      <tr key={tx._id || tx.id} style={{ borderBottom:'1px solid #f3f4f6' }}>
+                        <td style={{ padding:8 }}>{new Date(tx.date || tx.createdAt).toLocaleDateString('vi-VN')}</td>
+                        <td style={{ padding:8 }}>{tx.description || tx.title || '—'}</td>
+                        <td style={{ padding:8 }}>{tx.category && (tx.category.name || tx.category) || '—'}</td>
+                        <td style={{ padding:8, textAlign:'right' }}>{tx.type === 'expense' ? '-' : '+'}{formatCurrency(tx.amount)}</td>
+                        <td style={{ padding:8 }}>{tx.creatorName || (tx.createdBy && tx.createdBy.name) || '—'}</td>
+                        <td style={{ padding:8 }}>{tx.transactionScope || tx.scope || 'family'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            
+            <div style={{ display:'flex', justifyContent:'flex-end', marginTop:12 }}>
+              <button className="fh-btn secondary" onClick={closeAllFamilyTransactions}>Đóng</button>
+            </div>
           </div>
         </div>
       )}
