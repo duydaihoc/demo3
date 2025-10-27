@@ -47,7 +47,20 @@ const familySchema = new mongoose.Schema({
     amount: { type: Number, required: true },
     date: { type: Date, required: true },
     note: { type: String, default: '' },
-    createdAt: { type: Date, default: Date.now }
+    createdAt: { type: Date, default: Date.now },
+    // NEW: Thêm trường để track reset
+    lastResetAt: { type: Date },
+    resetCount: { type: Number, default: 0 }
+  }],
+  // NEW: Thêm lịch sử ngân sách
+  budgetHistory: [{
+    category: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', required: true },
+    amount: { type: Number, required: true },
+    startDate: { type: Date, required: true },
+    endDate: { type: Date, required: true },
+    spent: { type: Number, default: 0 },
+    note: { type: String, default: '' },
+    resetAt: { type: Date, default: Date.now }
   }],
   color: {
     colors: [String],

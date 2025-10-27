@@ -974,4 +974,116 @@ router.delete('/:familyId/budget/:budgetId', authenticateToken, async (req, res)
   }
 });
 
+// API: Reset ngân sách (tạo kỳ mới)
+router.post('/:familyId/budget/:budgetId/reset', authenticateToken, async (req, res) => {
+  try {
+    const { familyId, budgetId } = req.params;
+    const userId = req.user.id || req.user._id;
+
+    // Kiểm tra quyền - CHỈ OWNER
+    const family = await Family.findOne({ _id: familyId, owner: userId });
+    if (!family) return res.status(403).json({ message: 'Chỉ chủ gia đình mới có quyền reset ngân sách' });
+
+    // Tìm budget
+    const budget = family.budgets.id(budgetId);
+    if (!budget) return res.status(404).json({ message: 'Không tìm thấy ngân sách' });
+
+    // Lấy số tiền đã chi tiêu từ giao dịch trong kỳ CŨ
+    const categoryId = budget.category;
+    const oldBudgetDate = new Date(budget.date);
+    const oldStart = new Date(oldBudgetDate.getFullYear(), oldBudgetDate.getMonth(), 1);
+    const oldEnd = new Date(oldBudgetDate.getFullYear(), oldBudgetDate.getMonth() + 1, 0, 23, 59, 59, 999);
+
+    const txFilter = {
+      familyId,
+      transactionScope: 'family',
+      type: 'expense',
+      tags: { $ne: 'transfer' },
+      date: { $gte: oldStart, $lte: oldEnd },
+      category: categoryId
+    };
+    const transactions = await FamilyTransaction.find(txFilter);
+    const spent = transactions.reduce((sum, tx) => sum + (tx.amount || 0), 0);
+
+    // Lưu vào lịch sử
+    if (!Array.isArray(family.budgetHistory)) family.budgetHistory = [];
+    family.budgetHistory.push({
+      category: budget.category,
+      amount: budget.amount,
+      startDate: oldStart,
+      endDate: oldEnd,
+      spent: spent,
+      note: budget.note || '',
+      resetAt: new Date()
+    });
+
+    // Tính toán ngày hạn KỲ MỚI (tháng tiếp theo)
+    const now = new Date();
+    const nextMonth = new Date(oldBudgetDate);
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
+    
+    // Nếu tháng tiếp theo vẫn < tháng hiện tại → nhảy sang tháng hiện tại
+    if (nextMonth < now) {
+      nextMonth.setFullYear(now.getFullYear());
+      nextMonth.setMonth(now.getMonth());
+    }
+
+    // Cập nhật budget với ngày mới (GIỮ LẠI amount và category)
+    budget.date = nextMonth;
+    budget.lastResetAt = new Date();
+    budget.resetCount = (budget.resetCount || 0) + 1;
+
+    await family.save();
+
+    // Populate và trả về budget đã reset
+    await Family.populate(budget, { path: 'category', select: 'name icon type' });
+
+    const nextPeriod = {
+      startDate: new Date(nextMonth.getFullYear(), nextMonth.getMonth(), 1),
+      endDate: new Date(nextMonth.getFullYear(), nextMonth.getMonth() + 1, 0, 23, 59, 59, 999)
+    };
+
+    res.json({
+      message: 'Đã reset ngân sách thành công',
+      budget: budget,
+      nextPeriod: nextPeriod
+    });
+  } catch (err) {
+    console.error('Reset budget error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// API: Lấy lịch sử ngân sách
+router.get('/:familyId/budget-history', authenticateToken, async (req, res) => {
+  try {
+    const { familyId } = req.params;
+    const userId = req.user.id || req.user._id;
+    const { categoryId, limit = 10 } = req.query;
+
+    const family = await Family.findOne({ _id: familyId, 'members.user': userId })
+      .populate('budgetHistory.category', 'name icon type');
+    
+    if (!family) return res.status(403).json({ message: 'Bạn không có quyền với gia đình này' });
+
+    let history = family.budgetHistory || [];
+    
+    // Lọc theo category nếu có
+    if (categoryId) {
+      history = history.filter(h => String(h.category._id || h.category) === String(categoryId));
+    }
+
+    // Sắp xếp theo ngày reset mới nhất
+    history = history.sort((a, b) => new Date(b.resetAt) - new Date(a.resetAt));
+
+    // Giới hạn số lượng
+    history = history.slice(0, parseInt(limit));
+
+    res.json(history);
+  } catch (err) {
+    console.error('Get budget history error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
 module.exports = router;

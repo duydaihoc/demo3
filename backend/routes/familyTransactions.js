@@ -1369,29 +1369,40 @@ router.get('/:familyId/budget-progress', authenticateToken, isFamilyMember, asyn
   try {
     const { familyId } = req.params;
     
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    // Lấy tất cả ngân sách của gia đình
+    const family = await require('../models/family').findById(familyId);
+    if (!family || !Array.isArray(family.budgets)) {
+      return res.json({});
+    }
     
-    // Lấy tất cả giao dịch chi tiêu gia đình trong tháng, loại trừ transfer
-    const transactions = await FamilyTransaction.find({
-      familyId,
-      type: 'expense',
-      transactionScope: 'family',
-      tags: { $ne: 'transfer' },
-      date: { $gte: startOfMonth, $lte: endOfMonth }
-    }).populate('category', '_id');
-    
-    // Tính tổng theo category ID
     const progress = {};
-    transactions.forEach(tx => {
-      const catId = tx.category?._id || tx.category;
-      if (catId) {
-        // Convert ObjectId to string để frontend dễ so sánh
-        const catIdStr = String(catId);
-        progress[catIdStr] = (progress[catIdStr] || 0) + tx.amount;
-      }
-    });
+    
+    // Tính tiến độ cho TỪNG ngân sách (theo tháng của budget.date)
+    for (const budget of family.budgets) {
+      if (!budget.date || !budget.category) continue;
+      
+      const budgetDate = new Date(budget.date);
+      const startOfMonth = new Date(budgetDate.getFullYear(), budgetDate.getMonth(), 1);
+      const endOfMonth = new Date(budgetDate.getFullYear(), budgetDate.getMonth() + 1, 0, 23, 59, 59, 999);
+      
+      const categoryId = budget.category._id || budget.category;
+      
+      // Lấy giao dịch chi tiêu gia đình trong THÁNG CỦA NGÂN SÁCH ĐÓ
+      const transactions = await FamilyTransaction.find({
+        familyId,
+        type: 'expense',
+        transactionScope: 'family',
+        tags: { $ne: 'transfer' },
+        category: categoryId,
+        date: { $gte: startOfMonth, $lte: endOfMonth }
+      });
+      
+      const spent = transactions.reduce((sum, tx) => sum + (tx.amount || 0), 0);
+      
+      // Lưu vào progress theo category ID
+      const categoryIdStr = String(categoryId);
+      progress[categoryIdStr] = spent;
+    }
     
     res.json(progress);
   } catch (error) {

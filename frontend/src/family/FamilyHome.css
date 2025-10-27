@@ -368,6 +368,143 @@
 .fh-budget-percentage.warning { color: #f59e0b; }
 .fh-budget-percentage.danger { color: #ef4444; }
 
+/* Budget item với expired state */
+.fh-budget-item.expired {
+  border-left: 3px solid #ef4444;
+  background: #fef2f2;
+  padding-left: 12px;
+}
+
+/* Budget period indicator */
+.fh-budget-period {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-weight: 400;
+  margin-left: 8px;
+  padding: 2px 6px;
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+/* Future month badge */
+.fh-budget-future-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  padding: 3px 8px;
+  border-radius: 12px;
+  background-color: #dbeafe;
+  color: #1e40af;
+  font-weight: 500;
+}
+
+.fh-budget-future-badge i {
+  font-size: 0.7rem;
+}
+
+/* Highlight current month budget */
+.fh-budget-item.current-month {
+  border-left: 3px solid #10b981;
+  background: #f0fdf4;
+  padding-left: 12px;
+}
+
+/* Dim future month budget */
+.fh-budget-item.future-month {
+  opacity: 0.7;
+  border-left: 3px solid #cbd5e1;
+  padding-left: 12px;
+}
+
+.fh-budget-item.future-month:hover {
+  opacity: 1;
+}
+
+.fh-budget-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.fh-budget-expired-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  padding: 3px 8px;
+  border-radius: 12px;
+  background-color: #fee2e2;
+  color: #b91c1c;
+  font-weight: 500;
+}
+
+.fh-budget-expired-badge i {
+  font-size: 0.7rem;
+}
+
+/* Budget actions */
+.fh-budget-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  align-items: center;
+}
+
+.fh-budget-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: white;
+  color: #64748b;
+  font-size: 0.813rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.fh-budget-action-btn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+.fh-budget-action-btn.reset {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+}
+
+.fh-budget-action-btn.reset:hover {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.fh-budget-action-btn i {
+  font-size: 0.75rem;
+}
+
+/* Modal table styles */
+.fh-modal table {
+  font-size: 0.875rem;
+}
+
+.fh-modal table th {
+  font-weight: 600;
+  color: #475569;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.5px;
+}
+
+.fh-modal table tbody tr:hover {
+  background: #f8fafc;
+}
+
 /* Transactions List */
 .fh-transactions-list {
   display: flex;

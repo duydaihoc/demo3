@@ -44,6 +44,13 @@ export default function FamilyHome() {
   const [familyTxsError, setFamilyTxsError] = useState(null);
   // NEW: state cho tổng số lượng giao dịch gia đình (để hiển thị ở card)
   const [totalFamilyTxCount, setTotalFamilyTxCount] = useState(0);
+  // NEW: State cho lịch sử ngân sách
+  const [budgetHistoryModal, setBudgetHistoryModal] = useState({ show: false, categoryId: null, categoryName: '' });
+  const [budgetHistory, setBudgetHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  // NEW: State cho reset budget
+  const [resetBudgetModal, setResetBudgetModal] = useState({ show: false, budget: null });
+  const [resetBudgetLoading, setResetBudgetLoading] = useState(false);
 
   const API_BASE = 'http://localhost:5000';
   const token = localStorage.getItem('token');
@@ -491,6 +498,81 @@ export default function FamilyHome() {
     return String(memberUserId) === String(currentUser.id);
   };
 
+  // NEW: Hàm kiểm tra ngân sách đã hết hạn - KIỂM TRA THEO NGÀY CỤ THỂ
+  const isBudgetExpired = useCallback((budgetDate) => {
+    if (!budgetDate) return false;
+    const bDate = new Date(budgetDate);
+    // Set giờ về 00:00:00 để so sánh chỉ theo ngày
+    bDate.setHours(0, 0, 0, 0);
+    
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    
+    // Kiểm tra: nếu hôm nay > ngày trong budget.date → đã hết hạn
+    return now > bDate;
+  }, []);
+
+  // NEW: Fetch lịch sử ngân sách
+  const fetchBudgetHistory = useCallback(async (categoryId, categoryName) => {
+    if (!token || !selectedFamilyId) return;
+    setLoadingHistory(true);
+    try {
+      const url = `${API_BASE}/api/family/${selectedFamilyId}/budget-history?categoryId=${categoryId}&limit=20`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error('Không thể tải lịch sử ngân sách');
+      const data = await res.json();
+      setBudgetHistory(Array.isArray(data) ? data : []);
+      setBudgetHistoryModal({ show: true, categoryId, categoryName });
+    } catch (err) {
+      console.error('Error fetching budget history:', err);
+      setBudgetHistory([]);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, [token, selectedFamilyId, API_BASE]);
+
+  // NEW: Reset ngân sách
+  const handleResetBudget = async () => {
+    if (!resetBudgetModal.budget) return;
+    setResetBudgetLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/budget/${resetBudgetModal.budget._id}/reset`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Không thể reset ngân sách');
+      }
+      const result = await res.json();
+      
+      // Thông báo thành công với thông tin kỳ mới
+      const startStr = new Date(result.nextPeriod.startDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const endStr = new Date(result.nextPeriod.endDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      
+      alert(
+        `✅ ${result.message}\n\n` +
+        `📅 Kỳ mới: ${startStr} - ${endStr}\n` +
+        `💰 Ngân sách: ${formatCurrency(result.budget.amount)}\n` +
+        `📊 Tiến độ: 0% (mới bắt đầu)\n\n` +
+        `Ngân sách đã được giữ lại và bắt đầu kỳ mới!`
+      );
+      
+      setResetBudgetModal({ show: false, budget: null });
+      
+      // Reload budgets và progress
+      await fetchBudgets();
+      setBudgetProgress({});
+      setTimeout(async () => {
+        await fetchBudgetProgress();
+      }, 100);
+    } catch (err) {
+      alert('❌ ' + (err.message || 'Lỗi khi reset ngân sách'));
+    } finally {
+      setResetBudgetLoading(false);
+    }
+  };
+
   return (
     <div className="family-home">
       <FamilySidebar />
@@ -590,7 +672,7 @@ export default function FamilyHome() {
               {/* Budget Overview */}
               <section className="fh-budget-overview">
                 <div className="fh-section-header">
-                  <h2><i className="fas fa-chart-pie"></i> Ngân sách tháng này</h2>
+                  <h2><i className="fas fa-chart-pie"></i> Ngân sách của gia đình</h2>
                   <button className="fh-btn-link" onClick={() => setShowBudgetModal(true)}>
                     Xem tất cả <i className="fas fa-chevron-right"></i>
                   </button>
@@ -598,47 +680,66 @@ export default function FamilyHome() {
                 
                 <div className="fh-budget-list">
                   {(() => {
-                    // Lọc ngân sách theo tháng hiện tại
+                    // THAY ĐỔI: Không lọc theo tháng nữa, hiển thị tất cả ngân sách
                     const currentMonth = new Date().getMonth();
                     const currentYear = new Date().getFullYear();
-                    const filteredBudgets = budgetList.filter(b => {
-                      if (!b.date) return false;
-                      const budgetDate = new Date(b.date);
-                      return budgetDate.getMonth() === currentMonth && budgetDate.getFullYear() === currentYear;
-                    });
                     
-                    if (filteredBudgets.length === 0) {
+                    if (budgetList.length === 0) {
                       return (
                         <div className="fh-empty-state">
                           <i className="fas fa-calendar-alt"></i>
-                          <p>Chưa có ngân sách cho tháng này</p>
+                          <p>Chưa có ngân sách nào</p>
                         </div>
                       );
                     }
                     
-                    return filteredBudgets.map(budget => {
-                      // Lấy số tiền đã chi tiêu từ progress (theo category ID - convert sang string để so sánh)
+                    // Sort theo date mới nhất
+                    const sortedBudgets = [...budgetList].sort((a, b) => 
+                      new Date(b.date) - new Date(a.date)
+                    );
+                    
+                    return sortedBudgets.map(budget => {
                       const categoryId = budget.category?._id || budget.category;
                       const categoryIdStr = String(categoryId);
                       const spent = budgetProgress[categoryIdStr] || 0;
-                       // Debug: log chi tiết để kiểm tra
-                       console.log(`Budget ${budget.category?.name}: categoryId=${categoryIdStr}, spent=${spent}, amount=${budget.amount}, percentage=${calculatePercentage(spent, budget.amount)}%`);
-                       const percentage = calculatePercentage(spent, budget.amount);
-                       const status = percentage >= 90 ? 'danger' : percentage >= 70 ? 'warning' : 'good';
-                       
+                      const percentage = calculatePercentage(spent, budget.amount);
+                      const status = percentage >= 90 ? 'danger' : percentage >= 70 ? 'warning' : 'good';
+                      const isExpired = isBudgetExpired(budget.date);
+                      
+                      // Kiểm tra xem ngân sách này có phải của tháng hiện tại không
+                      const budgetDate = new Date(budget.date);
+                      const isCurrentMonth = budgetDate.getMonth() === currentMonth && 
+                                           budgetDate.getFullYear() === currentYear;
+                      
                       return (
                         <div 
                           key={budget._id || budget.id} 
-                          className="fh-budget-item"
-                          onClick={() => openBudgetDetail(budget)}
-                          style={{ cursor: 'pointer' }}
+                          className={`fh-budget-item ${isExpired ? 'expired' : ''} ${isCurrentMonth ? 'current-month' : 'future-month'}`}
                         >
                           <div className="fh-budget-icon">
                             <i className={budget.category?.icon || 'fas fa-tag'}></i>
                           </div>
                           
                           <div className="fh-budget-content">
-                            <div className="fh-budget-title">{budget.category?.name || 'Danh mục'}</div>
+                            <div className="fh-budget-title-row">
+                              <div className="fh-budget-title">
+                                {budget.category?.name || 'Danh mục'}
+                                {/* Hiển thị tháng/năm của ngân sách */}
+                                <span className="fh-budget-period">
+                                  {budgetDate.toLocaleDateString('vi-VN', { month: 'short', year: 'numeric' })}
+                                </span>
+                              </div>
+                              {isExpired && (
+                                <span className="fh-budget-expired-badge">
+                                  <i className="fas fa-exclamation-circle"></i> Đã hết hạn
+                                </span>
+                              )}
+                              {!isExpired && !isCurrentMonth && (
+                                <span className="fh-budget-future-badge">
+                                  <i className="fas fa-clock"></i> Kỳ tới
+                                </span>
+                              )}
+                            </div>
                             
                             <div className="fh-budget-bar-container">
                               <div 
@@ -652,6 +753,32 @@ export default function FamilyHome() {
                                 {formatCurrency(spent)} / {formatCurrency(budget.amount)}
                               </div>
                               <div className={`fh-budget-percentage ${status}`}>{percentage}%</div>
+                            </div>
+                            
+                            <div className="fh-budget-actions">
+                              <button 
+                                className="fh-budget-action-btn"
+                                onClick={(e) => { e.stopPropagation(); openBudgetDetail(budget); }}
+                                title="Xem chi tiết"
+                              >
+                                <i className="fas fa-eye"></i>
+                              </button>
+                              <button 
+                                className="fh-budget-action-btn"
+                                onClick={(e) => { e.stopPropagation(); fetchBudgetHistory(categoryIdStr, budget.category?.name); }}
+                                title="Xem lịch sử"
+                              >
+                                <i className="fas fa-history"></i>
+                              </button>
+                              {isExpired && isOwner() && (
+                                <button 
+                                  className="fh-budget-action-btn reset"
+                                  onClick={(e) => { e.stopPropagation(); setResetBudgetModal({ show: true, budget }); }}
+                                  title="Reset ngân sách"
+                                >
+                                  <i className="fas fa-redo"></i> Reset
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -986,8 +1113,8 @@ export default function FamilyHome() {
       
       {/* MODAL: All Family Transactions */}
       {showAllFamilyTxModal && (
-        <div className="fh-modal-overlay" style={{ position: 'fixed', inset: 0, background:'rgba(0,0,0,0.6)', zIndex:1100, display:'flex', alignItems:'center', justifyContent:'center' }}>
-          <div className="fh-modal" style={{ background:'#fff', borderRadius:12, padding:20, minWidth:360, maxWidth:1000, width:'95%', maxHeight:'85vh', overflowY:'auto', position:'relative' }}>
+        <div className="fh-modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex:1100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="fh-modal" style={{ background:'#fff', borderRadius: 12, padding: 20, minWidth: 360, maxWidth: 1000, width:'95%', maxHeight: '85vh', overflowY: 'auto', position: 'relative' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
               <h3 style={{ margin:0 }}>Tất cả giao dịch gia đình</h3>
               <button onClick={closeAllFamilyTransactions} style={{ background:'none', border:'none', fontSize:22, cursor:'pointer' }}>&times;</button>
@@ -996,7 +1123,7 @@ export default function FamilyHome() {
             {loadingFamilyTxAll ? (
               <div style={{ padding:24, textAlign:'center' }}>
                 <div className="fh-loading-spinner small"></div>
-                <div style={{ marginTop:8, color:'#64748b' }}>Đang tải giao dịch...</div>
+                <div style={{ marginTop:8, color: '#64748b' }}>Đang tải giao dịch...</div>
               </div>
             ) : familyTxsError ? (
               <div style={{ padding:24, textAlign:'center', color:'#b91c1c' }}>{familyTxsError}</div>
@@ -1100,6 +1227,97 @@ export default function FamilyHome() {
               <button className="fh-btn secondary" onClick={() => setDeleteBudgetModal({ show: false, budget: null })}>Hủy</button>
               <button className="fh-btn danger" onClick={handleDeleteBudget} disabled={deleteBudgetLoading}>
                 {deleteBudgetLoading ? 'Đang xóa...' : 'Xóa ngân sách'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* MODAL: Lịch sử ngân sách */}
+      {budgetHistoryModal.show && (
+        <div className="fh-modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="fh-modal" style={{ background: '#fff', borderRadius: 12, padding: 24, minWidth: 360, maxWidth: 900, width: '95%', maxHeight: '85vh', overflowY: 'auto', position: 'relative' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0 }}>
+                <i className="fas fa-history"></i> Lịch sử ngân sách - {budgetHistoryModal.categoryName}
+              </h3>
+              <button onClick={() => setBudgetHistoryModal({ show: false, categoryId: null, categoryName: '' })} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer' }}>&times;</button>
+            </div>
+            
+            {loadingHistory ? (
+              <div style={{ padding: 24, textAlign: 'center' }}>
+                <div className="fh-loading-spinner small"></div>
+                <div style={{ marginTop: 8, color: '#64748b' }}>Đang tải lịch sử...</div>
+              </div>
+            ) : budgetHistory.length === 0 ? (
+              <div style={{ padding: 24, textAlign: 'center', color: '#64748b' }}>
+                <i className="fas fa-inbox" style={{ fontSize: 48, marginBottom: 12, opacity: 0.5 }}></i>
+                <p>Chưa có lịch sử ngân sách</p>
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: '#f1f5f9' }}>
+                      <th style={{ padding: 10, textAlign: 'left' }}>Kỳ</th>
+                      <th style={{ padding: 10, textAlign: 'right' }}>Ngân sách</th>
+                      <th style={{ padding: 10, textAlign: 'right' }}>Đã chi</th>
+                      <th style={{ padding: 10, textAlign: 'center' }}>%</th>
+                      <th style={{ padding: 10, textAlign: 'left' }}>Ghi chú</th>
+                      <th style={{ padding: 10, textAlign: 'center' }}>Reset lúc</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {budgetHistory.map((h, idx) => {
+                      const percentage = calculatePercentage(h.spent || 0, h.amount || 1);
+                      const status = percentage >= 90 ? 'danger' : percentage >= 70 ? 'warning' : 'good';
+                      return (
+                        <tr key={h._id || idx} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                          <td style={{ padding: 10 }}>
+                            {new Date(h.startDate).toLocaleDateString('vi-VN', { month: 'short', year: 'numeric' })}
+                          </td>
+                          <td style={{ padding: 10, textAlign: 'right', fontWeight: 600 }}>{formatCurrency(h.amount)}</td>
+                          <td style={{ padding: 10, textAlign: 'right' }}>{formatCurrency(h.spent || 0)}</td>
+                          <td style={{ padding: 10, textAlign: 'center' }}>
+                            <span className={`fh-budget-percentage ${status}`} style={{ fontSize: '0.875rem', padding: '2px 8px', borderRadius: 12 }}>
+                              {percentage}%
+                            </span>
+                          </td>
+                          <td style={{ padding: 10 }}>{h.note || '—'}</td>
+                          <td style={{ padding: 10, textAlign: 'center', fontSize: '0.813rem', color: '#64748b' }}>
+                            {new Date(h.resetAt).toLocaleString('vi-VN')}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="fh-btn secondary" onClick={() => setBudgetHistoryModal({ show: false, categoryId: null, categoryName: '' })}>Đóng</button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* MODAL: Xác nhận reset ngân sách */}
+      {resetBudgetModal.show && (
+        <div className="fh-modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1101, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="fh-modal" style={{ background: '#fff', borderRadius: 12, padding: 32, minWidth: 340, maxWidth: 480, width: '100%', textAlign: 'center' }}>
+            <i className="fas fa-sync-alt" style={{ fontSize: 48, color: '#3b82f6', marginBottom: 16 }}></i>
+            <h2 style={{ margin: '0 0 12px 0', fontSize: 20, color: '#1f2937' }}>Reset ngân sách</h2>
+            <p style={{ margin: '0 0 8px 0', color: '#6b7280' }}>
+              Bạn có chắc chắn muốn reset ngân sách <strong>{resetBudgetModal.budget?.category?.name}</strong>?
+            </p>
+            <p style={{ margin: '0 0 20px 0', fontSize: '0.875rem', color: '#9ca3af' }}>
+              Dữ liệu kỳ hiện tại sẽ được lưu vào lịch sử và ngân sách sẽ bắt đầu kỳ mới (tháng tiếp theo).
+            </p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+              <button className="fh-btn secondary" onClick={() => setResetBudgetModal({ show: false, budget: null })}>Hủy</button>
+              <button className="fh-btn primary" onClick={handleResetBudget} disabled={resetBudgetLoading}>
+                {resetBudgetLoading ? 'Đang reset...' : 'Xác nhận reset'}
               </button>
             </div>
           </div>
