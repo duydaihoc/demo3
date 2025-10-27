@@ -963,11 +963,26 @@ router.delete('/:familyId/budget/:budgetId', authenticateToken, async (req, res)
     const budget = family.budgets.id(budgetId);
     if (!budget) return res.status(404).json({ message: 'Không tìm thấy ngân sách' });
 
+    // Lưu categoryId trước khi xóa để dùng cho việc xóa lịch sử
+    const categoryId = budget.category;
+
     // Xóa budget khỏi mảng - dùng pull() thay vì remove()
     family.budgets.pull(budgetId);
+    
+    // NEW: Xóa TẤT CẢ lịch sử ngân sách của category này
+    if (Array.isArray(family.budgetHistory) && family.budgetHistory.length > 0) {
+      family.budgetHistory = family.budgetHistory.filter(
+        h => String(h.category) !== String(categoryId)
+      );
+    }
+    
     await family.save();
 
-    res.json({ message: 'Đã xóa ngân sách thành công' });
+    res.json({ 
+      message: 'Đã xóa ngân sách và lịch sử thành công',
+      deletedBudgetId: budgetId,
+      deletedCategoryId: categoryId
+    });
   } catch (err) {
     console.error('Delete family budget error:', err);
     res.status(500).json({ message: 'Server error', error: err.message });
