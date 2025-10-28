@@ -62,6 +62,34 @@ const familySchema = new mongoose.Schema({
     note: { type: String, default: '' },
     resetAt: { type: Date, default: Date.now }
   }],
+  // NEW: Thêm danh sách mua sắm
+  shoppingList: [{
+    name: { type: String, required: true, trim: true },
+    quantity: { type: Number, default: 1, min: 1 },
+    notes: { type: String, default: '', trim: true },
+    category: { type: mongoose.Schema.Types.ObjectId, ref: 'Category' }, // THÊM: danh mục cho sản phẩm
+    purchased: { type: Boolean, default: false },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    createdAt: { type: Date, default: Date.now },
+    purchasedAt: { type: Date },
+    purchasedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+  }],
+  // NEW: Thêm danh sách việc cần làm
+  todoList: [{
+    title: { type: String, required: true, trim: true },
+    description: { type: String, default: '', trim: true },
+    priority: { 
+      type: String, 
+      enum: ['low', 'medium', 'high'], 
+      default: 'medium' 
+    },
+    completed: { type: Boolean, default: false },
+    dueDate: { type: Date },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    createdAt: { type: Date, default: Date.now },
+    completedAt: { type: Date },
+    completedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+  }],
   color: {
     colors: [String],
     direction: {

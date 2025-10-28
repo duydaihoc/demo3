@@ -1,16 +1,26 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './FamilySidebar.css';
 
 export default function FamilySidebar({ active, collapsed = false }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  // Menu items array
+  // Menu items array với dropdown cho lists
   const items = [
     { id: 'home', label: 'Trang chủ', route: '/family', icon: 'fas fa-home' },
     { id: 'transactions', label: 'Giao dịch', route: '/family/transactions', icon: 'fas fa-exchange-alt' },
-    { id: 'lists', label: 'Danh sách', route: '/family/lists', icon: 'fas fa-list' },
+    { 
+      id: 'lists', 
+      label: 'Danh sách', 
+      icon: 'fas fa-list',
+      hasDropdown: true,
+      submenu: [
+        { id: 'shopping-list', label: 'Danh sách mua sắm', route: '/family/shopping-list', icon: 'fas fa-shopping-cart' },
+        { id: 'todo-list', label: 'Danh sách việc cần làm', route: '/family/todo-list', icon: 'fas fa-tasks' }
+      ]
+    },
     { id: 'charts', label: 'Biểu đồ', route: '/family/charts', icon: 'fas fa-chart-bar' },
     { id: 'members', label: 'Thành viên', route: '/family/members', icon: 'fas fa-users' },
     { id: 'settings', label: 'Cài đặt', route: '/family/settings', icon: 'fas fa-cog' },
@@ -23,17 +33,23 @@ export default function FamilySidebar({ active, collapsed = false }) {
     if (path === '/family') return 'home';
     if (path === '/family/transactions') return 'transactions';
     if (path === '/family/lists') return 'lists';
+    if (path === '/family/shopping-list') return 'shopping-list';
+    if (path === '/family/todo-list') return 'todo-list';
     if (path === '/family/charts') return 'charts';
     if (path === '/family/members') return 'members';
     if (path === '/family/settings') return 'settings';
-    // Thêm các route khác nếu có
-    // if (path === '/family/tasks') return 'tasks';
-    // if (path === '/family/reports') return 'reports';
     
     return '';
   };
 
   const activeTab = getActiveTab();
+
+  // Auto-open dropdown if submenu is active
+  useEffect(() => {
+    if (activeTab === 'shopping-list' || activeTab === 'todo-list') {
+      setDropdownOpen(true);
+    }
+  }, [activeTab]);
 
   // Keep main content height in sync on resize (UI-only)
   useEffect(() => {
@@ -50,7 +66,9 @@ export default function FamilySidebar({ active, collapsed = false }) {
   }, []);
 
   const handleNav = (it) => {
-    if (it.route) {
+    if (it.hasDropdown) {
+      setDropdownOpen(!dropdownOpen);
+    } else if (it.route) {
       navigate(it.route);
       // UI: after navigation, ensure the content scroll container is at top
       setTimeout(() => {
@@ -64,6 +82,24 @@ export default function FamilySidebar({ active, collapsed = false }) {
           }
         } else {
           // fallback to window scroll
+          try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch(e){ window.scrollTo(0,0); }
+        }
+      }, 60);
+    }
+  };
+
+  const handleSubmenuNav = (submenuItem) => {
+    if (submenuItem.route) {
+      navigate(submenuItem.route);
+      setTimeout(() => {
+        const main = document.querySelector('.family-main');
+        if (main) {
+          try {
+            main.scrollTo({ top: 0, behavior: 'smooth' });
+          } catch (e) {
+            main.scrollTop = 0;
+          }
+        } else {
           try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch(e){ window.scrollTo(0,0); }
         }
       }, 60);
@@ -98,7 +134,7 @@ export default function FamilySidebar({ active, collapsed = false }) {
           {items.map(it => (
             <li key={it.id}>
               <button
-                className={`fs-item ${activeTab === it.id ? 'active' : ''}`}
+                className={`fs-item ${activeTab === it.id || (it.submenu && it.submenu.some(sub => sub.id === activeTab)) ? 'active' : ''}`}
                 onClick={() => handleNav(it)}
                 aria-pressed={activeTab === it.id}
                 aria-label={it.label}
@@ -106,7 +142,30 @@ export default function FamilySidebar({ active, collapsed = false }) {
               >
                 <i className={it.icon + ' fs-icon'} aria-hidden="true"></i>
                 <span className="fs-label">{it.label}</span>
+                {it.hasDropdown && (
+                  <i className={`fas fa-chevron-${dropdownOpen ? 'up' : 'down'} fs-dropdown-icon`} aria-hidden="true"></i>
+                )}
               </button>
+              
+              {/* Submenu dropdown */}
+              {it.hasDropdown && it.submenu && (
+                <ul className={`fs-submenu ${dropdownOpen ? 'open' : ''}`}>
+                  {it.submenu.map(subItem => (
+                    <li key={subItem.id}>
+                      <button
+                        className={`fs-submenu-item ${activeTab === subItem.id ? 'active' : ''}`}
+                        onClick={() => handleSubmenuNav(subItem)}
+                        aria-pressed={activeTab === subItem.id}
+                        aria-label={subItem.label}
+                        title={subItem.label}
+                      >
+                        <i className={subItem.icon + ' fs-submenu-icon'} aria-hidden="true"></i>
+                        <span className="fs-submenu-label">{subItem.label}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </li>
           ))}
         </ul>

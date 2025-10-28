@@ -1101,4 +1101,317 @@ router.get('/:familyId/budget-history', authenticateToken, async (req, res) => {
   }
 });
 
+// API: Lấy danh sách mua sắm của gia đình
+router.get('/:familyId/shopping-list', authenticateToken, async (req, res) => {
+  try {
+    const { familyId } = req.params;
+    const userId = req.user.id || req.user._id;
+
+    // Kiểm tra quyền truy cập - tất cả thành viên đều có thể xem
+    const family = await Family.findOne({
+      _id: familyId,
+      $or: [
+        { 'members.user': userId },
+        { owner: userId }
+      ]
+    })
+    .populate('shoppingList.createdBy', 'name email')
+    .populate('shoppingList.category', 'name icon type');
+
+    if (!family) {
+      return res.status(403).json({ message: 'Bạn không có quyền truy cập gia đình này' });
+    }
+
+    // Sắp xếp theo ngày tạo mới nhất
+    const shoppingList = (family.shoppingList || []).sort((a, b) => 
+      new Date(b.createdAt) - new Date(a.createdAt)
+    );
+
+    // Thêm tên người tạo và thông tin danh mục vào từng item
+    const shoppingListWithCreator = shoppingList.map(item => ({
+      ...item.toObject(),
+      creatorName: item.createdBy?.name || 'Thành viên',
+      categoryInfo: item.category ? {
+        _id: item.category._id,
+        name: item.category.name,
+        icon: item.category.icon,
+        type: item.category.type
+      } : null
+    }));
+
+    res.json(shoppingListWithCreator);
+  } catch (error) {
+    console.error('Error fetching shopping list:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// API: Thêm sản phẩm vào danh sách mua sắm
+router.post('/:familyId/shopping-list', authenticateToken, async (req, res) => {
+  try {
+    const { familyId } = req.params;
+    const { name, quantity, notes, category } = req.body; // THÊM: category
+    const userId = req.user.id || req.user._id;
+
+    // Validate input
+    if (!name || !name.trim()) {
+      return res.status(400).json({ message: 'Tên sản phẩm là bắt buộc' });
+    }
+
+    const cleanQuantity = quantity && !isNaN(quantity) && quantity > 0 ? Number(quantity) : 1;
+
+    // THÊM: Validate category nếu có
+    if (category && !mongoose.Types.ObjectId.isValid(category)) {
+      return res.status(400).json({ message: 'Danh mục không hợp lệ' });
+    }
+
+    if (category) {
+      const categoryExists = await Category.findById(category);
+      if (!categoryExists) {
+        return res.status(404).json({ message: 'Danh mục không tồn tại' });
+      }
+    }
+
+    // Kiểm tra quyền truy cập - tất cả thành viên đều có thể thêm
+    const family = await Family.findOne({
+      _id: familyId,
+      $or: [
+        { 'members.user': userId },
+        { owner: userId }
+      ]
+    });
+
+    if (!family) {
+      return res.status(403).json({ message: 'Bạn không có quyền truy cập gia đình này' });
+    }
+
+    // Tạo item mới
+    const newItem = {
+      name: name.trim(),
+      quantity: cleanQuantity,
+      notes: notes?.trim() || '',
+      category: category || null, // THÊM: category
+      purchased: false,
+      createdBy: userId,
+      createdAt: new Date()
+    };
+
+    // Thêm vào danh sách
+    if (!Array.isArray(family.shoppingList)) {
+      family.shoppingList = [];
+    }
+    family.shoppingList.push(newItem);
+    await family.save();
+
+    // Lấy item vừa tạo với thông tin người tạo và danh mục
+    const createdItem = family.shoppingList[family.shoppingList.length - 1];
+    await Family.populate(createdItem, { path: 'createdBy', select: 'name email' });
+    await Family.populate(createdItem, { path: 'category', select: 'name icon type' }); // THÊM: populate category
+
+    const responseItem = {
+      ...createdItem.toObject(),
+      creatorName: createdItem.createdBy?.name || 'Thành viên',
+      categoryInfo: createdItem.category ? { // THÊM: categoryInfo
+        _id: createdItem.category._id,
+        name: createdItem.category.name,
+        icon: createdItem.category.icon,
+        type: createdItem.category.type
+      } : null
+    };
+
+    res.status(201).json(responseItem);
+  } catch (error) {
+    console.error('Error adding shopping item:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// API: Cập nhật sản phẩm trong danh sách mua sắm
+router.patch('/:familyId/shopping-list/:itemId', authenticateToken, async (req, res) => {
+  try {
+    const { familyId, itemId } = req.params;
+    const { name, quantity, notes, category, purchased } = req.body; // THÊM: category
+    const userId = req.user.id || req.user._id;
+
+    // Tìm gia đình
+    const family = await Family.findOne({
+      _id: familyId,
+      $or: [
+        { 'members.user': userId },
+        { owner: userId }
+      ]
+    });
+
+    if (!family) {
+      return res.status(403).json({ message: 'Bạn không có quyền truy cập gia đình này' });
+    }
+
+    // Tìm item trong danh sách
+    const item = family.shoppingList.id(itemId);
+    if (!item) {
+      return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
+    }
+
+    // Kiểm tra quyền chỉnh sửa
+    const isOwner = String(family.owner) === String(userId);
+    
+    // Chỉ cho phép owner sửa thông tin sản phẩm (name, quantity, notes, category)
+    // Nhưng tất cả thành viên đều có thể đánh dấu đã mua/chưa mua
+    if ((name !== undefined || quantity !== undefined || notes !== undefined || category !== undefined) && !isOwner) {
+      return res.status(403).json({ 
+        message: 'Chỉ chủ gia đình mới có thể chỉnh sửa thông tin sản phẩm' 
+      });
+    }
+
+    // THÊM: Validate category nếu có thay đổi
+    if (category !== undefined && isOwner) {
+      if (category && !mongoose.Types.ObjectId.isValid(category)) {
+        return res.status(400).json({ message: 'Danh mục không hợp lệ' });
+      }
+      
+      if (category) {
+        const categoryExists = await Category.findById(category);
+        if (!categoryExists) {
+          return res.status(404).json({ message: 'Danh mục không tồn tại' });
+        }
+      }
+      
+      item.category = category || null;
+    }
+
+    // Cập nhật các trường được cho phép
+    if (name !== undefined && isOwner) {
+      if (!name.trim()) {
+        return res.status(400).json({ message: 'Tên sản phẩm không được để trống' });
+      }
+      item.name = name.trim();
+    }
+
+    if (quantity !== undefined && isOwner) {
+      const cleanQuantity = !isNaN(quantity) && quantity > 0 ? Number(quantity) : 1;
+      item.quantity = cleanQuantity;
+    }
+
+    if (notes !== undefined && isOwner) {
+      item.notes = notes?.trim() || '';
+    }
+
+    // Tất cả thành viên đều có thể cập nhật trạng thái mua
+    if (purchased !== undefined) {
+      item.purchased = Boolean(purchased);
+      if (item.purchased) {
+        item.purchasedAt = new Date();
+        item.purchasedBy = userId;
+      } else {
+        item.purchasedAt = undefined;
+        item.purchasedBy = undefined;
+      }
+    }
+
+    await family.save();
+
+    // Populate thông tin người tạo và danh mục
+    await Family.populate(item, { path: 'createdBy', select: 'name email' });
+    await Family.populate(item, { path: 'purchasedBy', select: 'name email' });
+    await Family.populate(item, { path: 'category', select: 'name icon type' }); // THÊM: populate category
+
+    const responseItem = {
+      ...item.toObject(),
+      creatorName: item.createdBy?.name || 'Thành viên',
+      purchasedByName: item.purchasedBy?.name || null,
+      categoryInfo: item.category ? { // THÊM: categoryInfo
+        _id: item.category._id,
+        name: item.category.name,
+        icon: item.category.icon,
+        type: item.category.type
+      } : null
+    };
+
+    res.json(responseItem);
+  } catch (error) {
+    console.error('Error updating shopping item:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// API: Xóa sản phẩm khỏi danh sách mua sắm
+router.delete('/:familyId/shopping-list/:itemId', authenticateToken, async (req, res) => {
+  try {
+    const { familyId, itemId } = req.params;
+    const userId = req.user.id || req.user._id;
+
+    // Kiểm tra quyền truy cập và chỉ owner mới được xóa
+    const family = await Family.findOne({
+      _id: familyId,
+      owner: userId // CHỈ OWNER mới có quyền xóa
+    });
+
+    if (!family) {
+      return res.status(403).json({ 
+        message: 'Chỉ chủ gia đình mới có thể xóa sản phẩm khỏi danh sách' 
+      });
+    }
+
+    // Tìm item trong danh sách
+    const item = family.shoppingList.id(itemId);
+    if (!item) {
+      return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
+    }
+
+    // Lưu thông tin item trước khi xóa để trả về
+    const deletedItemInfo = {
+      _id: item._id,
+      name: item.name,
+      quantity: item.quantity
+    };
+
+    // Xóa item khỏi danh sách
+    family.shoppingList.pull(itemId);
+    await family.save();
+
+    res.json({ 
+      message: 'Đã xóa sản phẩm khỏi danh sách thành công',
+      deletedItem: deletedItemInfo
+    });
+  } catch (error) {
+    console.error('Error deleting shopping item:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// API: Xóa tất cả sản phẩm đã mua khỏi danh sách
+router.delete('/:familyId/shopping-list/purchased/clear', authenticateToken, async (req, res) => {
+  try {
+    const { familyId } = req.params;
+    const userId = req.user.id || req.user._id;
+
+    // Chỉ owner mới có quyền xóa hàng loạt
+    const family = await Family.findOne({
+      _id: familyId,
+      owner: userId
+    });
+
+    if (!family) {
+      return res.status(403).json({ 
+        message: 'Chỉ chủ gia đình mới có thể xóa hàng loạt' 
+      });
+    }
+
+    // Đếm số sản phẩm đã mua trước khi xóa
+    const purchasedCount = family.shoppingList.filter(item => item.purchased).length;
+
+    // Xóa tất cả sản phẩm đã mua
+    family.shoppingList = family.shoppingList.filter(item => !item.purchased);
+    await family.save();
+
+    res.json({ 
+      message: `Đã xóa ${purchasedCount} sản phẩm đã mua khỏi danh sách`,
+      deletedCount: purchasedCount
+    });
+  } catch (error) {
+    console.error('Error clearing purchased items:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 module.exports = router;

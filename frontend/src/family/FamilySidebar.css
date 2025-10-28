@@ -303,6 +303,186 @@
 }
 .family-main::-webkit-scrollbar-track { background: transparent; }
 
+/* Dropdown icon styling */
+.fs-dropdown-icon {
+  margin-left: auto;
+  font-size: 12px !important;
+  transition: transform 0.3s ease;
+  opacity: 0.8;
+}
+
+.fs-item:hover .fs-dropdown-icon {
+  opacity: 1;
+}
+
+/* Submenu styling */
+.fs-submenu {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease, opacity 0.3s ease;
+  opacity: 0;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  margin-top: 8px;
+  margin-left: 20px;
+  margin-right: 20px;
+}
+
+.fs-submenu.open {
+  max-height: 200px;
+  opacity: 1;
+  padding: 8px 0;
+}
+
+/* Hide submenu completely when sidebar is collapsed */
+.family-sidebar.collapsed .fs-submenu {
+  display: none;
+}
+
+/* Submenu item styling */
+.fs-submenu-item {
+  display: flex;
+  width: 100%;
+  padding: 8px 16px;
+  text-align: left;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.fs-submenu-item:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  transform: translateX(4px);
+}
+
+.fs-submenu-item.active {
+  background: rgba(255, 255, 255, 0.2);
+  color: #d1fae5;
+  font-weight: 600;
+  position: relative;
+}
+
+/* Active submenu item indicator */
+.fs-submenu-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 20px;
+  background: linear-gradient(180deg, #d1fae5, #3b82f6);
+  border-radius: 2px;
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from { 
+    width: 0; 
+    opacity: 0; 
+  }
+  to { 
+    width: 3px; 
+    opacity: 1; 
+  }
+}
+
+/* Submenu icon styling */
+.fs-submenu-icon {
+  font-size: 14px !important;
+  width: 18px !important;
+  text-align: center;
+  opacity: 0.8;
+}
+
+.fs-submenu-item:hover .fs-submenu-icon,
+.fs-submenu-item.active .fs-submenu-icon {
+  opacity: 1;
+}
+
+/* Submenu label */
+.fs-submenu-label {
+  flex: 1;
+}
+
+/* Adjust main item when it has dropdown */
+.fs-item:has(.fs-submenu) {
+  position: relative;
+}
+
+/* Animation for dropdown arrow rotation */
+.fs-submenu.open ~ .fs-item .fs-dropdown-icon {
+  transform: rotate(180deg);
+}
+
+/* Mobile adjustments */
+@media (max-width: 900px) {
+  .fs-submenu {
+    margin-left: 10px;
+    margin-right: 10px;
+  }
+  
+  .fs-submenu-item {
+    padding: 10px 16px;
+    font-size: 1rem;
+  }
+  
+  .fs-submenu-icon {
+    font-size: 16px !important;
+    width: 20px !important;
+  }
+}
+
+/* Enhanced hover effects for parent item with dropdown */
+.fs-item:has(.fs-submenu):hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.fs-item:has(.fs-submenu).active {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* Smooth transition for submenu items */
+.fs-submenu-item {
+  transform: translateX(0);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.fs-submenu.open .fs-submenu-item {
+  animation: fadeInSlide 0.3s ease forwards;
+}
+
+.fs-submenu.open .fs-submenu-item:nth-child(1) {
+  animation-delay: 0.1s;
+}
+
+.fs-submenu.open .fs-submenu-item:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+@keyframes fadeInSlide {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 /* Mobile Responsive */
 @media (max-width: 900px) {
   .family-page {
