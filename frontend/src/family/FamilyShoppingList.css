@@ -114,69 +114,49 @@
 
 .fsl-actions {
   display: flex;
-  justify-content: flex-end;
-  margin-top: 16px;
+  gap: 0; /* Không có khoảng cách thừa giữa các nút */
 }
 
-.fsl-btn {
+.fsl-btn,
+.fsl-export-btn {
+  min-width: 160px;
+  height: 48px;
+  padding: 0 24px;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 600;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 14px 24px;
-  border-radius: 12px;
-  font-weight: 600;
-  font-size: 15px;
-  cursor: pointer;
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  justify-content: center;
+  box-sizing: border-box;
   border: none;
-  position: relative;
-  overflow: hidden;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-}
-
-.fsl-btn::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  transition: left 0.8s ease;
-}
-
-.fsl-btn:hover::before {
-  left: 100%;
+  transition: all 0.2s;
+  cursor: pointer;
+  /* Đảm bảo màu nền và border cho từng loại nút */
 }
 
 .fsl-btn.primary {
-  background: linear-gradient(135deg, #4ecdc4, #2a5298);
-  color: white;
-  box-shadow: 0 8px 32px rgba(78, 205, 196, 0.3);
+  background: #ffe066;
+  color: #7c6f57;
+  border: 1px solid #fbc02d;
 }
 
-.fsl-btn.primary:hover:not(:disabled) {
-  transform: translateY(-4px) scale(1.05);
-  box-shadow: 0 20px 40px rgba(78, 205, 196, 0.4);
+.fsl-btn.primary:hover {
+  background: #fffde7;
+  color: #b59f3b;
 }
 
-.fsl-btn.secondary {
-  background: rgba(255, 255, 255, 0.1);
-  color: #e2e8f0;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+.fsl-btn.secondary,
+.fsl-export-btn {
+  background: #fffde7;
+  color: #b59f3b;
+  border: 1px solid #ffe066;
 }
 
-.fsl-btn.secondary:hover {
-  background: rgba(255, 255, 255, 0.2);
-  transform: translateY(-3px);
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
-}
-
-.fsl-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none !important;
+.fsl-btn.secondary:hover,
+.fsl-export-btn:hover {
+  background: #ffe066;
+  color: #7c6f57;
 }
 
 /* Modal */
@@ -201,17 +181,14 @@
 }
 
 .fsl-modal {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 24px;
-  width: 90%;
-  max-width: 500px;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  animation: modal-slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  position: relative;
+  background: #fffbe6;
+  border-radius: 20px;
+  box-shadow: 0 8px 32px rgba(255, 224, 102, 0.18), 0 2px 0 #f7e9b0 inset;
+  border: 2px solid #ffe066;
+  max-width: 420px;
+  width: 95%;
+  padding: 0;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
 }
 
 .fsl-modal::before {
@@ -238,568 +215,495 @@
 }
 
 .fsl-modal-header {
-  padding: 24px 32px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 18px 24px;
+  border-bottom: 1px solid #ffe066;
+  background: #fffde7;
+  border-radius: 20px 20px 0 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: linear-gradient(135deg, rgba(78, 205, 196, 0.1), rgba(42, 82, 152, 0.1));
 }
 
 .fsl-modal-header h3 {
   margin: 0;
-  color: #ffffff;
-  font-size: 24px;
+  color: #7c6f57;
+  font-size: 20px;
   font-weight: 700;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  text-shadow: 0 2px 10px rgba(78, 205, 196, 0.3);
-}
-
-.fsl-modal-header h3 i {
-  color: #4ecdc4;
-  font-size: 28px;
+  letter-spacing: 0.5px;
 }
 
 .fsl-modal-close {
   background: none;
   border: none;
-  font-size: 32px;
-  color: #cbd5e1;
+  font-size: 28px;
+  color: #b59f3b;
   cursor: pointer;
   line-height: 1;
   padding: 0;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  transition: all 0.3s ease;
-  backdrop-filter: blur(10px);
+  transition: background 0.2s;
 }
 
 .fsl-modal-close:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-  color: #ffffff;
-  transform: rotate(90deg) scale(1.1);
+  background-color: #ffe066;
+  color: #7c6f57;
 }
 
-/* Form */
 .fsl-form {
-  padding: 32px;
+  padding: 24px;
 }
 
 .fsl-form-group {
   display: flex;
   flex-direction: column;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 .fsl-form-group label {
   font-weight: 600;
-  color: #e2e8f0;
-  margin-bottom: 8px;
+  color: #b59f3b;
+  margin-bottom: 7px;
   font-size: 15px;
 }
 
 .fsl-form-group input,
-.fsl-form-group textarea {
-  padding: 16px 20px;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  border-radius: 12px;
-  font-size: 16px;
+.fsl-form-group textarea,
+.fsl-form-group select {
+  padding: 12px 14px;
+  border: 1px solid #ffe066;
+  border-radius: 8px;
+  font-size: 15px;
   font-family: inherit;
-  background: rgba(255, 255, 255, 0.1);
-  color: #000000;
-  backdrop-filter: blur(10px);
-  transition: all 0.4s ease;
+  background: #fffde7;
+  color: #7c6f57;
+  transition: border 0.2s, box-shadow 0.2s;
 }
 
-.fsl-form-group input::placeholder,
-.fsl-form-group textarea::placeholder {
-  color: #94a3b8;
+.fsl-form-group input:focus,
+.fsl-form-group textarea:focus,
+.fsl-form-group select:focus {
+  outline: none;
+  border-color: #fbc02d;
+  box-shadow: 0 0 0 2px #ffe066;
+  background: #fffbe6;
 }
 
 .fsl-form-group textarea {
   resize: vertical;
-  min-height: 120px;
-}
-
-.fsl-form-group input:focus,
-.fsl-form-group textarea:focus {
-  outline: none;
-  border-color: #4ecdc4;
-  box-shadow: 0 0 0 4px rgba(78, 205, 196, 0.2);
-  transform: translateY(-2px);
-  background: rgba(255, 255, 255, 0.15);
+  min-height: 80px;
 }
 
 .fsl-form-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 16px;
-  margin-top: 32px;
-  padding-top: 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid #ffe066;
 }
 
-/* Shopping List Content */
-.fsl-content {
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 20px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(20px);
-  overflow: hidden;
-  position: relative;
+.fsl-btn.primary {
+  background: #ffe066;
+  color: #7c6f57;
+  border: 1px solid #fbc02d;
+  font-weight: 700;
 }
 
+.fsl-btn.primary:hover {
+  background: #fffde7;
+  color: #b59f3b;
+}
+
+.fsl-btn.secondary {
+  background: #fffde7;
+  color: #b59f3b;
+  border: 1px solid #ffe066;
+}
+
+.fsl-btn.secondary:hover {
+  background: #ffe066;
+  color: #7c6f57;
+}
+
+/* Note paper style for shopping items */
 .fsl-items-list {
-  max-height: 600px;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 28px 0;
 }
 
 .fsl-item {
-  display: flex;
-  align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  background: #fffbe6;
+  border-radius: 16px;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.08), 0 2px 0 #f7e9b0 inset;
+  border: 1px solid #f7e9b0;
+  padding: 22px 28px;
   position: relative;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.05);
+  min-height: 90px;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  transition: box-shadow 0.2s, transform 0.2s;
 }
 
 .fsl-item::before {
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(135deg, rgba(78, 205, 196, 0.05), rgba(42, 82, 152, 0.05));
-  opacity: 0;
-  transition: opacity 0.4s ease;
-}
-
-.fsl-item:hover::before {
-  opacity: 1;
+  top: 0; left: 0; right: 0;
+  height: 22px;
+  background: repeating-linear-gradient(
+    90deg,
+    #ffe066 0px, #ffe066 2px,
+    transparent 2px, transparent 100%
+  );
+  border-radius: 16px 16px 0 0;
+  opacity: 0.5;
 }
 
 .fsl-item:hover {
-  transform: translateX(8px);
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(78, 205, 196, 0.3);
-}
-
-.fsl-item:last-child {
-  border-bottom: none;
+  box-shadow: 0 8px 32px rgba(255, 224, 102, 0.18), 0 2px 0 #f7e9b0 inset;
+  transform: translateY(-2px) scale(1.01);
 }
 
 .fsl-item.purchased {
-  opacity: 0.9;
-  background: rgba(16, 185, 129, 0.04);
-}
-
-/* Remove the distracting green stripe (pseudo-element) */
-.fsl-item.purchased::after {
-	/* đảm bảo không hiển thị sọc ngang */
-	display: none !important;
-	content: none !important;
-}
-
-/* Remove strike-through on purchased item name */
-.fsl-item.purchased .fsl-item-name {
-	/* trước đây: text-decoration: line-through; */
-	text-decoration: none !important;
-	color: #ffffff; /* đảm bảo màu chữ rõ ràng */
-	opacity: 0.95;
-	font-weight: 700;
-}
-
-/* Tweak purchased item subtle styling (optional) */
-.fsl-item.purchased {
-	opacity: 0.9;
-	background: rgba(16, 185, 129, 0.04); /* very subtle */
-}
-
-/* Dim quantity and notes a bit for purchased items */
-.fsl-item.purchased .fsl-item-quantity,
-.fsl-item.purchased .fsl-item-notes,
-.fsl-item.purchased .fsl-item-meta {
-  opacity: 0.8;
-  color: #cbd5e1;
-}
-
-/* Add a small check badge on the left of the item header for purchased items */
-.fsl-item.purchased .fsl-item-header {
-  position: relative;
-  padding-left: 38px; /* space for badge */
-}
-
-.fsl-item.purchased .fsl-item-header::before {
-  content: '✓';
-  position: absolute;
-  left: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: linear-gradient(135deg,#10b981,#34d399);
-  color: white;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  box-shadow: 0 4px 10px rgba(16,185,129,0.25);
-}
-
-/* Make hover for purchased items more subtle (no large movement) */
-.fsl-item.purchased:hover {
-  transform: none;
-  background: rgba(16, 185, 129, 0.08);
-  border-color: rgba(16,185,129,0.12);
+  background: #e0f7fa;
+  border-color: #b2ebf2;
+  opacity: 0.95;
 }
 
 .fsl-item-content {
   flex: 1;
+  font-size: 16px;
 }
 
 .fsl-item-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
+  position: relative;
 }
 
 .fsl-item-name {
   font-weight: 700;
-  color: #ffffff;
-  font-size: 18px;
-  transition: color 0.3s ease;
+  color: #7c6f57;
+  font-size: 20px;
   margin: 0;
-}
-
-.fsl-item:hover .fsl-item-name {
-  color: #4ecdc4;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  letter-spacing: 0.5px;
 }
 
 .fsl-item-quantity {
-  font-size: 16px;
-  color: #cbd5e1;
+  font-size: 15px;
+  color: #b59f3b;
   font-weight: 600;
-  background: rgba(78, 205, 196, 0.2);
-  padding: 4px 12px;
-  border-radius: 20px;
-  border: 1px solid rgba(78, 205, 196, 0.3);
+  background: #fffde7;
+  padding: 3px 14px;
+  border-radius: 16px;
+  border: 1px solid #ffe066;
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+.fsl-item-category {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  background: #ffe066;
+  color: #7c6f57;
+  border-radius: 16px;
+  border: 1px solid #f7e9b0;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 6px;
+  width: fit-content;
+  box-shadow: 0 2px 8px rgba(255, 224, 102, 0.08);
+}
+
+.fsl-item-category i {
+  font-size: 12px;
 }
 
 .fsl-item-notes {
-  color: #cbd5e1;
-  font-size: 14px;
-  margin-bottom: 12px;
-  line-height: 1.5;
+  color: #a1887f;
+  font-size: 15px;
+  margin-bottom: 8px;
+  font-style: italic;
+  background: #fffde7;
+  border-radius: 8px;
+  padding: 6px 14px;
+  border: 1px dashed #ffe066;
 }
 
 .fsl-item-meta {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   flex-wrap: wrap;
+  font-size: 13px;
+  color: #b59f3b;
 }
 
 .fsl-item-creator,
 .fsl-item-date {
-  font-size: 12px;
-  color: #94a3b8;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
 }
 
 .fsl-item-actions {
   display: flex;
-  gap: 12px;
-  margin-left: 20px;
+  gap: 10px;
+  margin-left: 18px;
+  align-items: center;
 }
 
 .fsl-action-btn {
-  padding: 10px 16px;
+  padding: 10px 18px;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.2s;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  position: relative;
-  overflow: hidden;
-  backdrop-filter: blur(10px);
+  gap: 9px;
+  font-size: 15px;
+  font-weight: 600;
+  background: #fffde7;
+  color: #7c6f57;
+  border: 1px solid #ffe066;
+  box-shadow: 0 2px 8px rgba(255, 224, 102, 0.08);
 }
 
-.fsl-action-btn::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  transition: left 0.6s ease;
-}
-
-.fsl-action-btn:hover::before {
-  left: 100%;
+.fsl-action-btn:hover {
+  background: #ffe066;
+  color: #7c6f57;
+  transform: translateY(-2px) scale(1.04);
 }
 
 .fsl-action-btn.check {
-  background: rgba(16, 185, 129, 0.2);
-  color: #10b981;
-  border: 1px solid rgba(16, 185, 129, 0.3);
-}
-
-.fsl-action-btn.check:hover {
-  background: rgba(16, 185, 129, 0.3);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 16px rgba(16, 185, 129, 0.3);
+  background: #e0f7fa;
+  color: #0097a7;
+  border: 1px solid #b2ebf2;
 }
 
 .fsl-action-btn.undo {
-  background: rgba(245, 158, 11, 0.2);
-  color: #f59e0b;
-  border: 1px solid rgba(245, 158, 11, 0.3);
-}
-
-.fsl-action-btn.undo:hover {
-  background: rgba(245, 158, 11, 0.3);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 16px rgba(245, 158, 11, 0.3);
+  background: #fffde7;
+  color: #fbc02d;
+  border: 1px solid #ffe066;
 }
 
 .fsl-action-btn.delete {
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.3);
-}
-
-.fsl-action-btn.delete:hover {
-  background: rgba(239, 68, 68, 0.3);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 16px rgba(239, 68, 68, 0.3);
+  background: #ffeaea;
+  color: #d32f2f;
+  border: 1px solid #ffcdd2;
 }
 
 .fsl-action-btn.edit {
-  background: rgba(78, 205, 196, 0.12);
-  color: #2a9d88;
-  border: 1px solid rgba(78, 205, 196, 0.25);
+  background: #fffbe6;
+  color: #7c6f57;
+  border: 1px solid #ffe066;
 }
 
 .fsl-action-btn.edit:hover {
-  background: rgba(78, 205, 196, 0.22);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 16px rgba(46, 161, 140, 0.15);
+  background: #ffe066;
+  color: #7c6f57;
 }
 
-/* Loading and error states */
-.fsl-loading {
+/* Modal note style */
+.fsl-modal {
+  background: #fffbe6;
+  border-radius: 20px;
+  box-shadow: 0 8px 32px rgba(255, 224, 102, 0.18), 0 2px 0 #f7e9b0 inset;
+  border: 2px solid #ffe066;
+  max-width: 420px;
+  width: 95%;
+  padding: 0;
+  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+}
+
+.fsl-modal-header {
+  padding: 18px 24px;
+  border-bottom: 1px solid #ffe066;
+  background: #fffde7;
+  border-radius: 20px 20px 0 0;
   display: flex;
-  flex-direction: column;
+  justify-content: space-between;
   align-items: center;
-  justify-content: center;
-  min-height: 200px;
-  color: #ffffff;
 }
 
-.fsl-loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid rgba(78, 205, 196, 0.3);
-  border-radius: 50%;
-  border-top: 4px solid #4ecdc4;
-  animation: spin 1s linear infinite;
-  margin-bottom: 16px;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.fsl-error {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 200px;
-  text-align: center;
-  color: #fca5a5;
-}
-
-.fsl-error i {
-  font-size: 48px;
-  margin-bottom: 16px;
-  opacity: 0.5;
-}
-
-.fsl-error p {
-  font-size: 16px;
-  margin-bottom: 16px;
-}
-
-.fsl-retry-btn {
-  background: linear-gradient(135deg, #ef4444, #dc2626);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  padding: 10px 20px;
-  cursor: pointer;
-  font-weight: 600;
-  transition: all 0.3s ease;
-}
-
-.fsl-retry-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 16px rgba(239, 68, 68, 0.3);
-}
-
-/* Empty state */
-.fsl-empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  text-align: center;
-  color: #cbd5e1;
-}
-
-.fsl-empty-state i {
-  font-size: 64px;
-  color: rgba(78, 205, 196, 0.3);
-  margin-bottom: 20px;
-  animation: float-icon 3s ease-in-out infinite;
-}
-
-.fsl-empty-state h3 {
-  margin: 0 0 12px 0;
-  font-size: 24px;
-  color: #ffffff;
-}
-
-.fsl-empty-state p {
+.fsl-modal-header h3 {
   margin: 0;
-  font-size: 16px;
-  opacity: 0.8;
+  color: #7c6f57;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
 }
 
-/* Sidebar toggle button */
-.sidebar-toggle-btn {
-  position: fixed;
-  top: 20px;
-  left: 20px;
-  z-index: 1001;
-  background: linear-gradient(135deg, #4ecdc4, #2a5298);
-  color: white;
+.fsl-modal-close {
+  background: none;
   border: none;
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
+  font-size: 28px;
+  color: #b59f3b;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(78, 205, 196, 0.3);
-  transition: all 0.3s ease;
-  font-size: 16px;
+  border-radius: 50%;
+  transition: background 0.2s;
 }
 
-.sidebar-toggle-btn:hover {
-  transform: scale(1.1);
-  box-shadow: 0 6px 20px rgba(78, 205, 196, 0.4);
+.fsl-modal-close:hover {
+  background-color: #ffe066;
+  color: #7c6f57;
 }
 
-.sidebar-toggle-btn i {
-  transition: transform 0.3s ease;
+.fsl-form {
+  padding: 24px;
 }
 
-/* Export dropdown styles */
+.fsl-form-group {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 16px;
+}
+
+.fsl-form-group label {
+  font-weight: 600;
+  color: #b59f3b;
+  margin-bottom: 7px;
+  font-size: 15px;
+}
+
+.fsl-form-group input,
+.fsl-form-group textarea,
+.fsl-form-group select {
+  padding: 12px 14px;
+  border: 1px solid #ffe066;
+  border-radius: 8px;
+  font-size: 15px;
+  font-family: inherit;
+  background: #fffde7;
+  color: #7c6f57;
+  transition: border 0.2s, box-shadow 0.2s;
+}
+
+.fsl-form-group input:focus,
+.fsl-form-group textarea:focus,
+.fsl-form-group select:focus {
+  outline: none;
+  border-color: #fbc02d;
+  box-shadow: 0 0 0 2px #ffe066;
+  background: #fffbe6;
+}
+
+.fsl-form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.fsl-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid #ffe066;
+}
+
+.fsl-btn.primary {
+  background: #ffe066;
+  color: #7c6f57;
+  border: 1px solid #fbc02d;
+  font-weight: 700;
+}
+
+.fsl-btn.primary:hover {
+  background: #fffde7;
+  color: #b59f3b;
+}
+
+.fsl-btn.secondary {
+  background: #fffde7;
+  color: #b59f3b;
+  border: 1px solid #ffe066;
+}
+
+.fsl-btn.secondary:hover {
+  background: #ffe066;
+  color: #7c6f57;
+}
+
+/* Export dropdown note style */
 .fsl-export-dropdown {
   position: relative;
   display: inline-block;
 }
 
 .fsl-export-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 24px;
-  border-radius: 12px;
+  background: #fffde7;
+  color: #b59f3b;
+  border: 1px solid #ffe066;
+  border-radius: 10px;
   font-weight: 600;
   font-size: 15px;
-  cursor: pointer;
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  border: none;
-  position: relative;
-  overflow: hidden;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  background: rgba(255, 255, 255, 0.1);
-  color: #e2e8f0;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 10px 18px;
+  box-shadow: 0 2px 8px rgba(255, 224, 102, 0.08);
 }
 
 .fsl-export-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
-  transform: translateY(-3px);
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+  background: #ffe066;
+  color: #7c6f57;
 }
 
 .fsl-export-menu {
   position: absolute;
   top: 100%;
   left: 0;
-  min-width: 200px;
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 12px;
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  min-width: 180px;
+  background: #fffbe6;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(255, 224, 102, 0.18);
+  border: 1px solid #ffe066;
   z-index: 1000;
-  margin-top: 8px;
+  margin-top: 6px;
   animation: dropdown-fade-in 0.3s ease-out;
   overflow: hidden;
 }
 
 .fsl-export-menu button {
   width: 100%;
-  padding: 12px 20px;
+  padding: 10px 16px;
   background: none;
   border: none;
-  color: #e2e8f0;
+  color: #7c6f57;
   text-align: left;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: background 0.2s, color 0.2s;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   font-size: 14px;
   font-weight: 500;
 }
 
 .fsl-export-menu button:hover {
-  background: rgba(78, 205, 196, 0.2);
-  color: #4ecdc4;
-  transform: translateX(4px);
+  background: #ffe066;
+  color: #b59f3b;
 }
 
 .fsl-export-menu button:not(:last-child) {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid #ffe066;
 }
 
 .fsl-export-menu button i {
@@ -907,23 +811,4 @@
   .fsl-form {
     padding: 24px;
   }
-}
-
-.fsl-item-category {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 12px;
-  background: rgba(78, 205, 196, 0.2);
-  color: #4ecdc4;
-  border-radius: 20px;
-  border: 1px solid rgba(78, 205, 196, 0.3);
-  font-size: 12px;
-  font-weight: 500;
-  margin-bottom: 8px;
-  width: fit-content;
-}
-
-.fsl-item-category i {
-  font-size: 10px;
 }
