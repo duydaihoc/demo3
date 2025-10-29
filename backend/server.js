@@ -2,6 +2,8 @@ const express = require('express');
 const connectDB = require('./database/connect');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const path = require('path');
+const fs = require('fs');
 const authRoutes = require('./routes/auth'); // Add auth routes import
 const adminRoutes = require('./routes/admin'); // Import admin routes
 const walletRoutes = require('./routes/wallet'); // Import wallet routes
@@ -99,6 +101,21 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/friends', require('./routes/friends'));
 // Mount backup routes (admin only)
 app.use('/api/backup', require('./routes/backup'));
+
+// Tạo thư mục uploads nếu chưa tồn tại
+const uploadsDir = path.join(__dirname, 'uploads');
+const receiptsDir = path.join(uploadsDir, 'receipts');
+
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+if (!fs.existsSync(receiptsDir)) {
+  fs.mkdirSync(receiptsDir, { recursive: true });
+}
+
+// Serve static files cho uploads
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // create http server and attach socket.io if available
 const server = http.createServer(app);

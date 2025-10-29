@@ -21,6 +21,7 @@ export default function FamilySidebar({ active, collapsed = false }) {
         { id: 'todo-list', label: 'Danh sách việc cần làm', route: '/family/todo-list', icon: 'fas fa-tasks' }
       ]
     },
+    { id: 'archive', label: 'Lưu trữ', route: '/family/archive', icon: 'fas fa-archive' },
     { id: 'charts', label: 'Biểu đồ', route: '/family/charts', icon: 'fas fa-chart-bar' },
     { id: 'members', label: 'Thành viên', route: '/family/members', icon: 'fas fa-users' },
     { id: 'settings', label: 'Cài đặt', route: '/family/settings', icon: 'fas fa-cog' },
@@ -35,6 +36,7 @@ export default function FamilySidebar({ active, collapsed = false }) {
     if (path === '/family/lists') return 'lists';
     if (path === '/family/shopping-list') return 'shopping-list';
     if (path === '/family/todo-list') return 'todo-list';
+    if (path === '/family/archive') return 'archive';
     if (path === '/family/charts') return 'charts';
     if (path === '/family/members') return 'members';
     if (path === '/family/settings') return 'settings';

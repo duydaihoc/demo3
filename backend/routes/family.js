@@ -10,6 +10,9 @@ const FamilyTransaction = require('../models/FamilyTransaction');
 const Transaction = require('../models/Transaction'); // wallet transactions model
 const FamilyBalance = require('../models/FamilyBalance');
 const Category = require('../models/Category'); // cần để validate category
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
 // Middleware xác thực token
 const authenticateToken = (req, res, next) => {
@@ -1957,6 +1960,672 @@ router.delete('/:familyId/todo-list/:itemId', authenticateToken, async (req, res
     });
   } catch (error) {
     console.error('Error deleting todo item:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Cấu hình multer cho upload hình ảnh hóa đơn
+const receiptStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadPath = path.join(__dirname, '../uploads/receipts');
+    // Tạo thư mục nếu chưa tồn tại
+    if (!fs.existsSync(uploadPath)) {
+      fs.mkdirSync(uploadPath, { recursive: true });
+    }
+    cb(null, uploadPath);
+  },
+  filename: function (req, file, cb) {
+    // Tạo tên file unique với timestamp và random string
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    cb(null, `receipt-${uniqueSuffix}${ext}`);
+  }
+});
+
+// File filter cho hình ảnh
+const receiptFileFilter = (req, file, cb) => {
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Chỉ cho phép upload file hình ảnh (JPEG, PNG, GIF, WebP)'), false);
+  }
+};
+
+const uploadReceipt = multer({
+  storage: receiptStorage,
+  fileFilter: receiptFileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  }
+});
+
+// API: Upload hình ảnh hóa đơn
+router.post('/:familyId/receipt-images', authenticateToken, uploadReceipt.single('receiptImage'), async (req, res) => {
+  try {
+    const { familyId } = req.params;
+    const userId = req.user.id || req.user._id;
+    const { description, amount, date, category, tags, linkedTransactionId } = req.body;
+
+    // Kiểm tra quyền truy cập gia đình
+    const family = await Family.findOne({
+      _id: familyId,
+      $or: [
+        { 'members.user': userId },
+        { owner: userId }
+      ]
+    });
+
+    if (!family) {
+      return res.status(403).json({ message: 'Bạn không có quyền truy cập gia đình này' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: 'Vui lòng chọn file hình ảnh để upload' });
+    }
+
+    // Validate category nếu có
+    if (category && !mongoose.Types.ObjectId.isValid(category)) {
+      return res.status(400).json({ message: 'ID danh mục không hợp lệ' });
+    }
+
+    if (category) {
+      const categoryExists = await Category.findById(category);
+      if (!categoryExists) {
+        return res.status(404).json({ message: 'Danh mục không tồn tại' });
+      }
+    }
+
+    // Validate linkedTransaction nếu có
+    if (linkedTransactionId && !mongoose.Types.ObjectId.isValid(linkedTransactionId)) {
+      return res.status(400).json({ message: 'ID giao dịch liên kết không hợp lệ' });
+    }
+
+    if (linkedTransactionId) {
+      const transactionExists = await FamilyTransaction.findOne({
+        _id: linkedTransactionId,
+        familyId: familyId
+      });
+      if (!transactionExists) {
+        return res.status(404).json({ message: 'Giao dịch liên kết không tồn tại' });
+      }
+    }
+
+    // Tạo receipt image object
+    const receiptImage = {
+      filename: req.file.filename,
+      originalName: req.file.originalname,
+      path: req.file.path,
+      mimetype: req.file.mimetype,
+      size: req.file.size,
+      description: description?.trim() || '',
+      amount: amount ? Number(amount) : null,
+      date: date ? new Date(date) : new Date(),
+      category: category || null,
+      tags: tags ? JSON.parse(tags) : [],
+      linkedTransaction: linkedTransactionId || null,
+      uploadedBy: userId,
+      uploadedAt: new Date(),
+      isVerified: false
+    };
+
+    // Thêm vào mảng receiptImages của family
+    if (!Array.isArray(family.receiptImages)) {
+      family.receiptImages = [];
+    }
+    family.receiptImages.push(receiptImage);
+    await family.save();
+
+    // Populate thông tin người upload và category
+    const createdReceipt = family.receiptImages[family.receiptImages.length - 1];
+    await Family.populate(createdReceipt, { path: 'uploadedBy', select: 'name email' });
+    await Family.populate(createdReceipt, { path: 'category', select: 'name icon type' });
+    await Family.populate(createdReceipt, { path: 'linkedTransaction', select: 'description amount type date' });
+
+    res.status(201).json({
+      message: 'Upload hình ảnh hóa đơn thành công',
+      receiptImage: createdReceipt
+    });
+  } catch (error) {
+    console.error('Error uploading receipt image:', error);
+    
+    // Xóa file đã upload nếu có lỗi
+    if (req.file && req.file.path) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (unlinkError) {
+        console.error('Error deleting uploaded file:', unlinkError);
+      }
+    }
+    
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// API: Lấy danh sách hình ảnh hóa đơn của gia đình
+router.get('/:familyId/receipt-images', authenticateToken, async (req, res) => {
+  try {
+    const { familyId } = req.params;
+    const userId = req.user.id || req.user._id;
+    const { limit = 20, page = 1, isVerified, category, startDate, endDate } = req.query;
+
+    // Kiểm tra quyền truy cập
+    const family = await Family.findOne({
+      _id: familyId,
+      $or: [
+        { 'members.user': userId },
+        { owner: userId }
+      ]
+    })
+    .populate('receiptImages.uploadedBy', 'name email')
+    .populate('receiptImages.verifiedBy', 'name email')
+    .populate('receiptImages.category', 'name icon type')
+    .populate('receiptImages.linkedTransaction', 'description amount type date');
+
+    if (!family) {
+      return res.status(403).json({ message: 'Bạn không có quyền truy cập gia đình này' });
+    }
+
+    let receiptImages = family.receiptImages || [];
+
+    // Áp dụng các filter
+    if (isVerified !== undefined) {
+      receiptImages = receiptImages.filter(img => img.isVerified === (isVerified === 'true'));
+    }
+
+    if (category) {
+      receiptImages = receiptImages.filter(img => 
+        img.category && String(img.category._id || img.category) === String(category)
+      );
+    }
+
+    if (startDate || endDate) {
+      receiptImages = receiptImages.filter(img => {
+        const imgDate = new Date(img.date || img.uploadedAt);
+        if (startDate && imgDate < new Date(startDate)) return false;
+        if (endDate && imgDate > new Date(endDate)) return false;
+        return true;
+      });
+    }
+
+    // Sắp xếp theo ngày upload mới nhất
+    receiptImages = receiptImages.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+
+    // Phân trang
+    const totalItems = receiptImages.length;
+    const totalPages = Math.ceil(totalItems / parseInt(limit));
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const paginatedImages = receiptImages.slice(skip, skip + parseInt(limit));
+
+    // Thêm URL để xem hình ảnh - SỬA LẠI PHẦN NÀY
+    const imagesWithUrls = paginatedImages.map(img => ({
+      ...img.toObject(),
+      imageUrl: `http://localhost:5000/uploads/receipts/${img.filename}`, // URL trực tiếp đến file
+      uploaderName: img.uploadedBy?.name || 'Thành viên',
+      verifierName: img.verifiedBy?.name || null,
+      categoryInfo: img.category ? {
+        _id: img.category._id,
+        name: img.category.name,
+        icon: img.category.icon,
+        type: img.category.type
+      } : null
+    }));
+
+    res.json({
+      receiptImages: imagesWithUrls,
+      pagination: {
+        totalItems,
+        totalPages,
+        currentPage: parseInt(page),
+        itemsPerPage: parseInt(limit)
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching receipt images:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// API: Xem hình ảnh hóa đơn - GIỮ NGUYÊN API NÀY NHƯNG KHÔNG CẦN DÙNG
+router.get('/:familyId/receipt-images/:imageId/view', authenticateToken, async (req, res) => {
+  try {
+    const { familyId, imageId } = req.params;
+    const userId = req.user.id || req.user._id;
+
+    // Kiểm tra quyền truy cập
+    const family = await Family.findOne({
+      _id: familyId,
+      $or: [
+        { 'members.user': userId },
+        { owner: userId }
+      ]
+    });
+
+    if (!family) {
+      return res.status(403).json({ message: 'Bạn không có quyền truy cập gia đình này' });
+    }
+
+    // Tìm hình ảnh
+    const receiptImage = family.receiptImages.id(imageId);
+    if (!receiptImage) {
+      return res.status(404).json({ message: 'Không tìm thấy hình ảnh hóa đơn' });
+    }
+
+    // Kiểm tra file có tồn tại không
+    if (!fs.existsSync(receiptImage.path)) {
+      return res.status(404).json({ message: 'File hình ảnh không tồn tại' });
+    }
+
+    // Trả về file hình ảnh
+    res.setHeader('Content-Type', receiptImage.mimetype);
+    res.setHeader('Content-Disposition', `inline; filename="${receiptImage.originalName}"`);
+    res.sendFile(path.resolve(receiptImage.path));
+  } catch (error) {
+    console.error('Error viewing receipt image:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// API: Cập nhật thông tin hình ảnh hóa đơn
+router.patch('/:familyId/receipt-images/:imageId', authenticateToken, async (req, res) => {
+  try {
+    const { familyId, imageId } = req.params;
+    const userId = req.user.id || req.user._id;
+    const { description, amount, date, category, tags } = req.body;
+
+    // Kiểm tra quyền truy cập
+    const family = await Family.findOne({
+      _id: familyId,
+      $or: [
+        { 'members.user': userId },
+        { owner: userId }
+      ]
+    });
+
+    if (!family) {
+      return res.status(403).json({ message: 'Bạn không có quyền truy cập gia đình này' });
+    }
+
+    // Tìm hình ảnh
+    const receiptImage = family.receiptImages.id(imageId);
+    if (!receiptImage) {
+      return res.status(404).json({ message: 'Không tìm thấy hình ảnh hóa đôn' });
+    }
+
+    // Kiểm tra quyền chỉnh sửa
+    const isOwner = String(family.owner) === String(userId);
+    const isUploader = String(receiptImage.uploadedBy) === String(userId);
+
+    if (!isOwner && !isUploader) {
+      return res.status(403).json({ 
+        message: 'Bạn chỉ có thể chỉnh sửa hình ảnh hóa đơn do bạn upload' 
+      });
+    }
+
+    // Validate category nếu có
+    if (category !== undefined) {
+      if (category && !mongoose.Types.ObjectId.isValid(category)) {
+        return res.status(400).json({ message: 'ID danh mục không hợp lệ' });
+      }
+
+      if (category) {
+        const categoryExists = await Category.findById(category);
+        if (!categoryExists) {
+          return res.status(404).json({ message: 'Danh mục không tồn tại' });
+        }
+      }
+      
+      receiptImage.category = category || null;
+    }
+
+    // Cập nhật thông tin
+    if (description !== undefined) {
+      receiptImage.description = description?.trim() || '';
+    }
+
+    if (amount !== undefined) {
+      receiptImage.amount = amount ? Number(amount) : null;
+    }
+
+    if (date !== undefined) {
+      receiptImage.date = date ? new Date(date) : receiptImage.date;
+    }
+
+    if (tags !== undefined) {
+      receiptImage.tags = Array.isArray(tags) ? tags : [];
+    }
+
+    await family.save();
+
+    // Populate và trả về
+    await Family.populate(receiptImage, { path: 'uploadedBy', select: 'name email' });
+    await Family.populate(receiptImage, { path: 'category', select: 'name icon type' });
+    await Family.populate(receiptImage, { path: 'linkedTransaction', select: 'description amount type date' });
+
+    res.json({
+      message: 'Cập nhật thông tin hình ảnh hóa đơn thành công',
+      receiptImage: receiptImage
+    });
+  } catch (error) {
+    console.error('Error updating receipt image:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// API: Xác minh hình ảnh hóa đơn (chỉ owner)
+router.patch('/:familyId/receipt-images/:imageId/verify', authenticateToken, async (req, res) => {
+  try {
+    const { familyId, imageId } = req.params;
+    const userId = req.user.id || req.user._id;
+    const { isVerified } = req.body;
+
+    // Kiểm tra quyền owner
+    const family = await Family.findOne({
+      _id: familyId,
+      owner: userId
+    });
+
+    if (!family) {
+      return res.status(403).json({ message: 'Chỉ chủ gia đình mới có thể xác minh hóa đơn' });
+    }
+
+    // Tìm hình ảnh
+    const receiptImage = family.receiptImages.id(imageId);
+    if (!receiptImage) {
+      return res.status(404).json({ message: 'Không tìm thấy hình ảnh hóa đơn' });
+    }
+
+    // Cập nhật trạng thái xác minh
+    receiptImage.isVerified = Boolean(isVerified);
+    if (receiptImage.isVerified) {
+      receiptImage.verifiedBy = userId;
+      receiptImage.verifiedAt = new Date();
+    } else {
+      receiptImage.verifiedBy = undefined;
+      receiptImage.verifiedAt = undefined;
+    }
+
+    await family.save();
+
+    // Populate và trả về
+    await Family.populate(receiptImage, { path: 'uploadedBy', select: 'name email' });
+    await Family.populate(receiptImage, { path: 'verifiedBy', select: 'name email' });
+    await Family.populate(receiptImage, { path: 'category', select: 'name icon type' });
+
+    res.json({
+      message: `Hình ảnh hóa đơn đã được ${isVerified ? 'xác minh' : 'bỏ xác minh'}`,
+      receiptImage: receiptImage
+    });
+  } catch (error) {
+    console.error('Error verifying receipt image:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// API: Xóa hình ảnh hóa đơn
+router.delete('/:familyId/receipt-images/:imageId', authenticateToken, async (req, res) => {
+  try {
+    const { familyId, imageId } = req.params;
+    const userId = req.user.id || req.user._id;
+
+    // Kiểm tra quyền truy cập
+    const family = await Family.findOne({
+      _id: familyId,
+      $or: [
+        { 'members.user': userId },
+        { owner: userId }
+      ]
+    });
+
+    if (!family) {
+      return res.status(403).json({ message: 'Bạn không có quyền truy cập gia đình này' });
+    }
+
+    // Tìm hình ảnh
+    const receiptImage = family.receiptImages.id(imageId);
+    if (!receiptImage) {
+      return res.status(404).json({ message: 'Không tìm thấy hình ảnh hóa đơn' });
+    }
+
+    // Kiểm tra quyền xóa
+    const isOwner = String(family.owner) === String(userId);
+    const isUploader = String(receiptImage.uploadedBy) === String(userId);
+
+    if (!isOwner && !isUploader) {
+      return res.status(403).json({ 
+        message: 'Bạn chỉ có thể xóa hình ảnh hóa đơn do bạn upload' 
+      });
+    }
+
+    // Lưu thông tin file để xóa
+    const filePath = receiptImage.path;
+    const imageInfo = {
+      _id: receiptImage._id,
+      originalName: receiptImage.originalName,
+      description: receiptImage.description
+    };
+
+    // Xóa khỏi database
+    family.receiptImages.pull(imageId);
+    await family.save();
+
+    // Xóa file vật lý
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    } catch (fileError) {
+      console.error('Error deleting physical file:', fileError);
+      // Không throw error vì database đã được cập nhật
+    }
+
+    res.json({
+      message: 'Xóa hình ảnh hóa đơn thành công',
+      deletedImage: imageInfo
+    });
+  } catch (error) {
+    console.error('Error deleting receipt image:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// API: Liên kết hình ảnh hóa đơn với giao dịch
+router.patch('/:familyId/receipt-images/:imageId/link-transaction', authenticateToken, async (req, res) => {
+  try {
+    const { familyId, imageId } = req.params;
+    const userId = req.user.id || req.user._id;
+    const { transactionId } = req.body;
+
+    if (!transactionId) {
+      return res.status(400).json({ message: 'ID giao dịch là bắt buộc' });
+    }
+
+    // Kiểm tra quyền truy cập
+    const family = await Family.findOne({
+      _id: familyId,
+      $or: [
+        { 'members.user': userId },
+        { owner: userId }
+      ]
+    });
+
+    if (!family) {
+      return res.status(403).json({ message: 'Bạn không có quyền truy cập gia đình này' });
+    }
+
+    // Tìm hình ảnh
+    const receiptImage = family.receiptImages.id(imageId);
+    if (!receiptImage) {
+      return res.status(404).json({ message: 'Không tìm thấy hình ảnh hóa đơn' });
+    }
+
+    // Kiểm tra giao dịch có tồn tại không
+    const transaction = await FamilyTransaction.findOne({
+      _id: transactionId,
+      familyId: familyId
+    });
+
+    if (!transaction) {
+      return res.status(404).json({ message: 'Giao dịch không tồn tại trong gia đình này' });
+    }
+
+    // Kiểm tra quyền chỉnh sửa
+    const isOwner = String(family.owner) === String(userId);
+    const isUploader = String(receiptImage.uploadedBy) === String(userId);
+
+    if (!isOwner && !isUploader) {
+      return res.status(403).json({ 
+        message: 'Bạn chỉ có thể liên kết hình ảnh hóa đơn do bạn upload' 
+      });
+    }
+
+    // Liên kết với giao dịch
+    receiptImage.linkedTransaction = transactionId;
+    await family.save();
+
+    // Populate và trả về
+    await Family.populate(receiptImage, { path: 'linkedTransaction', select: 'description amount type date' });
+
+    res.json({
+      message: 'Liên kết hình ảnh hóa đơn với giao dịch thành công',
+      receiptImage: receiptImage
+    });
+  } catch (error) {
+    console.error('Error linking receipt to transaction:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// API: Hủy liên kết hình ảnh hóa đơn với giao dịch
+router.patch('/:familyId/receipt-images/:imageId/unlink-transaction', authenticateToken, async (req, res) => {
+  try {
+    const { familyId, imageId } = req.params;
+    const userId = req.user.id || req.user._id;
+
+    // Kiểm tra quyền truy cập
+    const family = await Family.findOne({
+      _id: familyId,
+      $or: [
+        { 'members.user': userId },
+        { owner: userId }
+      ]
+    });
+
+    if (!family) {
+      return res.status(403).json({ message: 'Bạn không có quyền truy cập gia đình này' });
+    }
+
+    // Tìm hình ảnh
+    const receiptImage = family.receiptImages.id(imageId);
+    if (!receiptImage) {
+      return res.status(404).json({ message: 'Không tìm thấy hình ảnh hóa đơn' });
+    }
+
+    // Kiểm tra quyền chỉnh sửa
+    const isOwner = String(family.owner) === String(userId);
+    const isUploader = String(receiptImage.uploadedBy) === String(userId);
+
+    if (!isOwner && !isUploader) {
+      return res.status(403).json({ 
+        message: 'Bạn chỉ có thể hủy liên kết hình ảnh hóa đơn do bạn upload' 
+      });
+    }
+
+    // Hủy liên kết
+    receiptImage.linkedTransaction = null;
+    await family.save();
+
+    res.json({
+      message: 'Hủy liên kết hình ảnh hóa đơn với giao dịch thành công',
+      receiptImage: receiptImage
+    });
+  } catch (error) {
+    console.error('Error unlinking receipt from transaction:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// API: Tìm kiếm hình ảnh hóa đơn
+router.get('/:familyId/receipt-images/search', authenticateToken, async (req, res) => {
+  try {
+    const { familyId } = req.params;
+    const userId = req.user.id || req.user._id;
+    const { q, minAmount, maxAmount, tags, isVerified } = req.query;
+
+    // Kiểm tra quyền truy cập
+    const family = await Family.findOne({
+      _id: familyId,
+      $or: [
+        { 'members.user': userId },
+        { owner: userId }
+      ]
+    })
+    .populate('receiptImages.uploadedBy', 'name email')
+    .populate('receiptImages.category', 'name icon type')
+    .populate('receiptImages.linkedTransaction', 'description amount type date');
+
+    if (!family) {
+      return res.status(403).json({ message: 'Bạn không có quyền truy cập gia đình này' });
+    }
+
+    let receiptImages = family.receiptImages || [];
+
+    // Tìm kiếm theo từ khóa
+    if (q) {
+      const searchTerm = q.toLowerCase();
+      receiptImages = receiptImages.filter(img => 
+        (img.description && img.description.toLowerCase().includes(searchTerm)) ||
+        (img.originalName && img.originalName.toLowerCase().includes(searchTerm)) ||
+        (img.metadata && img.metadata.vendor && img.metadata.vendor.toLowerCase().includes(searchTerm))
+      );
+    }
+
+    // Lọc theo số tiền
+    if (minAmount || maxAmount) {
+      receiptImages = receiptImages.filter(img => {
+        const amount = img.amount || img.metadata?.totalAmount || 0;
+        if (minAmount && amount < Number(minAmount)) return false;
+        if (maxAmount && amount > Number(maxAmount)) return false;
+        return true;
+      });
+    }
+
+    // Lọc theo tags
+    if (tags) {
+      const searchTags = tags.split(',').map(tag => tag.trim().toLowerCase());
+      receiptImages = receiptImages.filter(img => 
+        img.tags && img.tags.some(tag => 
+          searchTags.includes(tag.toLowerCase())
+        )
+      );
+    }
+
+    // Lọc theo trạng thái xác minh
+    if (isVerified !== undefined) {
+      receiptImages = receiptImages.filter(img => 
+        img.isVerified === (isVerified === 'true')
+      );
+    }
+
+    // Sắp xếp theo ngày upload mới nhất
+    receiptImages = receiptImages.sort((a, b) => 
+      new Date(b.uploadedAt) - new Date(a.uploadedAt)
+    );
+
+    // Thêm URL để xem hình ảnh
+    const imagesWithUrls = receiptImages.map(img => ({
+      ...img.toObject(),
+      imageUrl: `/api/family/${familyId}/receipt-images/${img._id}/view`,
+      uploaderName: img.uploadedBy?.name || 'Thành viên'
+    }));
+
+    res.json({
+      receiptImages: imagesWithUrls,
+      totalResults: imagesWithUrls.length,
+      searchQuery: { q, minAmount, maxAmount, tags, isVerified }
+    });
+  } catch (error) {
+    console.error('Error searching receipt images:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });

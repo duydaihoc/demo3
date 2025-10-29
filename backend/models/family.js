@@ -98,6 +98,38 @@ const familySchema = new mongoose.Schema({
     completedAt: { type: Date },
     completedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
   }],
+  // NEW: Thêm danh sách hình ảnh hóa đơn
+  receiptImages: [{
+    filename: { type: String, required: true },
+    originalName: { type: String, required: true },
+    path: { type: String, required: true },
+    mimetype: { type: String, required: true },
+    size: { type: Number, required: true },
+    description: { type: String, default: '', trim: true },
+    amount: { type: Number }, // Số tiền trên hóa đơn (tùy chọn)
+    date: { type: Date }, // Ngày của hóa đơn (tùy chọn)
+    category: { type: mongoose.Schema.Types.ObjectId, ref: 'Category' }, // Danh mục của hóa đơn
+    tags: [{ type: String, trim: true }], // Tags để phân loại (grocery, restaurant, gas, etc.)
+    linkedTransaction: { type: mongoose.Schema.Types.ObjectId, ref: 'FamilyTransaction' }, // Liên kết với giao dịch gia đình
+    uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    uploadedAt: { type: Date, default: Date.now },
+    isVerified: { type: Boolean, default: false }, // Xác minh bởi owner
+    verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    verifiedAt: { type: Date },
+    metadata: {
+      // Thông tin bổ sung từ OCR hoặc AI
+      extractedText: { type: String },
+      vendor: { type: String }, // Tên cửa hàng/nhà cung cấp
+      totalAmount: { type: Number },
+      taxAmount: { type: Number },
+      items: [{ // Danh sách sản phẩm/dịch vụ trên hóa đơn
+        name: { type: String },
+        quantity: { type: Number },
+        price: { type: Number },
+        total: { type: Number }
+      }]
+    }
+  }],
   color: {
     colors: [String],
     direction: {
