@@ -229,9 +229,36 @@ export default function FamilyShoppingList() {
   const currentUser = getCurrentUser();
   const isOwner = !!(familyInfo && currentUser && (String(familyInfo.owner?._id || familyInfo.owner) === String(currentUser.id)));
 
-  // Open edit modal (owner only)
+  // THÊM: Helper kiểm tra người dùng có phải là người tạo item không
+  const isItemCreator = (item) => {
+    if (!currentUser || !item.createdBy) return false;
+    
+    // Kiểm tra theo ID nếu createdBy là object
+    if (typeof item.createdBy === 'object' && item.createdBy._id) {
+      return String(item.createdBy._id) === String(currentUser.id);
+    }
+    
+    // Kiểm tra theo ID nếu createdBy là string
+    if (typeof item.createdBy === 'string') {
+      return String(item.createdBy) === String(currentUser.id);
+    }
+    
+    return false;
+  };
+
+  // THÊM: Helper kiểm tra có thể sửa item không (owner hoặc người tạo)
+  const canEditItem = (item) => {
+    return isOwner || isItemCreator(item);
+  };
+
+  // THÊM: Helper kiểm tra có thể xóa item không (owner hoặc người tạo)
+  const canDeleteItem = (item) => {
+    return isOwner || isItemCreator(item);
+  };
+
+  // Open edit modal (owner hoặc người tạo item)
   const openEditModal = (item) => {
-    if (!isOwner) return;
+    if (!canEditItem(item)) return;
     setEditingItem(item);
     setEditForm({
       name: item.name || '',
@@ -902,7 +929,8 @@ export default function FamilyShoppingList() {
                       </div>
                       
                       <div className="fsl-item-actions">
-                        {isOwner && (
+                        {/* Hiển thị nút sửa cho owner hoặc người tạo item */}
+                        {canEditItem(item) && (
                           <button
                             className="fsl-action-btn edit"
                             onClick={() => openEditModal(item)}
@@ -920,14 +948,17 @@ export default function FamilyShoppingList() {
                           <i className={`fas ${item.purchased ? 'fa-undo' : 'fa-check'}`}></i>
                           <span>{item.purchased ? ' Chưa mua' : ' Đã mua'}</span>
                         </button>
-                        <button
-                          className="fsl-action-btn delete"
-                          onClick={() => deleteItem(item._id)}
-                          title="Xóa"
-                        >
-                          <i className="fas fa-trash"></i>
-                          <span> Xóa</span>
-                        </button>
+                        {/* THAY ĐỔI: Chỉ hiển thị nút xóa cho owner hoặc người tạo item */}
+                        {canDeleteItem(item) && (
+                          <button
+                            className="fsl-action-btn delete"
+                            onClick={() => deleteItem(item._id)}
+                            title="Xóa"
+                          >
+                            <i className="fas fa-trash"></i>
+                            <span> Xóa</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}

@@ -83,8 +83,16 @@ const familySchema = new mongoose.Schema({
       enum: ['low', 'medium', 'high'], 
       default: 'medium' 
     },
-    completed: { type: Boolean, default: false },
+    completed: { type: Boolean, default: false }, // Trạng thái tổng thể
     dueDate: { type: Date },
+    assignedTo: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    // tracking completion status cho từng assignee
+    completionStatus: [{
+      user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+      completed: { type: Boolean, default: false },
+      completedAt: { type: Date },
+      _id: false
+    }],
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     createdAt: { type: Date, default: Date.now },
     completedAt: { type: Date },

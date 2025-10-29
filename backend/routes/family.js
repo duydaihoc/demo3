@@ -1230,7 +1230,7 @@ router.post('/:familyId/shopping-list', authenticateToken, async (req, res) => {
 router.patch('/:familyId/shopping-list/:itemId', authenticateToken, async (req, res) => {
   try {
     const { familyId, itemId } = req.params;
-    const { name, quantity, notes, category, purchased } = req.body; // THÊM: category
+    const { name, quantity, notes, category, purchased } = req.body;
     const userId = req.user.id || req.user._id;
 
     // Tìm gia đình
@@ -1252,51 +1252,21 @@ router.patch('/:familyId/shopping-list/:itemId', authenticateToken, async (req, 
       return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
     }
 
-    // Kiểm tra quyền chỉnh sửa
+    // THAY ĐỔI: Kiểm tra quyền chỉnh sửa
     const isOwner = String(family.owner) === String(userId);
+    const isItemCreator = String(item.createdBy) === String(userId);
     
-    // Chỉ cho phép owner sửa thông tin sản phẩm (name, quantity, notes, category)
-    // Nhưng tất cả thành viên đều có thể đánh dấu đã mua/chưa mua
-    if ((name !== undefined || quantity !== undefined || notes !== undefined || category !== undefined) && !isOwner) {
-      return res.status(403).json({ 
-        message: 'Chỉ chủ gia đình mới có thể chỉnh sửa thông tin sản phẩm' 
-      });
-    }
-
-    // THÊM: Validate category nếu có thay đổi
-    if (category !== undefined && isOwner) {
-      if (category && !mongoose.Types.ObjectId.isValid(category)) {
-        return res.status(400).json({ message: 'Danh mục không hợp lệ' });
+    // Kiểm tra quyền cho từng loại thay đổi
+    if (name !== undefined || quantity !== undefined || notes !== undefined || category !== undefined) {
+      // Chỉnh sửa thông tin sản phẩm: Owner có thể sửa tất cả, thành viên chỉ sửa được item của họ
+      if (!isOwner && !isItemCreator) {
+        return res.status(403).json({ 
+          message: 'Bạn chỉ có thể chỉnh sửa những sản phẩm do bạn tạo' 
+        });
       }
-      
-      if (category) {
-        const categoryExists = await Category.findById(category);
-        if (!categoryExists) {
-          return res.status(404).json({ message: 'Danh mục không tồn tại' });
-        }
-      }
-      
-      item.category = category || null;
     }
-
-    // Cập nhật các trường được cho phép
-    if (name !== undefined && isOwner) {
-      if (!name.trim()) {
-        return res.status(400).json({ message: 'Tên sản phẩm không được để trống' });
-      }
-      item.name = name.trim();
-    }
-
-    if (quantity !== undefined && isOwner) {
-      const cleanQuantity = !isNaN(quantity) && quantity > 0 ? Number(quantity) : 1;
-      item.quantity = cleanQuantity;
-    }
-
-    if (notes !== undefined && isOwner) {
-      item.notes = notes?.trim() || '';
-    }
-
-    // Tất cả thành viên đều có thể cập nhật trạng thái mua
+    
+    // Cập nhật trạng thái mua: tất cả thành viên đều có thể thay đổi
     if (purchased !== undefined) {
       item.purchased = Boolean(purchased);
       if (item.purchased) {
@@ -1308,18 +1278,53 @@ router.patch('/:familyId/shopping-list/:itemId', authenticateToken, async (req, 
       }
     }
 
+    // Cập nhật thông tin sản phẩm nếu có quyền
+    if ((isOwner || isItemCreator) && (name !== undefined || quantity !== undefined || notes !== undefined || category !== undefined)) {
+      if (name !== undefined) {
+        if (!name.trim()) {
+          return res.status(400).json({ message: 'Tên sản phẩm không được để trống' });
+        }
+        item.name = name.trim();
+      }
+
+      if (quantity !== undefined) {
+        const cleanQuantity = !isNaN(quantity) && quantity > 0 ? Number(quantity) : 1;
+        item.quantity = cleanQuantity;
+      }
+
+      if (notes !== undefined) {
+        item.notes = notes?.trim() || '';
+      }
+
+      // Validate category nếu có thay đổi
+      if (category !== undefined) {
+        if (category && !mongoose.Types.ObjectId.isValid(category)) {
+          return res.status(400).json({ message: 'Danh mục không hợp lệ' });
+        }
+        
+        if (category) {
+          const categoryExists = await Category.findById(category);
+          if (!categoryExists) {
+            return res.status(404).json({ message: 'Danh mục không tồn tại' });
+          }
+        }
+        
+        item.category = category || null;
+      }
+    }
+
     await family.save();
 
     // Populate thông tin người tạo và danh mục
     await Family.populate(item, { path: 'createdBy', select: 'name email' });
     await Family.populate(item, { path: 'purchasedBy', select: 'name email' });
-    await Family.populate(item, { path: 'category', select: 'name icon type' }); // THÊM: populate category
+    await Family.populate(item, { path: 'category', select: 'name icon type' });
 
     const responseItem = {
       ...item.toObject(),
       creatorName: item.createdBy?.name || 'Thành viên',
       purchasedByName: item.purchasedBy?.name || null,
-      categoryInfo: item.category ? { // THÊM: categoryInfo
+      categoryInfo: item.category ? {
         _id: item.category._id,
         name: item.category.name,
         icon: item.category.icon,
@@ -1340,15 +1345,18 @@ router.delete('/:familyId/shopping-list/:itemId', authenticateToken, async (req,
     const { familyId, itemId } = req.params;
     const userId = req.user.id || req.user._id;
 
-    // Kiểm tra quyền truy cập và chỉ owner mới được xóa
+    // Tìm gia đình và kiểm tra quyền truy cập
     const family = await Family.findOne({
       _id: familyId,
-      owner: userId // CHỈ OWNER mới có quyền xóa
+      $or: [
+        { 'members.user': userId },
+        { owner: userId }
+      ]
     });
 
     if (!family) {
       return res.status(403).json({ 
-        message: 'Chỉ chủ gia đình mới có thể xóa sản phẩm khỏi danh sách' 
+        message: 'Bạn không có quyền truy cập gia đình này' 
       });
     }
 
@@ -1356,6 +1364,16 @@ router.delete('/:familyId/shopping-list/:itemId', authenticateToken, async (req,
     const item = family.shoppingList.id(itemId);
     if (!item) {
       return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
+    }
+
+    // THAY ĐỔI: Kiểm tra quyền xóa - chỉ owner hoặc người tạo item
+    const isOwner = String(family.owner) === String(userId);
+    const isItemCreator = String(item.createdBy) === String(userId);
+
+    if (!isOwner && !isItemCreator) {
+      return res.status(403).json({ 
+        message: 'Bạn chỉ có thể xóa những sản phẩm do bạn tạo' 
+      });
     }
 
     // Lưu thông tin item trước khi xóa để trả về
@@ -1410,6 +1428,535 @@ router.delete('/:familyId/shopping-list/purchased/clear', authenticateToken, asy
     });
   } catch (error) {
     console.error('Error clearing purchased items:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// API: Lấy danh sách việc cần làm của gia đình
+router.get('/:familyId/todo-list', authenticateToken, async (req, res) => {
+  try {
+    const { familyId } = req.params;
+    const userId = req.user.id || req.user._id;
+
+    const family = await Family.findOne({
+      _id: familyId,
+      $or: [
+        { 'members.user': userId },
+        { owner: userId }
+      ]
+    })
+    .populate('todoList.createdBy', 'name email')
+    .populate('todoList.completedBy', 'name email')
+    .populate('todoList.assignedTo', 'name email')
+    .populate('todoList.completionStatus.user', 'name email');
+
+    if (!family) {
+      return res.status(403).json({ message: 'Bạn không có quyền truy cập gia đình này' });
+    }
+
+    const isOwner = String(family.owner) === String(userId);
+    let todoList = family.todoList || [];
+
+    // Nếu không phải owner, chỉ lấy những việc được phân công cho mình
+    if (!isOwner) {
+      todoList = todoList.filter(item => {
+        return item.assignedTo && item.assignedTo.some(assignee => 
+          String(assignee._id || assignee) === String(userId)
+        );
+      });
+    }
+
+    todoList = todoList.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    const todoListWithInfo = todoList.map(item => {
+      const itemObj = item.toObject();
+      const totalAssigned = itemObj.assignedTo ? itemObj.assignedTo.length : 0;
+      const completedDetails = itemObj.completionStatus || [];
+      const completedMembers = completedDetails.filter(cs => cs.completed).map(cs => cs.user);
+      const notCompletedMembers = completedDetails.filter(cs => !cs.completed).map(cs => cs.user);
+
+      // Danh sách thành viên được phân công (object)
+      const assignedToObjs = itemObj.assignedTo || [];
+
+      // Tên các thành viên được phân công
+      const assignedToNames = assignedToObjs.map(assignee => assignee.name || 'Thành viên');
+
+      // Tên các thành viên đã hoàn thành
+      const completedNames = completedDetails.filter(cs => cs.completed && cs.user)
+        .map(cs => cs.user.name || 'Thành viên');
+
+      // Tên các thành viên chưa hoàn thành
+      const notCompletedNames = completedDetails.filter(cs => !cs.completed && cs.user)
+        .map(cs => cs.user.name || 'Thành viên');
+
+      // Nếu là member, lấy danh sách các thành viên được phân công cùng mình
+      let assignedPeers = [];
+      if (!isOwner && assignedToObjs.length > 1) {
+        assignedPeers = assignedToObjs
+          .filter(assignee => String(assignee._id || assignee) !== String(userId))
+          .map(assignee => assignee.name || 'Thành viên');
+      }
+
+      return {
+        ...itemObj,
+        creatorName: itemObj.createdBy?.name || 'Thành viên',
+        completedByName: itemObj.completedBy?.name || null,
+        assignedToNames,
+        completedNames,
+        notCompletedNames,
+        assignedPeers,
+        canEdit: isOwner || String(itemObj.createdBy?._id || itemObj.createdBy) === String(userId),
+        isOwner,
+        totalAssigned,
+        completedCount: completedNames.length,
+        completionPercentage: totalAssigned > 0 ? Math.round((completedNames.length / totalAssigned) * 100) : 0,
+        allCompleted: totalAssigned > 0 && completedNames.length === totalAssigned,
+        completionDetails: completedDetails
+      };
+    });
+
+    res.json(todoListWithInfo);
+  } catch (error) {
+    console.error('Error fetching todo list:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// API: Thêm việc cần làm vào danh sách
+router.post('/:familyId/todo-list', authenticateToken, async (req, res) => {
+  try {
+    const { familyId } = req.params;
+    const { title, description, priority, dueDate, assignedTo } = req.body;
+    const userId = req.user.id || req.user._id;
+
+    // Validate input
+    if (!title || !title.trim()) {
+      return res.status(400).json({ message: 'Tiêu đề việc cần làm là bắt buộc' });
+    }
+
+    // THAY ĐỔI: Validate assignedTo (có thể là mảng hoặc string)
+    let assignedToArray = [];
+    if (assignedTo) {
+      if (Array.isArray(assignedTo)) {
+        // Nếu là mảng, validate từng phần tử
+        for (const id of assignedTo) {
+          if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ message: 'Một trong những người được phân công không hợp lệ' });
+          }
+        }
+        assignedToArray = assignedTo;
+      } else {
+        // Nếu là string, validate và chuyển thành mảng
+        if (!mongoose.Types.ObjectId.isValid(assignedTo)) {
+          return res.status(400).json({ message: 'Người được phân công không hợp lệ' });
+        }
+        assignedToArray = [assignedTo];
+      }
+    }
+
+    // Kiểm tra quyền truy cập - tất cả thành viên đều có thể thêm
+    const family = await Family.findOne({
+      _id: familyId,
+      $or: [
+        { 'members.user': userId },
+        { owner: userId }
+      ]
+    });
+
+    if (!family) {
+      return res.status(403).json({ message: 'Bạn không có quyền truy cập gia đình này' });
+    }
+
+    // THAY ĐỔI: Khởi tạo completionStatus cho tất cả người được phân công
+    const completionStatus = [];
+    if (assignedToArray.length > 0) {
+      assignedToArray.forEach(assigneeId => {
+        completionStatus.push({
+          user: assigneeId,
+          completed: false
+        });
+      });
+    }
+
+    // Tạo item mới
+    const newItem = {
+      title: title.trim(),
+      description: description?.trim() || '',
+      priority: priority || 'medium',
+      dueDate: dueDate ? new Date(dueDate) : null,
+      assignedTo: assignedToArray,
+      completionStatus: completionStatus, // THÊM: khởi tạo completion status
+      completed: false,
+      createdBy: userId,
+      createdAt: new Date()
+    };
+
+    // Thêm vào danh sách
+    if (!Array.isArray(family.todoList)) {
+      family.todoList = [];
+    }
+    family.todoList.push(newItem);
+    await family.save();
+
+    // Lấy item vừa tạo với thông tin người tạo và người được phân công
+    const createdItem = family.todoList[family.todoList.length - 1];
+    await Family.populate(createdItem, { path: 'createdBy', select: 'name email' });
+    await Family.populate(createdItem, { path: 'assignedTo', select: 'name email' }); // THAY ĐỔI: populate mảng
+
+    const responseItem = {
+      ...createdItem.toObject(),
+      creatorName: createdItem.createdBy?.name || 'Thành viên',
+      assignedToNames: createdItem.assignedTo ? createdItem.assignedTo.map(assignee => assignee.name || 'Thành viên') : [] // THAY ĐỔI: mảng tên
+    };
+
+    res.status(201).json(responseItem);
+  } catch (error) {
+    console.error('Error adding todo item:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// API: Cập nhật trạng thái hoàn thành cá nhân
+router.patch('/:familyId/todo-list/:itemId/toggle-completion', authenticateToken, async (req, res) => {
+  try {
+    const { familyId, itemId } = req.params;
+    const userId = req.user.id || req.user._id;
+
+    const family = await Family.findOne({
+      _id: familyId,
+      $or: [
+        { 'members.user': userId },
+        { owner: userId }
+      ]
+    });
+
+    if (!family) {
+      return res.status(403).json({ message: 'Bạn không có quyền truy cập gia đình này' });
+    }
+
+    const item = family.todoList.id(itemId);
+    if (!item) {
+      return res.status(404).json({ message: 'Không tìm thấy việc cần làm' });
+    }
+
+    const isOwner = String(family.owner) === String(userId);
+    const isItemCreator = String(item.createdBy) === String(userId);
+    const isAssignedTo = item.assignedTo && item.assignedTo.some(assignee => 
+      String(assignee._id || assignee) === String(userId)
+    );
+
+    if (!isOwner && !isItemCreator && !isAssignedTo) {
+      return res.status(403).json({ 
+        message: 'Bạn chỉ có thể cập nhật trạng thái của công việc được phân công cho bạn hoặc do bạn tạo' 
+      });
+    }
+
+    // Tìm completion status của user hiện tại
+    let userCompletionStatus = item.completionStatus.find(cs => 
+      String(cs.user) === String(userId)
+    );
+
+    if (!userCompletionStatus) {
+      // Nếu chưa có, tạo mới
+      userCompletionStatus = {
+        user: userId,
+        completed: false
+      };
+      item.completionStatus.push(userCompletionStatus);
+    }
+
+    // Toggle completion status của user
+    userCompletionStatus.completed = !userCompletionStatus.completed;
+    if (userCompletionStatus.completed) {
+      userCompletionStatus.completedAt = new Date();
+    } else {
+      userCompletionStatus.completedAt = undefined;
+    }
+
+    // Kiểm tra xem tất cả người được phân công đã hoàn thành chưa
+    const totalAssigned = item.assignedTo ? item.assignedTo.length : 0;
+    const completedCount = item.completionStatus.filter(cs => cs.completed).length;
+    const allCompleted = totalAssigned > 0 && completedCount === totalAssigned;
+
+    // Cập nhật trạng thái tổng thể
+    const wasCompleted = item.completed;
+    item.completed = allCompleted;
+
+    if (allCompleted && !wasCompleted) {
+      item.completedAt = new Date();
+      item.completedBy = userId; // Người cuối cùng hoàn thành
+    } else if (!allCompleted && wasCompleted) {
+      item.completedAt = undefined;
+      item.completedBy = undefined;
+    }
+
+    await family.save();
+
+    // Populate và trả về
+    await Family.populate(item, { path: 'createdBy', select: 'name email' });
+    await Family.populate(item, { path: 'completedBy', select: 'name email' });
+    await Family.populate(item, { path: 'assignedTo', select: 'name email' });
+    await Family.populate(item, { path: 'completionStatus.user', select: 'name email' });
+
+    const responseItem = {
+      ...item.toObject(),
+      creatorName: item.createdBy?.name || 'Thành viên',
+      completedByName: item.completedBy?.name || null,
+      assignedToNames: item.assignedTo ? item.assignedTo.map(assignee => assignee.name || 'Thành viên') : [],
+      totalAssigned,
+      completedCount,
+      completionPercentage: totalAssigned > 0 ? Math.round((completedCount / totalAssigned) * 100) : 0,
+      allCompleted,
+      completionDetails: item.completionStatus || []
+    };
+
+    res.json(responseItem);
+  } catch (error) {
+    console.error('Error toggling completion status:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// API: Cập nhật việc cần làm - cập nhật để xử lý completion status khi thay đổi assignedTo
+router.patch('/:familyId/todo-list/:itemId', authenticateToken, async (req, res) => {
+  try {
+    const { familyId, itemId } = req.params;
+    const { title, description, priority, dueDate, assignedTo, completed } = req.body;
+    const userId = req.user.id || req.user._id;
+
+    // Tìm gia đình
+    const family = await Family.findOne({
+      _id: familyId,
+      $or: [
+        { 'members.user': userId },
+        { owner: userId }
+      ]
+    });
+
+    if (!family) {
+      return res.status(403).json({ message: 'Bạn không có quyền truy cập gia đình này' });
+    }
+
+    // Tìm item trong danh sách
+    const item = family.todoList.id(itemId);
+    if (!item) {
+      return res.status(404).json({ message: 'Không tìm thấy việc cần làm' });
+    }
+
+    // Kiểm tra quyền chỉnh sửa phân biệt theo loại thao tác
+    const isOwner = String(family.owner) === String(userId);
+    const isItemCreator = String(item.createdBy) === String(userId);
+    const isAssignedTo = item.assignedTo && item.assignedTo.some(assignee => 
+      String(assignee._id || assignee) === String(userId)
+    );
+
+    // Kiểm tra quyền cho việc cập nhật trạng thái hoàn thành
+    if (completed !== undefined) {
+      // Owner, người tạo, hoặc người được phân công đều có thể cập nhật trạng thái
+      if (!isOwner && !isItemCreator && !isAssignedTo) {
+        return res.status(403).json({ 
+          message: 'Bạn chỉ có thể cập nhật trạng thái của công việc được phân công cho bạn hoặc do bạn tạo' 
+        });
+      }
+      
+      const wasCompleted = item.completed;
+      item.completed = Boolean(completed);
+      
+      if (item.completed && !wasCompleted) {
+        item.completedAt = new Date();
+        item.completedBy = userId;
+      } else if (!item.completed && wasCompleted) {
+        item.completedAt = undefined;
+        item.completedBy = undefined;
+      }
+    }
+
+    // Kiểm tra quyền cho việc chỉnh sửa thông tin công việc
+    if (title !== undefined || description !== undefined || priority !== undefined || 
+        dueDate !== undefined || assignedTo !== undefined) {
+      
+      // Chỉ owner hoặc người tạo mới được sửa thông tin công việc
+      if (!isOwner && !isItemCreator) {
+        return res.status(403).json({ 
+          message: 'Bạn chỉ có thể chỉnh sửa thông tin của những công việc do bạn tạo' 
+        });
+      }
+
+      // Xử lý cập nhật assignedTo
+      if (assignedTo !== undefined) {
+        let assignedToArray = [];
+        
+        // Xử lý assignedTo: có thể là null, [], hoặc mảng các ID
+        if (assignedTo && Array.isArray(assignedTo) && assignedTo.length > 0) {
+          // Validate từng phần tử trong mảng
+          for (const id of assignedTo) {
+            if (!mongoose.Types.ObjectId.isValid(id)) {
+              return res.status(400).json({ message: 'Một trong những người được phân công không hợp lệ' });
+            }
+          }
+          assignedToArray = assignedTo;
+
+          // Kiểm tra tất cả assignedTo có phải là thành viên gia đình không
+          for (const assigneeId of assignedToArray) {
+            const isValidMember = family.members.some(member => 
+              String(member.user) === String(assigneeId)
+            ) || String(family.owner) === String(assigneeId);
+
+            if (!isValidMember) {
+              return res.status(400).json({ message: 'Tất cả người được phân công phải là thành viên của gia đình' });
+            }
+          }
+        }
+        // Nếu assignedTo là null hoặc mảng rỗng thì assignedToArray = []
+        
+        // Cập nhật assignedTo
+        item.assignedTo = assignedToArray;
+
+        // Cập nhật completionStatus: giữ lại status của những người vẫn được assign, thêm mới cho người mới
+        const existingCompletions = item.completionStatus || [];
+        const newCompletions = [];
+
+        assignedToArray.forEach(assigneeId => {
+          const existingCompletion = existingCompletions.find(cs => 
+            String(cs.user) === String(assigneeId)
+          );
+          
+          if (existingCompletion) {
+            // Giữ lại status cũ
+            newCompletions.push(existingCompletion);
+          } else {
+            // Thêm mới cho người mới được assign
+            newCompletions.push({
+              user: assigneeId,
+              completed: false
+            });
+          }
+        });
+
+        item.completionStatus = newCompletions;
+
+        // Tính lại completion status tổng thể
+        const totalAssigned = assignedToArray.length;
+        const completedCount = newCompletions.filter(cs => cs.completed).length;
+        const allCompleted = totalAssigned > 0 && completedCount === totalAssigned;
+
+        // Cập nhật trạng thái completed tổng thể
+        item.completed = allCompleted;
+        if (!allCompleted) {
+          item.completedAt = undefined;
+          item.completedBy = undefined;
+        }
+      }
+
+      // Cập nhật thông tin việc cần làm
+      if (title !== undefined) {
+        if (!title.trim()) {
+          return res.status(400).json({ message: 'Tiêu đề không được để trống' });
+        }
+        item.title = title.trim();
+      }
+
+      if (description !== undefined) {
+        item.description = description?.trim() || '';
+      }
+
+      if (priority !== undefined) {
+        if (!['low', 'medium', 'high'].includes(priority)) {
+          return res.status(400).json({ message: 'Mức độ ưu tiên không hợp lệ' });
+        }
+        item.priority = priority;
+      }
+
+      if (dueDate !== undefined) {
+        item.dueDate = dueDate ? new Date(dueDate) : null;
+      }
+    }
+
+    await family.save();
+
+    // Populate thông tin người tạo, người hoàn thành và người được phân công
+    await Family.populate(item, { path: 'createdBy', select: 'name email' });
+    await Family.populate(item, { path: 'completedBy', select: 'name email' });
+    await Family.populate(item, { path: 'assignedTo', select: 'name email' });
+    await Family.populate(item, { path: 'completionStatus.user', select: 'name email' });
+
+    // Tính toán lại các thông số cho response (SỬA LỖI: định nghĩa lại totalAssigned)
+    const totalAssigned = item.assignedTo ? item.assignedTo.length : 0;
+    const completedCount = item.completionStatus ? item.completionStatus.filter(cs => cs.completed).length : 0;
+
+    const responseItem = {
+      ...item.toObject(),
+      creatorName: item.createdBy?.name || 'Thành viên',
+      completedByName: item.completedBy?.name || null,
+      assignedToNames: item.assignedTo ? item.assignedTo.map(assignee => assignee.name || 'Thành viên') : [],
+      totalAssigned,
+      completedCount,
+      completionPercentage: totalAssigned > 0 ? Math.round((completedCount / totalAssigned) * 100) : 0,
+      allCompleted: totalAssigned > 0 && completedCount === totalAssigned,
+      completionDetails: item.completionStatus || []
+    };
+
+    res.json(responseItem);
+  } catch (error) {
+    console.error('Error updating todo item:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// API: Xóa việc cần làm khỏi danh sách
+router.delete('/:familyId/todo-list/:itemId', authenticateToken, async (req, res) => {
+  try {
+    const { familyId, itemId } = req.params;
+    const userId = req.user.id || req.user._id;
+
+    // Tìm gia đình và kiểm tra quyền truy cập
+    const family = await Family.findOne({
+      _id: familyId,
+      $or: [
+        { 'members.user': userId },
+        { owner: userId }
+      ]
+    });
+
+    if (!family) {
+      return res.status(403).json({ 
+        message: 'Bạn không có quyền truy cập gia đình này' 
+      });
+    }
+
+    // Tìm item trong danh sách
+    const item = family.todoList.id(itemId);
+    if (!item) {
+      return res.status(404).json({ message: 'Không tìm thấy việc cần làm' });
+    }
+
+    // Kiểm tra quyền xóa - chỉ owner hoặc người tạo item
+    const isOwner = String(family.owner) === String(userId);
+    const isItemCreator = String(item.createdBy) === String(userId);
+
+    if (!isOwner && !isItemCreator) {
+      return res.status(403).json({ 
+        message: 'Bạn chỉ có thể xóa những việc cần làm do bạn tạo' 
+      });
+    }
+
+    // Lưu thông tin item trước khi xóa để trả về
+    const deletedItemInfo = {
+      _id: item._id,
+      title: item.title,
+      description: item.description
+    };
+
+    // Xóa item khỏi danh sách
+    family.todoList.pull(itemId);
+    await family.save();
+
+    res.json({ 
+      message: 'Đã xóa việc cần làm thành công',
+      deletedItem: deletedItemInfo
+    });
+  } catch (error) {
+    console.error('Error deleting todo item:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
