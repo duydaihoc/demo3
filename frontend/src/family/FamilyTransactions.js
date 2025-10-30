@@ -1788,10 +1788,6 @@ export default function FamilyTransactions() {
 																<i className="fas fa-trash"></i> Xóa
 															</button>
 														</>
-													)}
-												</div>
-											</div>
-										);
 									})
 								)}
 							</div>
