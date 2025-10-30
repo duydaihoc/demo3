@@ -57,6 +57,9 @@ export default function FamilyArchive() {
   const [linkedTransaction, setLinkedTransaction] = useState(null);
   const [loadingLinkedTx, setLoadingLinkedTx] = useState(false);
 
+  // New: folder UI state
+  const [activeFolder, setActiveFolder] = useState(null); // null => show folder grid
+
   const API_BASE = 'http://localhost:5000';
   const token = localStorage.getItem('token');
   const selectedFamilyId = localStorage.getItem('selectedFamilyId');
@@ -548,6 +551,36 @@ export default function FamilyArchive() {
     }
   };
 
+  // Group receipts into folders (by explicit folderName || year-month of date)
+  const folders = React.useMemo(() => {
+    if (!receiptImages || receiptImages.length === 0) return [];
+    const map = new Map();
+    receiptImages.forEach(r => {
+      const folderKey = r.folderName || (r.date ? new Date(r.date).toISOString().slice(0,7) : 'Ungrouped');
+      const folderLabel = r.folderName || (r.date ? new Date(r.date).toLocaleString('vi-VN', { year: 'numeric', month: 'long' }) : 'Không phân nhóm');
+      if (!map.has(folderKey)) map.set(folderKey, { key: folderKey, name: folderLabel, items: [] });
+      map.get(folderKey).items.push(r);
+    });
+    // Convert map to array and sort by newest folder first (by first item date)
+    return Array.from(map.values()).map(f => {
+      const itemsSorted = f.items.slice().sort((a,b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt));
+      return { ...f, items: itemsSorted, preview: itemsSorted.slice(0,4) };
+    }).sort((a,b) => {
+      const da = new Date(a.items[0]?.date || a.items[0]?.createdAt || 0);
+      const db = new Date(b.items[0]?.date || b.items[0]?.createdAt || 0);
+      return db - da;
+    });
+  }, [receiptImages]);
+
+  const openFolder = (folderKey) => {
+    setActiveFolder(folderKey);
+    // Put folder open into history? not required now
+  };
+
+  const closeFolder = () => {
+    setActiveFolder(null);
+  };
+
   return (
     <div className="family-page">
       <FamilySidebar active="archive" collapsed={sidebarCollapsed} />
@@ -677,122 +710,114 @@ export default function FamilyArchive() {
             </div>
           ) : (
             <>
-              {/* Receipt Images */}
+              {/* Receipt Images - now folder style */}
               {activeTab === 'receipts' && (
                 <div className="fa-section">
                   <div className="fa-section-header">
-                    <h2>Hình ảnh hóa đơn</h2>
+                    <h2>Kho lưu trữ theo thư mục</h2>
                     <p>Tổng cộng {totalItems} hình ảnh đã lưu trữ</p>
                   </div>
-                  
+
                   {receiptImages.length === 0 ? (
                     <div className="fa-empty-state">
-                      <i className="fas fa-receipt"></i>
+                      <i className="fas fa-folder-open"></i>
                       <h3>Chưa có hình ảnh hóa đơn nào</h3>
-                      <p>Hình ảnh hóa đơn sẽ được lưu trữ tại đây</p>
+                      <p>Upload hoặc liên kết các ảnh hóa đơn để lưu trữ theo thư mục.</p>
                     </div>
                   ) : (
-                    <div className="fa-receipts-grid">
-                      {receiptImages.map(receipt => {
-                        const category = receipt.categoryInfo ? getCategoryInfo(receipt.categoryInfo) : { name: 'Không có', icon: '📝' };
-                        return (
-                          <div key={receipt._id} className="fa-receipt-card">
-                            <div className="fa-receipt-image">
-                              <img 
-                                src={receipt.imageUrl} 
-                                alt={receipt.originalName}
-                                loading="lazy"
-                                onError={(e) => {
-                                  e.target.style.display = 'none';
-                                  e.target.nextSibling.style.display = 'flex';
-                                }}
-                                onLoad={(e) => {
-                                  e.target.style.display = 'block';
-                                  if (e.target.nextSibling) {
-                                    e.target.nextSibling.style.display = 'none';
-                                  }
-                                }}
-                              />
-                              {/* Fallback khi không load được ảnh */}
-                              <div 
-                                className="fa-image-fallback"
-                                style={{ 
-                                  display: 'none',
-                                  width: '100%', 
-                                  height: '100%', 
-                                  background: '#f1f5f9', 
-                                  alignItems: 'center', 
-                                  justifyContent: 'center',
-                                  color: '#64748b',
-                                  fontSize: '14px'
-                                }}
-                              >
-                                <div style={{ textAlign: 'center' }}>
-                                  <i className="fas fa-image" style={{ fontSize: '24px', marginBottom: '8px', display: 'block' }}></i>
-                                  Không thể hiển thị ảnh
+                    <>
+                      {/* If a folder is opened, show breadcrumb + file list */}
+                      {activeFolder ? (
+                        (() => {
+                          const folder = folders.find(f => f.key === activeFolder);
+                          const items = folder ? folder.items : [];
+                          return (
+                            <div>
+                              <div className="fa-folder-breadcrumb">
+                                <div className="fa-breadcrumb-back" onClick={closeFolder}>
+                                  <i className="fas fa-arrow-left"></i> Quay lại
                                 </div>
+                                <div className="fa-breadcrumb-title">{folder?.name || 'Thư mục'}</div>
+                                <div style={{ marginLeft: 'auto', color: '#64748b' }}>{items.length} mục</div>
                               </div>
-                              {receipt.isVerified && (
-                                <div className="fa-verified-badge">
-                                  <i className="fas fa-check-circle"></i>
+
+                              {items.length === 0 ? (
+                                <div className="fa-folder-empty">Thư mục trống</div>
+                              ) : (
+                                <div className="fa-folder-list">
+                                  {items.map(item => {
+                                    const category = item.categoryInfo ? getCategoryInfo(item.categoryInfo) : { name: 'Không có', icon: '📝' };
+                                    return (
+                                      <div key={item._id} className="fa-folder-list-item">
+                                        <div className="fa-folder-list-thumb">
+                                          <img
+                                            src={item.imageUrl}
+                                            alt={item.originalName}
+                                            onError={(e) => { e.target.style.display = 'none'; }}
+                                          />
+                                        </div>
+                                        <div className="fa-folder-list-body">
+                                          <div className="fa-folder-list-title">{item.description || item.originalName}</div>
+                                          <div className="fa-folder-list-meta">
+                                            <span className="fa-meta-badge date"><i className="fas fa-calendar-alt"></i> {formatDate(item.date)}</span>
+                                            <span className="fa-meta-badge uploader"><i className="fas fa-user"></i> {item.uploaderName}</span>
+                                            <span className="fa-meta-badge category">{category.icon} {category.name}</span>
+                                          </div>
+                                        </div>
+
+                                        <div className="fa-folder-list-actions">
+                                          <button className="fa-action-btn view" onClick={() => handleViewReceiptDetail(item)}>
+                                            <i className="fas fa-eye"></i>
+                                          </button>
+                                          {isOwner() && (
+                                            <button className={`fa-action-btn verify ${item.isVerified ? 'verified' : ''}`} onClick={() => verifyReceiptImage(item._id, !item.isVerified)}>
+                                              <i className={`fas ${item.isVerified ? 'fa-times' : 'fa-check'}`}></i>
+                                            </button>
+                                          )}
+                                          {(isOwner() || item.uploadedBy === currentUser?.id) && (
+                                            <button className="fa-action-btn delete" onClick={() => deleteReceiptImage(item._id)}>
+                                              <i className="fas fa-trash"></i>
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               )}
                             </div>
-                            
-                            <div className="fa-receipt-info">
-                              <div className="fa-receipt-header">
-                                <h4>{receipt.description || receipt.originalName}</h4>
-                                {receipt.amount && (
-                                  <span className="fa-receipt-amount">
-                                    {formatCurrency(receipt.amount)}
-                                  </span>
-                                )}
+                          );
+                        })()
+                      ) : (
+                        /* Folder grid view */
+                        <div className="fa-folders-grid">
+                          {folders.map(folder => (
+                            <div key={folder.key} className="fa-folder-card" onClick={() => openFolder(folder.key)} role="button">
+                              <div className="fa-folder-header">
+                                <div className="fa-folder-meta">
+                                  <div className="fa-folder-icon"><i className="fas fa-folder"></i></div>
+                                  <div>
+                                    <div className="fa-folder-name">{folder.name}</div>
+                                    <div style={{ color: '#94a3b8', fontSize: 13 }}>{folder.items[0] ? formatDate(folder.items[0].date || folder.items[0].createdAt) : ''}</div>
+                                  </div>
+                                </div>
+                                <div className="fa-folder-count">{folder.items.length}</div>
                               </div>
-                              
-                              <div className="fa-receipt-meta">
-                                <span className="fa-meta-badge category">
-                                  {category.icon} {category.name}
-                                </span>
-                                <span className="fa-meta-badge date">
-                                  <i className="fas fa-calendar-alt"></i> {formatDate(receipt.date)}
-                                </span>
-                                <span className="fa-meta-badge uploader">
-                                  <i className="fas fa-user"></i> {receipt.uploaderName}
-                                </span>
-                              </div>
-                              
-                              <div className="fa-receipt-actions">
-                                <button
-                                  className="fa-action-btn view"
-                                  onClick={() => handleViewReceiptDetail(receipt)}
-                                >
-                                  <i className="fas fa-eye"></i> Xem
-                                </button>
-                                
-                                {isOwner() && (
-                                  <button
-                                    className={`fa-action-btn verify ${receipt.isVerified ? 'verified' : ''}`}
-                                    onClick={() => verifyReceiptImage(receipt._id, !receipt.isVerified)}
-                                  >
-                                    <i className={`fas ${receipt.isVerified ? 'fa-times' : 'fa-check'}`}></i>
-                                    {receipt.isVerified ? 'Bỏ xác minh' : 'Xác minh'}
-                                  </button>
-                                )}
-                                
-                                {(isOwner() || receipt.uploadedBy === currentUser?.id) && (
-                                  <button
-                                    className="fa-action-btn delete"
-                                    onClick={() => deleteReceiptImage(receipt._id)}
-                                  >
-                                    <i className="fas fa-trash"></i> Xóa
-                                  </button>
-                                )}
+
+                              <div className="fa-folder-preview">
+                                {folder.preview.map((p, idx) => (
+                                  <img key={p._id || idx} src={p.imageUrl} alt={p.originalName} onError={(e) => { e.target.style.display = 'none'; e.target.parentNode && (e.target.parentNode.innerHTML = '<div class=\"empty\">—</div>'); }} />
+                                ))}
+                                {/* Fill empty slots to keep layout */}
+                                {Array.from({ length: Math.max(0, 4 - folder.preview.length) }).map((_,i) => (
+                                  <div key={'e'+i} className="empty">—</div>
+                                ))}
                               </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               )}
@@ -869,8 +894,8 @@ export default function FamilyArchive() {
                 </div>
               )}
 
-              {/* Pagination */}
-              {activeTab === 'receipts' && totalPages > 1 && (
+              {/* Pagination: show only when not inside a folder */}
+              {activeTab === 'receipts' && !activeFolder && totalPages > 1 && (
                 <div className="fa-pagination">
                   <button 
                     className="fa-pagination-btn"
