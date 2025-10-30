@@ -1411,4 +1411,41 @@ router.get('/:familyId/budget-progress', authenticateToken, isFamilyMember, asyn
   }
 });
 
+// GET /api/family/:familyId/transactions/:transactionId/receipts - Lấy danh sách ảnh hóa đơn liên kết với giao dịch
+router.get('/:familyId/transactions/:transactionId/receipts', authenticateToken, isFamilyMember, async (req, res) => {
+  try {
+    const { familyId, transactionId } = req.params;
+    // Tìm family
+    const family = await require('../models/family').findById(familyId)
+      .populate('receiptImages.uploadedBy', 'name email')
+      .populate('receiptImages.category', 'name icon type');
+    if (!family) {
+      return res.status(404).json({ message: 'Family not found' });
+    }
+    // Lọc các ảnh hóa đơn có linkedTransaction trùng transactionId
+    const linkedReceipts = (family.receiptImages || []).filter(img =>
+      img.linkedTransaction && String(img.linkedTransaction) === String(transactionId)
+    );
+    // Trả về danh sách ảnh với URL truy cập trực tiếp
+    const imagesWithUrls = linkedReceipts.map(img => ({
+      ...img.toObject(),
+      imageUrl: `http://localhost:5000/uploads/receipts/${img.filename}`,
+      uploaderName: img.uploadedBy?.name || 'Thành viên',
+      categoryInfo: img.category ? {
+        _id: img.category._id,
+        name: img.category.name,
+        icon: img.category.icon,
+        type: img.category.type
+      } : null
+    }));
+    res.json({
+      receiptImages: imagesWithUrls,
+      total: imagesWithUrls.length
+    });
+  } catch (error) {
+    console.error('Error fetching receipts for transaction:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 module.exports = router;

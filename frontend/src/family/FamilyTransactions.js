@@ -926,6 +926,69 @@ export default function FamilyTransactions() {
 		setShowViewModal(true);
 	};
 
+	// Thêm state cho modal ảnh hóa đơn liên kết
+	const [showReceiptsModal, setShowReceiptsModal] = useState(false);
+	const [linkedReceipts, setLinkedReceipts] = useState([]);
+	const [loadingReceipts, setLoadingReceipts] = useState(false);
+
+	// Hàm lấy ảnh hóa đơn liên kết với giao dịch
+	const fetchLinkedReceipts = async (transaction) => {
+		if (!token || !selectedFamilyId || !transaction?._id) return;
+		setLoadingReceipts(true);
+		try {
+			const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/transactions/${transaction._id}/receipts`, {
+				headers: { Authorization: `Bearer ${token}` }
+			});
+			if (!res.ok) throw new Error('Không thể tải ảnh hóa đơn');
+			const data = await res.json();
+			setLinkedReceipts(data.receiptImages || []);
+			setShowReceiptsModal(true);
+		} catch (err) {
+			console.error('Error fetching linked receipts:', err);
+			setLinkedReceipts([]);
+			setShowReceiptsModal(true);
+		} finally {
+			setLoadingReceipts(false);
+		}
+	};
+
+	// Thêm state lưu số lượng ảnh hóa đơn liên kết cho từng transaction
+	const [receiptCounts, setReceiptCounts] = useState({});
+
+	// Hàm lấy số lượng ảnh hóa đơn liên kết đã xác minh cho các giao dịch chi tiêu
+	const fetchReceiptCounts = useCallback(async (transactionsList) => {
+		const counts = {};
+		const promises = transactionsList
+			.filter(tx => tx.type === 'expense')
+			.map(async tx => {
+				try {
+					const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/transactions/${tx._id}/receipts`, {
+						headers: { Authorization: `Bearer ${token}` }
+					});
+					if (!res.ok) return;
+					const data = await res.json();
+					// Chỉ đếm ảnh đã xác minh
+					const verifiedCount = Array.isArray(data.receiptImages)
+						? data.receiptImages.filter(img => img.isVerified).length
+						: 0;
+					counts[tx._id] = verifiedCount;
+				} catch {
+					counts[tx._id] = 0;
+				}
+			});
+		await Promise.all(promises);
+		setReceiptCounts(counts);
+	}, [API_BASE, selectedFamilyId, token]);
+
+	// Khi danh sách transactions thay đổi, gọi fetchReceiptCounts
+	useEffect(() => {
+		if (transactions && transactions.length > 0) {
+			fetchReceiptCounts(transactions);
+		} else {
+			setReceiptCounts({});
+		}
+	}, [transactions, fetchReceiptCounts]);
+
 	return (
 		<div className="family-page">
 			{/* Animated background elements */}
@@ -1725,6 +1788,7 @@ export default function FamilyTransactions() {
 								) : (
 									transactions.map(transaction => {
 										const category = getCategoryInfo(transaction.category);
+										const hasVerifiedReceipts = receiptCounts[transaction._id] > 0;
 										return (
 											<div key={transaction._id} className="ft-transaction-item">
 												<div className="ft-transaction-icon">
@@ -1769,8 +1833,19 @@ export default function FamilyTransactions() {
 												</div>
 												
 												<div className="ft-transaction-actions">
+													{/* Chỉ hiện nút Ảnh hóa đơn nếu có ảnh liên kết đã xác minh */}
+													{transaction.type === 'expense' && hasVerifiedReceipts && (
+														<button
+															className="ft-action-btn link"
+															title="Xem ảnh hóa đơn"
+															onClick={() => fetchLinkedReceipts(transaction)}
+															style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+														>
+															<i className="fas fa-image"></i> Ảnh hóa đơn
+														</button>
+													)}
 													{/* Chỉ hiện nút sửa/xóa nếu người dùng hiện tại là người tạo */}
-													{currentUser && transaction.createdBy && 
+													{currentUser && transaction.createdBy &&
 													 (transaction.createdBy._id || transaction.createdBy.id || transaction.createdBy) === currentUser.id && (
 														<>
 															<button 
@@ -1788,6 +1863,10 @@ export default function FamilyTransactions() {
 																<i className="fas fa-trash"></i> Xóa
 															</button>
 														</>
+													)}
+												</div>
+											</div>
+										);
 									})
 								)}
 							</div>
@@ -1801,10 +1880,6 @@ export default function FamilyTransactions() {
 										disabled={currentPage === 1}
 									>
 										<i className="fas fa-angle-double-left"></i>
-									</button>
-									<button 
-										className="ft-pagination-btn"
-										onClick={() => handlePageChange(currentPage - 1)}
 										disabled={currentPage === 1}
 									>
 										<i className="fas fa-angle-left"></i>
@@ -1917,7 +1992,7 @@ export default function FamilyTransactions() {
 									</div>
 									<div className="ft-member-info-detail">
 										<h4>{selectedMember.userName || 'Thành viên'}</h4>
-										<div className="ft-member-meta">
+																				<div className="ft-member-meta">
 											<div className="ft-member-meta-item">
 												<i className="fas fa-envelope"></i> {selectedMember.userEmail || 'Không có email'}
 											</div>
@@ -2091,6 +2166,57 @@ export default function FamilyTransactions() {
 
 							<div className="ft-form-actions">
 								<button className="ft-btn secondary" onClick={() => setShowViewModal(false)}>Đóng</button>
+							</div>
+						</div>
+					</div>
+				)}
+
+				{/* Modal hiển thị ảnh hóa đơn liên kết */}
+				{showReceiptsModal && (
+					<div className="ft-modal-overlay">
+						<div className="ft-modal">
+							<div className="ft-modal-header">
+								<h3>
+									<i className="fas fa-image"></i> Ảnh hóa đơn liên kết
+								</h3>
+								<button className="ft-modal-close" onClick={() => setShowReceiptsModal(false)}>
+									&times;
+								</button>
+							</div>
+							<div className="ft-form" style={{ paddingBottom: 16 }}>
+								{loadingReceipts ? (
+									<div className="ft-loading-inline">
+										<i className="fas fa-spinner fa-spin"></i> Đang tải ảnh hóa đơn...
+									</div>
+								) : linkedReceipts.length === 0 ? (
+									<div className="ft-empty-state-small">
+										<i className="fas fa-image"></i>
+										<p>Chưa có ảnh hóa đơn liên kết với giao dịch này</p>
+									</div>
+								) : (
+									<div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+										{linkedReceipts.map(img => (
+											<div key={img._id} style={{ width: 180, textAlign: 'center' }}>
+												<img
+													src={img.imageUrl}
+													alt={img.originalName || 'Ảnh hóa đơn'}
+													style={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 8, background: '#f1f5f9' }}
+												/>
+												<div style={{ marginTop: 8, fontSize: 13, color: '#64748b' }}>
+													{img.description || img.originalName}
+												</div>
+												<div style={{ fontSize: 12, color: '#94a3b8' }}>
+													{img.uploaderName}
+												</div>
+											</div>
+										))}
+									</div>
+								)}
+							</div>
+							<div className="ft-form-actions">
+								<button className="ft-btn secondary" onClick={() => setShowReceiptsModal(false)}>
+									<i className="fas fa-times"></i> Đóng
+								</button>
 							</div>
 						</div>
 					</div>

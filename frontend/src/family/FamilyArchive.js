@@ -51,6 +51,12 @@ export default function FamilyArchive() {
   const [uploading, setUploading] = useState(false);
   const [transactions, setTransactions] = useState([]);
 
+  // Thêm state cho modal xem chi tiết ảnh hóa đơn
+  const [showReceiptDetailModal, setShowReceiptDetailModal] = useState(false);
+  const [selectedReceipt, setSelectedReceipt] = useState(null);
+  const [linkedTransaction, setLinkedTransaction] = useState(null);
+  const [loadingLinkedTx, setLoadingLinkedTx] = useState(false);
+
   const API_BASE = 'http://localhost:5000';
   const token = localStorage.getItem('token');
   const selectedFamilyId = localStorage.getItem('selectedFamilyId');
@@ -486,6 +492,62 @@ export default function FamilyArchive() {
     });
   };
 
+  // Thêm useEffect để tự động điền thông tin khi chọn liên kết giao dịch
+  useEffect(() => {
+    if (!uploadModal) return;
+    if (!uploadForm.linkedTransactionId) return;
+
+    // Tìm giao dịch được chọn
+    const tx = transactions.find(t => t._id === uploadForm.linkedTransactionId);
+    if (tx) {
+      setUploadForm(prev => ({
+        ...prev,
+        description: tx.description || '',
+        amount: tx.amount || '',
+        category: tx.category?._id || tx.category || ''
+      }));
+    }
+    // Nếu chọn "-- Không liên kết --", không tự động điền lại
+  }, [uploadForm.linkedTransactionId, transactions, uploadModal]);
+
+  // Hàm mở modal xem chi tiết ảnh hóa đơn
+  const handleViewReceiptDetail = async (receipt) => {
+    setSelectedReceipt(receipt);
+    setShowReceiptDetailModal(true);
+    setLinkedTransaction(null);
+
+    // Lấy id giao dịch liên kết từ nhiều trường (object hoặc string)
+    let linkedTxId = '';
+    if (receipt.linkedTransaction) {
+      if (typeof receipt.linkedTransaction === 'object' && receipt.linkedTransaction._id) {
+        linkedTxId = receipt.linkedTransaction._id;
+      } else {
+        linkedTxId = receipt.linkedTransaction;
+      }
+    } else if (receipt.linkedTransactionId) {
+      linkedTxId = receipt.linkedTransactionId;
+    }
+
+    if (linkedTxId) {
+      setLoadingLinkedTx(true);
+      try {
+        const res = await fetch(`${API_BASE}/api/family/transactions/${linkedTxId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const tx = await res.json();
+          setLinkedTransaction(tx);
+        } else {
+          setLinkedTransaction(null);
+        }
+      } catch (err) {
+        setLinkedTransaction(null);
+      } finally {
+        setLoadingLinkedTx(false);
+      }
+    }
+  };
+
   return (
     <div className="family-page">
       <FamilySidebar active="archive" collapsed={sidebarCollapsed} />
@@ -702,7 +764,7 @@ export default function FamilyArchive() {
                               <div className="fa-receipt-actions">
                                 <button
                                   className="fa-action-btn view"
-                                  onClick={() => window.open(receipt.imageUrl, '_blank')}
+                                  onClick={() => handleViewReceiptDetail(receipt)}
                                 >
                                   <i className="fas fa-eye"></i> Xem
                                 </button>
@@ -992,6 +1054,113 @@ export default function FamilyArchive() {
                     Upload
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal xem chi tiết ảnh hóa đơn */}
+      {showReceiptDetailModal && selectedReceipt && (
+        <div className="fa-modal-overlay">
+          <div className="fa-modal" style={{ maxWidth: 700 }}>
+            <div className="fa-modal-header">
+              <h3>
+                <i className="fas fa-image"></i> Chi tiết ảnh hóa đơn
+              </h3>
+              <button className="fa-modal-close" onClick={() => setShowReceiptDetailModal(false)}>
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+            <div className="fa-modal-body" style={{ padding: 24 }}>
+              <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+                <div style={{ flex: '0 0 260px', textAlign: 'center' }}>
+                  <img
+                    src={selectedReceipt.imageUrl}
+                    alt={selectedReceipt.originalName || 'Ảnh hóa đơn'}
+                    style={{ width: '100%', maxWidth: 240, maxHeight: 320, borderRadius: 12, background: '#f1f5f9', marginBottom: 12 }}
+                  />
+                  <div style={{ fontSize: 13, color: '#64748b', marginBottom: 8 }}>
+                    {selectedReceipt.description || selectedReceipt.originalName}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#94a3b8' }}>
+                    {selectedReceipt.uploaderName}
+                  </div>
+                  {selectedReceipt.isVerified && (
+                    <div style={{ marginTop: 8, color: '#10b981', fontWeight: 600 }}>
+                      <i className="fas fa-check-circle"></i> Đã xác minh
+                    </div>
+                  )}
+                </div>
+                <div style={{ flex: 1, minWidth: 220 }}>
+                  {/* Sửa lỗi: khai báo biến category tại đây */}
+                  {(() => {
+                    const category = selectedReceipt.categoryInfo
+                      ? getCategoryInfo(selectedReceipt.categoryInfo)
+                      : { name: 'Không có', icon: '📝' };
+                    return (
+                      <>
+                        <div style={{ marginBottom: 12 }}>
+                          <strong>Mô tả:</strong> {selectedReceipt.description || selectedReceipt.originalName}
+                        </div>
+                        {selectedReceipt.amount && (
+                          <div style={{ marginBottom: 12 }}>
+                            <strong>Số tiền:</strong> {formatCurrency(selectedReceipt.amount)}
+                          </div>
+                        )}
+                        <div style={{ marginBottom: 12 }}>
+                          <strong>Ngày hóa đơn:</strong> {formatDate(selectedReceipt.date)}
+                        </div>
+                        <div style={{ marginBottom: 12 }}>
+                          <strong>Danh mục:</strong> {category.icon} {category.name}
+                        </div>
+                        <div style={{ marginBottom: 12 }}>
+                          <strong>Người upload:</strong> {selectedReceipt.uploaderName}
+                        </div>
+                        {/* Nếu có liên kết giao dịch thì hiển thị */}
+                        {selectedReceipt.linkedTransaction && (
+                          <div style={{ marginTop: 18, paddingTop: 12, borderTop: '1px solid #e5e7eb' }}>
+                            <strong>Giao dịch liên kết:</strong>
+                            {loadingLinkedTx ? (
+                              <div style={{ marginTop: 8, color: '#64748b' }}>
+                                <i className="fas fa-spinner fa-spin"></i> Đang tải thông tin giao dịch...
+                              </div>
+                            ) : linkedTransaction ? (
+                              <div style={{ marginTop: 8 }}>
+                                <div><strong>Mô tả:</strong> {linkedTransaction.description || '—'}</div>
+                                <div>
+                                  <strong>Số tiền:</strong> {formatCurrency(linkedTransaction.amount)}
+                                  <span style={{ marginLeft: 8, color: linkedTransaction.type === 'expense' ? '#ef4444' : '#10b981' }}>
+                                    {linkedTransaction.type === 'expense' ? 'Chi tiêu' : 'Thu nhập'}
+                                  </span>
+                                </div>
+                                <div><strong>Ngày:</strong> {formatDate(linkedTransaction.date || linkedTransaction.createdAt)}</div>
+                                <div>
+                                  <strong>Danh mục:</strong> {linkedTransaction.category?.icon} {linkedTransaction.category?.name}
+                                </div>
+                                <div>
+                                  <strong>Người tạo:</strong> {linkedTransaction.creatorName || (linkedTransaction.createdBy && (linkedTransaction.createdBy.name || linkedTransaction.createdBy.email)) || '—'}
+                                </div>
+                              </div>
+                            ) : (
+                              <div style={{ marginTop: 8, color: '#ef4444' }}>
+                                Không tìm thấy thông tin giao dịch liên kết
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
+            <div className="fa-modal-footer">
+              <button className="fa-btn secondary" onClick={() => setShowReceiptDetailModal(false)}>
+                <i className="fas fa-times"></i> Đóng
+              </button>
+              <button className="fa-btn primary" onClick={() => window.open(selectedReceipt.imageUrl, '_blank')}>
+                <i className="fas fa-external-link-alt"></i> Xem ảnh lớn
               </button>
             </div>
           </div>
