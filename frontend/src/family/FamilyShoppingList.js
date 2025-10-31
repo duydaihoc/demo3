@@ -21,6 +21,13 @@ export default function FamilyShoppingList() {
   const [editForm, setEditForm] = useState({ name: '', quantity: 1, notes: '', category: '' });
   const [editingSaving, setEditingSaving] = useState(false);
 
+  // MỚI: controls & ui state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all'); // all | purchased | unpurchased
+  const [sortBy, setSortBy] = useState('newest'); // newest | oldest | qty-desc | qty-asc
+  const [exportOpen, setExportOpen] = useState(false);
+  const [viewMode, setViewMode] = useState('note'); // note | table
+
   const API_BASE = 'http://localhost:5000';
   const token = localStorage.getItem('token');
   const selectedFamilyId = localStorage.getItem('selectedFamilyId');
@@ -652,6 +659,34 @@ export default function FamilyShoppingList() {
     showNotification(`Đã xuất ${unpurchasedItems.length} mục ra file CSV`, 'success');
   };
 
+  // MỚI: stats và filtered list
+  const stats = React.useMemo(() => {
+    const total = shoppingItems.length;
+    const purchased = shoppingItems.filter(i => i.purchased).length;
+    const unpurchased = total - purchased;
+    const totalQty = shoppingItems.reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+    return { total, purchased, unpurchased, totalQty };
+  }, [shoppingItems]);
+
+  const filteredItems = React.useMemo(() => {
+    let items = (shoppingItems || []).slice();
+
+    if (filterStatus === 'purchased') items = items.filter(i => i.purchased);
+    if (filterStatus === 'unpurchased') items = items.filter(i => !i.purchased);
+
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      items = items.filter(i => (i.name || '').toLowerCase().includes(q) || (i.notes || '').toLowerCase().includes(q) || (i.creatorName || '').toLowerCase().includes(q));
+    }
+
+    if (sortBy === 'newest') items.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+    if (sortBy === 'oldest') items.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt));
+    if (sortBy === 'qty-desc') items.sort((a,b) => (Number(b.quantity)||0) - (Number(a.quantity)||0));
+    if (sortBy === 'qty-asc') items.sort((a,b) => (Number(a.quantity)||0) - (Number(b.quantity)||0));
+
+    return items;
+  }, [shoppingItems, filterStatus, searchQuery, sortBy]);
+
   return (
     <div className="family-page">
       <FamilySidebar active="shopping-list" collapsed={sidebarCollapsed} />
@@ -666,206 +701,133 @@ export default function FamilyShoppingList() {
           <i className={`fas ${sidebarCollapsed ? 'fa-bars' : 'fa-times'}`}></i>
         </button>
         
+        {/* Header với dashboard style */}
         <header className="fsl-header">
-          <h1>Danh sách mua sắm</h1>
-          <p>Quản lý danh sách sản phẩm cần mua</p>
-          
-          <div className="fsl-actions">
-            {/* THÊM: Nút xuất danh sách với dropdown */}
-            <div className="fsl-export-dropdown">
-              <button 
-                className="fsl-btn secondary fsl-export-btn"
-                onClick={() => {
-                  const dropdown = document.querySelector('.fsl-export-menu');
-                  dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
-                }}
-              >
-                <i className="fas fa-download"></i> Xuất danh sách
-                <i className="fas fa-chevron-down" style={{marginLeft: '8px', fontSize: '12px'}}></i>
-              </button>
-              
-              <div className="fsl-export-menu" style={{display: 'none'}}>
-                <button onClick={exportShoppingList}>
-                  <i className="fas fa-file-alt"></i> Xuất file Text
-                </button>
-                <button onClick={exportToPDF}>
-                  <i className="fas fa-file-pdf"></i> Xuất PDF (In)
-                </button>
-                <button onClick={exportToCSV}>
-                  <i className="fas fa-file-csv"></i> Xuất file CSV
-                </button>
-              </div>
-            </div>
-            
-            <button 
-              className="fsl-btn primary"
-              onClick={() => setShowAddModal(true)}
-            >
-              <i className="fas fa-plus"></i> Thêm sản phẩm
-            </button>
+          <div className="fsl-header-main">
+            <h1><i className="fas fa-shopping-cart"></i> Danh sách mua sắm</h1>
+            <p>Quản lý danh sách sản phẩm cần mua cho gia đình</p>
           </div>
         </header>
 
-        {/* Add Item Modal */}
-        {showAddModal && (
-          <div className="fsl-modal-overlay">
-            <div className="fsl-modal">
-              <div className="fsl-modal-header">
-                <h3>Thêm sản phẩm mới</h3>
-                <button 
-                  className="fsl-modal-close"
-                  onClick={() => setShowAddModal(false)}
-                >
-                  &times;
-                </button>
+        {/* Dashboard Stats */}
+        <div className="fsl-dashboard">
+          <div className="fsl-stats-cards">
+            <div className="fsl-stat-card total">
+              <div className="fsl-stat-icon">
+                <i className="fas fa-list"></i>
               </div>
-              
-              <form onSubmit={handleAddItem} className="fsl-form">
-                <div className="fsl-form-group">
-                  <label>Tên sản phẩm *</label>
-                  <input
-                    type="text"
-                    value={newItem.name}
-                    onChange={(e) => setNewItem({...newItem, name: e.target.value})}
-                    placeholder="Nhập tên sản phẩm"
-                    required
-                  />
-                </div>
-                
-                <div className="fsl-form-group">
-                  <label>Số lượng</label>
-                  <input
-                    type="number"
-                    value={newItem.quantity}
-                    onChange={(e) => setNewItem({...newItem, quantity: e.target.value})}
-                    min="1"
-                    placeholder="1"
-                  />
-                </div>
-
-                <div className="fsl-form-group">
-                  <label>Danh mục</label>
-                  <select
-                    value={newItem.category}
-                    onChange={(e) => setNewItem({...newItem, category: e.target.value})}
-                    disabled={loadingCategories}
-                  >
-                    <option value="">-- Chọn danh mục (tùy chọn) --</option>
-                    {categories.map(cat => (
-                      <option key={cat._id} value={cat._id}>
-                        {cat.icon} {cat.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                
-                <div className="fsl-form-group">
-                  <label>Ghi chú</label>
-                  <textarea
-                    value={newItem.notes}
-                    onChange={(e) => setNewItem({...newItem, notes: e.target.value})}
-                    placeholder="Ghi chú thêm (tùy chọn)"
-                    rows={3}
-                  />
-                </div>
-                
-                <div className="fsl-form-actions">
-                  <button 
-                    type="button" 
-                    className="fsl-btn secondary"
-                    onClick={() => setShowAddModal(false)}
-                    disabled={saving}
-                  >
-                    Hủy
-                  </button>
-                  <button 
-                    type="submit" 
-                    className="fsl-btn primary"
-                    disabled={saving}
-                  >
-                    {saving ? (
-                      <>
-                        <i className="fas fa-spinner fa-spin"></i> Đang lưu...
-                      </>
-                    ) : (
-                      <>
-                        <i className="fas fa-save"></i> Thêm sản phẩm
-                      </>
-                    )}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Edit Item Modal (owner only) */}
-        {showEditModal && editingItem && (
-          <div className="fsl-modal-overlay">
-            <div className="fsl-modal">
-              <div className="fsl-modal-header">
-                <h3>Chỉnh sửa sản phẩm</h3>
-                <button className="fsl-modal-close" onClick={() => { setShowEditModal(false); setEditingItem(null); }}>
-                  &times;
-                </button>
+              <div className="fsl-stat-content">
+                <div className="fsl-stat-number">{stats.total}</div>
+                <div className="fsl-stat-label">Tổng sản phẩm</div>
+                <div className="fsl-stat-sub">Số lượng: {stats.totalQty}</div>
               </div>
-
-              <form onSubmit={submitEdit} className="fsl-form">
-                <div className="fsl-form-group">
-                  <label>Tên sản phẩm *</label>
-                  <input
-                    type="text"
-                    value={editForm.name}
-                    onChange={(e) => setEditForm({...editForm, name: e.target.value})}
-                    required
-                  />
-                </div>
-
-                <div className="fsl-form-group">
-                  <label>Số lượng</label>
-                  <input
-                    type="number"
-                    value={editForm.quantity}
-                    onChange={(e) => setEditForm({...editForm, quantity: e.target.value})}
-                    min="1"
-                  />
-                </div>
-
-                <div className="fsl-form-group">
-                  <label>Danh mục</label>
-                  <select
-                    value={editForm.category || ''}
-                    onChange={(e) => setEditForm({...editForm, category: e.target.value})}
-                    disabled={loadingCategories}
-                  >
-                    <option value="">-- Không chọn --</option>
-                    {categories.map(cat => (
-                      <option key={cat._id} value={cat._id}>
-                        {cat.icon} {cat.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="fsl-form-group">
-                  <label>Ghi chú</label>
-                  <textarea
-                    value={editForm.notes}
-                    onChange={(e) => setEditForm({...editForm, notes: e.target.value})}
-                    rows={3}
-                  />
-                </div>
-
-                <div className="fsl-form-actions">
-                  <button type="button" className="fsl-btn secondary" onClick={() => { setShowEditModal(false); setEditingItem(null); }} disabled={editingSaving}>Hủy</button>
-                  <button type="submit" className="fsl-btn primary" disabled={editingSaving}>
-                    {editingSaving ? <><i className="fas fa-spinner fa-spin"></i> Đang lưu...</> : <><i className="fas fa-save"></i> Lưu</>}
-                  </button>
-                </div>
-              </form>
             </div>
-          </div>
-        )}
+
+            <div className="fsl-stat-card purchased">
+              <div className="fsl-stat-icon">
+                <i className="fas fa-check-circle"></i>
+              </div>
+              <div className="fsl-stat-content">
+                <div className="fsl-stat-number">{stats.purchased}</div>
+                <div className="fsl-stat-label">Đã mua</div>
+                <div className="fsl-stat-sub">Hoàn thành</div>
+              </div>
+            </div>
+
+            <div className="fsl-stat-card pending">
+              <div className="fsl-stat-icon">
+                <i className="fas fa-shopping-basket"></i>
+              </div>
+              <div className="fsl-stat-content">
+                <div className="fsl-stat-number">{stats.unpurchased}</div>
+                <div className="fsl-stat-label">Cần mua</div>
+                <div className="fsl-stat-sub">Còn lại</div>
+              </div>
+            </div>
+
+            <div className="fsl-stat-card actions">
+              <div className="fsl-stat-icon">
+                <i className="fas fa-plus"></i>
+              </div>
+              <div className="fsl-stat-content">
+                <button className="fsl-add-btn" onClick={() => setShowAddModal(true)} aria-label="Thêm sản phẩm mới">
+                  <i className="fas fa-plus"></i>
+                  <span className="fsl-add-text">Thêm sản phẩm mới</span>
+                </button>
+                 <div className="fsl-stat-sub">Thêm mới</div>
+               </div>
+             </div>
+           </div>
+ 
+           {/* Controls Row */}
+           <div className="fsl-controls">
+             <div className="fsl-search-controls">
+               <div className="fsl-search-box">
+                 <i className="fas fa-search"></i>
+                 <input 
+                   className="fsl-search-input" 
+                   placeholder="Tìm sản phẩm hoặc người tạo..." 
+                   value={searchQuery} 
+                   onChange={e => setSearchQuery(e.target.value)} 
+                 />
+               </div>
+               
+               <select className="fsl-filter-select" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+                 <option value="all">Tất cả trạng thái</option>
+                 <option value="unpurchased">Chưa mua</option>
+                 <option value="purchased">Đã mua</option>
+               </select>
+               
+               <select className="fsl-sort-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+                 <option value="newest">Mới nhất</option>
+                 <option value="oldest">Cũ nhất</option>
+                 <option value="qty-desc">Số lượng lớn → nhỏ</option>
+                 <option value="qty-asc">Số lượng nhỏ → lớn</option>
+               </select>
+             </div>
+
+             <div className="fsl-action-controls">
+               <div className="fsl-view-toggle">
+                 <button 
+                   className={`fsl-view-btn ${viewMode === 'note' ? 'active' : ''}`} 
+                   onClick={() => setViewMode('note')}
+                   title="Giao diện giấy note"
+                 >
+                   <i className="fas fa-sticky-note"></i>
+                   Giấy note
+                 </button>
+                 <button 
+                   className={`fsl-view-btn ${viewMode === 'table' ? 'active' : ''}`} 
+                   onClick={() => setViewMode('table')}
+                   title="Giao diện bảng"
+                 >
+                   <i className="fas fa-table"></i>
+                   Bảng
+                 </button>
+               </div>
+
+               <div className="fsl-export-dropdown">
+                 <button className="fsl-export-btn" onClick={() => setExportOpen(!exportOpen)}>
+                   <i className="fas fa-download"></i> Xuất file
+                   <i className="fas fa-chevron-down"></i>
+                 </button>
+                 {exportOpen && (
+                   <div className="fsl-export-menu">
+                     <button onClick={() => { exportShoppingList(); setExportOpen(false); }}>
+                       <i className="fas fa-file-alt"></i> File Text
+                     </button>
+                     <button onClick={() => { exportToPDF(); setExportOpen(false); }}>
+                       <i className="fas fa-file-pdf"></i> PDF (In)
+                     </button>
+                     <button onClick={() => { exportToCSV(); setExportOpen(false); }}>
+                       <i className="fas fa-file-csv"></i> File CSV
+                     </button>
+                   </div>
+                 )}
+               </div>
+             </div>
+           </div>
+         </div>
 
         {/* Shopping List Content */}
         <div className="fsl-content">
@@ -884,79 +846,148 @@ export default function FamilyShoppingList() {
             </div>
           ) : (
             <>
-              {shoppingItems.length === 0 ? (
+              {filteredItems.length === 0 ? (
                 <div className="fsl-empty-state">
                   <i className="fas fa-shopping-cart"></i>
                   <h3>Danh sách mua sắm trống</h3>
-                  <p>Bắt đầu thêm sản phẩm đầu tiên của bạn</p>
+                  <p>Thử điều chỉnh bộ lọc hoặc thêm sản phẩm mới</p>
                   <button 
-                    className="fsl-btn primary"
+                    className="fsl-add-btn"
                     onClick={() => setShowAddModal(true)}
+                    aria-label="Thêm sản phẩm mới"
                   >
-                    <i className="fas fa-plus"></i> Thêm sản phẩm
+                    <i className="fas fa-plus"></i> <span className="fsl-add-text">Thêm sản phẩm mới</span>
                   </button>
                 </div>
+              ) : viewMode === 'table' ? (
+                <div className="fsl-table-container">
+                  <table className="fsl-shopping-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Sản phẩm</th>
+                        <th>Số lượng</th>
+                        <th>Danh mục</th>
+                        <th>Người tạo</th>
+                        <th>Ngày tạo</th>
+                        <th>Trạng thái</th>
+                        <th>Thao tác</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredItems.map((item, idx) => (
+                        <tr key={item._id} className={`fsl-table-row ${item.purchased ? 'purchased' : ''}`}>
+                          <td>{idx + 1}</td>
+                          <td>
+                            <div className="fsl-product-cell">
+                              <div className="fsl-product-name">{item.name}</div>
+                              {item.notes && <div className="fsl-product-notes">{item.notes}</div>}
+                            </div>
+                          </td>
+                          <td>
+                            <span className="fsl-quantity-badge">x{item.quantity}</span>
+                          </td>
+                          <td>
+                            {item.categoryInfo ? (
+                              <span className="fsl-category-tag">
+                                <i className={item.categoryInfo.icon || 'fas fa-tag'}></i>
+                                {item.categoryInfo.name}
+                              </span>
+                            ) : '—'}
+                          </td>
+                          <td>{item.creatorName || 'Thành viên'}</td>
+                          <td>{new Date(item.createdAt).toLocaleDateString('vi-VN')}</td>
+                          <td>
+                            <span className={`fsl-status-badge ${item.purchased ? 'purchased' : 'pending'}`}>
+                              {item.purchased ? 'Đã mua' : 'Chưa mua'}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="fsl-table-actions">
+                              {canEditItem(item) && (
+                                <button className="fsl-action-btn edit" onClick={() => openEditModal(item)}>
+                                  <i className="fas fa-edit"></i> <span className="btn-text">Sửa</span>
+                                </button>
+                              )}
+                              <button 
+                                className={`fsl-action-btn ${item.purchased ? 'undo' : 'check'}`} 
+                                onClick={() => toggleItemPurchased(item._id, item.purchased)}
+                              >
+                                <i className={`fas ${item.purchased ? 'fa-undo' : 'fa-check'}`}></i>
+                                <span className="btn-text">{item.purchased ? 'Chưa mua' : 'Đã mua'}</span>
+                              </button>
+                              {canDeleteItem(item) && (
+                                <button className="fsl-action-btn delete" onClick={() => deleteItem(item._id)}>
+                                  <i className="fas fa-trash"></i> <span className="btn-text">Xóa</span>
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               ) : (
-                <div className="fsl-items-list">
-                  {shoppingItems.map(item => (
-                    <div key={item._id} className={`fsl-item ${item.purchased ? 'purchased' : ''}`}>
-                      <div className="fsl-item-content">
-                        <div className="fsl-item-header">
-                          <h4 className="fsl-item-name">{item.name}</h4>
-                          <span className="fsl-item-quantity">x{item.quantity}</span>
+                <div className="fsl-notes-container">
+                  {filteredItems.map(item => (
+                    <div key={item._id} className={`fsl-note-item ${item.purchased ? 'purchased' : ''}`}>
+                      <div className="fsl-note-header">
+                        <div className="fsl-note-title">
+                          <h4>{item.name}</h4>
+                          <span className="fsl-note-quantity">x{item.quantity}</span>
                         </div>
-                        
-                        {/* Hiển thị danh mục nếu có */}
-                        {item.categoryInfo && (
-                          <div className="fsl-item-category">
-                            <i className={item.categoryInfo.icon || 'fas fa-tag'}></i>
-                            <span>{item.categoryInfo.name}</span>
+                        {item.purchased && (
+                          <div className="fsl-note-purchased">
+                            <i className="fas fa-check-circle"></i>
+                            Đã mua
                           </div>
                         )}
-                        
-                        {item.notes && (
-                          <p className="fsl-item-notes">{item.notes}</p>
-                        )}
-                        
-                        <div className="fsl-item-meta">
-                          <span className="fsl-item-creator">
-                            <i className="fas fa-user"></i> {item.creatorName || 'Thành viên'}
-                          </span>
-                          <span className="fsl-item-date">
-                            <i className="fas fa-calendar-alt"></i> {new Date(item.createdAt).toLocaleDateString('vi-VN')}
-                          </span>
-                        </div>
                       </div>
-                      
-                      <div className="fsl-item-actions">
-                        {/* Hiển thị nút sửa cho owner hoặc người tạo item */}
+
+                      {item.categoryInfo && (
+                        <div className="fsl-note-category">
+                          <i className={item.categoryInfo.icon || 'fas fa-tag'}></i>
+                          <span>{item.categoryInfo.name}</span>
+                        </div>
+                      )}
+
+                      {item.notes && (
+                        <div className="fsl-note-description">
+                          <i className="fas fa-sticky-note"></i>
+                          {item.notes}
+                        </div>
+                      )}
+
+                      <div className="fsl-note-meta">
+                        <span className="fsl-note-creator">
+                          <i className="fas fa-user"></i>
+                          {item.creatorName || 'Thành viên'}
+                        </span>
+                        <span className="fsl-note-date">
+                          <i className="fas fa-calendar-alt"></i>
+                          {new Date(item.createdAt).toLocaleDateString('vi-VN')}
+                        </span>
+                      </div>
+
+                      <div className="fsl-note-actions">
                         {canEditItem(item) && (
-                          <button
-                            className="fsl-action-btn edit"
-                            onClick={() => openEditModal(item)}
-                            title="Chỉnh sửa"
-                          >
+                          <button className="fsl-note-btn edit" onClick={() => openEditModal(item)}>
                             <i className="fas fa-edit"></i>
-                            <span> Sửa</span>
+                            Sửa
                           </button>
                         )}
-                        <button
-                          className={`fsl-action-btn ${item.purchased ? 'undo' : 'check'}`}
+                        <button 
+                          className={`fsl-note-btn ${item.purchased ? 'undo' : 'check'}`} 
                           onClick={() => toggleItemPurchased(item._id, item.purchased)}
-                          title={item.purchased ? 'Chưa mua' : 'Đã mua'}
                         >
                           <i className={`fas ${item.purchased ? 'fa-undo' : 'fa-check'}`}></i>
-                          <span>{item.purchased ? ' Chưa mua' : ' Đã mua'}</span>
+                          {item.purchased ? 'Chưa mua' : 'Đã mua'}
                         </button>
-                        {/* THAY ĐỔI: Chỉ hiển thị nút xóa cho owner hoặc người tạo item */}
                         {canDeleteItem(item) && (
-                          <button
-                            className="fsl-action-btn delete"
-                            onClick={() => deleteItem(item._id)}
-                            title="Xóa"
-                          >
+                          <button className="fsl-note-btn delete" onClick={() => deleteItem(item._id)}>
                             <i className="fas fa-trash"></i>
-                            <span> Xóa</span>
+                            Xóa
                           </button>
                         )}
                       </div>
@@ -968,6 +999,167 @@ export default function FamilyShoppingList() {
           )}
         </div>
       </main>
+
+      {/* Add Item Modal */}
+      {showAddModal && (
+        <div className="fsl-modal-overlay">
+          <div className="fsl-modal">
+            <div className="fsl-modal-header">
+              <h3>Thêm sản phẩm mới</h3>
+              <button 
+                className="fsl-modal-close"
+                onClick={() => setShowAddModal(false)}
+              >
+                &times;
+              </button>
+            </div>
+            
+            <form onSubmit={handleAddItem} className="fsl-form">
+              <div className="fsl-form-group">
+                <label>Tên sản phẩm *</label>
+                <input
+                  type="text"
+                  value={newItem.name}
+                  onChange={(e) => setNewItem({...newItem, name: e.target.value})}
+                  placeholder="Nhập tên sản phẩm"
+                  required
+                />
+              </div>
+              
+              <div className="fsl-form-group">
+                <label>Số lượng</label>
+                <input
+                  type="number"
+                  value={newItem.quantity}
+                  onChange={(e) => setNewItem({...newItem, quantity: e.target.value})}
+                  min="1"
+                  placeholder="1"
+                />
+              </div>
+
+              <div className="fsl-form-group">
+                <label>Danh mục</label>
+                <select
+                  value={newItem.category}
+                  onChange={(e) => setNewItem({...newItem, category: e.target.value})}
+                  disabled={loadingCategories}
+                >
+                  <option value="">-- Chọn danh mục (tùy chọn) --</option>
+                  {categories.map(cat => (
+                    <option key={cat._id} value={cat._id}>
+                      {cat.icon} {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="fsl-form-group">
+                <label>Ghi chú</label>
+                <textarea
+                  value={newItem.notes}
+                  onChange={(e) => setNewItem({...newItem, notes: e.target.value})}
+                  placeholder="Ghi chú thêm (tùy chọn)"
+                  rows={3}
+                />
+              </div>
+              
+              <div className="fsl-form-actions">
+                <button 
+                  type="button" 
+                  className="fsl-btn secondary"
+                  onClick={() => setShowAddModal(false)}
+                  disabled={saving}
+                >
+                  Hủy
+                </button>
+                <button 
+                  type="submit" 
+                  className="fsl-btn primary"
+                  disabled={saving}
+                >
+                  {saving ? (
+                    <>
+                      <i className="fas fa-spinner fa-spin"></i> Đang lưu...
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-save"></i> Thêm sản phẩm
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Item Modal (owner only) */}
+      {showEditModal && editingItem && (
+        <div className="fsl-modal-overlay">
+          <div className="fsl-modal">
+            <div className="fsl-modal-header">
+              <h3>Chỉnh sửa sản phẩm</h3>
+              <button className="fsl-modal-close" onClick={() => { setShowEditModal(false); setEditingItem(null); }}>
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={submitEdit} className="fsl-form">
+              <div className="fsl-form-group">
+                <label>Tên sản phẩm *</label>
+                <input
+                  type="text"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({...editForm, name: e.target.value})}
+                  required
+                />
+              </div>
+
+              <div className="fsl-form-group">
+                <label>Số lượng</label>
+                <input
+                  type="number"
+                  value={editForm.quantity}
+                  onChange={(e) => setEditForm({...editForm, quantity: e.target.value})}
+                  min="1"
+                />
+              </div>
+
+              <div className="fsl-form-group">
+                <label>Danh mục</label>
+                <select
+                  value={editForm.category || ''}
+                  onChange={(e) => setEditForm({...editForm, category: e.target.value})}
+                  disabled={loadingCategories}
+                >
+                  <option value="">-- Không chọn --</option>
+                  {categories.map(cat => (
+                    <option key={cat._id} value={cat._id}>
+                      {cat.icon} {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="fsl-form-group">
+                <label>Ghi chú</label>
+                <textarea
+                  value={editForm.notes}
+                  onChange={(e) => setEditForm({...editForm, notes: e.target.value})}
+                  rows={3}
+                />
+              </div>
+
+              <div className="fsl-form-actions">
+                <button type="button" className="fsl-btn secondary" onClick={() => { setShowEditModal(false); setEditingItem(null); }} disabled={editingSaving}>Hủy</button>
+                <button type="submit" className="fsl-btn primary" disabled={editingSaving}>
+                  {editingSaving ? <><i className="fas fa-spinner fa-spin"></i> Đang lưu...</> : <><i className="fas fa-save"></i> Lưu</>}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

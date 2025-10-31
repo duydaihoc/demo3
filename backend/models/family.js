@@ -96,7 +96,9 @@ const familySchema = new mongoose.Schema({
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     createdAt: { type: Date, default: Date.now },
     completedAt: { type: Date },
-    completedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+    completedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    // THÊM: Flag để đánh dấu công việc đã quá hạn
+    isExpired: { type: Boolean, default: false }
   }],
   // NEW: Thêm danh sách hình ảnh hóa đơn
   receiptImages: [{

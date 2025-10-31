@@ -1642,90 +1642,82 @@ router.patch('/:familyId/todo-list/:itemId/toggle-completion', authenticateToken
       return res.status(404).json({ message: 'Không tìm thấy việc cần làm' });
     }
 
-    const isOwner = String(family.owner) === String(userId);
-    const isItemCreator = String(item.createdBy) === String(userId);
-    const isAssignedTo = item.assignedTo && item.assignedTo.some(assignee => 
-      String(assignee._id || assignee) === String(userId)
-    );
+    // THÊM: Kiểm tra nếu công việc đã quá hạn thì không cho phép toggle
+    if (item.isExpired || (item.dueDate && new Date(item.dueDate) < new Date())) {
+      return res.status(400).json({ message: 'Công việc đã quá hạn, không thể thay đổi trạng thái hoàn thành' });
+    }
 
-    if (!isOwner && !isItemCreator && !isAssignedTo) {
-      return res.status(403).json({ 
-        message: 'Bạn chỉ có thể cập nhật trạng thái của công việc được phân công cho bạn hoặc do bạn tạo' 
-      });
+    // Kiểm tra quyền toggle (owner, creator, hoặc assigned)
+    const isOwner = family.owner.toString() === req.user.id;
+    const isCreator = item.createdBy.toString() === req.user.id;
+    const isAssigned = item.assignedTo.some(id => id.toString() === req.user.id);
+
+    if (!isOwner && !isCreator && !isAssigned) {
+      return res.status(403).json({ message: 'Không có quyền thay đổi trạng thái công việc này' });
     }
 
     // Tìm completion status của user hiện tại
-    let userCompletionStatus = item.completionStatus.find(cs => 
-      String(cs.user) === String(userId)
-    );
+    let userCompletion = item.completionStatus.find(s => s.user.toString() === req.user.id);
 
-    if (!userCompletionStatus) {
+    if (!userCompletion) {
       // Nếu chưa có, tạo mới
-      userCompletionStatus = {
-        user: userId,
-        completed: false
+      userCompletion = {
+        user: req.user.id,
+        completed: false,
+        completedAt: null
       };
-      item.completionStatus.push(userCompletionStatus);
+      item.completionStatus.push(userCompletion);
     }
 
-    // Toggle completion status của user
-    userCompletionStatus.completed = !userCompletionStatus.completed;
-    if (userCompletionStatus.completed) {
-      userCompletionStatus.completedAt = new Date();
-    } else {
-      userCompletionStatus.completedAt = undefined;
-    }
-
-    // Kiểm tra xem tất cả người được phân công đã hoàn thành chưa
-    const totalAssigned = item.assignedTo ? item.assignedTo.length : 0;
-    const completedCount = item.completionStatus.filter(cs => cs.completed).length;
-    const allCompleted = totalAssigned > 0 && completedCount === totalAssigned;
+    // Toggle trạng thái
+    userCompletion.completed = !userCompletion.completed;
+    userCompletion.completedAt = userCompletion.completed ? new Date() : null;
 
     // Cập nhật trạng thái tổng thể
-    const wasCompleted = item.completed;
-    item.completed = allCompleted;
-
-    if (allCompleted && !wasCompleted) {
-      item.completedAt = new Date();
-      item.completedBy = userId; // Người cuối cùng hoàn thành
-    } else if (!allCompleted && wasCompleted) {
-      item.completedAt = undefined;
-      item.completedBy = undefined;
-    }
+    const totalAssigned = item.assignedTo.length;
+    const completedCount = item.completionStatus.filter(s => s.completed).length;
+    item.completed = completedCount === totalAssigned && totalAssigned > 0;
+    item.completedAt = item.completed ? new Date() : null;
+    item.completedBy = item.completed ? req.user.id : null;
 
     await family.save();
 
-    // Populate và trả về
-    await Family.populate(item, { path: 'createdBy', select: 'name email' });
-    await Family.populate(item, { path: 'completedBy', select: 'name email' });
-    await Family.populate(item, { path: 'assignedTo', select: 'name email' });
-    await Family.populate(item, { path: 'completionStatus.user', select: 'name email' });
-
-    const responseItem = {
-      ...item.toObject(),
-      creatorName: item.createdBy?.name || 'Thành viên',
-      completedByName: item.completedBy?.name || null,
-      assignedToNames: item.assignedTo ? item.assignedTo.map(assignee => assignee.name || 'Thành viên') : [],
-      totalAssigned,
-      completedCount,
-      completionPercentage: totalAssigned > 0 ? Math.round((completedCount / totalAssigned) * 100) : 0,
-      allCompleted,
-      completionDetails: item.completionStatus || []
-    };
-
-    res.json(responseItem);
+    res.json({ message: 'Cập nhật trạng thái thành công' });
   } catch (error) {
-    console.error('Error toggling completion status:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    console.error('Error toggling completion:', error);
+    res.status(500).json({ message: 'Lỗi server' });
   }
 });
 
-// API: Cập nhật việc cần làm - cập nhật để xử lý completion status khi thay đổi assignedTo
-router.patch('/:familyId/todo-list/:itemId', authenticateToken, async (req, res) => {
+// Helper function để kiểm tra và cập nhật trạng thái expired
+const updateExpiredTasks = async (family) => {
+  const now = new Date();
+  let hasUpdates = false;
+  
+  family.todoList.forEach(task => {
+    if (task.dueDate && !task.completed && !task.isExpired) {
+      // THÊM: Cộng thêm 1 ngày vào dueDate để công việc quá hạn từ ngày sau hạn
+      const effectiveDue = new Date(new Date(task.dueDate).getTime() + 24 * 60 * 60 * 1000);
+      if (effectiveDue < now) {
+        task.isExpired = true;
+        hasUpdates = true;
+      }
+    }
+  });
+  
+  if (hasUpdates) {
+    await family.save();
+  }
+  
+  return family;
+};
+
+// PATCH /api/family/:familyId/todo-list/:taskId - Cập nhật thông tin công việc
+router.patch('/:familyId/todo-list/:taskId', authenticateToken, async (req, res) => {
   try {
-    const { familyId, itemId } = req.params;
-    const { title, description, priority, dueDate, assignedTo, completed } = req.body;
+    const { familyId, taskId } = req.params;
     const userId = req.user.id || req.user._id;
+    const { title, description, priority, dueDate, assignedTo, completed } = req.body;
 
     // Tìm gia đình
     const family = await Family.findOne({
@@ -1740,16 +1732,16 @@ router.patch('/:familyId/todo-list/:itemId', authenticateToken, async (req, res)
       return res.status(403).json({ message: 'Bạn không có quyền truy cập gia đình này' });
     }
 
-    // Tìm item trong danh sách
-    const item = family.todoList.id(itemId);
-    if (!item) {
-      return res.status(404).json({ message: 'Không tìm thấy việc cần làm' });
+    // Tìm task trong danh sách
+    const task = family.todoList.id(taskId);
+    if (!task) {
+      return res.status(404).json({ message: 'Không tìm thấy công việc' });
     }
 
     // Kiểm tra quyền chỉnh sửa phân biệt theo loại thao tác
     const isOwner = String(family.owner) === String(userId);
-    const isItemCreator = String(item.createdBy) === String(userId);
-    const isAssignedTo = item.assignedTo && item.assignedTo.some(assignee => 
+    const isItemCreator = String(task.createdBy) === String(userId);
+    const isAssignedTo = task.assignedTo && task.assignedTo.some(assignee => 
       String(assignee._id || assignee) === String(userId)
     );
 
@@ -1762,15 +1754,15 @@ router.patch('/:familyId/todo-list/:itemId', authenticateToken, async (req, res)
         });
       }
       
-      const wasCompleted = item.completed;
-      item.completed = Boolean(completed);
+      const wasCompleted = task.completed;
+      task.completed = Boolean(completed);
       
-      if (item.completed && !wasCompleted) {
-        item.completedAt = new Date();
-        item.completedBy = userId;
-      } else if (!item.completed && wasCompleted) {
-        item.completedAt = undefined;
-        item.completedBy = undefined;
+      if (task.completed && !wasCompleted) {
+        task.completedAt = new Date();
+        task.completedBy = userId;
+      } else if (!task.completed && wasCompleted) {
+        task.completedAt = undefined;
+        task.completedBy = undefined;
       }
     }
 
@@ -1813,10 +1805,10 @@ router.patch('/:familyId/todo-list/:itemId', authenticateToken, async (req, res)
         // Nếu assignedTo là null hoặc mảng rỗng thì assignedToArray = []
         
         // Cập nhật assignedTo
-        item.assignedTo = assignedToArray;
+        task.assignedTo = assignedToArray;
 
         // Cập nhật completionStatus: giữ lại status của những người vẫn được assign, thêm mới cho người mới
-        const existingCompletions = item.completionStatus || [];
+        const existingCompletions = task.completionStatus || [];
         const newCompletions = [];
 
         assignedToArray.forEach(assigneeId => {
@@ -1836,7 +1828,7 @@ router.patch('/:familyId/todo-list/:itemId', authenticateToken, async (req, res)
           }
         });
 
-        item.completionStatus = newCompletions;
+        task.completionStatus = newCompletions;
 
         // Tính lại completion status tổng thể
         const totalAssigned = assignedToArray.length;
@@ -1844,10 +1836,10 @@ router.patch('/:familyId/todo-list/:itemId', authenticateToken, async (req, res)
         const allCompleted = totalAssigned > 0 && completedCount === totalAssigned;
 
         // Cập nhật trạng thái completed tổng thể
-        item.completed = allCompleted;
+        task.completed = allCompleted;
         if (!allCompleted) {
-          item.completedAt = undefined;
-          item.completedBy = undefined;
+          task.completedAt = undefined;
+          task.completedBy = undefined;
         }
       }
 
@@ -1856,47 +1848,47 @@ router.patch('/:familyId/todo-list/:itemId', authenticateToken, async (req, res)
         if (!title.trim()) {
           return res.status(400).json({ message: 'Tiêu đề không được để trống' });
         }
-        item.title = title.trim();
+        task.title = title.trim();
       }
 
       if (description !== undefined) {
-        item.description = description?.trim() || '';
+        task.description = description?.trim() || '';
       }
 
       if (priority !== undefined) {
         if (!['low', 'medium', 'high'].includes(priority)) {
           return res.status(400).json({ message: 'Mức độ ưu tiên không hợp lệ' });
         }
-        item.priority = priority;
+        task.priority = priority;
       }
 
       if (dueDate !== undefined) {
-        item.dueDate = dueDate ? new Date(dueDate) : null;
+        task.dueDate = dueDate ? new Date(dueDate) : null;
       }
     }
 
     await family.save();
 
     // Populate thông tin người tạo, người hoàn thành và người được phân công
-    await Family.populate(item, { path: 'createdBy', select: 'name email' });
-    await Family.populate(item, { path: 'completedBy', select: 'name email' });
-    await Family.populate(item, { path: 'assignedTo', select: 'name email' });
-    await Family.populate(item, { path: 'completionStatus.user', select: 'name email' });
+    await Family.populate(task, { path: 'createdBy', select: 'name email' });
+    await Family.populate(task, { path: 'completedBy', select: 'name email' });
+    await Family.populate(task, { path: 'assignedTo', select: 'name email' });
+    await Family.populate(task, { path: 'completionStatus.user', select: 'name email' });
 
     // Tính toán lại các thông số cho response (SỬA LỖI: định nghĩa lại totalAssigned)
-    const totalAssigned = item.assignedTo ? item.assignedTo.length : 0;
-    const completedCount = item.completionStatus ? item.completionStatus.filter(cs => cs.completed).length : 0;
+    const totalAssigned = task.assignedTo ? task.assignedTo.length : 0;
+    const completedCount = task.completionStatus ? task.completionStatus.filter(cs => cs.completed).length : 0;
 
     const responseItem = {
-      ...item.toObject(),
-      creatorName: item.createdBy?.name || 'Thành viên',
-      completedByName: item.completedBy?.name || null,
-      assignedToNames: item.assignedTo ? item.assignedTo.map(assignee => assignee.name || 'Thành viên') : [],
+      ...task.toObject(),
+      creatorName: task.createdBy?.name || 'Thành viên',
+      completedByName: task.completedBy?.name || null,
+      assignedToNames: task.assignedTo ? task.assignedTo.map(assignee => assignee.name || 'Thành viên') : [],
       totalAssigned,
       completedCount,
       completionPercentage: totalAssigned > 0 ? Math.round((completedCount / totalAssigned) * 100) : 0,
       allCompleted: totalAssigned > 0 && completedCount === totalAssigned,
-      completionDetails: item.completionStatus || []
+      completionDetails: task.completionStatus || []
     };
 
     res.json(responseItem);
@@ -2608,9 +2600,7 @@ router.get('/:familyId/receipt-images/search', authenticateToken, async (req, re
     }
 
     // Sắp xếp theo ngày upload mới nhất
-    receiptImages = receiptImages.sort((a, b) => 
-      new Date(b.uploadedAt) - new Date(a.uploadedAt)
-    );
+    receiptImages = receiptImages.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
 
     // Thêm URL để xem hình ảnh
     const imagesWithUrls = receiptImages.map(img => ({

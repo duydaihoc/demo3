@@ -15,7 +15,7 @@ export default function FamilyTodoList() {
     description: '', 
     priority: 'medium', 
     dueDate: '',
-    assignedTo: [] // THAY ĐỔI: khởi tạo là mảng rỗng
+    assignedTo: []
   });
   const [saving, setSaving] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -27,9 +27,16 @@ export default function FamilyTodoList() {
     description: '', 
     priority: 'medium', 
     dueDate: '',
-    assignedTo: [] // THAY ĐỔI: khởi tạo là mảng rỗng
+    assignedTo: []
   });
   const [editingSaving, setEditingSaving] = useState(false);
+
+  // New: dashboard controls
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all'); // all | completed | pending | overdue
+  const [filterPriority, setFilterPriority] = useState('all'); // all | high | medium | low
+  const [sortBy, setSortBy] = useState('newest'); // newest | oldest | priority | due-date
+  const [viewMode, setViewMode] = useState('note'); // note | table
 
   const API_BASE = 'http://localhost:5000';
   const token = localStorage.getItem('token');
@@ -138,7 +145,7 @@ export default function FamilyTodoList() {
         description: '', 
         priority: 'medium', 
         dueDate: '',
-        assignedTo: [] // THAY ĐỔI: reset về mảng rỗng
+        assignedTo: []
       });
       setShowAddModal(false);
       
@@ -237,21 +244,16 @@ export default function FamilyTodoList() {
   };
 
   const canEditItem = (item) => {
-    // THAY ĐỔI: Sử dụng thông tin từ API nếu có, fallback về logic cũ
-    if (item.canEdit !== undefined) {
-      return item.canEdit;
-    }
     return isOwner || isItemCreator(item);
   };
 
-  // THÊM: Helper để kiểm tra có thể toggle trạng thái không
   const canToggleStatus = (item) => {
     if (!currentUser) return false;
     
     // Owner và người tạo luôn có thể toggle
     if (isOwner || isItemCreator(item)) return true;
     
-    // THAY ĐỔI: Người được phân công cũng có thể toggle trạng thái (kiểm tra mảng)
+    // Người được phân công cũng có thể toggle trạng thái
     if (item.assignedTo && Array.isArray(item.assignedTo)) {
       return item.assignedTo.some(assignee => 
         String(assignee._id || assignee) === String(currentUser.id)
@@ -270,7 +272,6 @@ export default function FamilyTodoList() {
       description: item.description || '',
       priority: item.priority || 'medium',
       dueDate: item.dueDate ? new Date(item.dueDate).toISOString().split('T')[0] : '',
-      // THAY ĐỔI: assignedTo là mảng
       assignedTo: item.assignedTo ? item.assignedTo.map(assignee => assignee._id || assignee) : []
     });
     setShowEditModal(true);
@@ -317,6 +318,83 @@ export default function FamilyTodoList() {
     }
   };
 
+  // Helper: kiểm tra item đã quá hạn theo quy tắc "quá hạn từ ngày sau dueDate"
+  const isItemExpired = (item) => {
+    // nếu backend đã set flag isExpired => tôn trọng
+    if (item?.isExpired) return true;
+    if (!item?.dueDate) return false;
+    try {
+      const now = new Date();
+      const due = new Date(item.dueDate);
+      const effectiveDue = new Date(due.getTime() + 24 * 60 * 60 * 1000); // due + 1 ngày
+      return effectiveDue < now;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  // Compute stats for dashboard (sử dụng isItemExpired)
+  const stats = React.useMemo(() => {
+    const total = todoItems.length;
+    const completed = todoItems.filter(i => i.allCompleted).length;
+    const pending = total - completed;
+    const overdue = todoItems.filter(i => {
+      if (!i.dueDate || i.allCompleted) return false;
+      return isItemExpired(i);
+    }).length;
+    const highPriority = todoItems.filter(i => i.priority === 'high').length;
+    return { total, completed, pending, overdue, highPriority };
+  }, [todoItems]);
+
+  // Filtered and sorted items
+  const filteredItems = React.useMemo(() => {
+    let items = (todoItems || []).slice();
+
+    // Filter by status
+    if (filterStatus === 'completed') items = items.filter(i => i.allCompleted);
+    if (filterStatus === 'pending') items = items.filter(i => !i.allCompleted);
+    if (filterStatus === 'overdue') {
+      items = items.filter(i => {
+        if (!i.dueDate || i.allCompleted) return false;
+        return isItemExpired(i);
+      });
+    }
+
+    // Filter by priority
+    if (filterPriority !== 'all') {
+      items = items.filter(i => i.priority === filterPriority);
+    }
+
+    // Search
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      items = items.filter(i => 
+        (i.title || '').toLowerCase().includes(q) ||
+        (i.description || '').toLowerCase().includes(q) ||
+        (i.creatorName || '').toLowerCase().includes(q) ||
+        (i.assignedToNames && i.assignedToNames.some(name => name.toLowerCase().includes(q)))
+      );
+    }
+
+    // Sort
+    if (sortBy === 'newest') items.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+    if (sortBy === 'oldest') items.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt));
+    if (sortBy === 'priority') {
+      const priorityOrder = { high: 3, medium: 2, low: 1 };
+      items.sort((a,b) => priorityOrder[b.priority] - priorityOrder[a.priority]);
+    }
+    if (sortBy === 'due-date') {
+      items.sort((a,b) => {
+        if (!a.dueDate && !b.dueDate) return 0;
+        if (!a.dueDate) return 1;
+        if (!b.dueDate) return -1;
+        return new Date(a.dueDate) - new Date(b.dueDate);
+      });
+    }
+
+    return items;
+  }, [todoItems, filterStatus, filterPriority, searchQuery, sortBy]);
+
   // Helper functions
   const getPriorityColor = (priority) => {
     switch (priority) {
@@ -336,96 +414,29 @@ export default function FamilyTodoList() {
     }
   };
 
-  // Helper: kiểm tra cảnh báo quá hạn cho thành viên được giao
-  const isOverdueForAssigned = (item) => {
-    if (!item || !item.dueDate || item.allCompleted) return false;
-    if (!item.assignedTo || !Array.isArray(item.assignedTo)) return false;
-    if (!currentUser) return false;
-    
-    // Kiểm tra currentUser có trong danh sách được phân công không
-    const isAssigned = item.assignedTo.some(assignee => 
-      String(assignee._id || assignee) === String(currentUser.id)
-    );
-    if (!isAssigned) return false;
-    
-    // Kiểm tra currentUser đã hoàn thành chưa
-    const userCompletion = item.completionDetails?.find(detail => 
-      String(detail.user?._id || detail.user) === String(currentUser.id)
-    );
-    
-    // Nếu user đã hoàn thành thì không hiển thị cảnh báo
-    if (userCompletion && userCompletion.completed) return false;
-    
-    // Kiểm tra đã quá hạn chưa
-    const now = new Date();
-    const due = new Date(item.dueDate);
-    return now > due;
-  };
+  // Helper: lấy danh sách công việc quá hạn cho owner
+  const getOverdueTasks = React.useMemo(() => {
+    if (!isOwner) return [];
+    return todoItems.filter(item => {
+      if (item.allCompleted) return false;
+      if (!item.dueDate) return false;
+      return isItemExpired(item);
+    });
+  }, [todoItems, isOwner]);
 
-  // THÊM: Helper kiểm tra cảnh báo sắp đến hạn (còn 1 ngày)
-  const isNearDeadlineForAssigned = (item) => {
-    if (!item || !item.dueDate || item.allCompleted) return false;
-    if (!item.assignedTo || !Array.isArray(item.assignedTo)) return false;
-    if (!currentUser) return false;
-    
-    // Kiểm tra currentUser có trong danh sách được phân công không
-    const isAssigned = item.assignedTo.some(assignee => 
-      String(assignee._id || assignee) === String(currentUser.id)
-    );
-    if (!isAssigned) return false;
-    
-    // Kiểm tra currentUser đã hoàn thành chưa
-    const userCompletion = item.completionDetails?.find(detail => 
-      String(detail.user?._id || detail.user) === String(currentUser.id)
-    );
-    
-    // Nếu user đã hoàn thành thì không hiển thị cảnh báo
-    if (userCompletion && userCompletion.completed) return false;
-    
-    // Kiểm tra còn <= 24 giờ
-    const now = new Date();
-    const due = new Date(item.dueDate);
-    const timeDiff = due.getTime() - now.getTime();
-    const hoursDiff = timeDiff / (1000 * 3600);
-    
-    return hoursDiff > 0 && hoursDiff <= 24;
-  };
-
-  // THÊM: Helper để lấy danh sách những người chưa hoàn thành và đã quá hạn
-  const getOverdueMembers = (item) => {
-    if (!item || !item.dueDate || item.allCompleted) return [];
-    if (!item.completionDetails || !Array.isArray(item.completionDetails)) return [];
-    
-    const now = new Date();
-    const due = new Date(item.dueDate);
-    
-    // Chỉ hiển thị nếu đã quá hạn
-    if (now <= due) return [];
-    
-    // Lấy danh sách những người chưa hoàn thành
-    return item.completionDetails
-      .filter(detail => !detail.completed && detail.user)
-      .map(detail => detail.user.name || 'Thành viên');
-  };
-
-  // THÊM: Helper để lấy danh sách những người sắp đến hạn (còn 1 ngày)
-  const getNearDeadlineMembers = (item) => {
-    if (!item || !item.dueDate || item.allCompleted) return [];
-    if (!item.completionDetails || !Array.isArray(item.completionDetails)) return [];
-    
-    const now = new Date();
-    const due = new Date(item.dueDate);
-    const timeDiff = due.getTime() - now.getTime();
-    const hoursDiff = timeDiff / (1000 * 3600);
-    
-    // Chỉ hiển thị nếu còn <= 24 giờ và > 0
-    if (hoursDiff <= 0 || hoursDiff > 24) return [];
-    
-    // Lấy danh sách những người chưa hoàn thành
-    return item.completionDetails
-      .filter(detail => !detail.completed && detail.user)
-      .map(detail => detail.user.name || 'Thành viên');
-  };
+  // Helper: lấy danh sách công việc sắp đến hạn
+  const getNearDeadlineTasks = React.useMemo(() => {
+    if (!isOwner) return [];
+    return todoItems.filter(item => {
+      if (item.allCompleted) return false;
+      if (!item.dueDate) return false;
+      const now = new Date();
+      const due = new Date(item.dueDate);
+      const effectiveDue = new Date(due.getTime() + 24 * 60 * 60 * 1000);
+      const hoursDiff = (effectiveDue - now) / (1000 * 3600);
+      return hoursDiff > 0 && hoursDiff <= 24;
+    });
+  }, [todoItems, isOwner]);
 
   return (
     <div className="family-page">
@@ -441,225 +452,181 @@ export default function FamilyTodoList() {
           <i className={`fas ${sidebarCollapsed ? 'fa-bars' : 'fa-times'}`}></i>
         </button>
         
+        {/* Header với dashboard style */}
         <header className="ftl-header">
-          <h1>Danh sách việc cần làm</h1>
-          <p>
-            {isOwner 
-              ? 'Quản lý các công việc cần hoàn thành' 
-              : 'Các công việc được phân công cho bạn'
-            }
-          </p>
-          
-          <div className="ftl-actions">
-            {/* THAY ĐỔI: Chỉ hiển thị nút thêm cho owner */}
-            {isOwner && (
-              <button 
-                className="ftl-btn primary"
-                onClick={() => setShowAddModal(true)}
-              >
-                <i className="fas fa-plus"></i> Thêm công việc
-              </button>
-            )}
+          <div className="ftl-header-main">
+            <h1><i className="fas fa-tasks"></i> Danh sách việc cần làm</h1>
+            <p>Quản lý công việc gia đình và phân công nhiệm vụ</p>
           </div>
         </header>
 
-        {/* Add Item Modal */}
-        {showAddModal && (
-          <div className="ftl-modal-overlay">
-            <div className="ftl-modal">
-              <div className="ftl-modal-header">
-                <h3>Thêm công việc mới</h3>
-                <button 
-                  className="ftl-modal-close"
-                  onClick={() => setShowAddModal(false)}
-                >
-                  &times;
+        {/* CẢNH BÁO QUÁ HẠN - chỉ hiển thị cho owner */}
+        {isOwner && (getOverdueTasks.length > 0 || getNearDeadlineTasks.length > 0) && (
+          <div className="ftl-alerts-section">
+            {getOverdueTasks.length > 0 && (
+              <div className="ftl-alert ftl-overdue-alert">
+                <div className="ftl-alert-icon">
+                  <i className="fas fa-exclamation-triangle"></i>
+                </div>
+                <div className="ftl-alert-content">
+                  <h4>Có {getOverdueTasks.length} công việc đã quá hạn!</h4>
+                  <p>Cần chú ý và xử lý ngay để tránh ảnh hưởng đến tiến độ gia đình.</p>
+                  <div className="ftl-alert-tasks">
+                    {getOverdueTasks.slice(0, 3).map(task => (
+                      <span key={task._id} className="ftl-alert-task-item">
+                        {task.title}
+                      </span>
+                    ))}
+                    {getOverdueTasks.length > 3 && (
+                      <span className="ftl-alert-more">+{getOverdueTasks.length - 3} công việc khác</span>
+                    )}
+                  </div>
+                </div>
+                <button className="ftl-alert-close" onClick={() => {/* Có thể thêm logic để ẩn cảnh báo */}}>
+                  <i className="fas fa-times"></i>
                 </button>
+              </div>
+            )}
+            
+            {getNearDeadlineTasks.length > 0 && getOverdueTasks.length === 0 && (
+              <div className="ftl-alert ftl-deadline-alert">
+                <div className="ftl-alert-icon">
+                  <i className="fas fa-clock"></i>
+                </div>
+                <div className="ftl-alert-content">
+                  <h4>Có {getNearDeadlineTasks.length} công việc sắp đến hạn!</h4>
+                  <p>Còn ít hơn 24 giờ để hoàn thành. Hãy theo dõi tiến độ.</p>
+                  <div className="ftl-alert-tasks">
+                    {getNearDeadlineTasks.slice(0, 3).map(task => (
+                      <span key={task._id} className="ftl-alert-task-item">
+                        {task.title}
+                      </span>
+                    ))}
+                    {getNearDeadlineTasks.length > 3 && (
+                      <span className="ftl-alert-more">+{getNearDeadlineTasks.length - 3} công việc khác</span>
+                    )}
+                  </div>
+                </div>
+                <button className="ftl-alert-close" onClick={() => {/* Có thể thêm logic để ẩn cảnh báo */}}>
+                  <i className="fas fa-times"></i>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Dashboard Stats */}
+        <div className="ftl-dashboard">
+          <div className="ftl-stats-cards">
+            <div className="ftl-stat-card total">
+              <div className="ftl-stat-icon">
+                <i className="fas fa-list-check"></i>
+              </div>
+              <div className="ftl-stat-content">
+                <div className="ftl-stat-number">{stats.total}</div>
+                <div className="ftl-stat-label">Tổng công việc</div>
+                <div className="ftl-stat-sub">Đã tạo</div>
+              </div>
+            </div>
+
+            <div className="ftl-stat-card completed">
+              <div className="ftl-stat-icon">
+                <i className="fas fa-check-circle"></i>
+              </div>
+              <div className="ftl-stat-content">
+                <div className="ftl-stat-number">{stats.completed}</div>
+                <div className="ftl-stat-label">Đã hoàn thành</div>
+                <div className="ftl-stat-sub">Hoàn tất</div>
+              </div>
+            </div>
+
+            <div className="ftl-stat-card pending">
+              <div className="ftl-stat-icon">
+                <i className="fas fa-clock"></i>
+              </div>
+              <div className="ftl-stat-content">
+                <div className="ftl-stat-number">{stats.pending}</div>
+                <div className="ftl-stat-label">Đang thực hiện</div>
+                <div className="ftl-stat-sub">Chưa xong</div>
+              </div>
+            </div>
+
+            <div className="ftl-stat-card overdue">
+              <div className="ftl-stat-icon">
+                <i className="fas fa-exclamation-triangle"></i>
+              </div>
+              <div className="ftl-stat-content">
+                <div className="ftl-stat-number">{stats.overdue}</div>
+                <div className="ftl-stat-label">Quá hạn</div>
+                <div className="ftl-stat-sub">Cần chú ý</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Controls Row */}
+          <div className="ftl-controls">
+            <div className="ftl-search-controls">
+              <div className="ftl-search-box">
+                <i className="fas fa-search"></i>
+                <input 
+                  className="ftl-search-input" 
+                  placeholder="Tìm công việc hoặc người phân công..." 
+                  value={searchQuery} 
+                  onChange={e => setSearchQuery(e.target.value)} 
+                />
               </div>
               
-              <form onSubmit={handleAddItem} className="ftl-form">
-                <div className="ftl-form-group">
-                  <label>Tiêu đề *</label>
-                  <input
-                    type="text"
-                    value={newItem.title}
-                    onChange={(e) => setNewItem({...newItem, title: e.target.value})}
-                    placeholder="Nhập tiêu đề công việc"
-                    required
-                  />
-                </div>
-                
-                <div className="ftl-form-group">
-                  <label>Mô tả</label>
-                  <textarea
-                    value={newItem.description}
-                    onChange={(e) => setNewItem({...newItem, description: e.target.value})}
-                    placeholder="Mô tả chi tiết công việc (tùy chọn)"
-                    rows={3}
-                  />
-                </div>
-                
-                <div className="ftl-form-row">
-                  <div className="ftl-form-group">
-                    <label>Độ ưu tiên</label>
-                    <select
-                      value={newItem.priority}
-                      onChange={(e) => setNewItem({...newItem, priority: e.target.value})}
-                    >
-                      <option value="low">Thấp</option>
-                      <option value="medium">Trung bình</option>
-                      <option value="high">Cao</option>
-                    </select>
-                  </div>
-                  
-                  <div className="ftl-form-group">
-                    <label>Phân công cho</label>
-                    <select
-                      multiple
-                      value={newItem.assignedTo}
-                      onChange={(e) => {
-                        const selectedValues = Array.from(e.target.selectedOptions, option => option.value);
-                        setNewItem({...newItem, assignedTo: selectedValues});
-                      }}
-                      style={{ minHeight: '100px' }}
-                    >
-                      {familyInfo?.members?.map(member => (
-                        <option key={member.user._id} value={member.user._id}>
-                          {member.user.name} {member.user._id === currentUser?.id ? '(Bạn)' : ''}
-                        </option>
-                      ))}
-                    </select>
-                    <small style={{ color: '#94a3b8', fontSize: '12px', marginTop: '4px' }}>
-                      Giữ Ctrl (Windows) hoặc Cmd (Mac) để chọn nhiều người. Bỏ chọn tất cả để không phân công cho ai.
-                    </small>
-                  </div>
-                </div>
-
-                <div className="ftl-form-group">
-                  <label>Ngày đến hạn</label>
-                  <input
-                    type="date"
-                    value={newItem.dueDate}
-                    onChange={(e) => setNewItem({...newItem, dueDate: e.target.value})}
-                  />
-                </div>
-                
-                <div className="ftl-form-actions">
-                  <button 
-                    type="button" 
-                    className="ftl-btn secondary"
-                    onClick={() => setShowAddModal(false)}
-                    disabled={saving}
-                  >
-                    Hủy
-                  </button>
-                  <button 
-                    type="submit" 
-                    className="ftl-btn primary"
-                    disabled={saving}
-                  >
-                    {saving ? (
-                      <>
-                        <i className="fas fa-spinner fa-spin"></i> Đang lưu...
-                      </>
-                    ) : (
-                      <>
-                        <i className="fas fa-save"></i> Thêm công việc
-                      </>
-                    )}
-                  </button>
-                </div>
-              </form>
+              <select className="ftl-filter-select" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+                <option value="all">Tất cả trạng thái</option>
+                <option value="pending">Đang thực hiện</option>
+                <option value="completed">Đã hoàn thành</option>
+                <option value="overdue">Quá hạn</option>
+              </select>
+              
+              <select className="ftl-priority-select" value={filterPriority} onChange={e => setFilterPriority(e.target.value)}>
+                <option value="all">Tất cả ưu tiên</option>
+                <option value="high">Ưu tiên cao</option>
+                <option value="medium">Ưu tiên trung bình</option>
+                <option value="low">Ưu tiên thấp</option>
+              </select>
+              
+              <select className="ftl-sort-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+                <option value="newest">Mới nhất</option>
+                <option value="oldest">Cũ nhất</option>
+                <option value="priority">Theo ưu tiên</option>
+                <option value="due-date">Theo hạn</option>
+              </select>
             </div>
-          </div>
-        )}
 
-        {/* Edit Item Modal */}
-        {showEditModal && editingItem && (
-          <div className="ftl-modal-overlay">
-            <div className="ftl-modal">
-              <div className="ftl-modal-header">
-                <h3>Chỉnh sửa công việc</h3>
-                <button className="ftl-modal-close" onClick={() => { setShowEditModal(false); setEditingItem(null); }}>
-                  &times;
+            <div className="ftl-action-controls">
+              <div className="ftl-view-toggle">
+                <button 
+                  className={`ftl-view-btn ${viewMode === 'note' ? 'active' : ''}`} 
+                  onClick={() => setViewMode('note')}
+                  title="Giao diện giấy note"
+                >
+                  <i className="fas fa-sticky-note"></i>
+                  Giấy note
+                </button>
+                <button 
+                  className={`ftl-view-btn ${viewMode === 'table' ? 'active' : ''}`} 
+                  onClick={() => setViewMode('table')}
+                  title="Giao diện bảng"
+                >
+                  <i className="fas fa-table"></i>
+                  Bảng
                 </button>
               </div>
 
-              <form onSubmit={submitEdit} className="ftl-form">
-                <div className="ftl-form-group">
-                  <label>Tiêu đề *</label>
-                  <input
-                    type="text"
-                    value={editForm.title}
-                    onChange={(e) => setEditForm({...editForm, title: e.target.value})}
-                    required
-                  />
-                </div>
-
-                <div className="ftl-form-group">
-                  <label>Mô tả</label>
-                  <textarea
-                    value={editForm.description}
-                    onChange={(e) => setEditForm({...editForm, description: e.target.value})}
-                    rows={3}
-                  />
-                </div>
-
-                <div className="ftl-form-row">
-                  <div className="ftl-form-group">
-                    <label>Độ ưu tiên</label>
-                    <select
-                      value={editForm.priority}
-                      onChange={(e) => setEditForm({...editForm, priority: e.target.value})}
-                    >
-                      <option value="low">Thấp</option>
-                      <option value="medium">Trung bình</option>
-                      <option value="high">Cao</option>
-                    </select>
-                  </div>
-                  
-                  <div className="ftl-form-group">
-                    <label>Phân công cho</label>
-                    <select
-                      multiple
-                      value={editForm.assignedTo}
-                      onChange={(e) => {
-                        const selectedValues = Array.from(e.target.selectedOptions, option => option.value);
-                        setEditForm({...editForm, assignedTo: selectedValues});
-                      }}
-                      style={{ minHeight: '100px' }}
-                    >
-                      {familyInfo?.members?.map(member => (
-                        <option key={member.user._id} value={member.user._id}>
-                          {member.user.name} {member.user._id === currentUser?.id ? '(Bạn)' : ''}
-                        </option>
-                      ))}
-                    </select>
-                    <small style={{ color: '#94a3b8', fontSize: '12px', marginTop: '4px' }}>
-                      Giữ Ctrl (Windows) hoặc Cmd (Mac) để chọn nhiều người. Bỏ chọn tất cả để không phân công cho ai.
-                    </small>
-                  </div>
-                </div>
-
-                <div className="ftl-form-group">
-                  <label>Ngày đến hạn</label>
-                  <input
-                    type="date"
-                    value={editForm.dueDate}
-                    onChange={(e) => setEditForm({...editForm, dueDate: e.target.value})}
-                  />
-                </div>
-
-                <div className="ftl-form-actions">
-                  <button type="button" className="ftl-btn secondary" onClick={() => { setShowEditModal(false); setEditingItem(null); }} disabled={editingSaving}>Hủy</button>
-                  <button type="submit" className="ftl-btn primary" disabled={editingSaving}>
-                    {editingSaving ? <><i className="fas fa-spinner fa-spin"></i> Đang lưu...</> : <><i className="fas fa-save"></i> Lưu</>}
-                  </button>
-                </div>
-              </form>
+              {isOwner && (
+                <button className="ftl-add-btn" onClick={() => setShowAddModal(true)} aria-label="Thêm công việc mới">
+                  <i className="fas fa-plus"></i>
+                  <span className="ftl-add-text">Thêm công việc</span>
+                </button>
+              )}
             </div>
           </div>
-        )}
+        </div>
 
         {/* Todo List Content */}
         <div className="ftl-content">
@@ -678,85 +645,108 @@ export default function FamilyTodoList() {
             </div>
           ) : (
             <>
-              {todoItems.length === 0 ? (
+              {filteredItems.length === 0 ? (
                 <div className="ftl-empty-state">
                   <i className="fas fa-tasks"></i>
-                  <h3>
-                    {isOwner 
-                      ? 'Danh sách việc cần làm trống' 
-                      : 'Chưa có công việc nào được phân công cho bạn'
-                    }
-                  </h3>
-                  <p>
-                    {isOwner 
-                      ? 'Bắt đầu thêm công việc đầu tiên của bạn'
-                      : 'Chủ gia đình sẽ phân công công việc cho bạn'
-                    }
-                  </p>
-                  {/* THAY ĐỔI: Chỉ hiển thị nút thêm cho owner */}
+                  <h3>Danh sách việc cần làm trống</h3>
+                  <p>Thử điều chỉnh bộ lọc hoặc thêm công việc mới</p>
                   {isOwner && (
                     <button 
-                      className="ftl-btn primary"
+                      className="ftl-add-btn"
                       onClick={() => setShowAddModal(true)}
+                      aria-label="Thêm công việc mới"
                     >
-                      <i className="fas fa-plus"></i> Thêm công việc
+                      <i className="fas fa-plus"></i> <span className="ftl-add-text">Thêm công việc mới</span>
                     </button>
                   )}
                 </div>
+              ) : viewMode === 'table' ? (
+                <div className="ftl-table-container">
+                  <table className="ftl-todo-table">
+                    <thead>
+                      <tr>
+                        <th>Công việc</th>
+                        <th>Ưu tiên</th>
+                        <th>Phân công</th>
+                        <th>Hạn</th>
+                        <th>Tiến độ</th>
+                        <th>Trạng thái</th>
+                        <th>Thao tác</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredItems.map(item => (
+                        <tr key={item._id} className={`ftl-table-row ${item.allCompleted ? 'completed' : ''}`}>
+                          <td>
+                            <div className="ftl-table-task">
+                              <div className="ftl-table-title">{item.title}</div>
+                              {item.description && <div className="ftl-table-desc">{item.description}</div>}
+                            </div>
+                          </td>
+                          <td>
+                            <span className="ftl-priority-badge" style={{ backgroundColor: getPriorityColor(item.priority) }}>
+                              {getPriorityLabel(item.priority)}
+                            </span>
+                          </td>
+                          <td>
+                            {item.assignedToNames && item.assignedToNames.length > 0 
+                              ? item.assignedToNames.join(', ') 
+                              : '—'
+                            }
+                          </td>
+                          <td>
+                            {item.dueDate ? new Date(item.dueDate).toLocaleDateString('vi-VN') : '—'}
+                          </td>
+                          <td>
+                            <span className="ftl-progress-badge">
+                              {item.completedCount}/{item.totalAssigned} ({item.completionPercentage}%)
+                            </span>
+                          </td>
+                          <td>
+                            <span className={`ftl-status-badge ${item.allCompleted ? 'completed' : 'pending'}`}>
+                              {item.allCompleted ? 'Hoàn thành' : 'Đang thực hiện'}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="ftl-table-actions">
+                              {canEditItem(item) && (
+                                <button className="ftl-action-btn edit" onClick={() => openEditModal(item)}>
+                                  <i className="fas fa-edit"></i> Sửa
+                                </button>
+                              )}
+                              {canToggleStatus(item) && !item.allCompleted && !isItemExpired(item) && (
+                                <button 
+                                  className={`ftl-action-btn ${item.allCompleted ? 'undo' : 'check'}`} 
+                                  onClick={() => toggleItemCompleted(item._id, item.completed)}
+                                >
+                                  <i className={`fas ${item.allCompleted ? 'fa-undo' : 'fa-check'}`}></i>
+                                  {item.allCompleted ? 'Chưa xong' : 'Hoàn thành'}
+                                </button>
+                              )}
+                              {/* Nếu quá hạn và không thể hoàn thành, vẫn có thể hiển thị trạng thái expired nếu cần */}
+                              {isItemExpired(item) && !item.allCompleted && (
+                                <span className="ftl-expired-note" title="Đã quá hạn, không thể hoàn thành">Đã quá hạn</span>
+                              )}
+                              {canEditItem(item) && (
+                                <button className="ftl-action-btn delete" onClick={() => deleteItem(item._id)}>
+                                  <i className="fas fa-trash"></i> Xóa
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               ) : (
-                <div className="ftl-items-list">
-                  {todoItems.map(item => (
-                    <div key={item._id} className={`ftl-item ${item.allCompleted ? 'completed' : ''}`}>
-                      <div className="ftl-item-content">
-                        {/* THÊM: Hiển thị cảnh báo quá hạn cho thành viên được giao (cá nhân) */}
-                        {isOverdueForAssigned(item) && (
-                          <div className="ftl-warning-banner ftl-overdue-personal">
-                            <i className="fas fa-exclamation-triangle"></i>
-                            <strong>Bạn đã quá hạn!</strong> Công việc này đã đến hạn nhưng bạn chưa hoàn thành.
-                          </div>
-                        )}
-
-                        {/* THÊM: Hiển thị cảnh báo sắp đến hạn cho thành viên được giao (cá nhân) */}
-                        {isNearDeadlineForAssigned(item) && (
-                          <div className="ftl-warning-banner ftl-near-deadline-personal">
-                            <i className="fas fa-clock"></i>
-                            <strong>Sắp đến hạn!</strong> Còn ít hơn 24 giờ để hoàn thành công việc này.
-                          </div>
-                        )}
-
-                        {/* THÊM: Hiển thị cảnh báo tổng thể cho owner về thành viên quá hạn */}
-                        {isOwner && (() => {
-                          const overdueMembers = getOverdueMembers(item);
-                          const nearDeadlineMembers = getNearDeadlineMembers(item);
-                          
-                          return (
-                            <>
-                              {overdueMembers.length > 0 && (
-                                <div className="ftl-warning-banner ftl-overdue-members">
-                                  <i className="fas fa-exclamation-triangle"></i>
-                                  <strong>Có thành viên quá hạn!</strong> 
-                                  <div className="ftl-overdue-list">
-                                    {overdueMembers.join(', ')} chưa hoàn thành công việc đã quá hạn.
-                                  </div>
-                                </div>
-                              )}
-                              
-                              {nearDeadlineMembers.length > 0 && overdueMembers.length === 0 && (
-                                <div className="ftl-warning-banner ftl-near-deadline-members">
-                                  <i className="fas fa-clock"></i>
-                                  <strong>Có thành viên sắp đến hạn!</strong>
-                                  <div className="ftl-near-deadline-list">
-                                    {nearDeadlineMembers.join(', ')} cần hoàn thành trong 24 giờ tới.
-                                  </div>
-                                </div>
-                              )}
-                            </>
-                          );
-                        })()}
-                        
-                        <div className="ftl-item-header">
-                          <h4 className="ftl-item-title">{item.title}</h4>
-                          <div className="ftl-item-badges">
+                <div className="ftl-notes-container">
+                  {filteredItems.map(item => (
+                    <div key={item._id} className={`ftl-note-item ${item.allCompleted ? 'completed' : ''}`}>
+                      <div className="ftl-note-header">
+                        <div className="ftl-note-title">
+                          <h4>{item.title}</h4>
+                          <div className="ftl-note-badges">
                             <span 
                               className="ftl-priority-badge"
                               style={{ backgroundColor: getPriorityColor(item.priority) }}
@@ -764,233 +754,123 @@ export default function FamilyTodoList() {
                               {getPriorityLabel(item.priority)}
                             </span>
                             {item.dueDate && (
-                              <span className={`ftl-due-date ${(() => {
+                              <span className={`ftl-due-badge ${(() => {
                                 const now = new Date();
                                 const due = new Date(item.dueDate);
-                                const timeDiff = due.getTime() - now.getTime();
-                                const hoursDiff = timeDiff / (1000 * 3600);
-                                
-                                if (hoursDiff < 0) return 'overdue';
+                                // sử dụng effectiveDue để phân loại overdue / near-deadline
+                                const effectiveDue = new Date(due.getTime() + 24 * 60 * 60 * 1000);
+                                if (effectiveDue < now) return 'overdue';
+                                const hoursDiff = (effectiveDue - now) / (1000 * 3600);
                                 if (hoursDiff <= 24) return 'near-deadline';
                                 return '';
                               })()}`}>
                                 <i className="fas fa-calendar-alt"></i> 
-                                Hạn: {new Date(item.dueDate).toLocaleDateString('vi-VN')}
-                                {(() => {
-                                  const now = new Date();
-                                  const due = new Date(item.dueDate);
-                                  const timeDiff = due.getTime() - now.getTime();
-                                  const hoursDiff = timeDiff / (1000 * 3600);
-                                  
-                                  if (hoursDiff < 0) {
-                                    const daysPast = Math.ceil(Math.abs(hoursDiff) / 24);
-                                    return ` (Quá ${daysPast} ngày)`;
-                                  }
-                                  if (hoursDiff <= 24) {
-                                    const hoursLeft = Math.floor(hoursDiff);
-                                    return ` (Còn ${hoursLeft}h)`;
-                                  }
-                                  return '';
-                                })()}
-                              </span>
-                            )}
-                            {/* THÊM: Badge hiển thị tiến độ hoàn thành với trạng thái màu sắc */}
-                            {item.totalAssigned > 0 && (
-                              <span className={`ftl-completion-badge ${(() => {
-                                if (item.allCompleted) return 'completed';
-                                if (item.completedCount > 0) return 'in-progress';
-                                
-                                // Kiểm tra trạng thái deadline
-                                if (item.dueDate) {
-                                  const now = new Date();
-                                  const due = new Date(item.dueDate);
-                                  const timeDiff = due.getTime() - now.getTime();
-                                  const hoursDiff = timeDiff / (1000 * 3600);
-                                  
-                                  if (hoursDiff < 0) return 'overdue';
-                                  if (hoursDiff <= 24) return 'near-deadline';
-                                }
-                                
-                                return 'not-started';
-                              })()}`}>
-                                {item.completedCount}/{item.totalAssigned} hoàn thành ({item.completionPercentage}%)
+                                {new Date(item.dueDate).toLocaleDateString('vi-VN')}
                               </span>
                             )}
                           </div>
                         </div>
-                        
-                        {item.description && (
-                          <p className="ftl-item-description">{item.description}</p>
-                        )}
-
-                        {/* OWNER: Hiển thị danh sách đã hoàn thành/chưa hoàn thành */}
-                        {isOwner && (
-                          <div className="ftl-completion-details" style={{
-                            background: '#f8fafc',
-                            border: '1px solid #e2e8f0',
-                            borderRadius: '8px',
-                            padding: '12px',
-                            marginBottom: '12px'
-                          }}>
-                            <div style={{ fontWeight: '600', fontSize: '13px', color: '#475569', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <i className="fas fa-users"></i>
-                              Trạng thái từng người:
-                            </div>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
-                              <span style={{ fontWeight: '500', color: '#166534' }}>
-                                Đã hoàn thành: {item.completedNames && item.completedNames.length > 0 ? item.completedNames.join(', ') : '—'}
-                              </span>
-                            </div>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                              <span style={{ fontWeight: '500', color: '#991b1b' }}>
-                                Chưa hoàn thành: {item.notCompletedNames && item.notCompletedNames.length > 0 ? item.notCompletedNames.join(', ') : '—'}
-                              </span>
-                            </div>
+                        {item.allCompleted && (
+                          <div className="ftl-note-completed">
+                            <i className="fas fa-check-circle"></i>
+                            Hoàn thành
                           </div>
                         )}
-
-                        {/* MEMBER: Hiển thị các thành viên được phân công cùng mình */}
-                        {!isOwner && item.assignedPeers && item.assignedPeers.length > 0 && (
-                          <div className="ftl-item-assigned" style={{ background: '#e0e7ff', color: '#3730a3', border: '1px solid #a5b4fc' }}>
-                            <i className="fas fa-user-friends"></i>
-                            Thành viên cùng phân công: {item.assignedPeers.join(', ')}
-                          </div>
-                        )}
-
-                        {/* THÊM: Hiển thị chi tiết trạng thái hoàn thành cho owner */}
-                        {isOwner && item.completionDetails && item.completionDetails.length > 0 && (
-                          <div className="ftl-completion-details" style={{
-                            background: '#f8fafc',
-                            border: '1px solid #e2e8f0',
-                            borderRadius: '8px',
-                            padding: '12px',
-                            marginBottom: '12px'
-                          }}>
-                            <div style={{ 
-                              fontWeight: '600', 
-                              fontSize: '13px', 
-                              color: '#475569',
-                              marginBottom: '8px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '6px'
-                            }}>
-                              <i className="fas fa-users"></i>
-                              Trạng thái từng người:
-                            </div>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                              {item.completionDetails.map((detail, index) => (
-                                <div key={index} style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '6px',
-                                  padding: '4px 8px',
-                                  background: detail.completed ? '#dcfce7' : '#fef2f2',
-                                  color: detail.completed ? '#166534' : '#991b1b',
-                                  borderRadius: '12px',
-                                  fontSize: '12px',
-                                  fontWeight: '500',
-                                  border: `1px solid ${detail.completed ? '#bbf7d0' : '#fecaca'}`
-                                }}>
-                                  <i className={`fas ${detail.completed ? 'fa-check-circle' : 'fa-clock'}`}></i>
-                                  {detail.user?.name || 'Thành viên'}
-                                  {detail.completed && detail.completedAt && (
-                                    <span style={{ 
-                                      fontSize: '10px', 
-                                      opacity: 0.8,
-                                      marginLeft: '4px'
-                                    }}>
-                                      ({new Date(detail.completedAt).toLocaleDateString('vi-VN')})
-                                    </span>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Hiển thị người được phân công (cho member) */}
-                        {!isOwner && item.assignedToNames && item.assignedToNames.length > 0 && (
-                          <div className="ftl-item-assigned">
-                            <i className="fas fa-user-tag"></i>
-                            Phân công: {item.assignedToNames.join(', ')}
-                          </div>
-                        )}
-                        
-                        <div className="ftl-item-meta">
-                          <span className="ftl-item-creator">
-                            <i className="fas fa-user">người tạo:</i> {item.creatorName || 'Thành viên'}
-                          </span>
-                          
-                          {/* THÊM: Hiển thị ngày hoàn thành nếu đã hoàn thành */}
-                          {item.completed && item.completedAt && (
-                            <span className="ftl-item-completed">
-                              <i className="fas fa-check-circle"></i> Hoàn thành: {new Date(item.completedAt).toLocaleDateString('vi-VN')}
-                            </span>
-                          )}
-                          {/* THÊM: Hiển thị người hoàn thành nếu khác người tạo */}
-                          {item.completed && item.completedByName && item.completedByName !== item.creatorName && (
-                            <span className="ftl-item-completed-by">
-                              <i className="fas fa-user-check"></i> Bởi: {item.completedByName}
-                            </span>
-                          )}
-                        </div>
                       </div>
-                      
-                      <div className="ftl-item-actions">
-                        {canEditItem(item) && (
-                          <button
-                            className="ftl-action-btn edit"
-                            onClick={() => openEditModal(item)}
-                            title="Chỉnh sửa"
-                          >
-                            <i className="fas fa-edit"></i>
-                            <span> Sửa</span>
-                          </button>
-                        )}
-                        {/* THAY ĐỔI: Sử dụng canToggleStatus thay vì luôn hiển thị */}
-                        {canToggleStatus(item) && (
-                          <button 
-                            className={`ftl-action-btn ${item.allCompleted ? 'undo' : 'check'}`}
-                            onClick={() => toggleItemCompleted(item._id, item.completed)}
-                            title={(() => {
-                              const userCompletion = item.completionDetails?.find(detail => 
-                                String(detail.user?._id || detail.user) === String(currentUser?.id)
-                              );
-                              if (userCompletion) {
-                                return userCompletion.completed ? 'Đánh dấu chưa hoàn thành' : 'Đánh dấu đã hoàn thành';
-                              }
-                              return item.allCompleted ? 'Chưa hoàn thành' : 'Đã hoàn thành';
-                            })()}
-                          >
-                            <i className={`fas ${(() => {
-                              const userCompletion = item.completionDetails?.find(detail => 
-                                String(detail.user?._id || detail.user) === String(currentUser?.id)
-                              );
-                              return userCompletion?.completed ? 'fa-undo' : 'fa-check';
-                            })()}`}></i>
-                            <span>
-                              {(() => {
-                                const userCompletion = item.completionDetails?.find(detail => 
-                                  String(detail.user?._id || detail.user) === String(currentUser?.id)
-                                );
-                                if (userCompletion) {
-                                  return userCompletion.completed ? ' Chưa hoàn thành' : ' Đã hoàn thành';
-                                }
-                                return item.allCompleted ? ' Chưa hoàn thành' : ' Đã hoàn thành';
-                              })()}
-                            </span>
-                          </button>
-                        )}
+
+                      {/* THÊM: CẢNH BÁO QUÁ HẠN VÀ THỜI GIAN CÒN LẠI */}
+                      {item.dueDate && !item.allCompleted && (() => {
+                        const now = new Date();
+                        const due = new Date(item.dueDate);
+                        // THÊM: Cộng thêm 1 ngày vào dueDate để công việc quá hạn từ ngày sau hạn
+                        const effectiveDue = new Date(due.getTime() + 24 * 60 * 60 * 1000);
+                        const timeDiff = effectiveDue.getTime() - now.getTime();
+                        const hoursDiff = timeDiff / (1000 * 3600);
+                        const daysDiff = Math.floor(hoursDiff / 24);
+                        const remainingHours = Math.floor(hoursDiff % 24);
                         
+                        if (hoursDiff < 0) {
+                          // Quá hạn - hiển thị thông báo và ẩn nút hoàn thành
+                          const overdueHours = Math.abs(Math.floor(hoursDiff));
+                          const overdueDays = Math.floor(overdueHours / 24);
+                          return (
+                            <div className="ftl-note-alert ftl-overdue-alert ftl-expired">
+                              <i className="fas fa-exclamation-triangle"></i>
+                              <span>
+                                Đã quá hạn {overdueDays > 0 ? `${overdueDays} ngày ${overdueHours % 24}h` : `${overdueHours}h`} - không thể hoàn thành nữa!
+                              </span>
+                            </div>
+                          );
+                        } else if (hoursDiff <= 24) {
+                          // Còn dưới 24h
+                          return (
+                            <div className="ftl-note-alert ftl-deadline-alert">
+                              <i className="fas fa-clock"></i>
+                              <span>
+                                Còn {daysDiff > 0 ? `${daysDiff} ngày ${remainingHours}h` : `${Math.floor(hoursDiff)}h`} nữa!
+                              </span>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+
+                      {item.description && (
+                        <div className="ftl-note-description">
+                          <i className="fas fa-sticky-note"></i>
+                          {item.description}
+                        </div>
+                      )}
+
+                      {item.assignedToNames && item.assignedToNames.length > 0 && (
+                        <div className="ftl-note-assigned">
+                          <i className="fas fa-user-tag"></i>
+                          Phân công: {item.assignedToNames.join(', ')}
+                        </div>
+                      )}
+
+                      <div className="ftl-note-progress">
+                        <div className="ftl-progress-bar">
+                          <div 
+                            className="ftl-progress-fill"
+                            style={{ width: `${item.completionPercentage}%` }}
+                          ></div>
+                        </div>
+                        <span className="ftl-progress-text">
+                          {item.completedCount}/{item.totalAssigned} hoàn thành ({item.completionPercentage}%)
+                        </span>
+                      </div>
+
+                      <div className="ftl-note-meta">
+                        <span className="ftl-note-creator">
+                          <i className="fas fa-user"></i> {item.creatorName || 'Thành viên'}
+                        </span>
+                        <span className="ftl-note-date">
+                          <i className="fas fa-calendar-alt"></i> {new Date(item.createdAt).toLocaleDateString('vi-VN')}
+                        </span>
+                      </div>
+
+                      <div className="ftl-note-actions">
                         {canEditItem(item) && (
+                          <button className="ftl-note-btn edit" onClick={() => openEditModal(item)}>
+                            <i className="fas fa-edit"></i>
+                            Sửa
+                          </button>
+                        )}
+                        {/* ẨN NÚT HOÀN THÀNH NẾU QUÁ HẠN */}
+                        {canToggleStatus(item) && !item.allCompleted && (!item.dueDate || !isItemExpired(item)) && (
                           <button 
-                            className="ftl-action-btn delete"
-                            onClick={() => deleteItem(item._id)}
-                            title="Xóa"
+                            className={`ftl-note-btn ${item.allCompleted ? 'undo' : 'check'}`} 
+                            onClick={() => toggleItemCompleted(item._id, item.completed)}
                           >
+                            <i className={`fas ${item.allCompleted ? 'fa-undo' : 'fa-check'}`}></i>
+                            {item.allCompleted ? 'Chưa xong' : 'Hoàn thành'}
+                          </button>
+                        )}
+                        {canEditItem(item) && (
+                          <button className="ftl-note-btn delete" onClick={() => deleteItem(item._id)}>
                             <i className="fas fa-trash"></i>
-                            <span> Xóa</span>
+                            Xóa
                           </button>
                         )}
                       </div>
@@ -1002,6 +882,204 @@ export default function FamilyTodoList() {
           )}
         </div>
       </main>
+
+      {/* Add Item Modal */}
+      {showAddModal && (
+        <div className="ftl-modal-overlay">
+          <div className="ftl-modal">
+            <div className="ftl-modal-header">
+              <h3>Thêm công việc mới</h3>
+              <button 
+                className="ftl-modal-close"
+                onClick={() => setShowAddModal(false)}
+              >
+                &times;
+              </button>
+            </div>
+            
+            <form onSubmit={handleAddItem} className="ftl-form">
+              <div className="ftl-form-group">
+                <label>Tiêu đề *</label>
+                <input
+                  type="text"
+                  value={newItem.title}
+                  onChange={(e) => setNewItem({...newItem, title: e.target.value})}
+                  placeholder="Nhập tiêu đề công việc"
+                  required
+                />
+              </div>
+              
+              <div className="ftl-form-group">
+                <label>Mô tả</label>
+                <textarea
+                  value={newItem.description}
+                  onChange={(e) => setNewItem({...newItem, description: e.target.value})}
+                  placeholder="Mô tả chi tiết công việc (tùy chọn)"
+                  rows={3}
+                />
+              </div>
+              
+              <div className="ftl-form-row">
+                <div className="ftl-form-group">
+                  <label>Độ ưu tiên</label>
+                  <select
+                    value={newItem.priority}
+                    onChange={(e) => setNewItem({...newItem, priority: e.target.value})}
+                  >
+                    <option value="low">Thấp</option>
+                    <option value="medium">Trung bình</option>
+                    <option value="high">Cao</option>
+                  </select>
+                </div>
+                
+                <div className="ftl-form-group">
+                  <label>Phân công cho</label>
+                  <select
+                    multiple
+                    value={newItem.assignedTo}
+                    onChange={(e) => {
+                      const selectedValues = Array.from(e.target.selectedOptions, option => option.value);
+                      setNewItem({...newItem, assignedTo: selectedValues});
+                    }}
+                    style={{ minHeight: '100px' }}
+                  >
+                    {familyInfo?.members?.map(member => (
+                      <option key={member.user._id} value={member.user._id}>
+                        {member.user.name} {member.user._id === currentUser?.id ? '(Bạn)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <small style={{ color: '#94a3b8', fontSize: '12px', marginTop: '4px' }}>
+                    Giữ Ctrl (Windows) hoặc Cmd (Mac) để chọn nhiều người. Bỏ chọn tất cả để không phân công cho ai.
+                  </small>
+                </div>
+              </div>
+
+              <div className="ftl-form-group">
+                <label>Ngày đến hạn</label>
+                <input
+                  type="date"
+                  value={newItem.dueDate}
+                  onChange={(e) => setNewItem({...newItem, dueDate: e.target.value})}
+                />
+              </div>
+              
+              <div className="ftl-form-actions">
+                <button 
+                  type="button" 
+                  className="ftl-btn secondary"
+                  onClick={() => setShowAddModal(false)}
+                  disabled={saving}
+                >
+                  Hủy
+                </button>
+                <button 
+                  type="submit" 
+                  className="ftl-btn primary"
+                  disabled={saving}
+                >
+                  {saving ? (
+                    <>
+                      <i className="fas fa-spinner fa-spin"></i> Đang lưu...
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-save"></i> Thêm công việc
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Item Modal */}
+      {showEditModal && editingItem && (
+        <div className="ftl-modal-overlay">
+          <div className="ftl-modal">
+            <div className="ftl-modal-header">
+              <h3>Chỉnh sửa công việc</h3>
+              <button className="ftl-modal-close" onClick={() => { setShowEditModal(false); setEditingItem(null); }}>
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={submitEdit} className="ftl-form">
+              <div className="ftl-form-group">
+                <label>Tiêu đề *</label>
+                <input
+                  type="text"
+                  value={editForm.title}
+                  onChange={(e) => setEditForm({...editForm, title: e.target.value})}
+                  required
+                />
+              </div>
+
+              <div className="ftl-form-group">
+                <label>Mô tả</label>
+                <textarea
+                  value={editForm.description}
+                  onChange={(e) => setEditForm({...editForm, description: e.target.value})}
+                  rows={3}
+                />
+              </div>
+
+              <div className="ftl-form-row">
+                <div className="ftl-form-group">
+                  <label>Độ ưu tiên</label>
+                  <select
+                    value={editForm.priority}
+                    onChange={(e) => setEditForm({...editForm, priority: e.target.value})}
+                  >
+                    <option value="low">Thấp</option>
+                    <option value="medium">Trung bình</option>
+                    <option value="high">Cao</option>
+                  </select>
+                </div>
+                
+                <div className="ftl-form-group">
+                  <label>Phân công cho</label>
+                  <select
+                    multiple
+                    value={editForm.assignedTo}
+                    onChange={(e) => {
+                      const selectedValues = Array.from(e.target.selectedOptions, option => option.value);
+                      setEditForm({...editForm, assignedTo: selectedValues});
+                    }}
+                    style={{ minHeight: '100px' }}
+                  >
+                    {familyInfo?.members?.map(member => (
+                      <option key={member.user._id} value={member.user._id}>
+                        {member.user.name} {member.user._id === currentUser?.id ? '(Bạn)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <small style={{ color: '#94a3b8', fontSize: '12px', marginTop: '4px' }}>
+                    Giữ Ctrl (Windows) hoặc Cmd (Mac) để chọn nhiều người. Bỏ chọn tất cả để không phân công cho ai.
+                  </small>
+                </div>
+              </div>
+
+              <div className="ftl-form-group">
+                <label>Ngày đến hạn</label>
+                <input
+                  type="date"
+                  value={editForm.dueDate}
+                  onChange={(e) => setEditForm({...editForm, dueDate: e.target.value})}
+                />
+              </div>
+
+              <div className="ftl-form-actions">
+                <button type="button" className="ftl-btn secondary" onClick={() => { setShowEditModal(false); setEditingItem(null); }} disabled={editingSaving}>Hủy</button>
+                <button type="submit" className="ftl-btn primary" disabled={editingSaving}>
+                  {editingSaving ? <><i className="fas fa-spinner fa-spin"></i> Đang lưu...</> : <><i className="fas fa-save"></i> Lưu</>}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

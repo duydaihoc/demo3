@@ -761,14 +761,14 @@ export default function FamilyHome() {
                                 onClick={(e) => { e.stopPropagation(); openBudgetDetail(budget); }}
                                 title="Xem chi tiết"
                               >
-                                <i className="fas fa-eye"></i>
+                                <i className="fas fa-eye">xem chi tiết</i>
                               </button>
                               <button 
                                 className="fh-budget-action-btn"
                                 onClick={(e) => { e.stopPropagation(); fetchBudgetHistory(categoryIdStr, budget.category?.name); }}
                                 title="Xem lịch sử"
                               >
-                                <i className="fas fa-history"></i>
+                                <i className="fas fa-history">xem lịch sử</i>
                               </button>
                               {isExpired && isOwner() && (
                                 <button 

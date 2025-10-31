@@ -17,7 +17,6 @@ export default function FamilyArchive() {
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
   const [pageSize] = useState(20);
   
   // Filter states
@@ -57,8 +56,9 @@ export default function FamilyArchive() {
   const [linkedTransaction, setLinkedTransaction] = useState(null);
   const [loadingLinkedTx, setLoadingLinkedTx] = useState(false);
 
-  // New: folder UI state
-  const [activeFolder, setActiveFolder] = useState(null); // null => show folder grid
+  // New: dashboard controls
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState('newest'); // newest | oldest | amount-desc | amount-asc
 
   const API_BASE = 'http://localhost:5000';
   const token = localStorage.getItem('token');
@@ -133,7 +133,6 @@ export default function FamilyArchive() {
         setReceiptImages(data.receiptImages || []);
         if (data.pagination) {
           setTotalPages(data.pagination.totalPages || 1);
-          setTotalItems(data.pagination.totalItems || 0);
         }
       } else {
         throw new Error('Không thể tải hình ảnh hóa đơn');
@@ -182,7 +181,6 @@ export default function FamilyArchive() {
       if (res.ok) {
         const data = await res.json();
         setReceiptImages(data.receiptImages || []);
-        setTotalItems(data.totalResults || 0);
         setTotalPages(1); // Search không có pagination
       }
     } catch (err) {
@@ -272,7 +270,7 @@ export default function FamilyArchive() {
     if (token && selectedFamilyId) {
       fetchTransactions();
     }
-  }, [fetchTransactions]);
+  }, [fetchTransactions, token, selectedFamilyId]); // Add missing dependencies
 
   // Format currency
   const formatCurrency = (amount) => {
@@ -551,35 +549,44 @@ export default function FamilyArchive() {
     }
   };
 
-  // Group receipts into folders (by explicit folderName || year-month of date)
-  const folders = React.useMemo(() => {
-    if (!receiptImages || receiptImages.length === 0) return [];
-    const map = new Map();
-    receiptImages.forEach(r => {
-      const folderKey = r.folderName || (r.date ? new Date(r.date).toISOString().slice(0,7) : 'Ungrouped');
-      const folderLabel = r.folderName || (r.date ? new Date(r.date).toLocaleString('vi-VN', { year: 'numeric', month: 'long' }) : 'Không phân nhóm');
-      if (!map.has(folderKey)) map.set(folderKey, { key: folderKey, name: folderLabel, items: [] });
-      map.get(folderKey).items.push(r);
-    });
-    // Convert map to array and sort by newest folder first (by first item date)
-    return Array.from(map.values()).map(f => {
-      const itemsSorted = f.items.slice().sort((a,b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt));
-      return { ...f, items: itemsSorted, preview: itemsSorted.slice(0,4) };
-    }).sort((a,b) => {
-      const da = new Date(a.items[0]?.date || a.items[0]?.createdAt || 0);
-      const db = new Date(b.items[0]?.date || b.items[0]?.createdAt || 0);
-      return db - da;
-    });
+  // Compute stats for dashboard
+  const stats = React.useMemo(() => {
+    const totalCount = receiptImages.length;
+    const totalAmount = receiptImages.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+    const verifiedCount = receiptImages.filter(r => r.isVerified).length;
+    const unverifiedCount = totalCount - verifiedCount;
+    return { totalCount, totalAmount, verifiedCount, unverifiedCount };
   }, [receiptImages]);
 
-  const openFolder = (folderKey) => {
-    setActiveFolder(folderKey);
-    // Put folder open into history? not required now
-  };
+  // Group receipts by year-month for list view
+  const groupedByMonth = React.useMemo(() => {
+    const map = new Map();
+    const items = receiptImages.slice();
+    // apply simple search/filter on client side (title/description)
+    const filtered = items.filter(r => {
+      if (!searchQuery) return true;
+      const q = searchQuery.toLowerCase();
+      return (r.description || r.originalName || '').toLowerCase().includes(q)
+        || (r.uploaderName || '').toLowerCase().includes(q);
+    });
+    // apply sort
+    filtered.sort((a,b) => {
+      if (sortBy === 'newest') return new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt);
+      if (sortBy === 'oldest') return new Date(a.date || a.createdAt) - new Date(b.date || b.createdAt);
+      if (sortBy === 'amount-desc') return (Number(b.amount)||0) - (Number(a.amount)||0);
+      if (sortBy === 'amount-asc') return (Number(a.amount)||0) - (Number(b.amount)||0);
+      return 0;
+    });
 
-  const closeFolder = () => {
-    setActiveFolder(null);
-  };
+    filtered.forEach(r => {
+      const date = r.date ? new Date(r.date) : new Date(r.createdAt || Date.now());
+      const key = date.getFullYear() + '-' + String(date.getMonth()+1).padStart(2,'0');
+      const label = date.toLocaleString('vi-VN', { year:'numeric', month:'long' });
+      if (!map.has(key)) map.set(key, { key, label, items: [] });
+      map.get(key).items.push(r);
+    });
+    return Array.from(map.values()).sort((a,b) => new Date(b.key + '-01') - new Date(a.key + '-01'));
+  }, [receiptImages, searchQuery, sortBy]);
 
   return (
     <div className="family-page">
@@ -710,115 +717,131 @@ export default function FamilyArchive() {
             </div>
           ) : (
             <>
-              {/* Receipt Images - now folder style */}
+              {/* Receipt Images - table management style */}
               {activeTab === 'receipts' && (
                 <div className="fa-section">
                   <div className="fa-section-header">
-                    <h2>Kho lưu trữ theo thư mục</h2>
-                    <p>Tổng cộng {totalItems} hình ảnh đã lưu trữ</p>
+                    <h2>Quản lý hóa đơn - Bảng dữ liệu</h2>
+                    <p>Tổng quan và quản lý chi tiết hóa đơn</p>
                   </div>
 
-                  {receiptImages.length === 0 ? (
-                    <div className="fa-empty-state">
-                      <i className="fas fa-folder-open"></i>
-                      <h3>Chưa có hình ảnh hóa đơn nào</h3>
-                      <p>Upload hoặc liên kết các ảnh hóa đơn để lưu trữ theo thư mục.</p>
+                  {/* Quick stats bar */}
+                  <div className="fa-stats-bar">
+                    <div className="fa-stat-item">
+                      <span className="fa-stat-number">{stats.totalCount}</span>
+                      <span className="fa-stat-label">Tổng hóa đơn</span>
                     </div>
-                  ) : (
-                    <>
-                      {/* If a folder is opened, show breadcrumb + file list */}
-                      {activeFolder ? (
-                        (() => {
-                          const folder = folders.find(f => f.key === activeFolder);
-                          const items = folder ? folder.items : [];
-                          return (
-                            <div>
-                              <div className="fa-folder-breadcrumb">
-                                <div className="fa-breadcrumb-back" onClick={closeFolder}>
-                                  <i className="fas fa-arrow-left"></i> Quay lại
-                                </div>
-                                <div className="fa-breadcrumb-title">{folder?.name || 'Thư mục'}</div>
-                                <div style={{ marginLeft: 'auto', color: '#64748b' }}>{items.length} mục</div>
-                              </div>
+                    <div className="fa-stat-item verified">
+                      <span className="fa-stat-number">{stats.verifiedCount}</span>
+                      <span className="fa-stat-label">Đã xác minh</span>
+                    </div>
+                    <div className="fa-stat-item pending">
+                      <span className="fa-stat-number">{stats.unverifiedCount}</span>
+                      <span className="fa-stat-label">Chưa xác minh</span>
+                    </div>
+                    <div className="fa-stat-item amount">
+                      <span className="fa-stat-number">{formatCurrency(stats.totalAmount)}</span>
+                      <span className="fa-stat-label">Tổng tiền</span>
+                    </div>
+                  </div>
 
-                              {items.length === 0 ? (
-                                <div className="fa-folder-empty">Thư mục trống</div>
-                              ) : (
-                                <div className="fa-folder-list">
-                                  {items.map(item => {
-                                    const category = item.categoryInfo ? getCategoryInfo(item.categoryInfo) : { name: 'Không có', icon: '📝' };
-                                    return (
-                                      <div key={item._id} className="fa-folder-list-item">
-                                        <div className="fa-folder-list-thumb">
-                                          <img
-                                            src={item.imageUrl}
-                                            alt={item.originalName}
-                                            onError={(e) => { e.target.style.display = 'none'; }}
-                                          />
-                                        </div>
-                                        <div className="fa-folder-list-body">
-                                          <div className="fa-folder-list-title">{item.description || item.originalName}</div>
-                                          <div className="fa-folder-list-meta">
-                                            <span className="fa-meta-badge date"><i className="fas fa-calendar-alt"></i> {formatDate(item.date)}</span>
-                                            <span className="fa-meta-badge uploader"><i className="fas fa-user"></i> {item.uploaderName}</span>
-                                            <span className="fa-meta-badge category">{category.icon} {category.name}</span>
-                                          </div>
-                                        </div>
+                  {/* Search and sort controls */}
+                  <div className="fa-controls-row">
+                    <div className="fa-search-group">
+                      <input
+                        className="fa-search-input"
+                        placeholder="Tìm theo mô tả, tên người upload..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                      />
+                      <select className="fa-sort-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+                        <option value="newest">Mới nhất</option>
+                        <option value="oldest">Cũ nhất</option>
+                        <option value="amount-desc">Giá trị cao → thấp</option>
+                        <option value="amount-asc">Giá trị thấp → cao</option>
+                      </select>
+                    </div>
+                    <div className="fa-actions-group">
+                      <button className="fa-btn secondary" onClick={() => { setSearchQuery(''); setSortBy('newest'); }}>
+                        <i className="fas fa-sync-alt"></i> Reset
+                      </button>
+                      <button className="fa-btn primary" onClick={openUploadModal}>
+                        <i className="fas fa-plus"></i> Thêm hóa đơn
+                      </button>
+                    </div>
+                  </div>
 
-                                        <div className="fa-folder-list-actions">
-                                          <button className="fa-action-btn view" onClick={() => handleViewReceiptDetail(item)}>
-                                            <i className="fas fa-eye"></i>
-                                          </button>
-                                          {isOwner() && (
-                                            <button className={`fa-action-btn verify ${item.isVerified ? 'verified' : ''}`} onClick={() => verifyReceiptImage(item._id, !item.isVerified)}>
-                                              <i className={`fas ${item.isVerified ? 'fa-times' : 'fa-check'}`}></i>
-                                            </button>
-                                          )}
-                                          {(isOwner() || item.uploadedBy === currentUser?.id) && (
-                                            <button className="fa-action-btn delete" onClick={() => deleteReceiptImage(item._id)}>
-                                              <i className="fas fa-trash"></i>
-                                            </button>
-                                          )}
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })()
-                      ) : (
-                        /* Folder grid view */
-                        <div className="fa-folders-grid">
-                          {folders.map(folder => (
-                            <div key={folder.key} className="fa-folder-card" onClick={() => openFolder(folder.key)} role="button">
-                              <div className="fa-folder-header">
-                                <div className="fa-folder-meta">
-                                  <div className="fa-folder-icon"><i className="fas fa-folder"></i></div>
-                                  <div>
-                                    <div className="fa-folder-name">{folder.name}</div>
-                                    <div style={{ color: '#94a3b8', fontSize: 13 }}>{folder.items[0] ? formatDate(folder.items[0].date || folder.items[0].createdAt) : ''}</div>
-                                  </div>
-                                </div>
-                                <div className="fa-folder-count">{folder.items.length}</div>
-                              </div>
+                  {/* Receipts table */}
+                  <div className="fa-table-container">
+                    {groupedByMonth.length === 0 ? (
+                      <div className="fa-empty-state">
+                        <i className="fas fa-table"></i>
+                        <h3>Không có hóa đơn nào</h3>
+                        <p>Thử điều chỉnh bộ lọc hoặc thêm hóa đơn mới.</p>
+                      </div>
+                    ) : (
+                      <table className="fa-receipts-table">
+                        <thead>
+                          <tr>
+                            <th>Hình ảnh</th>
+                            <th>Mô tả</th>
+                            <th>Số tiền</th>
+                            <th>Ngày</th>
+                            <th>Danh mục</th>
+                            <th>Người upload</th>
+                            <th>Trạng thái</th>
+                            <th>Thao tác</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {groupedByMonth.flatMap(group => group.items).map(item => {
+                            const category = item.categoryInfo ? getCategoryInfo(item.categoryInfo) : { name: 'Không có', icon: '📝' };
+                            return (
+                              <tr key={item._id} className="fa-table-row">
+                                <td className="fa-table-thumb">
+                                  <img src={item.imageUrl} alt={item.originalName} onError={(e) => e.target.style.display = 'none'} />
+                                </td>
+                                <td className="fa-table-desc">
+                                  <div className="fa-table-title">{item.description || item.originalName}</div>
+                                </td>
+                                <td className="fa-table-amount">
+                                  {item.amount ? formatCurrency(item.amount) : '—'}
+                                </td>
+                                <td className="fa-table-date">{formatDate(item.date)}</td>
+                                <td className="fa-table-category">
+                                  <span className="fa-category-badge">{category.icon} {category.name}</span>
+                                </td>
+                                <td className="fa-table-uploader">{item.uploaderName}</td>
+                                <td className="fa-table-status">
+                                  {item.isVerified ? (
+                                    <span className="fa-status-badge verified"><i className="fas fa-check"></i> Đã xác minh</span>
+                                  ) : (
+                                    <span className="fa-status-badge pending"><i className="fas fa-clock"></i> Chưa xác minh</span>
+                                  )}
+                                </td>
+                                <td className="fa-table-actions">
+                                  <button className="fa-action-btn view" onClick={() => handleViewReceiptDetail(item)} title="Xem chi tiết">
+                                    <i className="fas fa-eye"></i> Xem
+                                  </button>
+                                  {isOwner() && (
+                                    <button className={`fa-action-btn verify ${item.isVerified ? 'verified' : ''}`} onClick={() => verifyReceiptImage(item._id, !item.isVerified)} title={item.isVerified ? 'Bỏ xác minh' : 'Xác minh'}>
+                                      <i className={`fas ${item.isVerified ? 'fa-times' : 'fa-check'}`}></i> {item.isVerified ? 'Bỏ xác minh' : 'Xác minh'}
+                                    </button>
+                                  )}
+                                  {(isOwner() || item.uploadedBy === currentUser?.id) && (
+                                    <button className="fa-action-btn delete" onClick={() => deleteReceiptImage(item._id)} title="Xóa">
+                                      <i className="fas fa-trash"></i> Xóa
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
 
-                              <div className="fa-folder-preview">
-                                {folder.preview.map((p, idx) => (
-                                  <img key={p._id || idx} src={p.imageUrl} alt={p.originalName} onError={(e) => { e.target.style.display = 'none'; e.target.parentNode && (e.target.parentNode.innerHTML = '<div class=\"empty\">—</div>'); }} />
-                                ))}
-                                {/* Fill empty slots to keep layout */}
-                                {Array.from({ length: Math.max(0, 4 - folder.preview.length) }).map((_,i) => (
-                                  <div key={'e'+i} className="empty">—</div>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  )}
                 </div>
               )}
 
@@ -895,7 +918,7 @@ export default function FamilyArchive() {
               )}
 
               {/* Pagination: show only when not inside a folder */}
-              {activeTab === 'receipts' && !activeFolder && totalPages > 1 && (
+              {activeTab === 'receipts' && totalPages > 1 && (
                 <div className="fa-pagination">
                   <button 
                     className="fa-pagination-btn"
