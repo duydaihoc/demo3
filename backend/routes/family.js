@@ -1642,18 +1642,14 @@ router.patch('/:familyId/todo-list/:itemId/toggle-completion', authenticateToken
       return res.status(404).json({ message: 'Không tìm thấy việc cần làm' });
     }
 
-    // THÊM: Kiểm tra nếu công việc đã quá hạn thì không cho phép toggle
-    if (item.isExpired || (item.dueDate && new Date(item.dueDate) < new Date())) {
-      return res.status(400).json({ message: 'Công việc đã quá hạn, không thể thay đổi trạng thái hoàn thành' });
+    // LOGIC CHUẨN: quá hạn từ ngày sau ngày đến hạn (dueDate + 1 ngày)
+    let expired = false;
+    if (item.dueDate) {
+      const effectiveDue = new Date(new Date(item.dueDate).getTime() + 24 * 60 * 60 * 1000);
+      if (effectiveDue <= new Date()) expired = true;
     }
-
-    // Kiểm tra quyền toggle (owner, creator, hoặc assigned)
-    const isOwner = family.owner.toString() === req.user.id;
-    const isCreator = item.createdBy.toString() === req.user.id;
-    const isAssigned = item.assignedTo.some(id => id.toString() === req.user.id);
-
-    if (!isOwner && !isCreator && !isAssigned) {
-      return res.status(403).json({ message: 'Không có quyền thay đổi trạng thái công việc này' });
+    if (item.isExpired || expired) {
+      return res.status(400).json({ message: 'Công việc đã quá hạn, không thể thay đổi trạng thái hoàn thành' });
     }
 
     // Tìm completion status của user hiện tại
@@ -1696,9 +1692,9 @@ const updateExpiredTasks = async (family) => {
   
   family.todoList.forEach(task => {
     if (task.dueDate && !task.completed && !task.isExpired) {
-      // THÊM: Cộng thêm 1 ngày vào dueDate để công việc quá hạn từ ngày sau hạn
+      // LOGIC CHUẨN: quá hạn từ ngày sau ngày đến hạn (dueDate + 1 ngày)
       const effectiveDue = new Date(new Date(task.dueDate).getTime() + 24 * 60 * 60 * 1000);
-      if (effectiveDue < now) {
+      if (effectiveDue <= now) {
         task.isExpired = true;
         hasUpdates = true;
       }

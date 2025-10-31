@@ -1824,11 +1824,7 @@ export default function FamilyTransactions() {
 															</span>
 														)}
 														{/* Wallet Link Badge */}
-														{transaction.isLinkedToWallet && transaction.linkedWallet && (
-															<span className="ft-wallet-badge linked">
-																<i className="fas fa-wallet"></i> {transaction.linkedWallet.name || 'Ví cá nhân'}
-															</span>
-														)}
+														
 													</div>
 												</div>
 												

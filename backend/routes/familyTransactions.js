@@ -1448,4 +1448,140 @@ router.get('/:familyId/transactions/:transactionId/receipts', authenticateToken,
   }
 });
 
+// GET /api/family/:familyId/transactions/monthly - Dữ liệu giao dịch theo tháng (6 tháng gần nhất)
+router.get('/:familyId/transactions/monthly', authenticateToken, isFamilyMember, async (req, res) => {
+  try {
+    const { familyId } = req.params;
+    
+    // Lấy 6 tháng gần nhất
+    const monthsData = [];
+    const now = new Date();
+    
+    for (let i = 5; i >= 0; i--) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const startOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+      const endOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
+      
+      const transactions = await FamilyTransaction.find({
+        familyId,
+        date: { $gte: startOfMonth, $lte: endOfMonth },
+        tags: { $ne: 'transfer' }
+      });
+      
+      const income = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+      const expense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+      
+      monthsData.push({
+        month: date.toLocaleDateString('vi-VN', { month: 'short', year: 'numeric' }),
+        income,
+        expense
+      });
+    }
+    
+    res.json(monthsData);
+  } catch (error) {
+    console.error('Error fetching monthly data:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /api/family/:familyId/transactions/categories - Phân bổ theo danh mục
+router.get('/:familyId/transactions/categories', authenticateToken, isFamilyMember, async (req, res) => {
+  try {
+    const { familyId } = req.params;
+    
+    // Lấy giao dịch chi tiêu tháng hiện tại
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    
+    const transactions = await FamilyTransaction.find({
+      familyId,
+      type: 'expense',
+      tags: { $ne: 'transfer' },
+      date: { $gte: startOfMonth, $lte: endOfMonth }
+    }).populate('category', 'name icon');
+    
+    // Nhóm theo category
+    const categoryMap = {};
+    transactions.forEach(tx => {
+      const catId = tx.category?._id || 'other';
+      const catName = tx.category?.name || 'Khác';
+      
+      if (!categoryMap[catId]) {
+        categoryMap[catId] = { name: catName, value: 0 };
+      }
+      categoryMap[catId].value += tx.amount;
+    });
+    
+    const categoryData = Object.values(categoryMap);
+    
+    res.json(categoryData);
+  } catch (error) {
+    console.error('Error fetching category data:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /api/family/:familyId/transactions/activity - Hoạt động nạp/rút
+router.get('/:familyId/transactions/activity', authenticateToken, isFamilyMember, async (req, res) => {
+  try {
+    const { familyId } = req.params;
+    
+    // Lấy 7 ngày gần nhất
+    const activityData = [];
+    const now = new Date();
+    
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+      const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      const endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
+      
+      const transactions = await FamilyTransaction.find({
+        familyId,
+        tags: 'transfer',
+        date: { $gte: startOfDay, $lte: endOfDay }
+      });
+      
+      const deposits = transactions.filter(t => t.tags.includes('to-family')).reduce((sum, t) => sum + t.amount, 0);
+      const withdrawals = transactions.filter(t => t.tags.includes('from-family')).reduce((sum, t) => sum + t.amount, 0);
+      
+      activityData.push({
+        date: date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }),
+        name: date.toLocaleDateString('vi-VN', { weekday: 'short' }),
+        deposits,
+        withdrawals
+      });
+    }
+    
+    res.json(activityData);
+  } catch (error) {
+    console.error('Error fetching activity data:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /api/family/:familyId/transactions/top - Top giao dịch
+router.get('/:familyId/transactions/top', authenticateToken, isFamilyMember, async (req, res) => {
+  try {
+    const { familyId } = req.params;
+    const { limit = 5 } = req.query;
+    
+    const transactions = await FamilyTransaction.find({
+      familyId,
+      tags: { $ne: 'transfer' }
+    })
+    .populate('category', 'name icon')
+    .populate('createdBy', 'name')
+    .sort({ amount: -1 })
+    .limit(parseInt(limit));
+    
+    res.json(transactions);
+  } catch (error) {
+    console.error('Error fetching top transactions:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 module.exports = router;

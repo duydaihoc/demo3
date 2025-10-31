@@ -716,16 +716,22 @@ export default function FamilyTodoList() {
                               )}
                               {canToggleStatus(item) && !item.allCompleted && !isItemExpired(item) && (
                                 <button 
-                                  className={`ftl-action-btn ${item.allCompleted ? 'undo' : 'check'}`} 
+                                  className="ftl-action-btn check" 
                                   onClick={() => toggleItemCompleted(item._id, item.completed)}
                                 >
-                                  <i className={`fas ${item.allCompleted ? 'fa-undo' : 'fa-check'}`}></i>
-                                  {item.allCompleted ? 'Chưa xong' : 'Hoàn thành'}
+                                  <i className="fas fa-check"></i>
+                                  Hoàn thành
                                 </button>
                               )}
-                              {/* Nếu quá hạn và không thể hoàn thành, vẫn có thể hiển thị trạng thái expired nếu cần */}
-                              {isItemExpired(item) && !item.allCompleted && (
-                                <span className="ftl-expired-note" title="Đã quá hạn, không thể hoàn thành">Đã quá hạn</span>
+                              {/* Nút hoàn tác nếu đã hoàn thành */}
+                              {canToggleStatus(item) && item.allCompleted && (
+                                <button 
+                                  className="ftl-action-btn undo"
+                                  onClick={() => toggleItemCompleted(item._id, item.completed)}
+                                >
+                                  <i className="fas fa-undo"></i>
+                                  Chưa hoàn thành
+                                </button>
                               )}
                               {canEditItem(item) && (
                                 <button className="ftl-action-btn delete" onClick={() => deleteItem(item._id)}>
@@ -842,12 +848,13 @@ export default function FamilyTodoList() {
                       </div>
 
                       <div className="ftl-note-meta">
-                        <span className="ftl-note-creator">
+                        <span className="ftl-note-creator ftl-note-creator-badge">
                           <i className="fas fa-user"></i> {item.creatorName || 'Thành viên'}
                         </span>
-                        <span className="ftl-note-date">
+                        {/* XÓA: Không hiển thị ngày tạo ở đây nữa */}
+                        {/* <span className="ftl-note-date">
                           <i className="fas fa-calendar-alt"></i> {new Date(item.createdAt).toLocaleDateString('vi-VN')}
-                        </span>
+                        </span> */}
                       </div>
 
                       <div className="ftl-note-actions">
@@ -857,14 +864,24 @@ export default function FamilyTodoList() {
                             Sửa
                           </button>
                         )}
-                        {/* ẨN NÚT HOÀN THÀNH NẾU QUÁ HẠN */}
+                        {/* Nút hoàn thành nếu chưa hoàn thành và chưa quá hạn */}
                         {canToggleStatus(item) && !item.allCompleted && (!item.dueDate || !isItemExpired(item)) && (
                           <button 
-                            className={`ftl-note-btn ${item.allCompleted ? 'undo' : 'check'}`} 
+                            className={`ftl-note-btn check`} 
                             onClick={() => toggleItemCompleted(item._id, item.completed)}
                           >
-                            <i className={`fas ${item.allCompleted ? 'fa-undo' : 'fa-check'}`}></i>
-                            {item.allCompleted ? 'Chưa xong' : 'Hoàn thành'}
+                            <i className="fas fa-check"></i>
+                            Hoàn thành
+                          </button>
+                        )}
+                        {/* Nút hoàn tác nếu đã hoàn thành */}
+                        {canToggleStatus(item) && item.allCompleted && (
+                          <button 
+                            className="ftl-note-btn undo"
+                            onClick={() => toggleItemCompleted(item._id, item.completed)}
+                          >
+                            <i className="fas fa-undo"></i>
+                            Chưa hoàn thành
                           </button>
                         )}
                         {canEditItem(item) && (
