@@ -26,6 +26,10 @@ try {
 // Load environment variables
 require('dotenv').config();
 
+// Add debug log
+console.log('🔍 Environment loaded');
+console.log('📝 GEMINI_API_KEY status:', process.env.GEMINI_API_KEY ? 'Present' : 'Missing');
+
 // Set default environment
 process.env.NODE_ENV = process.env.NODE_ENV || 'development';
 
