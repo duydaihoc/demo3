@@ -91,7 +91,11 @@ router.get('/:familyId/transactions', authenticateToken, isFamilyMember, async (
     // Nếu client truyền transactionScope thì tôn trọng
     if (transactionScope) {
       filter.transactionScope = transactionScope;
+      // Khi query với transactionScope=personal, owner có thể xem tất cả personal transactions của các thành viên
+      // Không cần giới hạn createdBy vì đã filter theo transactionScope=personal
+      // Chỉ lấy personal transactions, không lấy family transactions
     } else {
+      // Nếu không có transactionScope, mặc định lấy family + personal của user hiện tại
       const userId = req.user.id || req.user._id;
       filter.$or = [
         { transactionScope: 'family' },
@@ -1452,6 +1456,7 @@ router.get('/:familyId/transactions/:transactionId/receipts', authenticateToken,
 router.get('/:familyId/transactions/monthly', authenticateToken, isFamilyMember, async (req, res) => {
   try {
     const { familyId } = req.params;
+    const { transactionScope } = req.query; // Hỗ trợ filter theo transactionScope
     
     // Lấy 6 tháng gần nhất
     const monthsData = [];
@@ -1462,11 +1467,22 @@ router.get('/:familyId/transactions/monthly', authenticateToken, isFamilyMember,
       const startOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
       const endOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
       
-      const transactions = await FamilyTransaction.find({
+      // Xây dựng filter
+      const filter = {
         familyId,
         date: { $gte: startOfMonth, $lte: endOfMonth },
         tags: { $ne: 'transfer' }
-      });
+      };
+      
+      // Nếu có transactionScope, chỉ lấy loại đó (mặc định là family)
+      if (transactionScope) {
+        filter.transactionScope = transactionScope;
+      } else {
+        // Mặc định chỉ lấy giao dịch gia đình
+        filter.transactionScope = 'family';
+      }
+      
+      const transactions = await FamilyTransaction.find(filter);
       
       const income = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
       const expense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
