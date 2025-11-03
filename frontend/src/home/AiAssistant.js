@@ -47,6 +47,9 @@ export default function AiAssistant() {
   const [originalMessage, setOriginalMessage] = useState('');
   const [analyzingCategory, setAnalyzingCategory] = useState(false);
 
+  // THÊM: State cho pending transaction (đang chờ thông tin)
+  const [pendingTransaction, setPendingTransaction] = useState(null);
+
   const messagesEndRef = useRef(null);
 
   const API_BASE = 'http://localhost:5000';
@@ -76,6 +79,15 @@ export default function AiAssistant() {
     };
     
     setMessages(prev => [...prev, userMessage]);
+    
+    // THÊM: Lưu message gốc nếu đang có pending transaction
+    if (pendingTransaction) {
+      // Kết hợp với pending transaction để có context đầy đủ
+      setOriginalMessage(`${pendingTransaction.description} ${userMessage.text}`.trim());
+    } else {
+      setOriginalMessage(userMessage.text);
+    }
+    
     setInput('');
     setIsTyping(true);
 
@@ -102,7 +114,8 @@ export default function AiAssistant() {
         },
         body: JSON.stringify({
           message: userMessage.text,
-          conversationHistory: newHistory
+          conversationHistory: newHistory,
+          pendingTransaction: pendingTransaction // THÊM: gửi pending transaction nếu có
         }),
         signal: controller.signal
       });
@@ -116,7 +129,8 @@ export default function AiAssistant() {
       const data = await response.json();
       console.log('✅ Received response:', {
         geminiAvailable: data.geminiAvailable,
-        hasTransactionSuggestion: !!data.transactionSuggestion
+        hasTransactionSuggestion: !!data.transactionSuggestion,
+        needsMoreInfo: !!data.needsMoreInfo
       });
       
       // Update Gemini status
@@ -133,24 +147,35 @@ export default function AiAssistant() {
         fallback: data.fallback,
         geminiAvailable: data.geminiAvailable,
         geminiError: data.geminiError,
-        debug: data.debug
+        debug: data.debug,
+        needsMoreInfo: data.needsMoreInfo // THÊM: flag cần thêm thông tin
       };
 
       setMessages(prev => [...prev, aiMessage]);
       
-      // Nếu có transaction suggestion, hiển thị modal xác nhận với chọn ví
-      if (data.transactionSuggestion && data.transactionSuggestion.confidence > 0.6) {
+      // THÊM: Xử lý pending transaction
+      if (data.needsMoreInfo && data.pendingTransaction) {
+        setPendingTransaction(data.pendingTransaction);
+        console.log('⏳ Waiting for more info:', data.pendingTransaction);
+      } else if (data.transactionSuggestion && data.transactionSuggestion.confidence > 0.6) {
+        // Reset pending nếu đã có đủ thông tin
+        setPendingTransaction(null);
+        
         setSuggestedTransaction(data.transactionSuggestion);
-        setOriginalMessage(userMessage.text); // LƯU message gốc để phân tích category sau
+        // SỬA: Sử dụng originalMessage đã được set ở trên (có thể bao gồm cả pending context)
         
         // Reset selected wallet về ví đầu tiên
         if (wallets.length > 0) {
           setSelectedWalletId(wallets[0]._id);
-          // Tự động phân tích danh mục cho ví đầu tiên
-          await analyzeCategoryForWallet(wallets[0]._id, userMessage.text);
+          // THÊM: Phân tích danh mục với full context (bao gồm cả pending transaction nếu có)
+          const contextForCategory = originalMessage || userMessage.text;
+          await analyzeCategoryForWallet(wallets[0]._id, contextForCategory);
         }
         
         setShowTransactionModal(true);
+      } else {
+        // Reset pending nếu không còn tạo giao dịch
+        setPendingTransaction(null);
       }
       
       // Cập nhật history với response

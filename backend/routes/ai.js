@@ -227,11 +227,99 @@ CHÚ Ý QUAN TRỌNG:
 // ======================== MAIN AI ENDPOINT ========================
 router.post('/chat', auth, async (req, res) => {
   try {
-    const { message, conversationHistory = [], selectedWalletId } = req.body; // THÊM: nhận selectedWalletId từ frontend
+    const { message, conversationHistory = [], selectedWalletId, pendingTransaction } = req.body;
     const userId = req.user._id;
 
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
+    }
+
+    // THÊM: Kiểm tra incomplete transaction TRƯỚC
+    const incompleteCheck = detectIncompleteTransaction(message, pendingTransaction);
+    
+    if (incompleteCheck.complete && incompleteCheck.transaction) {
+      // Có đủ thông tin rồi, phân tích category
+      const wallets = await Wallet.find({ owner: userId }).populate('categories');
+      const categories = await Category.find({ 
+        $or: [{ isDefault: true }, { user: userId }] 
+      });
+      
+      let categoryId = null;
+      let categoryName = null;
+      
+      // SỬA: Phân tích category bằng fullContext (description + số tiền)
+      if (geminiAvailable && model) {
+        try {
+          // SỬA: Sử dụng fullContext thay vì chỉ description
+          const contextForAnalysis = incompleteCheck.transaction.fullContext || incompleteCheck.transaction.description;
+          
+          console.log('🔍 Analyzing category with full context:', contextForAnalysis);
+          
+          const categoryAnalysis = await analyzeCategoryForMessage(
+            contextForAnalysis,
+            categories,
+            model
+          );
+          categoryId = categoryAnalysis.categoryId;
+          categoryName = categoryAnalysis.categoryName;
+          
+          console.log('✅ Category analysis result:', { categoryId, categoryName });
+        } catch (error) {
+          console.log('⚠️ Category analysis failed, using fallback');
+          // Fallback analysis với full context
+          const fallbackResult = analyzeCategoryWithFallback(
+            incompleteCheck.transaction.fullContext || incompleteCheck.transaction.description,
+            categories
+          );
+          categoryId = fallbackResult.categoryId;
+          categoryName = fallbackResult.categoryName;
+        }
+      } else {
+        // Fallback AI trực tiếp với full context
+        const fallbackResult = analyzeCategoryWithFallback(
+          incompleteCheck.transaction.fullContext || incompleteCheck.transaction.description,
+          categories
+        );
+        categoryId = fallbackResult.categoryId;
+        categoryName = fallbackResult.categoryName;
+      }
+      
+      // Trả về transaction suggestion đầy đủ
+      return res.json({
+        reply: `✅ **Đã ghi nhận thông tin giao dịch:**
+
+📝 ${incompleteCheck.transaction.description}
+💰 ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(incompleteCheck.transaction.amount)}
+${incompleteCheck.transaction.type === 'income' ? '💵 Thu nhập' : '💸 Chi tiêu'}
+${categoryName ? `📊 ${categoryName}` : ''}
+
+✨ Hãy xác nhận để tạo giao dịch!`,
+        transactionSuggestion: {
+          type: incompleteCheck.transaction.type,
+          amount: incompleteCheck.transaction.amount,
+          description: incompleteCheck.transaction.description,
+          categoryId: categoryId,
+          categoryName: categoryName,
+          confidence: 0.85,
+          reasoning: 'Đã bổ sung đầy đủ thông tin từ cuộc hội thoại'
+        },
+        needsMoreInfo: false,
+        geminiAvailable,
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    if (incompleteCheck.missing === 'amount' && incompleteCheck.pendingTransaction) {
+      // Thiếu số tiền, hỏi lại
+      const promptReply = generateMissingInfoPrompt(incompleteCheck.pendingTransaction);
+      
+      return res.json({
+        reply: promptReply,
+        needsMoreInfo: true,
+        pendingTransaction: incompleteCheck.pendingTransaction,
+        geminiAvailable,
+        timestamp: new Date().toISOString()
+      });
     }
 
     // Lấy thông tin context của user
@@ -860,6 +948,106 @@ Hãy trả lời một cách chi tiết, hữu ích và cá nhân hóa.
   }
 });
 
+// THÊM: Helper function để phát hiện thiếu thông tin giao dịch
+function detectIncompleteTransaction(message, pendingTransaction = null) {
+  try {
+    const lowerMessage = message.toLowerCase().trim();
+    
+    // Nếu đang có pending transaction, check xem message có cung cấp thông tin còn thiếu không
+    if (pendingTransaction) {
+      // Kiểm tra có số tiền không
+      const amount = extractAmount(message);
+      if (amount) {
+        return {
+          complete: true,
+          transaction: {
+            ...pendingTransaction,
+            amount: amount,
+            // THÊM: Kết hợp description gốc với message mới để có context đầy đủ
+            fullContext: `${pendingTransaction.description} ${message}`.trim()
+          }
+        };
+      }
+      
+      return {
+        complete: false,
+        missing: 'amount',
+        pendingTransaction: pendingTransaction
+      };
+    }
+    
+    // SỬA: Phát hiện ý định tạo giao dịch mới - BAO GỒM CẢ THU NHẬP
+    const expenseKeywords = ['tạo', 'thêm', 'ghi', 'ăn', 'mua', 'chi', 'trả', 'đổ', 'mua sắm'];
+    const incomeKeywords = ['thu', 'nhận', 'lương', 'thưởng', 'kiếm', 'bán', 'thu nhập', 'nhận tiền'];
+    
+    const hasExpenseIntent = expenseKeywords.some(keyword => lowerMessage.includes(keyword));
+    const hasIncomeIntent = incomeKeywords.some(keyword => lowerMessage.includes(keyword));
+    const hasTransactionIntent = hasExpenseIntent || hasIncomeIntent;
+    
+    if (hasTransactionIntent) {
+      const amount = extractAmount(message);
+      
+      // Nếu không có số tiền, tạo pending transaction
+      if (!amount) {
+        // Trích xuất mô tả từ message
+        let description = message.trim();
+        // Loại bỏ các từ khóa tạo giao dịch
+        const removeKeywords = [
+          'tạo giao dịch', 'thêm giao dịch', 'ghi giao dịch', 
+          'tạo', 'thêm', 'ghi', 'nhận', 'thu'
+        ];
+        removeKeywords.forEach(keyword => {
+          description = description.replace(new RegExp(keyword, 'gi'), '').trim();
+        });
+        
+        // SỬA: Xác định type dựa trên keywords - ƯU TIÊN income keywords
+        let type = 'expense'; // default
+        
+        // Check income TRƯỚC để ưu tiên nhận diện thu nhập
+        for (const keyword of incomeKeywords) {
+          if (lowerMessage.includes(keyword)) {
+            type = 'income';
+            break;
+          }
+        }
+        
+        console.log(`🔍 Detected incomplete transaction: type=${type}, description="${description}"`);
+        
+        return {
+          complete: false,
+          missing: 'amount',
+          pendingTransaction: {
+            type: type,
+            description: description || (type === 'income' ? 'Thu nhập' : 'Giao dịch'),
+            hasDescription: !!description
+          }
+        };
+      }
+    }
+    
+    return { complete: false, missing: null };
+  } catch (error) {
+    console.error('Error detecting incomplete transaction:', error);
+    return { complete: false, missing: null };
+  }
+}
+
+// THÊM: Helper function tạo prompt hỏi thông tin còn thiếu
+function generateMissingInfoPrompt(pendingTransaction) {
+  if (!pendingTransaction) return null;
+  
+  const { type, description } = pendingTransaction;
+  
+  return `💡 **Tôi hiểu bạn muốn tạo giao dịch:**
+
+📝 ${description || 'Giao dịch'}
+${type === 'income' ? '💰 Thu nhập' : '💸 Chi tiêu'}
+
+❓ **Số tiền là bao nhiêu?**
+
+Ví dụ: "50k", "50 nghìn", "500.000đ", "2 triệu"`;
+}
+
 // THÊM: Enhanced fallback AI cho transaction analysis
 function analyzeTransactionWithFallback(message) {
   try {
@@ -1152,6 +1340,53 @@ CHÚ Ý:
   }
 }
 
+// THÊM: Helper function phân tích category từ message
+async function analyzeCategoryForMessage(description, categories, model) {
+  try {
+    const expenseCategories = categories.filter(c => c.type === 'expense' || !c.type);
+    const incomeCategories = categories.filter(c => c.type === 'income');
+    
+    const prompt = `
+Phân tích mô tả giao dịch và chọn danh mục phù hợp nhất.
+
+DANH MỤC CHI TIÊU:
+${expenseCategories.map(c => `- ${c.name} (${c.icon || '📝'}) (ID: ${c._id})`).join('\n')}
+
+DANH MỤC THU NHẬP:
+${incomeCategories.map(c => `- ${c.name} (${c.icon || '💰'}) (ID: ${c._id})`).join('\n')}
+
+MÔ TẢ GIAO DỊCH: "${description}"
+
+Trả về JSON (KHÔNG markdown):
+{
+  "categoryId": "ID danh mục" hoặc null,
+  "categoryName": "Tên danh mục" hoặc null,
+  "confidence": 0-1
+}
+`;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    let text = response.text().trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    
+    const analysis = JSON.parse(text);
+    return {
+      categoryId: analysis.categoryId || null,
+      categoryName: analysis.categoryName || null,
+      confidence: analysis.confidence || 0
+    };
+  } catch (error) {
+    console.error('Error analyzing category:', error);
+    // Fallback
+    const fallbackResult = analyzeCategoryWithFallback(description, categories);
+    return {
+      categoryId: fallbackResult.categoryId,
+      categoryName: fallbackResult.categoryName,
+      confidence: fallbackResult.confidence
+    };
+  }
+}
+
 // CẬP NHẬT: POST /api/ai/analyze-category-for-wallet với fallback
 router.post('/analyze-category-for-wallet', auth, async (req, res) => {
   try {
@@ -1288,102 +1523,18 @@ Trả về JSON (KHÔNG markdown):
   }
 });
 
-// CẬP NHẬT: generateAdvancedFallbackResponse để thông minh hơn
-function generateAdvancedFallbackResponse(message, context, user, geminiError) {
-  const lowerMessage = message.toLowerCase().trim();
-  
-  // Enhanced fallback với quota detection
-  let quotaMessage = '';
-  if (geminiError && geminiError.includes('quota')) {
-    quotaMessage = '\n\n🚫 **Đã hết quota Gemini API hôm nay** (200 requests miễn phí). Đang sử dụng AI dự phòng thông minh.\n\n💡 **Để có trải nghiệm tốt hất:** Có thể nâng cấp lên Gemini Pro hoặc chờ reset quota vào ngày mai.';
-  }
-  
-  // Analyze transaction intent with fallback
-  const transactionAnalysis = analyzeTransactionWithFallback(message);
-  
-  if (transactionAnalysis && transactionAnalysis.success) {
-    return `🤖 **AI Dự phòng thông minh đã phân tích:**
+// THÊM: Emergency response generator
+function generateEmergencyResponse(message, user, error) {
+  return `😅 **Xin lỗi, hệ thống đang gặp sự cố.**
 
-📝 **Giao dịch được phát hiện:**
-• Loại: ${transactionAnalysis.type === 'expense' ? '💸 Chi tiêu' : '💰 Thu nhập'}
-• Số tiền: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(transactionAnalysis.amount)}
-• Mô tả: ${transactionAnalysis.description}
-• Độ tin cậy: ${Math.round(transactionAnalysis.confidence * 100)}%
+⚠️ **Lỗi:** ${error.message || 'Lỗi không xác định'}
 
-💡 **Để tạo giao dịch:** Hãy chọn ví và danh mục phù hợp từ giao diện xác nhận.${quotaMessage}
+💡 **Bạn vẫn có thể:**
+• Sử dụng các tính năng khác của ứng dụng
+• Thử lại sau vài phút
+• Kiểm tra kết nối mạng
 
-🔮 **AI dự phòng:** Tôi có thể phân tích và tạo giao dịch cơ bản, trả lời câu hỏi về tài chính dựa trên dữ liệu thực tế của bạn!`;
-  }
-  
-  // Financial advice and analysis
-  if (lowerMessage.includes('tình hình') || lowerMessage.includes('phân tích') || lowerMessage.includes('tài chính')) {
-    return `📊 **Tình hình tài chính hiện tại:**
-
-💼 **Tổng quan:**
-• Số ví đang quản lý: ${context.walletsCount}
-• Tổng số dư: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(context.totalBalance)}
-• Giao dịch gần đây: ${context.recentTransactionsCount} giao dịch
-
-💡 **Gợi ý từ AI dự phòng:**
-• Theo dõi chi tiêu hàng ngày để kiểm soát tốt hơn
-• Đặt ngân sách cho từng danh mục
-• Xem xét tăng tiết kiệm nếu có thể${quotaMessage}
-
-🎯 **Để phân tích chi tiết hơn:** Hãy hỏi về danh mục cụ thể hoặc khoảng thời gian nhất định.`;
-  }
-  
-  // Savings advice
-  if (lowerMessage.includes('tiết kiệm') || lowerMessage.includes('save')) {
-    return `💰 **Lời khuyên tiết kiệm từ AI dự phòng:**
-
-🎯 **Nguyên tắc 50-30-20:**
-• 50% cho chi tiêu thiết yếu
-• 30% cho giải trí và mua sắm
-• 20% cho tiết kiệm và đầu tư
-
-📈 **Chiến lược thông minh:**
-• Tự động chuyển tiền tiết kiệm ngay khi có lương
-• Cắt giảm các khoản chi không cần thiết
-• Theo dõi chi tiêu qua ứng dụng này
-
-💡 **Với số dư hiện tại ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(context.totalBalance)}:**
-Bạn có thể bắt đầu tiết kiệm 10-15% tổng thu nhập.${quotaMessage}`;
-  }
-  
-  // Investment advice
-  if (lowerMessage.includes('đầu tư') || lowerMessage.includes('invest')) {
-    return `📈 **Tư vấn đầu tư cơ bản từ AI:**
-
-🎯 **Nguyên tắc đầu tư thông minh:**
-• Chỉ đầu tư số tiền có thể chấp nhận mất
-• Đa dạng hóa danh mục đầu tư
-• Đầu tư dài hạn (3-5 năm+)
-
-💼 **Các kênh phù hợp:**
-• Gửi tiết kiệm ngân hàng (an toàn)
-• Trái phiếu chính phủ (ổn định)
-• Quỹ đầu tư (cân bằng rủi ro)
-• Vàng (bảo toàn giá trị)
-
-⚠️ **Lưu ý:** Đây chỉ là thông tin tham khảo. Hãy tự nghiên cứu hoặc tham khảo chuyên gia tài chính.${quotaMessage}`;
-  }
-  
-  // Default response
-  return `🤖 **AI Dự phòng thông minh** ${user?.name ? `xin chào ${user.name}` : 'xin chào'}!
-
-💡 **Tôi có thể giúp bạn:**
-• 📝 Tạo giao dịch (vd: "ăn tối 50k", "nhận lương 10 triệu")
-• 📊 Phân tích tình hình tài chính
-• 💰 Tư vấn tiết kiệm và đầu tư
-• 📈 Theo dõi chi tiêu theo danh mục
-• ✏️ Sửa đổi giao dịch đã tạo
-
-🎯 **Thống kê hiện tại:**
-• ${context.walletsCount} ví đang quản lý
-• ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(context.totalBalance)} tổng số dư
-• ${context.recentTransactionsCount} giao dịch gần đây${quotaMessage}
-
-💬 **Hãy thử hỏi:** "Phân tích chi tiêu tháng này" hoặc "Tôi nên tiết kiệm thế nào?"`;
+🙏 Cảm ơn bạn đã thông cảm!`;
 }
 
 module.exports = router;
