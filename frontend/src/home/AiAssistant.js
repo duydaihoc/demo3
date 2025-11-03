@@ -50,6 +50,12 @@ export default function AiAssistant() {
   // THÊM: State cho pending transaction (đang chờ thông tin)
   const [pendingTransaction, setPendingTransaction] = useState(null);
 
+  // THÊM: State cho delete transaction
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteSuggestion, setDeleteSuggestion] = useState(null);
+  const [selectedTransactionToDelete, setSelectedTransactionToDelete] = useState(null);
+  const [deletingSaving, setDeletingSaving] = useState(false);
+
   const messagesEndRef = useRef(null);
 
   const API_BASE = 'http://localhost:5000';
@@ -143,6 +149,7 @@ export default function AiAssistant() {
         timestamp: new Date(),
         actionSuggestion: data.actionSuggestion,
         transactionSuggestion: data.transactionSuggestion,
+        editSuggestion: data.editSuggestion,
         context: data.context,
         fallback: data.fallback,
         geminiAvailable: data.geminiAvailable,
@@ -153,6 +160,57 @@ export default function AiAssistant() {
 
       setMessages(prev => [...prev, aiMessage]);
       
+      // THÊM: Xử lý delete intent
+      if (data.deleteSuggestion) {
+        const found = Array.isArray(data.deleteSuggestion.foundTransactions) ? data.deleteSuggestion.foundTransactions : [];
+        
+        console.log('🗑️ Delete suggestion received:', {
+          foundCount: found.length,
+          multipleMatches: data.deleteSuggestion.multipleMatches,
+          transactions: found
+        });
+        
+        const normalizedDelete = {
+          ...data.deleteSuggestion,
+          multipleMatches: found.length > 1
+        };
+        
+        setDeleteSuggestion(normalizedDelete);
+        setShowDeleteModal(true);
+        
+        // Tự động chọn nếu chỉ có 1 kết quả
+        if (found.length === 1) {
+          console.log('✅ Auto-selecting single transaction to delete');
+          selectTransactionToDelete(found[0]);
+        }
+      }
+
+      // THÊM: Xử lý edit intent
+      if (data.editSuggestion) {
+        const found = Array.isArray(data.editSuggestion.foundTransactions) ? data.editSuggestion.foundTransactions : [];
+        
+        console.log('📝 Edit suggestion received:', {
+          foundCount: found.length,
+          multipleMatches: data.editSuggestion.multipleMatches,
+          transactions: found
+        });
+        
+        // SỬA: Normalize multipleMatches dựa vào số lượng thực tế
+        const normalizedEdit = {
+          ...data.editSuggestion,
+          multipleMatches: found.length > 1 // Force recalculate
+        };
+        
+        setEditSuggestion(normalizedEdit);
+        setShowEditModal(true);
+        
+        // SỬA: Tự động chọn nếu CHỈ có 1 kết quả
+        if (found.length === 1) {
+          console.log('✅ Auto-selecting single transaction');
+          selectTransactionToEdit(found[0]);
+        }
+      }
+
       // THÊM: Xử lý pending transaction
       if (data.needsMoreInfo && data.pendingTransaction) {
         setPendingTransaction(data.pendingTransaction);
@@ -238,9 +296,9 @@ export default function AiAssistant() {
         body: JSON.stringify({
           type: suggestedTransaction.type,
           amount: suggestedTransaction.amount,
-          description: suggestedTransaction.description,
+          description: suggestedTransaction.description, // SỬA: Vẫn gọi là description ở frontend, backend sẽ map sang title
           categoryId: suggestedTransaction.categoryId,
-          walletId: selectedWalletId // Sử dụng ví đã chọn
+          walletId: selectedWalletId
         })
       });
 
@@ -253,10 +311,10 @@ export default function AiAssistant() {
       // Tìm tên ví đã chọn
       const selectedWallet = wallets.find(w => w._id === selectedWalletId);
       
-      // Thêm thông báo thành công vào chat
+      // SỬA: Hiển thị title thay vì description
       const successMessage = {
         id: Date.now() + 2,
-        text: `✅ **Đã tạo giao dịch thành công!**\n\n📝 ${result.transaction.description}\n💰 ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(result.transaction.amount)}\n📊 ${suggestedTransaction.categoryName || 'Không có danh mục'}\n💼 ${selectedWallet?.name || 'Ví'}\n\n${suggestedTransaction.type === 'expense' ? '💸 Chi tiêu' : '💰 Thu nhập'} đã được ghi nhận.`,
+        text: `✅ **Đã tạo giao dịch thành công!**\n\n📝 ${result.transaction.title}\n💰 ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(result.transaction.amount)}\n📊 ${suggestedTransaction.categoryName || 'Không có danh mục'}\n💼 ${selectedWallet?.name || 'Ví'}\n\n${suggestedTransaction.type === 'expense' ? '💸 Chi tiêu' : '💰 Thu nhập'} đã được ghi nhận.`,
         sender: 'ai',
         timestamp: new Date(),
         success: true
@@ -274,7 +332,7 @@ export default function AiAssistant() {
       
     } catch (error) {
       console.error('Error creating transaction:', error);
-      showNotification(error.message || 'Không thể tạo giao dịch', 'error'); // SỬA: dùng showNotification thay vì alert
+      showNotification(error.message || 'Không thể tạo giao dịch', 'error');
     } finally {
       setCreatingTransaction(false);
     }
@@ -298,10 +356,40 @@ export default function AiAssistant() {
     setEditingSaving(true);
     try {
       const updates = {};
-      if (editForm.amount) updates.amount = parseFloat(editForm.amount);
-      if (editForm.description) updates.description = editForm.description;
-      if (editForm.categoryId) updates.categoryId = editForm.categoryId;
-      if (editForm.date) updates.date = editForm.date;
+      
+      // SỬA: Xử lý số tiền chính xác hơn, hỗ trợ số thập phân
+      if (editForm.amount && editForm.amount.toString().trim() !== '') {
+        // SỬA: Không loại bỏ dấu chấm để tránh hiểu nhầm "39.998" thành 39998
+        const cleanedAmount = editForm.amount.toString();
+        const amountValue = parseFloat(cleanedAmount);
+        if (isNaN(amountValue) || amountValue < 0) {
+          alert('❌ Số tiền không hợp lệ');
+          setEditingSaving(false);
+          return;
+        }
+        // Làm tròn về số nguyên
+        updates.amount = Math.round(amountValue);
+        console.log('💰 Frontend amount processing:', {
+          input: editForm.amount,
+          cleaned: cleanedAmount,
+          parsed: amountValue,
+          rounded: updates.amount
+        });
+      }
+      
+      if (editForm.description && editForm.description.trim() !== '') {
+        updates.description = editForm.description.trim();
+      }
+      
+      if (editForm.categoryId) {
+        updates.categoryId = editForm.categoryId;
+      }
+      
+      if (editForm.date) {
+        updates.date = editForm.date;
+      }
+
+      console.log('📤 Sending updates:', updates);
 
       const response = await fetch(`${API_BASE}/api/ai/edit-transaction`, {
         method: 'POST',
@@ -321,10 +409,12 @@ export default function AiAssistant() {
 
       const result = await response.json();
       
-      // Thêm thông báo thành công vào chat
+      console.log('✅ Edit result:', result);
+      
+      // SỬA: Hiển thị title
       const successMessage = {
         id: Date.now() + 2,
-        text: `✅ **Đã cập nhật giao dịch thành công!**\n\n📝 ${result.transaction.description}\n💰 ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(result.transaction.amount)}\n📊 ${result.transaction.category?.name || 'Không có danh mục'}\n💼 ${result.transaction.wallet?.name}\n\n✏️ Giao dịch đã được cập nhật.`,
+        text: `✅ **Đã cập nhật giao dịch thành công!**\n\n📝 ${result.transaction.title}\n💰 ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(result.transaction.amount)}\n📊 ${result.transaction.category?.name || 'Không có danh mục'}\n💼 ${result.transaction.wallet?.name}\n\n✏️ Giao dịch đã được cập nhật.`,
         sender: 'ai',
         timestamp: new Date(),
         success: true
@@ -344,6 +434,60 @@ export default function AiAssistant() {
       alert('❌ Không thể cập nhật giao dịch: ' + error.message);
     } finally {
       setEditingSaving(false);
+    }
+  };
+
+  // THÊM: Function chọn giao dịch để xóa
+  const selectTransactionToDelete = (tx) => {
+    setSelectedTransactionToDelete(tx);
+  };
+
+  // THÊM: Function submit delete
+  const submitDeleteTransaction = async () => {
+    if (!selectedTransactionToDelete) return;
+    
+    setDeletingSaving(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/ai/delete-transaction`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          transactionId: selectedTransactionToDelete.id
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Không thể xóa giao dịch');
+      }
+
+      const result = await response.json();
+      
+      // Hiển thị thông báo thành công
+      const successMessage = {
+        id: Date.now() + 2,
+        text: `✅ **Đã xóa giao dịch thành công!**\n\n📝 ${result.deletedTransaction.title || result.deletedTransaction.description}\n💰 ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(result.deletedTransaction.amount)}\n💼 ${result.deletedTransaction.walletName}\n\n🔄 **Đã hoàn tiền vào ví**\n💳 Số dư mới: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(result.newWalletBalance)}`,
+        sender: 'ai',
+        timestamp: new Date(),
+        success: true
+      };
+      
+      setMessages(prev => [...prev, successMessage]);
+      
+      // Đóng modal
+      setShowDeleteModal(false);
+      setDeleteSuggestion(null);
+      setSelectedTransactionToDelete(null);
+      
+      alert('✅ Đã xóa giao dịch và hoàn tiền thành công!');
+      
+    } catch (error) {
+      console.error('Error deleting transaction:', error);
+      alert('❌ Không thể xóa giao dịch: ' + error.message);
+    } finally {
+      setDeletingSaving(false);
     }
   };
 
@@ -688,7 +832,10 @@ export default function AiAssistant() {
                   <h3>Sửa giao dịch</h3>
                   <div className="ai-status">
                     <span className="ai-status-dot online"></span>
-                    {editSuggestion.multipleMatches ? 'Chọn giao dịch cần sửa' : 'Xác nhận thông tin cập nhật'}
+                    {/* SỬA: Check số lượng thực tế */}
+                    {editSuggestion.foundTransactions?.length > 1 && !selectedTransactionToEdit 
+                      ? 'Chọn giao dịch cần sửa' 
+                      : 'Xác nhận thông tin cập nhật'}
                   </div>
                 </div>
               </div>
@@ -698,12 +845,12 @@ export default function AiAssistant() {
             </div>
 
             <div className="ai-transaction-content">
-              {/* Nếu có nhiều giao dịch, hiển thị danh sách chọn */}
-              {editSuggestion.multipleMatches && !selectedTransactionToEdit && (
+              {/* SỬA: Hiển thị danh sách chỉ khi có >1 và chưa chọn */}
+              {editSuggestion.foundTransactions?.length > 1 && !selectedTransactionToEdit && (
                 <div className="ai-transaction-select">
                   <div className="ai-select-header">
                     <i className="fas fa-list"></i>
-                    <h4>Tìm thấy {editSuggestion.foundTransactions.length} giao dịch tương tự</h4>
+                    <h4>Tìm thấy {editSuggestion.foundTransactions.length} giao dịch có tên tương tự</h4>
                     <p>Vui lòng chọn giao dịch bạn muốn sửa:</p>
                   </div>
                   
@@ -730,12 +877,6 @@ export default function AiAssistant() {
                             <i className="fas fa-wallet"></i>
                             {tx.wallet}
                           </span>
-                          {tx.category && (
-                            <span className="ai-option-category">
-                              <i className="fas fa-tag"></i>
-                              {tx.category}
-                            </span>
-                          )}
                         </div>
                       </div>
                     ))}
@@ -743,7 +884,7 @@ export default function AiAssistant() {
                 </div>
               )}
 
-              {/* Form sửa giao dịch */}
+              {/* Form sửa - hiển thị khi đã chọn hoặc chỉ có 1 kết quả */}
               {selectedTransactionToEdit && (
                 <div className="ai-edit-form">
                   <div className="ai-edit-current">
@@ -822,6 +963,371 @@ export default function AiAssistant() {
                 </div>
               )}
 
+              {/* Không có kết quả */}
+              {(!editSuggestion.foundTransactions || editSuggestion.foundTransactions.length === 0) && !selectedTransactionToEdit && (
+                <div className="ai-transaction-empty">
+                  <i className="fas fa-search"></i>
+                  <p>Không tìm thấy giao dịch có tên chứa từ khóa của bạn.</p>
+                  <small>Hãy thử với tên giao dịch chính xác hơn.</small>
+                </div>
+              )}
+
+              <div className="ai-transaction-actions">
+                <button 
+                  className="ai-btn secondary"
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setSelectedTransactionToEdit(null);
+                  }}
+                  disabled={editingSaving}
+                >
+                  <i className="fas fa-times"></i>
+                  {selectedTransactionToEdit && editSuggestion.multipleMatches ? 'Chọn lại' : 'Hủy'}
+                </button>
+                {selectedTransactionToEdit && (
+                  <button 
+                    className="ai-btn primary"
+                    onClick={submitEditTransaction}
+                    disabled={editingSaving}
+                  >
+                    {editingSaving ? (
+                      <>
+                        <i className="fas fa-spinner fa-spin"></i>
+                        Đang cập nhật...
+                      </>
+                    ) : (
+                      <>
+                        <i className="fas fa-check"></i>
+                        Xác nhận cập nhật
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* THÊM: Delete Transaction Modal */}
+      {showDeleteModal && deleteSuggestion && (
+        <div className="ai-modal-overlay" onClick={() => setShowDeleteModal(false)}>
+          <div className="ai-modal ai-transaction-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="ai-modal-header">
+              <div className="ai-header-info">
+                <div className="ai-avatar">
+                  <i className="fas fa-trash-alt"></i>
+                </div>
+                <div className="ai-header-text">
+                  <h3>Xóa giao dịch</h3>
+                  <div className="ai-status">
+                    <span className="ai-status-dot online"></span>
+                    {deleteSuggestion.foundTransactions?.length > 1 && !selectedTransactionToDelete 
+                      ? 'Chọn giao dịch cần xóa' 
+                      : 'Xác nhận xóa giao dịch'}
+                  </div>
+                </div>
+              </div>
+              <button className="ai-close-btn" onClick={() => setShowDeleteModal(false)}>
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+
+            <div className="ai-transaction-content">
+              {/* Hiển thị danh sách nếu có >1 và chưa chọn */}
+              {deleteSuggestion.foundTransactions?.length > 1 && !selectedTransactionToDelete && (
+                <div className="ai-transaction-select">
+                  <div className="ai-select-header">
+                    <i className="fas fa-list"></i>
+                    <h4>Tìm thấy {deleteSuggestion.foundTransactions.length} giao dịch có tên tương tự</h4>
+                    <p>Vui lòng chọn giao dịch bạn muốn xóa:</p>
+                  </div>
+                  
+                  <div className="ai-transaction-list">
+                    {deleteSuggestion.foundTransactions.map((tx, index) => (
+                      <div 
+                        key={index} 
+                        className="ai-transaction-option"
+                        onClick={() => selectTransactionToDelete(tx)}
+                      >
+                        <div className="ai-option-header">
+                          <span className="ai-option-number">#{index + 1}</span>
+                          <span className="ai-option-title">{tx.description}</span>
+                        </div>
+                        <div className="ai-option-details">
+                          <span className="ai-option-amount">
+                            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(tx.amount)}
+                          </span>
+                          <span className="ai-option-date">
+                            <i className="fas fa-calendar"></i>
+                            {new Date(tx.date).toLocaleDateString('vi-VN')}
+                          </span>
+                          <span className="ai-option-wallet">
+                            <i className="fas fa-wallet"></i>
+                            {tx.wallet}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Form xác nhận xóa */}
+              {selectedTransactionToDelete && (
+                <div className="ai-delete-confirm">
+                  <div className="ai-warning-box">
+                    <i className="fas fa-exclamation-triangle"></i>
+                    <h4>⚠️ Cảnh báo: Bạn sắp xóa giao dịch này</h4>
+                  </div>
+
+                  <div className="ai-delete-info">
+                    <h4>
+                      <i className="fas fa-info-circle"></i>
+                      Thông tin giao dịch sẽ bị xóa
+                    </h4>
+                    <div className="ai-current-info">
+                      <div className="ai-info-row">
+                        <span className="ai-info-label">Mô tả:</span>
+                        <span className="ai-info-value">{selectedTransactionToDelete.description}</span>
+                      </div>
+                      <div className="ai-info-row">
+                        <span className="ai-info-label">Số tiền:</span>
+                        <span className="ai-info-value">
+                          {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(selectedTransactionToDelete.amount)}
+                        </span>
+                      </div>
+                      <div className="ai-info-row">
+                        <span className="ai-info-label">Ngày:</span>
+                        <span className="ai-info-value">
+                          {new Date(selectedTransactionToDelete.date).toLocaleDateString('vi-VN')}
+                        </span>
+                      </div>
+                      <div className="ai-info-row">
+                        <span className="ai-info-label">Ví:</span>
+                        <span className="ai-info-value">{selectedTransactionToDelete.wallet}</span>
+                      </div>
+                      {selectedTransactionToDelete.category && (
+                        <div className="ai-info-row">
+                          <span className="ai-info-label">Danh mục:</span>
+                          <span className="ai-info-value">{selectedTransactionToDelete.category}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="ai-refund-notice">
+                    <i className="fas fa-undo"></i>
+                    <span><strong>Hoàn tiền:</strong> Số tiền sẽ được hoàn trả về ví sau khi xóa</span>
+                  </div>
+
+                  {deleteSuggestion.reasoning && (
+                    <div className="ai-reasoning">
+                      <i className="fas fa-lightbulb"></i>
+                      <span>{deleteSuggestion.reasoning}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Không có kết quả */}
+              {(!deleteSuggestion.foundTransactions || deleteSuggestion.foundTransactions.length === 0) && !selectedTransactionToDelete && (
+                <div className="ai-transaction-empty">
+                  <i className="fas fa-search"></i>
+                  <p>Không tìm thấy giao dịch có tên chứa từ khóa của bạn.</p>
+                  <small>Hãy thử với tên giao dịch chính xác hơn.</small>
+                </div>
+              )}
+
+              <div className="ai-transaction-actions">
+                <button 
+                  className="ai-btn secondary"
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setSelectedTransactionToDelete(null);
+                  }}
+                  disabled={deletingSaving}
+                >
+                  <i className="fas fa-times"></i>
+                  {selectedTransactionToDelete && deleteSuggestion.multipleMatches ? 'Chọn lại' : 'Hủy'}
+                </button>
+                {selectedTransactionToDelete && (
+                  <button 
+                    className="ai-btn danger"
+                    onClick={submitDeleteTransaction}
+                    disabled={deletingSaving}
+                  >
+                    {deletingSaving ? (
+                      <>
+                        <i className="fas fa-spinner fa-spin"></i>
+                        Đang xóa...
+                      </>
+                    ) : (
+                      <>
+                        <i className="fas fa-trash-alt"></i>
+                        Xác nhận xóa
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Transaction Modal */}
+      {showEditModal && editSuggestion && (
+        <div className="ai-modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="ai-modal ai-transaction-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="ai-modal-header">
+              <div className="ai-header-info">
+                <div className="ai-avatar">
+                  <i className="fas fa-edit"></i>
+                </div>
+                <div className="ai-header-text">
+                  <h3>Sửa giao dịch</h3>
+                  <div className="ai-status">
+                    <span className="ai-status-dot online"></span>
+                    {/* SỬA: Check số lượng thực tế */}
+                    {editSuggestion.foundTransactions?.length > 1 && !selectedTransactionToEdit 
+                      ? 'Chọn giao dịch cần sửa' 
+                      : 'Xác nhận thông tin cập nhật'}
+                  </div>
+                </div>
+              </div>
+              <button className="ai-close-btn" onClick={() => setShowEditModal(false)}>
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+
+            <div className="ai-transaction-content">
+              {/* SỬA: Hiển thị danh sách chỉ khi có >1 và chưa chọn */}
+              {editSuggestion.foundTransactions?.length > 1 && !selectedTransactionToEdit && (
+                <div className="ai-transaction-select">
+                  <div className="ai-select-header">
+                    <i className="fas fa-list"></i>
+                    <h4>Tìm thấy {editSuggestion.foundTransactions.length} giao dịch có tên tương tự</h4>
+                    <p>Vui lòng chọn giao dịch bạn muốn sửa:</p>
+                  </div>
+                  
+                  <div className="ai-transaction-list">
+                    {editSuggestion.foundTransactions.map((tx, index) => (
+                      <div 
+                        key={index} 
+                        className="ai-transaction-option"
+                        onClick={() => selectTransactionToEdit(tx)}
+                      >
+                        <div className="ai-option-header">
+                          <span className="ai-option-number">#{index + 1}</span>
+                          <span className="ai-option-title">{tx.description}</span>
+                        </div>
+                        <div className="ai-option-details">
+                          <span className="ai-option-amount">
+                            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(tx.amount)}
+                          </span>
+                          <span className="ai-option-date">
+                            <i className="fas fa-calendar"></i>
+                            {new Date(tx.date).toLocaleDateString('vi-VN')}
+                          </span>
+                          <span className="ai-option-wallet">
+                            <i className="fas fa-wallet"></i>
+                            {tx.wallet}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Form sửa - hiển thị khi đã chọn hoặc chỉ có 1 kết quả */}
+              {selectedTransactionToEdit && (
+                <div className="ai-edit-form">
+                  <div className="ai-edit-current">
+                    <h4>
+                      <i className="fas fa-info-circle"></i>
+                      Thông tin hiện tại
+                    </h4>
+                    <div className="ai-current-info">
+                      <div className="ai-info-row">
+                        <span className="ai-info-label">Mô tả:</span>
+                        <span className="ai-info-value">{selectedTransactionToEdit.description}</span>
+                      </div>
+                      <div className="ai-info-row">
+                        <span className="ai-info-label">Số tiền:</span>
+                        <span className="ai-info-value">
+                          {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(selectedTransactionToEdit.amount)}
+                        </span>
+                      </div>
+                      <div className="ai-info-row">
+                        <span className="ai-info-label">Ngày:</span>
+                        <span className="ai-info-value">
+                          {new Date(selectedTransactionToEdit.date).toLocaleDateString('vi-VN')}
+                        </span>
+                      </div>
+                      {selectedTransactionToEdit.category && (
+                        <div className="ai-info-row">
+                          <span className="ai-info-label">Danh mục:</span>
+                          <span className="ai-info-value">{selectedTransactionToEdit.category}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="ai-edit-new">
+                    <h4>
+                      <i className="fas fa-edit"></i>
+                      Thông tin mới
+                    </h4>
+                    
+                    <div className="ai-form-group">
+                      <label>Mô tả</label>
+                      <input
+                        type="text"
+                        value={editForm.description}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, description: e.target.value }))}
+                        placeholder="Nhập mô tả mới (để trống nếu không đổi)"
+                      />
+                    </div>
+
+                    <div className="ai-form-group">
+                      <label>Số tiền (VND)</label>
+                      <input
+                        type="number"
+                        value={editForm.amount}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, amount: e.target.value }))}
+                        placeholder="Nhập số tiền mới (để trống nếu không đổi)"
+                      />
+                    </div>
+
+                    <div className="ai-form-group">
+                      <label>Ngày</label>
+                      <input
+                        type="date"
+                        value={editForm.date}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, date: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+
+                  {editSuggestion.reasoning && (
+                    <div className="ai-reasoning">
+                      <i className="fas fa-lightbulb"></i>
+                      <span>{editSuggestion.reasoning}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Không có kết quả */}
+              {(!editSuggestion.foundTransactions || editSuggestion.foundTransactions.length === 0) && !selectedTransactionToEdit && (
+                <div className="ai-transaction-empty">
+                  <i className="fas fa-search"></i>
+                  <p>Không tìm thấy giao dịch có tên chứa từ khóa của bạn.</p>
+                  <small>Hãy thử với tên giao dịch chính xác hơn.</small>
+                </div>
+              )}
               <div className="ai-transaction-actions">
                 <button 
                   className="ai-btn secondary"
