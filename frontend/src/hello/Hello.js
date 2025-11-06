@@ -1,9 +1,9 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import './Hello.css';
 
 export default function Hello() {
-  // Add scroll animation effect
+  // Add scroll animation effect - SỬA: Thêm class visible ngay từ đầu
   useEffect(() => {
     const handleScroll = () => {
       const elements = document.querySelectorAll('.animate-on-scroll');
@@ -18,11 +18,117 @@ export default function Hello() {
       });
     };
     
+    // THÊM: Thêm class visible cho tất cả element ngay khi component mount
+    const elements = document.querySelectorAll('.animate-on-scroll');
+    elements.forEach(el => el.classList.add('visible'));
+    
     window.addEventListener('scroll', handleScroll);
     // Trigger once on load
     handleScroll();
     
     return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const [activeFeature, setActiveFeature] = useState('personal');
+  const [carouselIndex, setCarouselIndex] = useState(0);
+  const carouselTimerRef = useRef(null);
+  const statsRef = useRef(null);
+
+  const featureData = {
+    personal: {
+      title: 'Quản lý cá nhân',
+      desc: 'Theo dõi ví cá nhân, mục tiêu tiết kiệm và phân tích chi tiêu hàng ngày.',
+      pills: ['Đa ví', 'Mục tiêu', 'Phân loại tự động', 'Báo cáo PDF', 'Gợi ý điều chỉnh']
+    },
+    group: {
+      title: 'Nhóm & Ghi nợ',
+      desc: 'Chia sẻ chi phí, ghi nợ minh bạch và nhắc nhở thanh toán tự động.',
+      pills: ['Tạo nhóm', 'Phân quyền', 'Ghi nợ', 'Tự động chia', 'Lịch sử minh bạch']
+    },
+    family: {
+      title: 'Liên kết ví gia đình',
+      desc: 'Tập trung tài chính gia đình, phân vai trò quản lý và theo dõi tổng hợp.',
+      pills: ['Phân vai trò', 'Tổng hợp dòng tiền', 'Giới hạn chi', 'Cảnh báo sớm']
+    },
+    ai: {
+      title: 'Trợ lý AI Gemini',
+      desc: 'Phân tích xu hướng, tạo giao dịch bằng ngôn ngữ tự nhiên & gợi ý tối ưu.',
+      pills: ['Hiểu ngữ cảnh', 'Tối ưu hóa', 'Hỏi đáp tài chính', 'Gợi ý tiết kiệm']
+    },
+    security: {
+      title: 'Bảo mật & Tin cậy',
+      desc: 'Mã hóa dữ liệu, xác thực an toàn và cảnh báo bất thường.',
+      pills: ['Mã hóa', 'Theo dõi bất thường', 'Nhật ký bảo mật', 'Sao lưu']
+    }
+  };
+
+  const testimonialsSets = [
+    [
+      { quote: 'MoneyWise giúp tôi giảm 25% chi tiêu không cần thiết chỉ sau 2 tháng.', author: 'Vũ Ngọc Hà', role: 'Product Manager' },
+      { quote: 'Tính năng nhóm quá tiện — tụi mình không còn phải ghi tay ai nợ ai.', author: 'Phạm Minh Khang', role: 'Sinh viên' }
+    ],
+    [
+      { quote: 'Liên kết ví gia đình làm mọi thứ rõ ràng và ít tranh cãi hơn.', author: 'Nguyễn Thảo Vy', role: 'Nội trợ' },
+      { quote: 'Trợ lý AI trả lời rất tự nhiên và cho gợi ý hợp lý.', author: 'Trần Anh Tuấn', role: 'Dev Backend' }
+    ],
+    [
+      { quote: 'Giao diện đẹp, tốc độ nhanh, số liệu rõ ràng — mình recommend.', author: 'Lê Hữu Đạt', role: 'Designer' },
+      { quote: 'Đã thử nhiều app khác, cái này trực quan và chi tiết nhất.', author: 'Đỗ Mai Linh', role: 'Tư vấn tài chính' }
+    ]
+  ];
+
+  useEffect(() => {
+    // Auto rotate testimonials
+    carouselTimerRef.current = setInterval(() => {
+      setCarouselIndex(prev => (prev + 1) % testimonialsSets.length);
+    }, 6500);
+    return () => clearInterval(carouselTimerRef.current);
+  }, []);
+
+  useEffect(() => {
+    // Animated counters when in view
+    const observer = new IntersectionObserver(
+      entries => {
+        entries.forEach(e => {
+          if (e.isIntersecting) {
+            const nums = e.target.querySelectorAll('[data-animate]');
+            nums.forEach(el => {
+              const target = el.getAttribute('data-target');
+              if (!target) return;
+              let current = 0;
+              const max = parseInt(target.replace(/\D/g, ''), 10) || 0;
+              const step = Math.ceil(max / 40);
+              const timer = setInterval(() => {
+                current += step;
+                if (current >= max) {
+                  current = max;
+                  clearInterval(timer);
+                  el.classList.add('animated');
+                }
+                el.textContent = target.includes('+') ? current + '+' : current;
+              }, 45);
+            });
+            observer.disconnect();
+          }
+        });
+      },
+      { threshold: 0.35 }
+    );
+    if (statsRef.current) observer.observe(statsRef.current);
+  }, []);
+
+  // Close ribbon on scroll down a lot (optional)
+  const [showRibbon, setShowRibbon] = useState(true);
+  useEffect(() => {
+    let lastY = window.scrollY;
+    const handle = () => {
+      const y = window.scrollY;
+      if (y > lastY + 140) setShowRibbon(false);
+      else if (y < 120) setShowRibbon(true);
+      lastY = y;
+    };
+    window.addEventListener('scroll', handle);
+    return () => window.removeEventListener('scroll', handle);
   }, []);
 
   return (
@@ -51,13 +157,13 @@ export default function Hello() {
 
       <section className="hero-section">
         <div className="hero-content">
-          <h1 className="animate-on-scroll">Quản lý chi tiêu thông minh</h1>
+          <h1 className="animate-on-scroll">Quản lý tài chính thông minh cho gia đình</h1>
           <p className="hero-subtitle animate-on-scroll">
-            Giải pháp toàn diện giúp bạn theo dõi, phân tích và tối ưu hóa tài chính cá nhân
+            Giải pháp toàn diện: Quản lý cá nhân, nhóm chi tiêu, liên kết ví gia đình, ghi nợ thông minh và trợ lý AI
           </p>
           <div className="hero-cta animate-on-scroll">
-            <Link to="/register" className="cta-primary">Bắt đầu miễn phí</Link>
-            <Link to="/login" className="cta-secondary">Đã có tài khoản</Link>
+            <Link to="/register" className="cta-primary">Dùng thử miễn phí</Link>
+            <Link to="/login" className="cta-secondary">Đăng nhập</Link>
           </div>
         </div>
         <div className="hero-image animate-on-scroll">
@@ -78,6 +184,250 @@ export default function Hello() {
               </div>
             </div>
           </div>
+        </div>
+        <div className="hero-pulse" aria-hidden="true"></div>
+      </section>
+
+      {/* Tabs Tính năng */}
+      <div className="features-tabs animate-on-scroll">
+        <div className="feature-tab-list">
+          {Object.keys(featureData).map(key => (
+            <button
+              key={key}
+              type="button"
+              className={`feature-tab-btn ${activeFeature === key ? 'active' : ''}`}
+              onClick={() => setActiveFeature(key)}
+              aria-pressed={activeFeature === key}
+            >
+              <span className="feature-tab-icon">
+                {key === 'personal' && '👤'}
+                {key === 'group' && '👥'}
+                {key === 'family' && '🏠'}
+                {key === 'ai' && '🤖'}
+                {key === 'security' && '🔒'}
+              </span>
+              <span>{featureData[key].title}</span>
+            </button>
+          ))}
+        </div>
+        <div className="feature-tab-content fade-swap-enter">
+          <h3 className="feature-tab-title">{featureData[activeFeature].title}</h3>
+            <p className="feature-tab-desc">{featureData[activeFeature].desc}</p>
+            <div className="feature-highlight-pills">
+              {featureData[activeFeature].pills.map(p => (
+                <span key={p} className="feature-pill">{p}</span>
+              ))}
+            </div>
+        </div>
+      </div>
+
+      {/* Enhanced Features Showcase */}
+      <section className="features-showcase">
+        <h2 className="section-title animate-on-scroll">Tính năng nổi bật</h2>
+        
+        <div className="features-grid-large">
+          <div className="feature-card-large animate-on-scroll">
+            <div className="feature-icon-large">
+              <i className="fas fa-user-circle"></i>
+            </div>
+            <h3>Quản lý cá nhân</h3>
+            <p>Kiểm soát hoàn toàn tài chính cá nhân với giao diện trực quan và dễ sử dụng</p>
+            <ul className="feature-highlights">
+              <li><i className="fas fa-check"></i> Tạo và quản lý nhiều ví riêng</li>
+              <li><i className="fas fa-check"></i> Phân loại giao dịch tự động</li>
+              <li><i className="fas fa-check"></i> Báo cáo chi tiêu chi tiết</li>
+              <li><i className="fas fa-check"></i> Đặt mục tiêu tiết kiệm</li>
+            </ul>
+            <span className="feature-badge">Miễn phí</span>
+          </div>
+
+          <div className="feature-card-large animate-on-scroll">
+            <div className="feature-icon-large">
+              <i className="fas fa-users"></i>
+            </div>
+            <h3>Nhóm chi tiêu & Ghi nợ</h3>
+            <p>Quản lý chi tiêu chung với bạn bè, đồng nghiệp một cách dễ dàng và minh bạch</p>
+            <ul className="feature-highlights">
+              <li><i className="fas fa-check"></i> Tạo nhóm không giới hạn</li>
+              <li><i className="fas fa-check"></i> Ghi nợ và thanh toán thông minh</li>
+              <li><i className="fas fa-check"></i> Chia sẻ chi phí tự động</li>
+              <li><i className="fas fa-check"></i> Thông báo nhắc nhở thanh toán</li>
+            </ul>
+            <span className="feature-badge">Pro</span>
+          </div>
+
+          <div className="feature-card-large animate-on-scroll">
+            <div className="feature-icon-large">
+              <i className="fas fa-home"></i>
+            </div>
+            <h3>Liên kết ví gia đình</h3>
+            <p>Quản lý tài chính gia đình tập trung, minh bạch và hiệu quả</p>
+            <ul className="feature-highlights">
+              <li><i className="fas fa-check"></i> Liên kết ví giữa các thành viên</li>
+              <li><i className="fas fa-check"></i> Phân quyền quản lý linh hoạt</li>
+              <li><i className="fas fa-check"></i> Theo dõi chi tiêu gia đình</li>
+              <li><i className="fas fa-check"></i> Báo cáo tài chính tổng hợp</li>
+            </ul>
+            <span className="feature-badge">Family Plan</span>
+          </div>
+
+          <div className="feature-card-large animate-on-scroll">
+            <div className="feature-icon-large">
+              <i className="fas fa-wallet"></i>
+            </div>
+            <h3>Đa ví thông minh</h3>
+            <p>Quản lý nhiều nguồn tiền khác nhau một cách khoa học và có hệ thống</p>
+            <ul className="feature-highlights">
+              <li><i className="fas fa-check"></i> Tạo ví không giới hạn</li>
+              <li><i className="fas fa-check"></i> Chuyển tiền giữa các ví</li>
+              <li><i className="fas fa-check"></i> Danh mục chi tiêu riêng biệt</li>
+              <li><i className="fas fa-check"></i> Theo dõi số dư realtime</li>
+            </ul>
+            <span className="feature-badge">Miễn phí</span>
+          </div>
+
+          <div className="feature-card-large animate-on-scroll">
+            <div className="feature-icon-large">
+              <i className="fas fa-robot"></i>
+            </div>
+            <h3>Trợ lý AI Gemini</h3>
+            <p>Trợ lý thông minh hỗ trợ quản lý tài chính 24/7 với công nghệ AI tiên tiến</p>
+            <ul className="feature-highlights">
+              <li><i className="fas fa-check"></i> Tạo giao dịch bằng giọng nói</li>
+              <li><i className="fas fa-check"></i> Phân tích xu hướng chi tiêu</li>
+              <li><i className="fas fa-check"></i> Tư vấn tài chính cá nhân hóa</li>
+              <li><i className="fas fa-check"></i> Gợi ý tiết kiệm thông minh</li>
+            </ul>
+            <span className="feature-badge">AI Powered</span>
+          </div>
+
+          <div className="feature-card-large animate-on-scroll">
+            <div className="feature-icon-large">
+              <i className="fas fa-user-friends"></i>
+            </div>
+            <h3>Quản lý thành viên</h3>
+            <p>Kết nối và quản lý thành viên trong gia đình hoặc nhóm một cách hiệu quả</p>
+            <ul className="feature-highlights">
+              <li><i className="fas fa-check"></i> Thêm thành viên không giới hạn</li>
+              <li><i className="fas fa-check"></i> Phân quyền chi tiết</li>
+              <li><i className="fas fa-check"></i> Theo dõi hoạt động thành viên</li>
+              <li><i className="fas fa-check"></i> Lịch sử giao dịch minh bạch</li>
+            </ul>
+            <span className="feature-badge">Pro</span>
+          </div>
+        </div>
+      </section>
+
+      {/* How It Works */}
+      <section className="how-it-works-section">
+        <h2 className="section-title animate-on-scroll">Cách thức hoạt động</h2>
+        
+        <div className="steps-container">
+          <div className="step-card animate-on-scroll">
+            <div className="step-number">1</div>
+            <h3>Đăng ký tài khoản</h3>
+            <p>Tạo tài khoản miễn phí chỉ trong 30 giây với email hoặc số điện thoại</p>
+          </div>
+
+          <div className="step-card animate-on-scroll">
+            <div className="step-number">2</div>
+            <h3>Tạo ví và nhóm</h3>
+            <p>Thiết lập các ví cá nhân và nhóm chi tiêu theo nhu cầu của bạn</p>
+          </div>
+
+          <div className="step-card animate-on-scroll">
+            <div className="step-number">3</div>
+            <h3>Ghi nhận giao dịch</h3>
+            <p>Ghi lại các giao dịch dễ dàng bằng tay hoặc sử dụng trợ lý AI</p>
+          </div>
+
+          <div className="step-card animate-on-scroll">
+            <div className="step-number">4</div>
+            <h3>Theo dõi và phân tích</h3>
+            <p>Xem báo cáo chi tiết và nhận gợi ý tối ưu hóa tài chính</p>
+          </div>
+        </div>
+      </section>
+
+      {/* Stats Section */}
+      <section className="stats-section animate-on-scroll" ref={statsRef}>
+        <h2 className="section-title">Con số ấn tượng</h2>
+        <div className="stats-grid">
+          <div className="stat-item">
+            <span className="stat-number" data-animate data-target="10000+">0+</span>
+            <span className="stat-label">Người dùng</span>
+          </div>
+          <div className="stat-item">
+            <span className="stat-number" data-animate data-target="50000+">0+</span>
+            <span className="stat-label">Giao dịch / tháng</span>
+          </div>
+          <div className="stat-item">
+            <span className="stat-number" data-animate data-target="5000+">0+</span>
+            <span className="stat-label">Nhóm đang hoạt động</span>
+          </div>
+            <div className="stat-item">
+            <span className="stat-number" data-animate data-target="98+">0+</span>
+            <span className="stat-label">Tỷ lệ hài lòng</span>
+          </div>
+        </div>
+      </section>
+
+      {/* Comparison Table */}
+      <section className="comparison-section">
+        <h2 className="section-title animate-on-scroll">So sánh với ứng dụng khác</h2>
+        
+        <div className="comparison-table-wrapper animate-on-scroll">
+          <table className="comparison-table">
+            <thead>
+              <tr>
+                <th>Tính năng</th>
+                <th>Quản lý Chi tiêu</th>
+                <th>Ứng dụng khác</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Quản lý ví cá nhân</td>
+                <td><span className="check-icon" aria-hidden>✓</span></td>
+                <td><span className="check-icon" aria-hidden>✓</span></td>
+              </tr>
+              <tr>
+                <td>Nhóm chi tiêu</td>
+                <td><span className="check-icon" aria-hidden>✓</span></td>
+                <td><span className="cross-icon" aria-hidden>✕</span></td>
+              </tr>
+              <tr>
+                <td>Liên kết ví gia đình</td>
+                <td><span className="check-icon" aria-hidden>✓</span></td>
+                <td><span className="cross-icon" aria-hidden>✕</span></td>
+              </tr>
+              <tr>
+                <td>Ghi nợ thông minh</td>
+                <td><span className="check-icon" aria-hidden>✓</span></td>
+                <td><span className="cross-icon" aria-hidden>✕</span></td>
+              </tr>
+              <tr>
+                <td>Trợ lý AI Gemini</td>
+                <td><span className="check-icon" aria-hidden>✓</span></td>
+                <td><span className="cross-icon" aria-hidden>✕</span></td>
+              </tr>
+              <tr>
+                <td>Quản lý thành viên</td>
+                <td><span className="check-icon" aria-hidden>✓</span></td>
+                <td><span className="check-icon" aria-hidden>✓</span></td>
+              </tr>
+              <tr>
+                <td>Báo cáo chi tiết</td>
+                <td><span className="check-icon" aria-hidden>✓</span></td>
+                <td><span className="check-icon" aria-hidden>✓</span></td>
+              </tr>
+              <tr>
+                <td>Miễn phí sử dụng cơ bản</td>
+                <td><span className="check-icon" aria-hidden>✓</span></td>
+                <td><span className="cross-icon" aria-hidden>✕</span></td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
 
@@ -135,57 +485,39 @@ export default function Hello() {
         </div>
       </section>
 
-      <section className="features-section">
-        <div className="feature-container animate-on-scroll">
-          <div className="feature-content">
-            <h2>Phân tích chi tiêu thông minh</h2>
-            <p>Biểu đồ trực quan giúp bạn hiểu rõ cấu trúc chi tiêu. Phân tích thông minh giúp phát hiện các khoản chi tiêu không cần thiết và cơ hội tiết kiệm.</p>
-            <ul className="feature-list">
-              <li><i className="fas fa-check"></i> Biểu đồ trực quan</li>
-              <li><i className="fas fa-check"></i> So sánh giữa các tháng</li>
-              <li><i className="fas fa-check"></i> Phân tích xu hướng</li>
-            </ul>
-          </div>
-          <div className="feature-image analytics-image"></div>
+      {/* Carousel Testimonials (thay khối cũ) */}
+      <div className="testimonial-carousel animate-on-scroll">
+        <h2 className="section-title" style={{ marginBottom: '30px' }}>Trải nghiệm thực tế</h2>
+        <div className="carousel-track">
+          {testimonialsSets.map((group, idx) => (
+            <div
+              key={idx}
+              className={`carousel-slide ${carouselIndex === idx ? 'active scale-pop' : ''}`}
+              aria-hidden={carouselIndex !== idx}
+            >
+              {group.map((t, i) => (
+                <div key={i} className="testimonial-card">
+                  <div className="testimonial-quote">“{t.quote}”</div>
+                  <div className="testimonial-author">{t.author}</div>
+                  <div className="testimonial-role">{t.role}</div>
+                </div>
+              ))}
+            </div>
+          ))}
         </div>
-        
-        <div className="feature-container reverse animate-on-scroll">
-          <div className="feature-content">
-            <h2>Ngân sách thông minh</h2>
-            <p>Tạo và theo dõi ngân sách cho từng danh mục chi tiêu. Nhận thông báo khi bạn sắp đạt đến giới hạn ngân sách.</p>
-            <ul className="feature-list">
-              <li><i className="fas fa-check"></i> Tự động phân loại</li>
-              <li><i className="fas fa-check"></i> Cảnh báo vượt ngân sách</li>
-              <li><i className="fas fa-check"></i> Gợi ý tiết kiệm</li>
-            </ul>
-          </div>
-          <div className="feature-image budget-image"></div>
+        <div className="carousel-controls" role="tablist" aria-label="Chuyển testimonial">
+          {testimonialsSets.map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              className={`carousel-dot ${carouselIndex === i ? 'active' : ''}`}
+              onClick={() => setCarouselIndex(i)}
+              aria-label={`Slide ${i + 1}`}
+              aria-selected={carouselIndex === i}
+            />
+          ))}
         </div>
-      </section>
-
-      <section className="testimonials-section animate-on-scroll">
-        <h2 className="section-title">Người dùng nói gì về chúng tôi</h2>
-        
-        <div className="testimonials-container">
-          <div className="testimonial-card">
-            <div className="testimonial-quote">"MoneyWise đã giúp tôi tiết kiệm hơn 30% thu nhập hàng tháng bằng cách chỉ ra những khoản chi tiêu không cần thiết."</div>
-            <div className="testimonial-author">Nguyễn Minh Tuấn</div>
-            <div className="testimonial-role">Kỹ sư phần mềm</div>
-          </div>
-          
-          <div className="testimonial-card">
-            <div className="testimonial-quote">"Giao diện trực quan và dễ sử dụng. Giờ đây cả gia đình tôi có thể theo dõi chi tiêu chung một cách hiệu quả."</div>
-            <div className="testimonial-author">Trần Thị Hương</div>
-            <div className="testimonial-role">Giáo viên</div>
-          </div>
-          
-          <div className="testimonial-card">
-            <div className="testimonial-quote">"Tôi đã đạt được mục tiêu tiết kiệm cho chuyến du lịch châu Âu nhờ tính năng đặt mục tiêu tài chính của MoneyWise."</div>
-            <div className="testimonial-author">Lê Văn Hòa</div>
-            <div className="testimonial-role">Nhân viên marketing</div>
-          </div>
-        </div>
-      </section>
+      </div>
 
       <section className="cta-section animate-on-scroll">
         <div className="cta-content">
@@ -253,6 +585,25 @@ export default function Hello() {
           </div>
         </div>
       </footer>
+
+      {showRibbon && (
+        <div className="cta-ribbon cta-ribbon--glass" role="complementary" aria-label="Đăng ký nhanh">
+          <div className="ribbon-text">
+            <strong>Bắt đầu quản lý tài chính thông minh hôm nay</strong><br />
+            Dùng thử miễn phí & trải nghiệm trợ lý AI ngay.
+          </div>
+          <div className="ribbon-actions">
+            <button
+              className="ribbon-btn outline"
+              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            >Tìm hiểu</button>
+            <button
+              className="ribbon-btn"
+              onClick={() => window.location.href = '/register'}
+            >Đăng ký miễn phí</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
