@@ -56,6 +56,48 @@ export default function AiAssistant() {
   const [selectedTransactionToDelete, setSelectedTransactionToDelete] = useState(null);
   const [deletingSaving, setDeletingSaving] = useState(false);
 
+  // THÊM: Persona (tính cách chatbot)
+  const personaOptions = [
+    { key: 'neutral', label: 'Trung lập' },
+    { key: 'friendly', label: 'Thân thiện' },
+    { key: 'expert', label: 'Chuyên gia' },
+    { key: 'serious', label: 'Nghiêm túc' },
+    { key: 'humorous', label: 'Hài hước' }
+  ];
+  const [persona, setPersona] = useState('neutral');
+
+  // THÊM: Helper tạo câu phản hồi theo tính cách
+  const buildPersonaComment = (personaKey, action, info) => {
+    const fmt = (n) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n);
+    const amountText = info?.amount != null ? fmt(info.amount) : '';
+    const desc = info?.description || info?.title || '';
+    if (personaKey === 'serious') {
+      if (action === 'create') return `⚠️ Chi tiêu: ${desc ? `${desc} - ` : ''}${amountText}. Hãy kỷ luật hơn. Chỉ lần này thôi đấy.`;
+      if (action === 'edit') return `⚠️ Đã chỉnh sửa giao dịch. Hãy đảm bảo ghi chép chính xác lần sau.`;
+      if (action === 'delete') return `⚠️ Đã xóa giao dịch. Tránh xóa nhầm, ảnh hưởng báo cáo.`;
+    }
+    if (personaKey === 'friendly') {
+      if (action === 'create') return `😊 Ghi nhận xong ${desc ? `${desc} - ` : ''}${amountText}! Cố gắng giữ ngân sách nhé!`;
+      if (action === 'edit') return `👍 Đã cập nhật giao dịch! Mọi thứ rõ ràng hơn rồi.`;
+      if (action === 'delete') return `👌 Đã xóa giao dịch! Giữ dữ liệu gọn gàng nào.`;
+    }
+    if (personaKey === 'expert') {
+      if (action === 'create') return `Khuyến nghị: theo dõi nhóm chi tiêu liên quan đến "${desc || 'chi tiêu'}" để tối ưu ${amountText}.`;
+      if (action === 'edit') return `Lưu ý: cập nhật chính xác giúp phân tích theo thời gian ổn định hơn.`;
+      if (action === 'delete') return `Gợi ý: hạn chế xóa; cân nhắc gắn cờ hoặc ghi chú để bảo toàn chuỗi thời gian.`;
+    }
+    if (personaKey === 'humorous') {
+      if (action === 'create') return `😜 Lại tiêu ${amountText} cho ${desc || 'một điều thú vị'} à? Ví nói: "Nhẹ tay thôi nhé!"`;
+      if (action === 'edit') return `🛠️ Tút lại giao dịch xong! Dữ liệu nay xịn sò hơn rồi.`;
+      if (action === 'delete') return `🗑️ Xóa cái rụp! Dọn dẹp dữ liệu cũng như dọn phòng — sướng lắm!`;
+    }
+    // neutral
+    if (action === 'create') return `Đã ghi nhận ${desc ? `${desc} - ` : ''}${amountText}.`;
+    if (action === 'edit') return `Đã cập nhật giao dịch.`;
+    if (action === 'delete') return `Đã xóa giao dịch.`;
+    return '';
+  };
+
   const messagesEndRef = useRef(null);
 
   const API_BASE = 'http://localhost:5000';
@@ -121,7 +163,8 @@ export default function AiAssistant() {
         body: JSON.stringify({
           message: userMessage.text,
           conversationHistory: newHistory,
-          pendingTransaction: pendingTransaction // THÊM: gửi pending transaction nếu có
+          pendingTransaction: pendingTransaction, // THÊM: gửi pending transaction nếu có
+          persona
         }),
         signal: controller.signal
       });
@@ -321,6 +364,20 @@ export default function AiAssistant() {
       };
       
       setMessages(prev => [...prev, successMessage]);
+
+      // THÊM: Persona follow-up
+      const personaMsg = buildPersonaComment(persona, 'create', {
+        amount: result.transaction.amount,
+        description: result.transaction.title
+      });
+      if (personaMsg) {
+        setMessages(prev => [...prev, {
+          id: Date.now() + 3,
+          text: personaMsg,
+          sender: 'ai',
+          timestamp: new Date()
+        }]);
+      }
       
       // Đóng modal
       setShowTransactionModal(false);
@@ -421,6 +478,20 @@ export default function AiAssistant() {
       };
       
       setMessages(prev => [...prev, successMessage]);
+
+      // THÊM: Persona follow-up cho edit
+      const personaMsg = buildPersonaComment(persona, 'edit', {
+        amount: result.transaction.amount,
+        description: result.transaction.title
+      });
+      if (personaMsg) {
+        setMessages(prev => [...prev, {
+          id: Date.now() + 3,
+          text: personaMsg,
+          sender: 'ai',
+          timestamp: new Date()
+        }]);
+      }
       
       // Đóng modal
       setShowEditModal(false);
@@ -475,6 +546,20 @@ export default function AiAssistant() {
       };
       
       setMessages(prev => [...prev, successMessage]);
+
+      // THÊM: Persona follow-up cho delete
+      const personaMsg = buildPersonaComment(persona, 'delete', {
+        amount: result.deletedTransaction.amount,
+        description: result.deletedTransaction.title || result.deletedTransaction.description
+      });
+      if (personaMsg) {
+        setMessages(prev => [...prev, {
+          id: Date.now() + 3,
+          text: personaMsg,
+          sender: 'ai',
+          timestamp: new Date()
+        }]);
+      }
       
       // Đóng modal
       setShowDeleteModal(false);
@@ -686,6 +771,20 @@ export default function AiAssistant() {
                   <div className="ai-status">
                     <span className={`ai-status-dot ${geminiStatus ? 'online' : 'offline'}`}></span>
                     {geminiStatus ? 'Đang hoạt động với Gemini' : 'Chế độ dự phòng'}
+                  </div>
+                  {/* THÊM: Persona selector */}
+                  <div className="ai-persona-selector" role="group" aria-label="Chọn tính cách chatbot">
+                    {personaOptions.map(opt => (
+                      <button
+                        key={opt.key}
+                        className={`ai-persona-pill ${persona === opt.key ? 'active' : ''}`}
+                        onClick={() => setPersona(opt.key)}
+                        type="button"
+                        title={`Chọn phong cách: ${opt.label}`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>

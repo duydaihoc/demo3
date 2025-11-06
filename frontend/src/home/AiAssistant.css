@@ -165,6 +165,37 @@
   gap: 12px;
 }
 
+/* Persona Selector */
+.ai-persona-selector {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.ai-persona-pill {
+  padding: 6px 10px;
+  font-size: 11px;
+  border-radius: 999px;
+  border: 1px solid #dadce0;
+  background: #ffffff;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ai-persona-pill:hover {
+  background: #e8f0fe;
+  border-color: #4285f4;
+}
+
+.ai-persona-pill.active {
+  background: #1a73e8;
+  border-color: #1a73e8;
+  color: white;
+  box-shadow: 0 2px 8px rgba(26, 115, 232, 0.25);
+}
+
 .ai-avatar {
   width: 40px;
   height: 40px;

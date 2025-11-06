@@ -9,6 +9,8 @@ const Category = require('../models/Category');
 // ======================== GEMINI AI SETUP ========================
 let model = null;
 let geminiAvailable = false;
+let embeddingModel = null; // THÊM: model embedding
+const userVectorStores = new Map(); // THÊM: Map lưu index FAISS và metadata
 
 try {
   const { GoogleGenerativeAI } = require('@google/generative-ai');
@@ -18,6 +20,7 @@ try {
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY.trim());
     // ✅ Dùng model mới nhất, tránh lỗi 404
     model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" }); 
+    embeddingModel = genAI.getGenerativeModel({ model: "text-embedding-004" }); // THÊM: embedding model
     geminiAvailable = true;
     console.log('✅ Gemini AI initialized successfully (model: gemini-2.0-flash)');
   } else {
@@ -28,7 +31,177 @@ try {
   geminiAvailable = false;
 }
 
+// THÊM: Import faiss-node (cần npm install faiss-node)
+let faiss = null;
+try {
+  faiss = require('faiss-node');
+  console.log('✅ FAISS loaded');
+} catch (e) {
+  console.warn('⚠️ FAISS not installed. Run: npm install faiss-node');
+}
+
 // ======================== Helper functions ========================
+
+// THÊM: Semantic memory (FAISS + Embeddings)
+const EMBEDDING_DIM = 768; // text-embedding-004 dimension
+
+async function embedText(text) {
+  try {
+    if (!embeddingModel || !text) return null;
+    const result = await embeddingModel.embedContent({
+      content: { parts: [{ text: String(text).slice(0, 8000) }] }
+    });
+    const values = result?.embedding?.values || [];
+    if (!Array.isArray(values) || values.length === 0) return null;
+    return Float32Array.from(values);
+  } catch (err) {
+    console.warn('⚠️ embedText failed:', err.message);
+    return null;
+  }
+}
+
+// THÊM: Detect intents for advice/statistics
+function detectAdviceOrStatsIntent(message) {
+  const lower = (message || '').toLowerCase();
+  const adviceKeywords = ['lời khuyên', 'tiết kiệm', 'đầu tư', 'kế hoạch', 'mục tiêu', 'gợi ý', 'hướng đi'];
+  const statsKeywords = ['thống kê', 'báo cáo', 'phân tích', 'chi tiêu', 'thu nhập', 'tổng kết', 'tháng này', 'tuần này', 'năm nay'];
+  return {
+    advice: adviceKeywords.some(k => lower.includes(k)),
+    stats: statsKeywords.some(k => lower.includes(k))
+  };
+}
+
+// THÊM: Build short conversation transcript for prompt (last N turns)
+function buildConversationTranscript(conversationHistory = [], maxTurns = 8) {
+  try {
+    const recent = conversationHistory.slice(-maxTurns);
+    if (!recent.length) return '(Không có lịch sử hội thoại)';
+    return recent
+      .map(turn => {
+        const role = turn.role === 'assistant' ? 'AI' : 'User';
+        const text = String(turn.content || '').replace(/\n/g, ' ').slice(0, 500);
+        return `${role}: ${text}`;
+      })
+      .join('\n');
+  } catch {
+    return '(Không thể tạo transcript)';
+  }
+}
+
+// THÊM: Compute simple stats from transactions
+function computeBasicStats(transactions = [], now = new Date()) {
+  const start30 = new Date(now);
+  start30.setDate(start30.getDate() - 30);
+  const inLast30 = transactions.filter(t => new Date(t.date || t.createdAt) >= start30);
+  const totals = inLast30.reduce((acc, t) => {
+    if (t.type === 'income') acc.income += t.amount || 0; else acc.expense += t.amount || 0;
+    return acc;
+  }, { income: 0, expense: 0 });
+  const net = totals.income - totals.expense;
+  const byCategory = new Map();
+  inLast30.forEach(t => {
+    const name = t.category?.name || (t.type === 'income' ? 'Thu khác' : 'Chi khác');
+    byCategory.set(name, (byCategory.get(name) || 0) + (t.amount || 0));
+  });
+  const topCategories = Array.from(byCategory.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([name, amount]) => ({ name, amount }));
+  return { inLastDays: 30, totals, net, topCategories, count: inLast30.length };
+}
+
+// THÊM: Áp dụng giọng điệu theo persona
+function styleResponseByPersona(personaKey, text) {
+  try {
+    const persona = (personaKey || 'neutral');
+    let out = String(text || '');
+    if (persona === 'serious') {
+      // Loại bớt emoji và thêm giọng điệu nghiêm túc
+      out = out.replace(/[😅😊😜👌👍⚡🤖💡📈📊💰💵💸🔮✅🗑️🛠️]/g, '')
+               .replace(/\n\n+/g, '\n');
+      out = `Lưu ý: ${out}`;
+    } else if (persona === 'friendly') {
+      out = `😊 ${out}`;
+    } else if (persona === 'expert') {
+      // Rõ ràng, súc tích, giảm emoji
+      out = out.replace(/[😅😊😜👌👍⚡🤖💡📈📊💰💵💸🔮✅🗑️🛠️]/g, '')
+               .replace(/\n\n+/g, '\n');
+      out = `Khuyến nghị (chuyên gia):\n${out}`;
+    } else if (persona === 'humorous') {
+      out = `😄 ${out}\n(Đùa chút cho bớt căng thẳng!)`;
+    }
+    return out;
+  } catch {
+    return text;
+  }
+}
+
+function ensureUserVectorStore(userId) {
+  if (!userId) return null;
+  if (!userVectorStores.has(String(userId))) {
+    if (!faiss) {
+      userVectorStores.set(String(userId), { index: null, dim: EMBEDDING_DIM, items: [] });
+      return userVectorStores.get(String(userId));
+    }
+    const index = new faiss.IndexFlatIP(EMBEDDING_DIM);
+    userVectorStores.set(String(userId), { index, dim: EMBEDDING_DIM, items: [] });
+  }
+  return userVectorStores.get(String(userId));
+}
+
+async function addToVectorStore(userId, text, metadata = {}) {
+  try {
+    const store = ensureUserVectorStore(userId);
+    if (!store) return;
+    const vector = await embedText(text);
+    const item = {
+      text: String(text || ''),
+      metadata: { ...metadata, ts: metadata.ts || Date.now() }
+    };
+    // Luôn lưu items để có fallback theo thời gian nếu thiếu FAISS/embeds
+    store.items.push(item);
+    if (!vector || !faiss || !store.index) return; // fallback-only mode
+    // Chuẩn hóa cos-sim: IndexFlatIP giả định vector đã được normalize
+    const norm = Math.hypot(...vector);
+    const normalized = norm > 0 ? Float32Array.from(vector.map(v => v / norm)) : vector;
+    store.index.add(normalized);
+  } catch (e) {
+    console.warn('⚠️ addToVectorStore error:', e.message);
+  }
+}
+
+async function searchVectorStore(userId, query, topK = 5) {
+  try {
+    const store = ensureUserVectorStore(userId);
+    if (!store || store.items.length === 0) return [];
+    const qVec = await embedText(query);
+    if (faiss && store.index && qVec) {
+      const norm = Math.hypot(...qVec);
+      const qNorm = norm > 0 ? Float32Array.from(qVec.map(v => v / norm)) : qVec;
+      const { distances, labels } = store.index.search(qNorm, Math.min(topK, store.items.length));
+      const results = [];
+      for (let i = 0; i < labels.length; i++) {
+        const idx = labels[i];
+        if (idx >= 0 && store.items[idx]) {
+          results.push({
+            text: store.items[idx].text,
+            metadata: store.items[idx].metadata,
+            dist: distances[i]
+          });
+        }
+      }
+      return results;
+    }
+    // Fallback: trả về theo thời gian gần nhất
+    return store.items
+      .slice(-topK)
+      .reverse()
+      .map(it => ({ text: it.text, metadata: it.metadata, dist: 0 }));
+  } catch (e) {
+    console.warn('⚠️ searchVectorStore error:', e.message);
+    return [];
+  }
+}
 
 // Phân tích ý định hành động
 function analyzeForActionSuggestion(userMessage, aiReply) {
@@ -305,11 +478,187 @@ Trả về JSON (KHÔNG markdown, CHỈ JSON):
   }
 }
 
+// THÊM: Helper function để phát hiện thiếu thông tin giao dịch
+function detectIncompleteTransaction(message, pendingTransaction = null) {
+  try {
+    const lowerMessage = message.toLowerCase().trim();
+    
+    // Nếu đang có pending transaction, check xem message có cung cấp thông tin còn thiếu không
+    if (pendingTransaction) {
+      // Kiểm tra có số tiền không
+      const amount = extractAmount(message);
+      if (amount) {
+        return {
+          complete: true,
+          transaction: {
+            ...pendingTransaction,
+            amount: amount,
+            fullContext: `${pendingTransaction.description} ${message}`.trim()
+          }
+        };
+      }
+      
+      return {
+        complete: false,
+        missing: 'amount',
+        pendingTransaction: pendingTransaction
+      };
+    }
+    
+    // Phát hiện ý định tạo giao dịch mới
+    const expenseKeywords = ['tạo', 'thêm', 'ghi', 'ăn', 'mua', 'chi', 'trả', 'đổ', 'mua sắm', 'khám', 'bệnh', 'thuốc', 'sức khỏe', 'cafe', 'cơm', 'phở', 'bún', 'trà', 'nước', 'nhậu', 'bar', 'nhà hàng', 'quán', 'tối', 'sáng', 'trưa', 'ăn vặt', 'đồ ăn', 'thức ăn', 'xe', 'xăng', 'đổ xăng', 'taxi', 'grab', 'bus', 'tàu', 'máy bay', 'vé', 'đi', 'về', 'đường', 'gửi xe', 'bảo dưỡng', 'shopping', 'quần áo', 'giày', 'túi', 'phụ kiện', 'đồ', 'sắm', 'áo', 'dép', 'váy', 'quần', 'phim', 'game', 'vui chơi', 'giải trí', 'karaoke', 'du lịch', 'picnic', 'chơi', 'vui', 'điện', 'nước', 'internet', 'điện thoại', 'wifi', 'cáp', 'gas', 'tiền điện', 'tiền nước', 'học', 'sách', 'khóa học', 'học phí', 'giáo dục', 'trường', 'lớp'];
+    const incomeKeywords = ['thu', 'nhận', 'lương', 'thưởng', 'kiếm', 'bán', 'thu nhập', 'nhận tiền', 'bonus', 'salary', 'nhận lương', 'trả lương'];
+    
+    const hasExpenseIntent = expenseKeywords.some(keyword => lowerMessage.includes(keyword));
+    const hasIncomeIntent = incomeKeywords.some(keyword => lowerMessage.includes(keyword));
+    const hasTransactionIntent = hasExpenseIntent || hasIncomeIntent;
+    
+    if (hasTransactionIntent) {
+      const amount = extractAmount(message);
+      
+      if (!amount) {
+        let description = message.trim();
+        const removeKeywords = [
+          'tạo giao dịch', 'thêm giao dịch', 'ghi giao dịch', 
+          'tạo', 'thêm', 'ghi', 'nhận', 'thu'
+        ];
+        removeKeywords.forEach(keyword => {
+          description = description.replace(new RegExp(keyword, 'gi'), '').trim();
+        });
+        
+        let type = 'expense';
+        for (const keyword of incomeKeywords) {
+          if (lowerMessage.includes(keyword)) {
+            type = 'income';
+            break;
+          }
+        }
+        
+        return {
+          complete: false,
+          missing: 'amount',
+          pendingTransaction: {
+            type: type,
+            description: description || (type === 'income' ? 'Thu nhập' : 'Giao dịch'),
+            hasDescription: !!description
+          }
+        };
+      }
+    }
+    
+    return { complete: false, missing: null };
+  } catch (error) {
+    console.error('Error detecting incomplete transaction:', error);
+    return { complete: false, missing: null };
+  }
+}
+
+// THÊM: Helper function tạo prompt hỏi thông tin còn thiếu
+function generateMissingInfoPrompt(pendingTransaction) {
+  if (!pendingTransaction) return null;
+  
+  const { type, description } = pendingTransaction;
+  
+  return `💡 **Tôi hiểu bạn muốn tạo giao dịch:**
+
+📝 ${description || 'Giao dịch'}
+${type === 'income' ? '💰 Thu nhập' : '💸 Chi tiêu'}
+
+❓ **Số tiền là bao nhiêu?**
+
+Ví dụ: "50k", "50 nghìn", "500.000đ", "2 triệu"`;
+}
+
+// THÊM: Helper function phân tích danh mục cho message (sử dụng Gemini)
+async function analyzeCategoryForMessage(message, categories, model, hintedType = null) {
+  try {
+    const expenseCats = categories.filter(c => c.type === 'expense' || !c.type);
+    const incomeCats = categories.filter(c => c.type === 'income');
+
+    const categoryPrompt = `
+Bạn là AI phân tích danh mục cho giao dịch tài chính.
+
+DANH MỤC CHI TIÊU CÓ SẴN:
+${expenseCats.map(c => `- ${c.name} (${c.icon || '📝'}) - Mô tả: ${c.description || 'Không có'} (ID: ${c._id})`).join('\n')}
+
+DANH MỤC THU NHẬP CÓ SẴN:
+${incomeCats.map(c => `- ${c.name} (${c.icon || '💰'}) - Mô tả: ${c.description || 'Không có'} (ID: ${c._id})`).join('\n')}
+
+CÂU NÓI VỀ GIAO DỊCH: "${message}"
+
+**QUAN TRỌNG:** 
+- CHỈ chọn danh mục TỪ DANH SÁCH TRÊN
+- categoryId PHẢI là ID trong dấu ngoặc (ID: ...), KHÔNG phải tên danh mục
+- Nếu không tìm thấy danh mục phù hợp, trả về categoryId = null
+
+Trả về JSON (KHÔNG markdown, CHỈ JSON):
+{
+  "categoryId": "ID dạng 507f1f77bcf86cd799439011" hoặc null,
+  "categoryName": "Tên danh mục" hoặc null,
+  "confidence": 0-1,
+  "reasoning": "giải thích"
+}
+`;
+
+    const result = await model.generateContent(categoryPrompt);
+    const response = await result.response;
+    let text = response.text().trim();
+    text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    
+    const analysis = JSON.parse(text);
+    
+    // Validate category exists
+    let validatedCategoryId = null;
+    let validatedCategoryName = null;
+    
+    if (analysis.categoryId && typeof analysis.categoryId === 'string') {
+      const found = categories.find(c => String(c._id) === String(analysis.categoryId));
+      if (found) {
+        validatedCategoryId = found._id;
+        validatedCategoryName = found.name;
+      } else if (analysis.categoryId.match(/^[0-9a-fA-F]{24}$/)) {
+        // Try to find by name if ID doesn't match
+        const foundByName = categories.find(c => 
+          c.name.toLowerCase() === analysis.categoryId.toLowerCase()
+        );
+        if (foundByName) {
+          validatedCategoryId = foundByName._id;
+          validatedCategoryName = foundByName.name;
+        }
+      }
+    }
+    
+    if (!validatedCategoryId && analysis.categoryName) {
+      const found = categories.find(c => 
+        c.name.toLowerCase().includes(analysis.categoryName.toLowerCase()) ||
+        analysis.categoryName.toLowerCase().includes(c.name.toLowerCase())
+      );
+      if (found) {
+        validatedCategoryId = found._id;
+        validatedCategoryName = found.name;
+      }
+    }
+
+    return {
+      categoryId: validatedCategoryId,
+      categoryName: validatedCategoryName,
+      confidence: validatedCategoryId ? analysis.confidence : 0,
+      reasoning: validatedCategoryId 
+        ? (analysis.reasoning || 'Gemini AI đã phân tích')
+        : 'Không tìm thấy danh mục phù hợp'
+    };
+  } catch (error) {
+    console.error('❌ analyzeCategoryForMessage error:', error);
+    throw error; // Let caller handle fallback
+  }
+}
+
 // ======================== MAIN AI ENDPOINT ========================
 router.post('/chat', auth, async (req, res) => {
   try {
-    const { message, conversationHistory = [], selectedWalletId, pendingTransaction } = req.body;
+    const { message, conversationHistory = [], selectedWalletId, pendingTransaction, persona } = req.body;
     const userId = req.user._id;
+    const personaKey = (persona || 'neutral');
 
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
@@ -377,15 +726,24 @@ router.post('/chat', auth, async (req, res) => {
       }
       
       // Trả về transaction suggestion đầy đủ
-      return res.json({
-        reply: `✅ **Đã ghi nhận thông tin giao dịch:**
+      // Lưu ngữ cảnh gợi ý tạo giao dịch
+      try {
+        const summary = `Gợi ý giao dịch (${incompleteCheck.transaction.type}): ${incompleteCheck.transaction.description} - ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(incompleteCheck.transaction.amount)}${categoryName ? ` | Danh mục: ${categoryName}` : ''}`;
+        await addToVectorStore(userId, summary, { type: 'transaction_suggestion' });
+      } catch (memErr) {
+        console.warn('⚠️ Suggest memory failed:', memErr.message);
+      }
+      const baseReply = `✅ **Đã ghi nhận thông tin giao dịch:**
 
 📝 ${incompleteCheck.transaction.description}
 💰 ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(incompleteCheck.transaction.amount)}
 ${incompleteCheck.transaction.type === 'income' ? '💵 Thu nhập' : '💸 Chi tiêu'}
 ${categoryName ? `📊 ${categoryName}` : ''}
 
-✨ Hãy xác nhận để tạo giao dịch!`,
+✨ Hãy xác nhận để tạo giao dịch!`;
+      const styledReply = styleResponseByPersona(personaKey, baseReply);
+      return res.json({
+        reply: styledReply,
         transactionSuggestion: {
           type: incompleteCheck.transaction.type,
           amount: incompleteCheck.transaction.amount,
@@ -405,8 +763,14 @@ ${categoryName ? `📊 ${categoryName}` : ''}
       // Thiếu số tiền, hỏi lại
       const promptReply = generateMissingInfoPrompt(incompleteCheck.pendingTransaction);
       
+      // Lưu ngữ cảnh hỏi thêm thông tin
+      try {
+        await addToVectorStore(userId, 'Hỏi bổ sung số tiền cho giao dịch chưa đủ thông tin', { type: 'needs_more_info', missing: 'amount' });
+      } catch (memErr) {
+        console.warn('⚠️ Need-more-info memory failed:', memErr.message);
+      }
       return res.json({
-        reply: promptReply,
+        reply: styleResponseByPersona(personaKey, promptReply),
         needsMoreInfo: true,
         pendingTransaction: incompleteCheck.pendingTransaction,
         geminiAvailable,
@@ -445,6 +809,20 @@ ${categoryName ? `📊 ${categoryName}` : ''}
     if (geminiAvailable && model) {
       try {
         console.log('🤖 Sending request to Gemini Pro...');
+        
+        // THÊM: RAG semantic context từ bộ nhớ người dùng
+        const semanticContext = await searchVectorStore(userId, message, 7);
+        // THÊM: Ý định lời khuyên / thống kê và tính sẵn thống kê 30 ngày
+        const adviceStatsIntent = detectAdviceOrStatsIntent(message);
+        let statsSummaryBlock = '';
+        if (adviceStatsIntent.stats) {
+          const computed = computeBasicStats(recentTransactions);
+          const fmt = (n) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n);
+          const top = computed.topCategories.map(c => `${c.name} (${fmt(c.amount)})`).join(', ');
+          statsSummaryBlock = `\nTHỐNG KÊ ${computed.inLastDays} NGÀY:\n- Thu nhập: ${fmt(computed.totals.income)}\n- Chi tiêu: ${fmt(computed.totals.expense)}\n- Cân đối: ${fmt(computed.net)}\n- Top danh mục: ${top}`;
+        }
+        // THÊM: Lịch sử hội thoại để giữ mạch trò chuyện
+        const transcript = buildConversationTranscript(conversationHistory, 8);
         
         // THÊM: Kiểm tra ý định XÓA giao dịch TRƯỚC
         const lowerMessage = message.toLowerCase();
@@ -520,54 +898,49 @@ ${categoryName ? `📊 ${categoryName}` : ''}
           }
         }
         
+        // Tạo hướng dẫn tính cách (persona)
+        const personaMap = {
+          neutral: 'Phong cách trung lập, rõ ràng, lịch sự.',
+          friendly: 'Giọng điệu thân thiện, khích lệ, dễ gần.',
+          expert: 'Giọng điệu chuyên gia, súc tích, dựa trên dữ liệu, có cấu trúc.',
+          serious: 'Giọng điệu nghiêm túc, đi thẳng vào trọng tâm, ít cảm xúc.',
+          humorous: 'Giọng điệu vui vẻ, dí dỏm nhưng vẫn lịch sự và ngắn gọn.'
+        };
+        const personaKey = (persona || 'neutral');
+        const personaInstruction = personaMap[personaKey] || personaMap.neutral;
+
         // Tạo context prompt cho Gemini
         const contextPrompt = `
-Bạn là trợ lý tài chính cá nhân thông minh. Hãy trả lời câu hỏi của người dùng một cách tự nhiên, hữu ích và cụ thể.
+Bạn là trợ lý tài chính cá nhân thông minh.
+
+PHONG CÁCH TRẢ LỜI (Persona): ${personaInstruction}
+
+NGỮ CẢNH LIÊN QUAN (RAG - vector search):
+${semanticContext.length === 0 ? '(Không tìm thấy ngữ cảnh tương tự)' : semanticContext.map(c => `- ${c.text} ${c.metadata?.type ? `(type: ${c.metadata.type})` : ''} ${typeof c.dist === 'number' ? `(sim: ${c.dist.toFixed(2)})` : ''}`).join('\n')}
 
 THÔNG TIN NGƯỜI DÙNG:
 - Tên: ${req.user.name || 'Người dùng'}
 - Email: ${req.user.email || 'Không có'}
 
-TÌNH HÌNH TÀI CHÍNH HIỆN TẠI:
-- Số ví đang quản lý: ${wallets.length}
-- Tổng số dư hiện tại: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(context.totalBalance)}
+TÌNH HÌNH TÀI CHÍNH:
+- Số ví: ${wallets.length}
+- Tổng số dư: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(context.totalBalance)}
 
-DANH SÁCH VÍ:
-${wallets.map(w => `- ${w.name}: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(w.initialBalance || 0)}`).join('\n')}
+GIAO DỊCH GẦN ĐÂY:
+${recentTransactions.slice(0, 10).map(t => `- ${t.title}: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(t.amount)} (${t.type === 'income' ? 'Thu' : 'Chi'})`).join('\n')}
 
-GIAO DỊCH GẦN ĐÂY (${recentTransactions.length} giao dịch):
-${recentTransactions.slice(0, 10).map(t => `- ${t.title}: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(t.amount)} (${t.type === 'income' ? 'Thu nhập' : 'Chi tiêu'})`).join('\n')}
+LỊCH SỬ HỘI THOẠI (mới nhất ở cuối):
+${transcript}
+${statsSummaryBlock}
 
-${deleteSuggestion ? `
-QUAN TRỌNG: Tôi đã phát hiện người dùng muốn XÓA giao dịch:
-${deleteSuggestion.multipleMatches 
-  ? `- Tìm thấy ${deleteSuggestion.foundTransactions.length} giao dịch tương tự. Hãy yêu cầu người dùng chọn giao dịch cụ thể để xóa.`
-  : deleteSuggestion.foundTransactions.length === 1
-    ? `- Tìm thấy giao dịch: ${deleteSuggestion.foundTransactions[0].description} - ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(deleteSuggestion.foundTransactions[0].amount)}
-Hãy xác nhận với người dùng và chuẩn bị XÓA giao dịch này (sẽ hoàn tiền về ví).`
-    : `- Không tìm thấy giao dịch phù hợp. Hãy yêu cầu người dùng cung cấp thêm thông tin.`
-}
-` : editSuggestion ? `
-QUAN TRỌNG: Tôi đã phát hiện người dùng muốn SỬA giao dịch:
-${editSuggestion.multipleMatches 
-  ? `- Tìm thấy ${editSuggestion.foundTransactions.length} giao dịch tương tự. Hãy yêu cầu người dùng chọn giao dịch cụ thể.`
-  : editSuggestion.foundTransactions.length === 1
-    ? `- Tìm thấy giao dịch: ${editSuggestion.foundTransactions[0].description} - ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(editSuggestion.foundTransactions[0].amount)}
-- Cập nhật: ${JSON.stringify(editSuggestion.updates)}
-Hãy xác nhận với người dùng và chuẩn bị cập nhật giao dịch này.`
-    : `- Không tìm thấy giao dịch phù hợp. Hãy yêu cầu người dùng cung cấp thêm thông tin.`
-}
-` : transactionSuggestion ? `
-QUAN TRỌNG: Tôi đã phát hiện người dùng muốn tạo giao dịch MỚI:
-- Loại: ${transactionSuggestion.type === 'expense' ? 'Chi tiêu' : 'Thu nhập'}
-- Số tiền: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(transactionSuggestion.amount)}
-- Mô tả: ${transactionSuggestion.description}
-Hãy xác nhận với người dùng.
-` : ''}
+${deleteSuggestion ? 'YÊU CẦU XÓA GIAO DỊCH: Có ý định xóa, xử lý theo hướng dẫn trước.' :
+ editSuggestion ? 'YÊU CẦU SỬA GIAO DỊCH: Có ý định cập nhật giao dịch.' :
+ transactionSuggestion ? 'Ý ĐỊNH TẠO GIAO DỊCH MỚI: Hỏi xác nhận.' : ''}
 
-CÂU HỎI HIỆN TẠI: ${message}
+CÂU HỎI: ${message}
 
-Hãy trả lời một cách chi tiết, hữu ích và cá nhân hóa.
+Hãy trả lời ngắn gọn, rõ ràng, tận dụng NGỮ CẢNH LIÊN QUAN nếu phù hợp.
+Nếu người dùng yêu cầu lời khuyên, đưa ra 2-4 khuyến nghị thực tế dựa trên số liệu của họ (ưu tiên danh mục chi tiêu cao, chênh lệch thu-chi, số dư ví). Nếu yêu cầu thống kê, hãy tóm tắt số liệu và nêu 1-2 insight chính.
 `;
 
         // Gọi Gemini API với timeout
@@ -580,6 +953,8 @@ Hãy trả lời một cách chi tiết, hữu ích và cá nhân hóa.
         
         const response = await result.response;
         aiReply = response.text().trim();
+        // Áp dụng persona cho phản hồi từ Gemini
+        aiReply = styleResponseByPersona(personaKey, aiReply);
         
         console.log('✅ Gemini Pro response received successfully');
         
@@ -587,7 +962,7 @@ Hãy trả lời một cách chi tiết, hữu ích và cá nhân hóa.
         console.error('❌ Gemini API Error:', geminiErrorCatch.message);
         geminiError = geminiErrorCatch.message;
         fallback = true;
-        aiReply = generateAdvancedFallbackResponse(message, context, req.user, geminiError);
+        aiReply = generateAdvancedFallbackResponse(message, context, req.user, geminiError, personaKey);
       }
     } else {
       console.log('⚠️ Gemini not available, using enhanced fallback');
@@ -610,7 +985,15 @@ Hãy trả lời một cách chi tiết, hữu ích và cá nhân hóa.
           editSuggestion = fallbackEdit.editIntent;
         }
       }
-      aiReply = generateAdvancedFallbackResponse(message, context, req.user, null);
+      aiReply = generateAdvancedFallbackResponse(message, context, req.user, null, personaKey);
+    }
+
+    // LƯU NGỮ CẢNH: Ghi nhớ câu của user và phản hồi AI
+    try {
+      await addToVectorStore(userId, message, { type: 'user_message' });
+      if (aiReply) await addToVectorStore(userId, aiReply, { type: 'ai_reply' });
+    } catch (memErr) {
+      console.warn('⚠️ Memory store failed:', memErr.message);
     }
 
     // Phân tích AI response để đề xuất hành động
@@ -632,7 +1015,7 @@ Hãy trả lời một cách chi tiết, hữu ích và cá nhân hóa.
   } catch (error) {
     console.error('❌ Chat Error:', error);
     
-    const emergencyResponse = generateEmergencyResponse(req.body.message, req.user, error);
+    const emergencyResponse = generateEmergencyResponse(req.body.message, req.user, error, (req.body && req.body.persona) || 'neutral');
     
     res.json({
       reply: emergencyResponse,
@@ -645,7 +1028,7 @@ Hãy trả lời một cách chi tiết, hữu ích và cá nhân hóa.
 });
 
 // ======================== FALLBACK RESPONSES ========================
-function generateAdvancedFallbackResponse(message, context, user, geminiError) {
+function generateAdvancedFallbackResponse(message, context, user, geminiError, personaKey = 'neutral') {
   const lowerMessage = message.toLowerCase().trim();
   
   // Enhanced fallback với quota detection
@@ -658,7 +1041,7 @@ function generateAdvancedFallbackResponse(message, context, user, geminiError) {
   const transactionAnalysis = analyzeTransactionWithFallback(message);
   
   if (transactionAnalysis && transactionAnalysis.success) {
-    return `🤖 **AI Dự phòng thông minh đã phân tích:**
+    const base = `🤖 **AI Dự phòng thông minh đã phân tích:**
 
 📝 **Giao dịch được phát hiện:**
 • Loại: ${transactionAnalysis.type === 'expense' ? '💸 Chi tiêu' : '💰 Thu nhập'}
@@ -669,11 +1052,12 @@ function generateAdvancedFallbackResponse(message, context, user, geminiError) {
 💡 **Để tạo giao dịch:** Hãy chọn ví và danh mục phù hợp từ giao diện xác nhận.${quotaMessage}
 
 🔮 **AI dự phòng:** Tôi có thể phân tích và tạo giao dịch cơ bản, trả lời câu hỏi về tài chính dựa trên dữ liệu thực tế của bạn!`;
+    return styleResponseByPersona(personaKey, base);
   }
   
   // Financial advice and analysis
   if (lowerMessage.includes('tình hình') || lowerMessage.includes('phân tích') || lowerMessage.includes('tài chính')) {
-    return `📊 **Tình hình tài chính hiện tại:**
+    const base = `📊 **Tình hình tài chính hiện tại:**
 
 💼 **Tổng quan:**
 • Số ví đang quản lý: ${context.walletsCount}
@@ -686,11 +1070,12 @@ function generateAdvancedFallbackResponse(message, context, user, geminiError) {
 • Xem xét tăng tiết kiệm nếu có thể${quotaMessage}
 
 🎯 **Để phân tích chi tiết hơn:** Hãy hỏi về danh mục cụ thể hoặc khoảng thời gian nhất định.`;
+    return styleResponseByPersona(personaKey, base);
   }
   
   // Savings advice
   if (lowerMessage.includes('tiết kiệm') || lowerMessage.includes('save')) {
-    return `💰 **Lời khuyên tiết kiệm từ AI dự phòng:**
+    const base = `💰 **Lời khuyên tiết kiệm từ AI dự phòng:**
 
 🎯 **Nguyên tắc 50-30-20:**
 • 50% cho chi tiêu thiết yếu
@@ -704,11 +1089,12 @@ function generateAdvancedFallbackResponse(message, context, user, geminiError) {
 
 💡 **Với số dư hiện tại ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(context.totalBalance)}:**
 Bạn có thể bắt đầu tiết kiệm 10-15% tổng thu nhập.${quotaMessage}`;
+    return styleResponseByPersona(personaKey, base);
   }
   
   // Investment advice
   if (lowerMessage.includes('đầu tư') || lowerMessage.includes('invest')) {
-    return `📈 **Tư vấn đầu tư cơ bản từ AI:**
+    const base = `📈 **Tư vấn đầu tư cơ bản từ AI:**
 
 🎯 **Nguyên tắc đầu tư thông minh:**
 • Chỉ đầu tư số tiền có thể chấp nhận mất
@@ -722,10 +1108,11 @@ Bạn có thể bắt đầu tiết kiệm 10-15% tổng thu nhập.${quotaMessa
 • Vàng (bảo toàn giá trị)
 
 ⚠️ **Lưu ý:** Đây chỉ là thông tin tham khảo. Hãy tự nghiên cứu hoặc tham khảo chuyên gia tài chính.${quotaMessage}`;
+    return styleResponseByPersona(personaKey, base);
   }
   
   // Default response
-  return `🤖 **AI Dự phòng thông minh** ${user?.name ? `xin chào ${user.name}` : 'xin chào'}!
+  const baseDefault = `🤖 **AI Dự phòng thông minh** ${user?.name ? `xin chào ${user.name}` : 'xin chào'}!
 
 💡 **Tôi có thể giúp bạn:**
 • 📝 Tạo giao dịch (vd: "ăn tối 50k", "nhận lương 10 triệu")
@@ -740,6 +1127,44 @@ Bạn có thể bắt đầu tiết kiệm 10-15% tổng thu nhập.${quotaMessa
 • ${context.recentTransactionsCount} giao dịch gần đây${quotaMessage}
 
 💬 **Hãy thử hỏi:** "Phân tích chi tiêu tháng này" hoặc "Tôi nên tiết kiệm thế nào?"`;
+  return styleResponseByPersona(personaKey, baseDefault);
+}
+
+// THÊM: Emergency response generator khi có lỗi
+function generateEmergencyResponse(message, user, error, personaKey = 'neutral') {
+  const errorMessage = error?.message || 'Lỗi không xác định';
+  const userName = user?.name || 'Bạn';
+  
+  // Kiểm tra nếu là lỗi liên quan đến detectIncompleteTransaction
+  if (errorMessage.includes('detectIncompleteTransaction')) {
+    const base = `❌ **Đã xảy ra lỗi khi xử lý yêu cầu của bạn**
+
+Xin lỗi ${userName}, hệ thống đang gặp sự cố kỹ thuật khi phân tích giao dịch.
+
+**Thông tin lỗi:** ${errorMessage}
+
+💡 **Gợi ý:**
+- Vui lòng thử lại sau vài giây
+- Đảm bảo bạn đã nhập đầy đủ thông tin (ví dụ: "ăn tối 50k")
+- Nếu vấn đề vẫn tiếp tục, vui lòng liên hệ hỗ trợ
+
+🔄 **Thử lại với:** "ăn tối 50k" hoặc "nhận lương 10 triệu"`;
+    return styleResponseByPersona(personaKey, base);
+  }
+  
+  const baseDefault = `❌ **Đã xảy ra lỗi khi xử lý yêu cầu của bạn**
+
+Xin lỗi ${userName}, hệ thống đang gặp sự cố kỹ thuật.
+
+**Thông tin lỗi:** ${errorMessage}
+
+💡 **Gợi ý:**
+- Vui lòng thử lại sau vài giây
+- Kiểm tra lại kết nối mạng của bạn
+- Nếu vấn đề vẫn tiếp tục, vui lòng liên hệ hỗ trợ
+
+🔄 **Thử lại với:** "ăn tối 50k" hoặc "nhận lương 10 triệu"`;
+  return styleResponseByPersona(personaKey, baseDefault);
 }
 
 // ======================== CREATE TRANSACTION ENDPOINT ========================
@@ -801,6 +1226,14 @@ router.post('/create-transaction', auth, async (req, res) => {
       message: 'Tạo giao dịch thành công',
       transaction
     });
+
+    // THÊM: Lưu ngữ cảnh tạo giao dịch vào semantic memory
+    try {
+      const summary = `Tạo giao dịch ${type === 'income' ? 'thu' : 'chi'}: ${transaction.title} - ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount)}${transaction.category ? ` | Danh mục: ${transaction.category.name || ''}` : ''} | Ví: ${wallet.name}`;
+      await addToVectorStore(req.user._id, summary, { type: 'transaction_create', transactionId: String(transaction._id) });
+    } catch (memErr) {
+      console.warn('⚠️ Store create memory failed:', memErr.message);
+    }
 
   } catch (error) {
     console.error('❌ Error creating transaction:', error);
@@ -923,6 +1356,14 @@ router.post('/edit-transaction', auth, async (req, res) => {
       message: 'Cập nhật giao dịch thành công',
       transaction: tx
     });
+
+    // THÊM: Lưu ngữ cảnh sửa giao dịch vào semantic memory
+    try {
+      const summary = `Sửa giao dịch: ${tx.title} - ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(tx.amount)} | Ví: ${tx.wallet?.name}${tx.category ? ` | Danh mục: ${tx.category.name}` : ''}`;
+      await addToVectorStore(req.user._id, summary, { type: 'transaction_edit', transactionId: String(tx._id) });
+    } catch (memErr) {
+      console.warn('⚠️ Store edit memory failed:', memErr.message);
+    }
   } catch (error) {
     console.error('❌ Error editing transaction:', error);
     return res.status(500).json({ error: 'Không thể cập nhật giao dịch', details: error.message });
@@ -979,6 +1420,14 @@ router.post('/delete-transaction', auth, async (req, res) => {
       deletedTransaction: deletedTxInfo,
       newWalletBalance: wallet.initialBalance
     });
+
+    // THÊM: Lưu ngữ cảnh xóa giao dịch vào semantic memory
+    try {
+      const summary = `Xóa giao dịch: ${deletedTxInfo.title || 'Giao dịch'} - ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(deletedTxInfo.amount)} | Ví: ${deletedTxInfo.walletName}${deletedTxInfo.categoryName ? ` | Danh mục: ${deletedTxInfo.categoryName}` : ''}`;
+      await addToVectorStore(req.user._id, summary, { type: 'transaction_delete', transactionId: String(deletedTxInfo.id) });
+    } catch (memErr) {
+      console.warn('⚠️ Store delete memory failed:', memErr.message);
+    }
   } catch (error) {
     console.error('❌ Error deleting transaction:', error);
     return res.status(500).json({ 
@@ -1445,97 +1894,6 @@ function fallbackAnalyzeEditIntent(message, recentTransactions) {
 
 // ======================== Helper functions (tiếp theo) ========================
 
-// THÊM: Helper function để phát hiện thiếu thông tin giao dịch
-function detectIncompleteTransaction(message, pendingTransaction = null) {
-  try {
-    const lowerMessage = message.toLowerCase().trim();
-    
-    // Nếu đang có pending transaction, check xem message có cung cấp thông tin còn thiếu không
-    if (pendingTransaction) {
-      // Kiểm tra có số tiền không
-      const amount = extractAmount(message);
-      if (amount) {
-        return {
-          complete: true,
-          transaction: {
-            ...pendingTransaction,
-            amount: amount,
-            fullContext: `${pendingTransaction.description} ${message}`.trim()
-          }
-        };
-      }
-      
-      return {
-        complete: false,
-        missing: 'amount',
-        pendingTransaction: pendingTransaction
-      };
-    }
-    
-    // Phát hiện ý định tạo giao dịch mới
-    const expenseKeywords = ['tạo', 'thêm', 'ghi', 'ăn', 'mua', 'chi', 'trả', 'đổ', 'mua sắm', 'khám', 'bệnh', 'thuốc', 'sức khỏe', 'cafe', 'cơm', 'phở', 'bún', 'trà', 'nước', 'nhậu', 'bar', 'nhà hàng', 'quán', 'tối', 'sáng', 'trưa', 'ăn vặt', 'đồ ăn', 'thức ăn', 'xe', 'xăng', 'đổ xăng', 'taxi', 'grab', 'bus', 'tàu', 'máy bay', 'vé', 'đi', 'về', 'đường', 'gửi xe', 'bảo dưỡng', 'shopping', 'quần áo', 'giày', 'túi', 'phụ kiện', 'đồ', 'sắm', 'áo', 'dép', 'váy', 'quần', 'phim', 'game', 'vui chơi', 'giải trí', 'karaoke', 'du lịch', 'picnic', 'chơi', 'vui', 'điện', 'nước', 'internet', 'điện thoại', 'wifi', 'cáp', 'gas', 'tiền điện', 'tiền nước', 'học', 'sách', 'khóa học', 'học phí', 'giáo dục', 'trường', 'lớp'];
-    const incomeKeywords = ['thu', 'nhận', 'lương', 'thưởng', 'kiếm', 'bán', 'thu nhập', 'nhận tiền', 'bonus', 'salary', 'nhận lương', 'trả lương'];
-    
-    const hasExpenseIntent = expenseKeywords.some(keyword => lowerMessage.includes(keyword));
-    const hasIncomeIntent = incomeKeywords.some(keyword => lowerMessage.includes(keyword));
-    const hasTransactionIntent = hasExpenseIntent || hasIncomeIntent;
-    
-    if (hasTransactionIntent) {
-      const amount = extractAmount(message);
-      
-      if (!amount) {
-        let description = message.trim();
-        const removeKeywords = [
-          'tạo giao dịch', 'thêm giao dịch', 'ghi giao dịch', 
-          'tạo', 'thêm', 'ghi', 'nhận', 'thu'
-        ];
-        removeKeywords.forEach(keyword => {
-          description = description.replace(new RegExp(keyword, 'gi'), '').trim();
-        });
-        
-        let type = 'expense';
-        for (const keyword of incomeKeywords) {
-          if (lowerMessage.includes(keyword)) {
-            type = 'income';
-            break;
-          }
-        }
-        
-        return {
-          complete: false,
-          missing: 'amount',
-          pendingTransaction: {
-            type: type,
-            description: description || (type === 'income' ? 'Thu nhập' : 'Giao dịch'),
-            hasDescription: !!description
-          }
-        };
-      }
-    }
-    
-    return { complete: false, missing: null };
-  } catch (error) {
-    console.error('Error detecting incomplete transaction:', error);
-    return { complete: false, missing: null };
-  }
-}
-
-// THÊM: Helper function tạo prompt hỏi thông tin còn thiếu
-function generateMissingInfoPrompt(pendingTransaction) {
-  if (!pendingTransaction) return null;
-  
-  const { type, description } = pendingTransaction;
-  
-  return `💡 **Tôi hiểu bạn muốn tạo giao dịch:**
-
-📝 ${description || 'Giao dịch'}
-${type === 'income' ? '💰 Thu nhập' : '💸 Chi tiêu'}
-
-❓ **Số tiền là bao nhiêu?**
-
-Ví dụ: "50k", "50 nghìn", "500.000đ", "2 triệu"`;
-}
-
 // THÊM: Enhanced fallback AI cho transaction analysis
 function analyzeTransactionWithFallback(message) {
   try {
@@ -1842,7 +2200,10 @@ Trả về JSON (KHÔNG markdown, CHỈ JSON):
         
         // Use fallback AI
         console.log('🔄 Using fallback category analysis...');
-        const fallbackResult = analyzeCategoryWithFallback(message, walletCategories);
+        const fallbackResult = analyzeCategoryWithFallback(
+          message, 
+          walletCategories
+        );
         
         return res.json({
           categoryId: fallbackResult.categoryId,
@@ -1855,7 +2216,10 @@ Trả về JSON (KHÔNG markdown, CHỈ JSON):
     } else {
       // Use fallback AI directly
       console.log('🤖 Using fallback category analysis (Gemini not available)');
-      const fallbackResult = analyzeCategoryWithFallback(message, walletCategories);
+      const fallbackResult = analyzeCategoryWithFallback(
+        message, 
+        walletCategories
+      );
       
       return res.json({
         categoryId: fallbackResult.categoryId,
