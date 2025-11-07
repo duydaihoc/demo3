@@ -9,6 +9,10 @@ const userSchema = new mongoose.Schema(
     friends: [
       { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
     ],
+    // THÊM: Flag để đánh dấu user mới
+    isNewUser: { type: Boolean, default: true },
+    // THÊM: Lưu thời gian user đã xem tour
+    hasSeenTour: { type: Boolean, default: false }
   },
   { timestamps: true }
 );

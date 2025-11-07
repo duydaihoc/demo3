@@ -24,15 +24,18 @@ function Login() {
       if (response.ok) {
         localStorage.setItem('token', data.token);
         localStorage.setItem('userName', data.name);
-        localStorage.setItem('role', data.role); // Save role
-        setSuccess(data.message); // Show success message
+        localStorage.setItem('userId', data.userId); // THÊM: lưu userId
+        localStorage.setItem('role', data.role);
+        localStorage.setItem('isNewUser', data.isNewUser); // THÊM: lưu flag isNewUser
+        localStorage.setItem('hasSeenTour', data.hasSeenTour); // THÊM: lưu flag hasSeenTour
+        setSuccess(data.message);
         setTimeout(() => {
           if (data.role === 'admin') {
             window.location.href = '/admin';
           } else {
             window.location.href = '/home';
           }
-        }, 1200); // Delay redirect to show message
+        }, 1200);
       } else {
         setError(data.message);
       }

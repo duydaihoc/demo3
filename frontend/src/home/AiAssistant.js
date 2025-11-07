@@ -658,7 +658,7 @@ export default function AiAssistant() {
     <>
       {/* Enhanced AI Button với Gemini branding */}
       <button
-        className="ai-button"
+        className="ai-button tour-ai-component"
         onClick={toggleModal}
         title="Trợ lý AI Gemini"
         aria-label="Mở Trợ lý AI Gemini"

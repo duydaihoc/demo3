@@ -24,6 +24,7 @@ const auth = async (req, res, next) => {
 
     // Attach user to request object
     req.user = user;
+    req.userId = user._id; // THÊM: Attach userId riêng để dễ access
     next();
   } catch (error) {
     console.error('Auth middleware error:', error.message);

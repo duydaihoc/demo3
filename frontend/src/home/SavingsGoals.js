@@ -933,7 +933,7 @@ function SavingsGoals() {
 
   // Display the goals list (default view)
   return (
-    <div className="savings-container">
+    <div className="savings-container tour-goals-component">
       <Notification {...notification} />
       <DeleteConfirmModal
         open={deleteConfirm.open}

@@ -28,14 +28,16 @@ function Register() {
       });
       const data = await response.json();
       if (response.ok) {
-        setSuccess(data.message); // Show success message
+        setSuccess(data.message);
         setName('');
         setEmail('');
         setPassword('');
         setConfirmPassword('');
+        // THÊM: Lưu flag để hiển thị tour sau khi đăng ký thành công
+        localStorage.setItem('justRegistered', 'true');
         setTimeout(() => {
           window.location.href = '/login';
-        }, 1200); // Delay redirect to show message
+        }, 1200);
       } else {
         setError(data.message);
       }

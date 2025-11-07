@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { auth } = require('../middleware/auth'); // THÊM: import auth middleware
 const router = express.Router();
 
 // Register route
@@ -31,7 +32,7 @@ router.post('/login', async (req, res) => {
     }
     const token = jwt.sign(
       { 
-        id: user._id, // Include user ID in the token
+        id: user._id,
         email: user.email, 
         role: user.role 
       }, 
@@ -40,13 +41,46 @@ router.post('/login', async (req, res) => {
     );
     res.json({ 
       token, 
-      userId: user._id, // Also send user ID in the response
+      userId: user._id,
       name: user.name, 
-      role: user.role, 
+      role: user.role,
+      isNewUser: user.isNewUser, // THÊM: gửi flag isNewUser
+      hasSeenTour: user.hasSeenTour, // THÊM: gửi flag hasSeenTour
       message: 'Đăng nhập thành công!' 
     });
   } catch (error) {
     res.status(500).json({ message: 'Login failed', error: error.message });
+  }
+});
+
+// THÊM: Route để đánh dấu user đã xem tour
+router.post('/mark-tour-seen', auth, async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { 
+        hasSeenTour: true,
+        isNewUser: false // Không còn là user mới sau khi đã xem tour
+      },
+      { new: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.json({ 
+      message: 'Tour marked as seen',
+      hasSeenTour: user.hasSeenTour,
+      isNewUser: user.isNewUser
+    });
+  } catch (error) {
+    console.error('Error marking tour as seen:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 

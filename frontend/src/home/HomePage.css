@@ -62,6 +62,28 @@ html, body {
   transform: scale(1.05);
 }
 
+.home-help-btn {
+  margin-left: 15px;
+  background: linear-gradient(90deg, #4ecdc4, #2a5298);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 22px;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(42,82,152,0.08);
+  transition: background 0.3s, transform 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.home-help-btn:hover {
+  background: linear-gradient(90deg, #2a5298, #4ecdc4);
+  transform: scale(1.05);
+}
+
 .home-content {
   display: grid;
   grid-template-columns: 2fr 1fr;
@@ -199,6 +221,22 @@ html, body {
 
 .home-stat-table tr:last-child td {
   border-bottom: none;
+}
+
+/* Remove unused tour wrapper styles */
+/* Tour will target actual component classes instead of wrappers */
+
+/* Disable tour scroll/jump animation */
+[data-tour-elem] {
+  scroll-behavior: auto !important;
+}
+
+.reactour__mask {
+  transition: none !important;
+}
+
+.reactour__popover {
+  transition: none !important;
 }
 
 @media (max-width: 900px) {

@@ -552,7 +552,7 @@ function Wallets() {
 
   // Thêm confirm toast rendering gần Notification Toast
   return (
-    <div className="wallets-container">
+    <div className="wallets-container tour-wallets-component">
       <div className="wallets-title">Ví</div>
       <div className="wallets-sub">Quản lý các ví của bạn</div>
       <div className="wallets-list">

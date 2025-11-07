@@ -606,7 +606,7 @@ export default function FinanceDashboard() {
   }
   
   return (
-    <div className="fd-root" aria-label="Bảng điều khiển tài chính">
+    <div className="fd-root tour-stats-component" aria-label="Bảng điều khiển tài chính">
       {/* Export report button at top */}
       <div className="fd-export-wrap" style={{ marginBottom: 12 }}>
         <button 
