@@ -465,6 +465,14 @@
   box-shadow: 0 18px 50px rgba(10,30,60,0.25);
   transform-origin: center;
   animation: modalPop 0.36s cubic-bezier(.2,.9,.3,1) both;
+  /* đảm bảo vùng highlight ổn định khi nội dung thay đổi */
+  position: relative;
+  transition: height .25s ease, width .25s ease;
+}
+
+.category-modal .category-grid {
+  min-height: 240px; /* giữ chiều cao tối thiểu để vùng sáng không co giật */
+  transition: min-height .25s ease;
 }
 
 /* header */

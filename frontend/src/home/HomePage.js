@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { TourProvider, useTour } from '@reactour/tour';
 import { steps } from './tourConfig';
+import { walletCreationSteps } from './walletTourConfig';
 import Sidebar from './Sidebar';
 import Wallets from './Wallets';
 import './HomePage.css';
@@ -80,8 +81,9 @@ const TourNavigation = (props) => {
 const HomePageContent = () => {
   const userName = localStorage.getItem('userName') || 'Tên người dùng';
   const navigate = useNavigate();
-  const { setIsOpen, setCurrentStep } = useTour();
+  const { setIsOpen, setCurrentStep, setSteps, currentStep } = useTour();
   const [showWelcome, setShowWelcome] = useState(false);
+  const [showHelpDropdown, setShowHelpDropdown] = useState(false);
   const walletRef = useRef(null);
   const goalsRef = useRef(null);
   const aiRef = useRef(null);
@@ -148,6 +150,106 @@ const HomePageContent = () => {
     }
   };
 
+  // Function to show general guide
+  const showGeneralHelp = () => {
+    setSteps(steps);
+    setShowHelpDropdown(false);
+    setIsOpen(true);
+  };
+
+  // Function to show wallet creation guide
+  const showWalletCreationGuide = () => {
+    setSteps(walletCreationSteps);
+    setShowHelpDropdown(false);
+    setCurrentStep(0);
+    setIsOpen(true);
+  };
+
+  // Toggle dropdown
+  const toggleHelpDropdown = () => {
+    setShowHelpDropdown(!showHelpDropdown);
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!event.target.closest('.home-help-dropdown')) {
+        setShowHelpDropdown(false);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const onAddModal = () => {
+      if (currentStep === 0) setTimeout(() => setCurrentStep(1), 150);
+    };
+    const onWalletCreated = () => {
+      setTimeout(() => setCurrentStep(5), 250); // jump to step 6 (index 5)
+    };
+    const onExpenseChosen = () => {
+      if (currentStep === 5) setTimeout(() => setCurrentStep(6), 150); // move to step 7
+    };
+    const onIncomeTab = () => {
+      if (currentStep === 6) setTimeout(() => setCurrentStep(7), 150); // move to step 8
+    };
+    const onIncomeChosen = () => {
+      if (currentStep === 7) setTimeout(() => setCurrentStep(8), 150); // move to step 9
+    };
+    const onCategoriesSaved = () => {
+      if (currentStep <= 9) {
+        markTourAsSeen();
+        setIsOpen(false);
+      }
+    };
+    window.addEventListener('walletAddModalOpened', onAddModal);
+    window.addEventListener('walletCreated', onWalletCreated);
+    window.addEventListener('walletExpenseCategoryChosen', onExpenseChosen);
+    window.addEventListener('walletIncomeTabSelected', onIncomeTab);
+    window.addEventListener('walletIncomeCategoryChosen', onIncomeChosen);
+    window.addEventListener('walletCategoriesSaved', onCategoriesSaved);
+    return () => {
+      window.removeEventListener('walletAddModalOpened', onAddModal);
+      window.removeEventListener('walletCreated', onWalletCreated);
+      window.removeEventListener('walletExpenseCategoryChosen', onExpenseChosen);
+      window.removeEventListener('walletIncomeTabSelected', onIncomeTab);
+      window.removeEventListener('walletIncomeCategoryChosen', onIncomeChosen);
+      window.removeEventListener('walletCategoriesSaved', onCategoriesSaved);
+    };
+  }, [currentStep]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    // Recalc highlight when category filter changes or modal resizes
+    const forceRecalc = () => {
+      // hack: trigger resize + re-set same step to force recompute bbox
+      window.dispatchEvent(new Event('resize'));
+      setTimeout(() => setCurrentStep(s => s), 50);
+    };
+    const onFilterChanged = forceRecalc;
+    const onModalResized = forceRecalc;
+
+    window.addEventListener('walletCategoryFilterChanged', onFilterChanged);
+    window.addEventListener('walletCategoryModalResized', onModalResized);
+
+    return () => {
+      window.removeEventListener('walletCategoryFilterChanged', onFilterChanged);
+      window.removeEventListener('walletCategoryModalResized', onModalResized);
+    };
+  }, [setCurrentStep]);
+
+  useEffect(() => {
+    // Attach MutationObserver when on category steps of wallet tour
+    const modal = document.querySelector('.category-modal');
+    if (!modal) return;
+    const observer = new MutationObserver(() => {
+      try { window.dispatchEvent(new CustomEvent('walletCategoryModalResized')); } catch(_) {}
+    });
+    observer.observe(modal, { childList: true, subtree: true, attributes: true });
+    return () => observer.disconnect();
+  }, [currentStep]);
+
   return (
     <div className="home-container">
       <Sidebar userName={userName} />
@@ -209,14 +311,35 @@ const HomePageContent = () => {
         <div className="home-header">
           <div style={{ display: 'flex', alignItems: 'center' }}>
             <span className="home-title">Trang chủ</span>
-            <button
-              onClick={showHelp}
-              className="home-help-btn"
-              title="Bấm để xem hướng dẫn sử dụng"
+            <div 
+              className={`home-help-dropdown ${showHelpDropdown ? 'open' : ''}`}
             >
-              <i className="fas fa-question-circle"></i>
-              Hướng dẫn
-            </button>
+              <button
+                onClick={toggleHelpDropdown}
+                className="home-help-btn"
+                title="Chọn loại hướng dẫn"
+              >
+                <i className="fas fa-question-circle"></i>
+                Hướng dẫn
+                <i className="fas fa-chevron-down dropdown-arrow"></i>
+              </button>
+              <div className="home-help-dropdown-content">
+                <button 
+                  className="home-help-dropdown-item"
+                  onClick={showGeneralHelp}
+                >
+                  <i className="fas fa-compass"></i>
+                  Hướng dẫn chung
+                </button>
+                <button 
+                  className="home-help-dropdown-item"
+                  onClick={showWalletCreationGuide}
+                >
+                  <i className="fas fa-wallet"></i>
+                  Hướng dẫn tạo ví
+                </button>
+              </div>
+            </div>
           </div>
           <div className="home-actions">
             <button onClick={() => navigate('/transactions')}>+ Ghi chép</button>
@@ -279,14 +402,161 @@ function HomePage() {
   };
 
   return (
+    <div>
     <TourProvider
       steps={steps}
       scrollSmooth={true}
-      resizeObserving={true}          // THÊM: theo dõi resize
+      resizeObserving={true}
+      components={{
+        Navigation: (props) => {
+          const { currentStep, steps, setCurrentStep, setIsOpen } = props;
+          const visibleDots = 5; // Maximum number of visible dots
+          let startIndex = 0;
+          
+          // Calculate the starting index to show a sliding window of dots
+          if (currentStep >= visibleDots) {
+            startIndex = currentStep - visibleDots + 1;
+          }
+          
+          // Ensure we don't go beyond the total number of steps
+          const endIndex = Math.min(startIndex + visibleDots, steps.length);
+          const isFirstStep = currentStep === 0;
+          const isLastStep = currentStep === steps.length - 1;
+          
+          return (
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(78, 205, 196, 0.1), rgba(42, 82, 152, 0.1))',
+              borderRadius: '12px',
+              padding: '15px 20px',
+              margin: '20px 0',
+              boxShadow: '0 4px 15px rgba(0, 0, 0, 0.1)',
+              width: '100%',
+              maxWidth: '400px',
+              margin: '20px auto',
+              border: '1px solid rgba(255, 255, 255, 0.2)'
+            }}>
+              {/* Step Counter */}
+              <div style={{
+                textAlign: 'center',
+                marginBottom: '15px',
+                fontSize: '14px',
+                fontWeight: 600,
+                color: '#4ecdc4',
+                textTransform: 'uppercase',
+                letterSpacing: '1px'
+              }}>
+                Bước {currentStep + 1} / {steps.length}
+              </div>
+              
+              {/* Dots Navigation */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginBottom: '15px',
+                padding: '0 10px'
+              }}>
+                {steps.map((_, index) => {
+                  // Only render dots within the visible range
+                  if (index >= startIndex && index < endIndex) {
+                    return (
+                      <button
+                        key={index}
+                        onClick={() => setCurrentStep(index)}
+                        style={{
+                          width: currentStep === index ? '12px' : '8px',
+                          height: currentStep === index ? '12px' : '8px',
+                          borderRadius: '50%',
+                          border: 'none',
+                          margin: '0 6px',
+                          padding: 0,
+                          background: currentStep === index 
+                            ? 'linear-gradient(135deg, #4ecdc4, #2a5298)' 
+                            : 'rgba(255, 255, 255, 0.4)',
+                          cursor: 'pointer',
+                          transition: 'all 0.3s ease',
+                          boxShadow: currentStep === index 
+                            ? '0 0 10px rgba(78, 205, 196, 0.5)' 
+                            : 'none'
+                        }}
+                        aria-label={`Bước ${index + 1}`}
+                      />
+                    );
+                  }
+                  return null;
+                })}
+              </div>
+              
+              {/* Navigation Buttons */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                width: '100%',
+                gap: '15px'
+              }}>
+                {/* Back Button */}
+                <button
+                  onClick={() => setCurrentStep(currentStep - 1)}
+                  disabled={isFirstStep}
+                  style={{
+                    flex: 1,
+                    padding: '10px 15px',
+                    border: '1px solid rgba(78, 205, 196, 0.5)',
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    borderRadius: '8px',
+                    cursor: isFirstStep ? 'not-allowed' : 'pointer',
+                    color: isFirstStep ? 'rgba(78, 205, 196, 0.5)' : '#4ecdc4',
+                    fontWeight: 600,
+                    fontSize: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    transition: 'all 0.3s ease',
+                    opacity: isFirstStep ? 0.6 : 1,
+                    backdropFilter: 'blur(5px)'
+                  }}
+                >
+                  <span>←</span> Quay lại
+                </button>
+                
+                {/* Next/Finish Button */}
+                <button
+                  onClick={() => isLastStep ? setIsOpen(false) : setCurrentStep(currentStep + 1)}
+                  style={{
+                    flex: 1,
+                    padding: '10px 15px',
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #4ecdc4, #2a5298)',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    color: 'white',
+                    fontWeight: 600,
+                    fontSize: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    transition: 'all 0.3s ease',
+                    boxShadow: '0 4px 15px rgba(78, 205, 196, 0.3)'
+                  }}
+                >
+                  {isLastStep ? 'Hoàn thành' : 'Tiếp theo'}
+                  {!isLastStep && <span>→</span>}
+                </button>
+              </div>
+            </div>
+          );
+        }
+      }}
       onOpen={() => document.body.classList.add('tour-open')}
       onClose={() => document.body.classList.remove('tour-open')}
       onCurrentStepChange={(step) => {
-        const stepDef = steps[step];
+        // Handle step changes for both general and wallet creation tours
+        const currentSteps = steps.length > 0 ? steps : walletCreationSteps;
+        const stepDef = currentSteps[step];
+        
         if (stepDef?.selector === '.fd-root') {
           const target = document.querySelector('.fd-root');
           const scroller = document.querySelector('.home-main');
@@ -294,6 +564,13 @@ function HomePage() {
             const top = target.offsetTop - 40;
             scroller.scrollTo({ top, behavior: 'smooth' });
           }
+        }
+
+        // Execute step action if available (for wallet creation guide)
+        if (stepDef?.action && typeof stepDef.action === 'function') {
+          setTimeout(() => {
+            stepDef.action();
+          }, 500);
         }
       }}
       disableInteraction={false}
@@ -409,6 +686,7 @@ function HomePage() {
     >
       <HomePageContent />
     </TourProvider>
+    </div>
   );
 }
 

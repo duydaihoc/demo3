@@ -161,6 +161,7 @@ function Wallets() {
 
   const handleAddWalletClick = () => {
     setShowCreateModal(true);
+    try { window.dispatchEvent(new CustomEvent('walletAddModalOpened')); } catch(_) {}
   };
 
   const handleCloseModal = () => {
@@ -235,6 +236,7 @@ function Wallets() {
         setSelectedCategories([]);
         // dùng notification thay vì alert
         showNotification('Tạo ví thành công! Hãy chọn danh mục cho ví.', 'success');
+        try { window.dispatchEvent(new CustomEvent('walletCreated',{detail:{walletId:newWallet._id}})); } catch(_) {}
       } else {
         const error = await response.json();
         showNotification('Lỗi khi tạo ví: ' + (error.message || ''), 'error');
@@ -248,9 +250,26 @@ function Wallets() {
   };
 
   const handleCategoryChange = (categoryId) => {
-    setSelectedCategories(prev =>
-      prev.includes(categoryId) ? prev.filter(id => id !== categoryId) : [...prev, categoryId]
-    );
+    setSelectedCategories(prev => {
+      const wasSelected = prev.includes(categoryId);
+      const next = wasSelected ? prev.filter(id => id !== categoryId) : [...prev, categoryId];
+
+      if (!wasSelected) {
+        if (categoryFilter === 'expense') {
+          const expenseCount = next.filter(id => expenseCats.some(c => c._id === id)).length;
+          if (expenseCount === 1) {
+            try { window.dispatchEvent(new CustomEvent('walletExpenseCategoryChosen')); } catch(_) {}
+          }
+        }
+        if (categoryFilter === 'income') {
+          const incomeCount = next.filter(id => incomeCats.some(c => c._id === id)).length;
+          if (incomeCount === 1) {
+            try { window.dispatchEvent(new CustomEvent('walletIncomeCategoryChosen')); } catch(_) {}
+          }
+        }
+      }
+      return next;
+    });
   };
 
   const handleSaveCategories = async () => {
@@ -278,6 +297,7 @@ function Wallets() {
       fetchWallets();
       // dùng notification
       showNotification('Đã lưu danh mục cho ví!', 'success');
+      try { window.dispatchEvent(new CustomEvent('walletCategoriesSaved')); } catch(_) {}
     } catch (error) {
       console.error(error);
       showNotification('Lỗi khi lưu danh mục cho ví!', 'error');
@@ -686,14 +706,21 @@ function Wallets() {
                   <button
                     type="button"
                     className={`filter-btn ${categoryFilter === 'expense' ? 'active' : ''}`}
-                    onClick={() => setCategoryFilter('expense')}
+                    onClick={() => {
+                      setCategoryFilter('expense');
+                      try { window.dispatchEvent(new CustomEvent('walletCategoryFilterChanged',{detail:{filter:'expense'}})); } catch(_) {}
+                    }}
                   >
                     Chi tiêu
                   </button>
                   <button
                     type="button"
                     className={`filter-btn ${categoryFilter === 'income' ? 'active' : ''}`}
-                    onClick={() => setCategoryFilter('income')}
+                    onClick={() => {
+                      setCategoryFilter('income');
+                      try { window.dispatchEvent(new CustomEvent('walletIncomeTabSelected')); } catch(_) {}
+                      try { window.dispatchEvent(new CustomEvent('walletCategoryFilterChanged',{detail:{filter:'income'}})); } catch(_) {}
+                    }}
                   >
                     Thu nhập
                   </button>
@@ -889,8 +916,15 @@ function Wallets() {
                 <div style={{ marginBottom: 8, fontWeight: 700, color: '#163a5a' }}>Chọn danh mục</div>
                 <div style={{ display: 'flex', gap: 12, marginBottom: 8, alignItems: 'center' }}>
                   <div className="category-filter" style={{ padding: 4 }}>
-                    <button type="button" className={`filter-btn ${categoryFilter === 'expense' ? 'active' : ''}`} onClick={() => setCategoryFilter('expense')}>Chi tiêu</button>
-                    <button type="button" className={`filter-btn ${categoryFilter === 'income' ? 'active' : ''}`} onClick={() => setCategoryFilter('income')}>Thu nhập</button>
+                    <button type="button" className={`filter-btn ${categoryFilter === 'expense' ? 'active' : ''}`} onClick={() => {
+                      setCategoryFilter('expense');
+                      try { window.dispatchEvent(new CustomEvent('walletCategoryFilterChanged',{detail:{filter:'expense'}})); } catch(_) {}
+                    }}>Chi tiêu</button>
+                    <button type="button" className={`filter-btn ${categoryFilter === 'income' ? 'active' : ''}`} onClick={() => {
+                      setCategoryFilter('income');
+                      try { window.dispatchEvent(new CustomEvent('walletIncomeTabSelected')); } catch(_) {}
+                      try { window.dispatchEvent(new CustomEvent('walletCategoryFilterChanged',{detail:{filter:'income'}})); } catch(_) {}
+                    }}>Thu nhập</button>
                   </div>
                   <div style={{ color: '#666' }}>{selectedCategories.length} đã chọn</div>
                 </div>
