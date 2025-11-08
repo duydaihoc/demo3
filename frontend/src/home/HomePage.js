@@ -279,9 +279,23 @@ function HomePage() {
   };
 
   return (
-    <TourProvider 
+    <TourProvider
       steps={steps}
-      scrollSmooth={false}
+      scrollSmooth={true}
+      resizeObserving={true}          // THÊM: theo dõi resize
+      onOpen={() => document.body.classList.add('tour-open')}
+      onClose={() => document.body.classList.remove('tour-open')}
+      onCurrentStepChange={(step) => {
+        const stepDef = steps[step];
+        if (stepDef?.selector === '.fd-root') {
+          const target = document.querySelector('.fd-root');
+          const scroller = document.querySelector('.home-main');
+          if (target && scroller) {
+            const top = target.offsetTop - 40;
+            scroller.scrollTo({ top, behavior: 'smooth' });
+          }
+        }
+      }}
       disableInteraction={false}
       disableDotsNavigation={false}
       disableKeyboardNavigation={false}
@@ -295,36 +309,38 @@ function HomePage() {
       styles={{
         popover: (base) => ({
           ...base,
-          backgroundColor: '#fff',
-          borderRadius: '12px',
-          padding: '20px',
-          maxWidth: '400px',
-          boxShadow: '0 8px 20px rgba(0,0,0,0.15)'
+          padding: 0,
+          border: 'none',
+          background: 'linear-gradient(135deg,#4ecdc4 0%,#2a5298 100%)',
+          borderRadius: 20,
+          boxShadow: '0 10px 28px -4px rgba(0,0,0,0.25)',
+          overflow: 'hidden',
         }),
         dot: (base, { current }) => ({
           ...base,
-          backgroundColor: current ? '#4ecdc4' : '#e0e0e0',
-          width: '10px',
-          height: '10px',
-          margin: '0 5px'
+          width: 12,
+          height: 12,
+          // margin removed so CSS gap + margin works
+          backgroundColor: current ? '#4ecdc4' : '#d5dbe3',
+          border: current ? '2px solid #2a5298' : '2px solid #ffffff',
+          boxSizing: 'border-box',
         }),
         badge: () => ({
           display: 'none'
         }),
         maskArea: (base) => ({
           ...base,
-          rx: 10,
-          stroke: 'rgba(78, 205, 196, 0.5)',
+          rx: 14,
+          stroke: 'rgba(78,205,196,0.55)',
           strokeWidth: 4,
-          transition: 'none'
+          transition: 'all .5s cubic-bezier(.4,.14,.25,1)'
         }),
         highlightedArea: (base) => ({
           ...base,
-          display: 'block',
-          stroke: '#4ecdc4',
-          strokeWidth: 3,
-          transition: 'none',
-          animation: 'none'
+          stroke: 'url(#tour-gradient-stroke)',
+          strokeWidth: 4,
+          filter: 'drop-shadow(0 0 12px rgba(78,205,196,0.55))',
+          transition: 'all .55s cubic-bezier(.4,.14,.25,1)',
         }),
         controls: (base) => ({
           ...base,

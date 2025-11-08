@@ -23,6 +23,48 @@ html, body {
   height: 100%;
   overflow: hidden;
 }
+body.tour-open {
+  overflow: auto; /* CHANGED: cho phép scroll khi tour mở */
+}
+
+.fd-root {
+  position: relative;
+  z-index: 1; /* đảm bảo mask định vị chính xác */
+}
+
+.reactour__popover {
+  max-width: 420px;
+  z-index: 10000;
+}
+
+.reactour__mask {
+  z-index: 9999;
+}
+
+.reactour__popover {
+  transition: transform .4s ease, opacity .35s ease !important;
+  animation: tourFadeSlide .4s ease;
+}
+
+.reactour__mask {
+  transition: all .45s ease !important;
+}
+
+@keyframes tourFadeSlide {
+  0% { opacity: 0; transform: translateY(10px) scale(.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Hiệu ứng “pulse” nhẹ cho vùng highlight */
+.reactour__mask svg rect[fill='transparent'] {
+  animation: tourHighlightPulse 2.5s ease-in-out infinite;
+}
+
+@keyframes tourHighlightPulse {
+  0% { stroke-width: 3; }
+  50% { stroke-width: 6; }
+  100% { stroke-width: 3; }
+}
 
 .home-header {
   display: flex;
@@ -223,20 +265,155 @@ html, body {
   border-bottom: none;
 }
 
-/* Remove unused tour wrapper styles */
-/* Tour will target actual component classes instead of wrappers */
-
-/* Disable tour scroll/jump animation */
-[data-tour-elem] {
-  scroll-behavior: auto !important;
+/* === TOUR THEME ENHANCEMENTS === */
+.tour-popover-wrapper {
+  position: relative;
+  background: linear-gradient(135deg,#4ecdc4 0%,#2a5298 100%);
+  padding: 2px;
+  border-radius: 18px;
+  animation: tourPopIn .5s cubic-bezier(.4,.14,.25,1);
+  max-width: 420px;
 }
 
+.tour-popover-content {
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(8px);
+  border-radius: 16px;
+  padding: 18px 20px 16px;
+  font-family: 'Roboto', Arial, sans-serif;
+  color: #1f355d;
+  position: relative;
+  overflow: hidden;
+}
+
+.tour-popover-content h3 {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+  background: linear-gradient(90deg,#2a5298,#4ecdc4);
+  -webkit-background-clip: text;
+  color: transparent;
+  letter-spacing: .4px;
+}
+
+.tour-popover-content p,
+.tour-popover-content li {
+  font-size: .9rem;
+  line-height: 1.35rem;
+}
+
+.tour-popover-wrapper:before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 20% 15%, rgba(255,255,255,0.35), transparent 60%),
+    radial-gradient(circle at 85% 75%, rgba(255,255,255,0.25), transparent 70%);
+  border-radius: 18px;
+  pointer-events: none;
+  mix-blend-mode: overlay;
+}
+
+.tour-popover-arrow {
+  --arrow-size: 18px;
+  position: absolute;
+  width: var(--arrow-size);
+  height: var(--arrow-size);
+  background: linear-gradient(135deg,#4ecdc4 0%,#2a5298 100%);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%,-50%) rotate(45deg);
+  border-radius: 4px;
+  z-index: -1;
+  box-shadow: 0 4px 18px -4px rgba(0,0,0,0.25);
+  animation: arrowFade .5s;
+}
+.reactour__popover[data-popper-placement^="top"] .tour-popover-arrow { bottom: -9px; top: auto; }
+.reactour__popover[data-popper-placement^="bottom"] .tour-popover-arrow { top: -9px; }
+.reactour__popover[data-popper-placement^="left"] .tour-popover-arrow { left: auto; right: -9px; top:50%; }
+.reactour__popover[data-popper-placement^="right"] .tour-popover-arrow { left: -9px; }
+.reactour__popover[data-popper-placement="center"] .tour-popover-arrow { display:none; }
+
+.reactour__popover[data-popper-placement^="top"] .tour-popover-wrapper,
+.reactour__popover[data-popper-placement^="bottom"] .tour-popover-wrapper,
+.reactour__popover[data-popper-placement^="left"] .tour-popover-wrapper,
+.reactour__popover[data-popper-placement^="right"] .tour-popover-wrapper {
+  animation: tourPopIn .55s cubic-bezier(.25,.8,.25,1);
+}
+
+@keyframes tourPopIn {
+  0% { opacity:0; transform: translateY(10px) scale(.94); filter: blur(4px); }
+  60% { opacity:1; transform: translateY(-2px) scale(1.02); }
+  100% { opacity:1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+
+@keyframes arrowFade {
+  0% { opacity:0; transform: translate(-50%,-50%) scale(.4) rotate(45deg); }
+  100% { opacity:1; transform: translate(-50%,-50%) scale(1) rotate(45deg); }
+}
+
+/* Highlight halo & animated sweep (using mask path overlay fallback) */
 .reactour__mask {
-  transition: none !important;
+  backdrop-filter: blur(2px) brightness(.98);
 }
 
-.reactour__popover {
-  transition: none !important;
+/* Extra glow ring using pseudo after (position over target via blend mode) */
+.reactour__mask:after {
+  content:"";
+  position: fixed;
+  pointer-events:none;
+  inset:0;
+  background:
+    radial-gradient(circle at var(--rt-target-x,50%) var(--rt-target-y,50%),
+      rgba(78,205,196,0.35),
+      rgba(78,205,196,0.15) 28%,
+      transparent 55%);
+  mix-blend-mode: screen;
+  animation: haloPulse 3s ease-in-out infinite;
+}
+
+@keyframes haloPulse {
+  0%,100% { opacity:.55; transform: scale(1); }
+  50% { opacity:.9; transform: scale(1.03); }
+}
+
+/* Optional gradient sweep on highlight stroke via SVG stroke-dash */
+.reactour__mask svg rect[fill="transparent"] {
+  stroke-dasharray: 14 10;
+  animation:
+    drawDash 10s linear infinite,
+    tourHighlightPulse 2.8s ease-in-out infinite;
+}
+
+@keyframes drawDash {
+  to { stroke-dashoffset: -240; }
+}
+
+/* Adjust dots (navigation) if present */
+.reactour__dot {
+  box-shadow: 0 0 0 2px #e1eef5 inset;
+}
+.reactour__dot--is-active {
+  background:#4ecdc4 !important;
+  transform: scale(1.25);
+  box-shadow: 0 0 0 2px #2a5298 inset, 0 0 4px 2px rgba(78,205,196,.6);
+}
+
+/* Buttons inside tour (fallback selector) */
+.reactour__popover button {
+  font-family: 'Roboto', Arial, sans-serif;
+}
+
+/* Dark scheme fallback */
+@media (prefers-color-scheme: dark) {
+  .tour-popover-content {
+    background: rgba(20,32,52,0.88);
+    color: #e5f5ff;
+  }
+  .tour-popover-content h3 {
+    background: linear-gradient(90deg,#4ecdc4,#8dd8ff);
+    -webkit-background-clip: text;
+    color: transparent;
+  }
 }
 
 @media (max-width: 900px) {
@@ -247,4 +424,92 @@ html, body {
     padding: 20px;
     margin-left: 220px;
   }
+}
+
+/* Tour popover color fix */
+.reactour__popover {
+  position: relative;
+}
+
+.reactour__popover > div:not(.tour-popover-wrapper) {
+  /* wrap existing content with glass panel */
+  background: rgba(255,255,255,0.94);
+  backdrop-filter: blur(10px);
+  padding: 18px 20px 16px;
+  margin: 0;
+  border-radius: 16px;
+  font-family: 'Roboto', Arial, sans-serif;
+  color: #1f355d;
+}
+
+.reactour__popover h3 {
+  margin-top: 0;
+  background: linear-gradient(90deg,#2a5298,#4ecdc4);
+  -webkit-background-clip: text;
+  color: transparent;
+  font-size: 1.05rem;
+  letter-spacing: .3px;
+}
+
+.reactour__popover p,
+.reactour__popover li {
+  font-size: .9rem;
+  line-height: 1.35rem;
+}
+
+.reactour__popover:before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 20% 15%, rgba(255,255,255,0.35), transparent 60%),
+    radial-gradient(circle at 85% 75%, rgba(255,255,255,0.25), transparent 70%);
+  pointer-events: none;
+  mix-blend-mode: overlay;
+}
+
+/* Optional arrow */
+.reactour__popover:after {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  background: linear-gradient(135deg,#4ecdc4 0%,#2a5298 100%);
+  transform: rotate(45deg);
+  box-shadow: 0 6px 14px -4px rgba(0,0,0,0.25);
+}
+
+.reactour__popover[data-popper-placement^="top"]:after { bottom: -9px; left: 50%; transform: translateX(-50%) rotate(45deg); }
+.reactour__popover[data-popper-placement^="bottom"]:after { top: -9px; left: 50%; transform: translateX(-50%) rotate(45deg); }
+.reactour__popover[data-popper-placement^="left"]:after { right: -9px; top: 50%; transform: translateY(-50%) rotate(45deg); }
+.reactour__popover[data-popper-placement^="right"]:after { left: -9px; top: 50%; transform: translateY(-50%) rotate(45deg); }
+.reactour__popover[data-popper-placement="center"]:after { display: none; }
+
+/* Fix tour dots overlapping */
+.reactour__dots {
+  display: flex !important;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 18px 16px; /* tăng khoảng cách giữa các chấm */
+  padding: 10px 12px;
+  max-width: 380px;
+  box-sizing: border-box;
+}
+
+.reactour__dot {
+  margin: 0 4px !important; /* fallback nếu gap không áp dụng */
+  flex: 0 0 auto;
+  position: relative;
+  transition: transform .25s ease, box-shadow .25s ease;
+}
+
+.reactour__dot--is-active {
+  transform: scale(1.35);
+  box-shadow: 0 0 0 3px rgba(78,205,196,.35);
+}
+
+.reactour__dot:focus-visible {
+  outline: 2px solid #2a5298;
+  outline-offset: 2px;
 }
