@@ -343,6 +343,13 @@
 @media (max-width: 900px) {
   .fd-comp-list { gap: 8px; }
   .fd-comp-item { padding: 8px; }
+  .fd-insights {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .fd-insights-chart {
+    min-height: 140px;
+  }
 }
 
 @media (max-width: 980px) {
@@ -436,4 +443,90 @@
 .fd-stock-chart {
   height: 200px;
   position: relative;
+}
+
+/* NEW: Insights Card */
+.fd-insights {
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 4px 24px rgba(42,82,152,0.08);
+  padding: 16px 16px 12px;
+  margin-top: 24px; /* tách với phần trên */
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 16px;
+}
+
+.fd-insights-header {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #eef2f8;
+  padding-bottom: 8px;
+}
+.fd-insights-title {
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: #2a5298;
+}
+.fd-insights-sub {
+  font-size: 0.85rem;
+  color: #5b768c;
+  font-weight: 700;
+}
+
+.fd-insights-body {
+  display: contents; /* keep grid children spanning columns */
+}
+
+.fd-insights-chart {
+  min-height: 160px;
+}
+
+.fd-insights-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.fd-insights-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-weight: 700;
+  color: #163a5a;
+  background: #f7fafd;
+  border: 1px solid #eef2f8;
+  padding: 8px 10px;
+  border-radius: 10px;
+}
+.fd-insights-list li.ins-item { line-height: 1.15rem; }
+.fd-insights-list .dot { color: #4ecdc4; font-size: 1.2rem; line-height: 1; transform: translateY(-1px); }
+
+.ins-badge {
+  font-size: .55rem;
+  text-transform: uppercase;
+  font-weight: 800;
+  letter-spacing: .8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: #e3eaf2;
+  color: #1f355d;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.ins-badge.ins-trend    { background: linear-gradient(90deg,#2a5298,#4ecdc4); color:#fff; }
+.ins-badge.ins-forecast { background: linear-gradient(90deg,#4ecdc4,#2a5298); color:#fff; }
+.ins-badge.ins-alert    { background: linear-gradient(90deg,#ff6b6b,#e25858); color:#fff; }
+.ins-badge.ins-action   { background: linear-gradient(90deg,#ffa502,#ff7d54); color:#fff; }
+.ins-badge.ins-focus    { background: linear-gradient(90deg,#6c5ce7,#9b59b6); color:#fff; }
+
+@media (max-width: 900px) {
+  .fd-insights { grid-template-columns: 1fr; gap: 12px; }
+  .fd-insights-chart { min-height: 140px; }
+  .ins-badge { font-size:.5rem; padding:3px 5px; }
 }

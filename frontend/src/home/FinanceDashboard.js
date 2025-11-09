@@ -1,5 +1,6 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import './FinanceDashboard.css';
+import SpendingTimeline from './SpendingTimeline';
 // Import Chart.js
 import { 
   Chart as ChartJS, 
@@ -13,7 +14,7 @@ import {
   LineElement,
   PointElement 
 } from 'chart.js';
-import { Pie, Bar } from 'react-chartjs-2';
+import { Pie, Bar, Line } from 'react-chartjs-2'; // add Line
 import ExportModal from '../components/ExportModal';
 
 // Register Chart.js components
@@ -52,6 +53,11 @@ export default function FinanceDashboard() {
   const [showExportModal, setShowExportModal] = useState(false);
   // Add new state for stock-like chart data
   const [stockChartData, setStockChartData] = useState(null);
+  // NEW: AI insights states
+  const [insights, setInsights] = useState([]);
+  const [insightsChartData, setInsightsChartData] = useState(null);
+  // NEW: keep objects with types for badges
+  const [detailedInsightObjects, setDetailedInsightObjects] = useState([]);
   
   // Format currency with appropriate locale
   const formatCurrency = (amount, currency) => {
@@ -281,6 +287,377 @@ export default function FinanceDashboard() {
     };
   }, []);
 
+  // NEW: Compute AI spending insights for last 3 months (mở rộng trả về rawData)
+  const computeInsights = useCallback((txs = []) => {
+    const now = new Date();
+    // Build last 3 months windows [M-2, M-1, M]
+    const months = [];
+    for (let i = 2; i >= 0; i--) {
+      const b = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push({
+        label: b.toLocaleDateString('vi-VN', { month: '2-digit', year: '2-digit' }),
+        start: new Date(b.getFullYear(), b.getMonth(), 1),
+        end: new Date(b.getFullYear(), b.getMonth() + 1, 1)
+      });
+    }
+
+    const perMonthTotals = [];
+    const perMonthByCat = [];
+    const perMonthNightExpense = [];
+
+    months.forEach((m, idx) => {
+      const monthTx = txs.filter(t => {
+        if (!t?.date) return false;
+        const d = new Date(t.date);
+        return d >= m.start && d < m.end && t.type === 'expense';
+      });
+      const total = monthTx.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+      perMonthTotals.push(total);
+
+      const catMap = {};
+      let night = 0;
+      monthTx.forEach(t => {
+        const catName = (t.category && t.category.name) || 'Khác';
+        catMap[catName] = (catMap[catName] || 0) + (Number(t.amount) || 0);
+        const hr = new Date(t.date).getHours();
+        if (hr < 6 || hr >= 21) night += (Number(t.amount) || 0);
+      });
+      perMonthByCat.push({ total, catMap });
+      perMonthNightExpense[idx] = night;
+    });
+
+    const ins = [];
+
+    // Top category share (current month vs previous)
+    if (perMonthByCat[2]?.total > 0) {
+      const entries = Object.entries(perMonthByCat[2].catMap).sort((a, b) => b[1] - a[1]);
+      const [topCat, topAmt] = entries[0] || ['Khác', 0];
+      const share = Math.round((topAmt / perMonthByCat[2].total) * 100);
+      let deltaTxt = '';
+      if (perMonthByCat[1]?.total > 0) {
+        const prevTopAmt = perMonthByCat[1].catMap[topCat] || 0;
+        const prevShare = Math.round((prevTopAmt / perMonthByCat[1].total) * 100);
+        const diff = share - prevShare;
+        if (diff !== 0) {
+          deltaTxt = diff > 0 ? `, tăng ${diff}% so với tháng trước` : `, giảm ${Math.abs(diff)}% so với tháng trước`;
+        }
+      }
+      ins.push(`Bạn chi ${share}% cho ${topCat}${deltaTxt}.`);
+      if (share >= 30) {
+        ins.push(`Gợi ý: đặt mục tiêu tiết kiệm 5–10% cho danh mục ${topCat} trong tháng tới.`);
+      }
+    }
+
+    // Night spending change
+    if (perMonthNightExpense[2] != null && perMonthNightExpense[1] != null && perMonthNightExpense[1] > 0) {
+      const change = Math.round(((perMonthNightExpense[2] - perMonthNightExpense[1]) / perMonthNightExpense[1]) * 100);
+      if (Math.abs(change) >= 20) {
+        ins.push(`Chi tiêu ban đêm ${change >= 0 ? 'tăng' : 'giảm'} ${Math.abs(change)}% so với tháng trước.`);
+      }
+    }
+
+    // Prepare rawData for detailed analysis
+    const monthExpenseArray = perMonthTotals.slice();
+    const currentMonthCats = perMonthByCat[2]?.catMap || {};
+    const prevMonthCats = perMonthByCat[1]?.catMap || {};
+    const currentMonthTotal = perMonthByCat[2]?.total || 0;
+    const prevMonthTotal = perMonthByCat[1]?.total || 0;
+
+    const lineData = {
+      labels: months.map(m => m.label),
+      datasets: [
+        {
+          label: 'Chi tiêu theo tháng',
+          data: perMonthTotals,
+          borderColor: 'rgba(231, 76, 60, 0.9)',
+          backgroundColor: 'rgba(231, 76, 60, 0.25)',
+          tension: 0.35,
+          pointRadius: 3,
+          pointHoverRadius: 4
+        }
+      ]
+    };
+
+    return { insights: ins, lineData, rawData: {
+      months,
+      monthExpenseArray,
+      currentMonthCats,
+      prevMonthCats,
+      currentMonthTotal,
+      prevMonthTotal,
+      nightExpenseCurrent: perMonthNightExpense[2] || 0,
+      nightExpensePrev: perMonthNightExpense[1] || 0
+    }};
+  }, []);
+
+  // NEW: Hàm tạo gợi ý chi tiết hơn
+  const generateDetailedSuggestions = useCallback((txs = [], rawData) => {
+    if (!txs.length || !rawData) return [];
+    const suggestions = [];
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+
+    // Lấy giao dịch tháng hiện tại
+    const monthStart = new Date(year, month, 1);
+    const nextMonthStart = new Date(year, month + 1, 1);
+    const monthTxs = txs.filter(t => {
+      if (!t.date) return false;
+      const d = new Date(t.date);
+      return d >= monthStart && d < nextMonthStart && t.type === 'expense';
+    });
+
+    const dayCountSoFar = Math.max(1, (now - monthStart) / 86400000 + 1);
+    const spentSoFar = monthTxs.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+    const avgPerDay = spentSoFar / dayCountSoFar;
+    const forecast = Math.round((avgPerDay * (nextMonthStart - monthStart) / 86400000) || 0);
+
+    // So sánh trung bình ngày với tháng trước
+    const prevMonthStart = new Date(year, month - 1, 1);
+    const prevMonthEnd = new Date(year, month, 1);
+    const prevMonthTxs = txs.filter(t => {
+      if (!t.date) return false;
+      const d = new Date(t.date);
+      return d >= prevMonthStart && d < prevMonthEnd && t.type === 'expense';
+    });
+    const prevSpent = prevMonthTxs.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+    const prevDayCount = (prevMonthEnd - prevMonthStart) / 86400000;
+    const prevAvgPerDay = prevSpent / (prevDayCount || 1);
+    const avgDiffPct = prevAvgPerDay > 0 ? Math.round(((avgPerDay - prevAvgPerDay) / prevAvgPerDay) * 100) : 0;
+
+    suggestions.push({
+      type: 'trend',
+      text: `Trung bình bạn chi khoảng ${avgPerDay.toLocaleString('vi-VN')}₫ mỗi ngày, ${avgDiffPct === 0 ? 'tương đương' : (avgDiffPct > 0 ? 'cao hơn' : 'thấp hơn')} ${Math.abs(avgDiffPct)}% so với tháng trước.`
+    });
+
+    suggestions.push({
+      type: 'forecast',
+      text: `Dự báo cuối tháng này bạn có thể tiêu khoảng ${forecast.toLocaleString('vi-VN')}₫ nếu giữ nhịp độ hiện tại.`
+    });
+
+    // Danh mục tăng mạnh nhất
+    const catGrowth = [];
+    Object.keys(rawData.currentMonthCats).forEach(cat => {
+      const curAmt = rawData.currentMonthCats[cat] || 0;
+      const prevAmt = rawData.prevMonthCats[cat] || 0;
+      const diff = curAmt - prevAmt;
+      const pct = prevAmt > 0 ? Math.round((diff / prevAmt) * 100) : (curAmt > 0 ? 100 : 0);
+      if (curAmt > 0) {
+        catGrowth.push({ cat, curAmt, diff, pct });
+      }
+    });
+    catGrowth.sort((a,b) => b.pct - a.pct);
+    if (catGrowth[0]) {
+      const g = catGrowth[0];
+      if (g.pct >= 30) {
+        suggestions.push({
+          type: 'alert',
+          text: `Danh mục "${g.cat}" tăng ${g.pct}% so với tháng trước (hiện tại: ${g.curAmt.toLocaleString('vi-VN')}₫). Cân nhắc đặt giới hạn hoặc xem lại nhu cầu.`
+        });
+      }
+    }
+
+    // Ví chi tiêu lớn nhất (expense)
+    const walletExpenseMap = {};
+    monthTxs.forEach(t => {
+      const wName = (t.wallet && t.wallet.name) || 'Ví khác';
+      walletExpenseMap[wName] = (walletExpenseMap[wName] || 0) + (Number(t.amount) || 0);
+    });
+    const walletRank = Object.entries(walletExpenseMap).sort((a,b)=>b[1]-a[1]);
+    if (walletRank[0]) {
+      suggestions.push({
+        type: 'focus',
+        text: `Ví "${walletRank[0][0]}" chi nhiều nhất: ${walletRank[0][1].toLocaleString('vi-VN')}₫ trong tháng này. Bạn có thể ưu tiên kiểm tra lại các giao dịch ở ví này.`
+      });
+    }
+
+    // Tiềm năng tiết kiệm: nếu top danh mục >35% tổng chi
+    const totalCur = rawData.currentMonthTotal;
+    if (totalCur > 0) {
+      const entries = Object.entries(rawData.currentMonthCats).sort((a,b)=>b[1]-a[1]);
+      const [topCat, topAmt] = entries[0] || ['Khác', 0];
+      const share = Math.round((topAmt / totalCur) * 100);
+      if (share >= 35) {
+        const saveTarget = Math.round(topAmt * 0.05);
+        suggestions.push({
+          type: 'action',
+          text: `Nếu giảm 5% chi ở "${topCat}" (~${saveTarget.toLocaleString('vi-VN')}₫) bạn sẽ cải thiện ngân sách rõ rệt.`
+        });
+      }
+    }
+
+    // Cảnh báo chi tiêu ban đêm tăng mạnh
+    const nightCur = rawData.nightExpenseCurrent;
+    const nightPrev = rawData.nightExpensePrev;
+    if (nightPrev > 0) {
+      const nightDiffPct = Math.round(((nightCur - nightPrev) / nightPrev) * 100);
+      if (nightDiffPct >= 40 && nightCur > 0) {
+        suggestions.push({
+          type: 'alert',
+          text: `Chi tiêu ban đêm đã tăng ${nightDiffPct}% (hiện tại: ${nightCur.toLocaleString('vi-VN')}₫). Hãy xem có thể chuyển sang mua ban ngày để kiểm soát tốt hơn.`
+        });
+      }
+    }
+
+    // Gợi ý đặt mục tiêu tiết kiệm tổng quát
+    if (forecast > 0 && rawData.prevMonthTotal > 0) {
+      const potentialCut = Math.round(forecast * 0.08);
+      suggestions.push({
+        type: 'action',
+        text: `Đặt mục tiêu tiết kiệm thêm 8% tháng này (~${potentialCut.toLocaleString('vi-VN')}₫) dựa trên dự báo chi tiêu hiện tại.`
+      });
+    }
+
+    return suggestions;
+  }, []);
+
+  // Chart options for pie chart
+  const pieOptions = {
+    responsive: true,
+    plugins: {
+      legend: {
+        position: 'right',
+        labels: {
+          generateLabels: (chart) => {
+            const datasets = chart.data.datasets;
+            return chart.data.labels.map((label, i) => {
+              const meta = chart.getDatasetMeta(0);
+              const style = meta.controller && meta.controller.getStyle ? meta.controller.getStyle(i) : {};
+              return {
+                text: `${chartData.pieData?.icons?.[i] || ''} ${label}`,
+                fillStyle: style.backgroundColor,
+                strokeStyle: style.borderColor,
+                lineWidth: style.borderWidth,
+                hidden: isNaN(datasets[0].data[i]) || (meta.data[i] && meta.data[i].hidden),
+                index: i
+              };
+            });
+          }
+        }
+      },
+      title: {
+        display: true,
+        text: pieChartType === 'expense' ? 'Chi tiêu theo danh mục' : 'Thu nhập theo danh mục',
+        font: {
+          size: 16,
+          weight: 'bold'
+        }
+      }
+    }
+  };
+  
+  // Chart options for bar chart
+  const barOptions = {
+    responsive: true,
+    plugins: {
+      legend: {
+        position: 'top',
+      },
+      title: {
+        display: true,
+        text: 'Thu nhập & Chi tiêu tháng này',
+        font: {
+          size: 16,
+          weight: 'bold'
+        }
+      },
+    },
+  };
+
+  // NEW: Line options for insights chart (fix no-undef)
+  const insightLineOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      title: {
+        display: true,
+        text: 'Xu hướng chi tiêu 3 tháng gần đây',
+        font: { size: 14, weight: 'bold' }
+      },
+      tooltip: {
+        callbacks: {
+          label: (ctx) => `${Number(ctx.raw || 0).toLocaleString('vi-VN')}₫`
+        }
+      }
+    },
+    scales: {
+      x: { grid: { display: false } },
+      y: {
+        grid: { color: 'rgba(0,0,0,0.05)' },
+        ticks: {
+          callback: (v) => `${Number(v).toLocaleString('vi-VN')}₫`,
+          font: { size: 10 }
+        }
+      }
+    }
+  };
+
+  // Stock chart options - updated for column chart
+  const stockOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: {
+        grid: {
+          display: false,
+          drawBorder: false,
+        },
+        ticks: {
+          font: {
+            size: 10,
+          },
+          maxRotation: 0
+        }
+      },
+      y: {
+        grid: {
+          color: 'rgba(0, 0, 0, 0.05)',
+        },
+        ticks: {
+          callback: (value) => `${Math.abs(value).toLocaleString('vi-VN')}₫`,
+          font: {
+            size: 10,
+          }
+        }
+      }
+    },
+    plugins: {
+      legend: {
+        display: true,
+        position: 'top',
+      },
+      title: {
+        display: true,
+        text: 'Biến động số dư theo thời gian',
+        font: {
+          size: 16,
+          weight: 'bold'
+        }
+      },
+      tooltip: {
+        callbacks: {
+          label: (context) => {
+            const value = context.raw;
+            const formattedValue = Math.abs(value).toLocaleString('vi-VN') + '₫';
+            return `${context.dataset.label}: ${formattedValue}`;
+          }
+        }
+      }
+    },
+    interaction: {
+      mode: 'index',
+      intersect: false,
+    },
+  };
+
+  // NEW: lookup map from detailed objects (fix no-undef)
+  const typeLookup = useMemo(() => {
+    const map = {};
+    detailedInsightObjects.forEach(o => { map[o.text] = o.type; });
+    return map;
+  }, [detailedInsightObjects]);
+
   useEffect(() => {
     const ctrl = new AbortController();
     const fetchData = async () => {
@@ -378,6 +755,39 @@ export default function FinanceDashboard() {
         // Prepare stock chart data
         const stockData = prepareStockChartData(txs, wallets);
         setStockChartData(stockData);
+
+        // Try server-side insights, fallback to client compute
+        try {
+          const token = localStorage.getItem('token');
+          const headers = token ? { Authorization: `Bearer ${token}` } : {};
+          const res = await fetch(`http://localhost:5000/api/ai/insights?months=3`, { headers, signal: ctrl.signal });
+          if (res.ok) {
+            const data = await res.json();
+            const baseSuggestions = Array.isArray(data.suggestions) ? data.suggestions : [];
+            // Always compute local rawData for detailed suggestions
+            const localAi = computeInsights(txs);
+            const detailed = generateDetailedSuggestions(txs, localAi.rawData);
+            setDetailedInsightObjects(detailed);
+            // Merge and dedupe texts
+            const mergedTexts = [...new Set([...baseSuggestions, ...detailed.map(d => d.text)])];
+            setInsights(mergedTexts);
+            setInsightsChartData(data.lineData || localAi.lineData);
+          } else {
+            const localAi = computeInsights(txs);
+            const detailed = generateDetailedSuggestions(txs, localAi.rawData);
+            setDetailedInsightObjects(detailed);
+            const mergedTexts = [...new Set([...localAi.insights, ...detailed.map(d => d.text)])];
+            setInsights(mergedTexts);
+            setInsightsChartData(localAi.lineData);
+          }
+        } catch {
+          const localAi = computeInsights(txs);
+          const detailed = generateDetailedSuggestions(txs, localAi.rawData);
+          setDetailedInsightObjects(detailed);
+          const mergedTexts = [...new Set([...localAi.insights, ...detailed.map(d => d.text)])];
+          setInsights(mergedTexts);
+          setInsightsChartData(localAi.lineData);
+        }
       } catch (err) {
         if (err.name === 'AbortError') return;
         console.error(err);
@@ -390,7 +800,7 @@ export default function FinanceDashboard() {
     fetchData();
     return () => { ctrl.abort(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prepareChartData, prepareStockChartData]);
+  }, [prepareChartData, prepareStockChartData, computeInsights]);
 
   // Update chart when wallet selection changes or pie chart type changes
   useEffect(() => {
@@ -478,133 +888,6 @@ export default function FinanceDashboard() {
     return wallet ? wallet.name : 'Ví đã chọn';
   };
 
-  // Chart options for pie chart
-  const pieOptions = {
-    responsive: true,
-    plugins: {
-      legend: {
-        position: 'right',
-        labels: {
-          generateLabels: (chart) => {
-            const datasets = chart.data.datasets;
-            return chart.data.labels.map((label, i) => {
-              const meta = chart.getDatasetMeta(0);
-              const style = meta.controller && meta.controller.getStyle ? meta.controller.getStyle(i) : {};
-              return {
-                text: `${chartData.pieData?.icons?.[i] || ''} ${label}`,
-                fillStyle: style.backgroundColor,
-                strokeStyle: style.borderColor,
-                lineWidth: style.borderWidth,
-                hidden: isNaN(datasets[0].data[i]) || (meta.data[i] && meta.data[i].hidden),
-                index: i
-              };
-            });
-          }
-        }
-      },
-      title: {
-        display: true,
-        text: pieChartType === 'expense' ? 'Chi tiêu theo danh mục' : 'Thu nhập theo danh mục',
-        font: {
-          size: 16,
-          weight: 'bold'
-        }
-      }
-    }
-  };
-  
-  // Chart options for bar chart
-  const barOptions = {
-    responsive: true,
-    plugins: {
-      legend: {
-        position: 'top',
-      },
-      title: {
-        display: true,
-        text: 'Thu nhập & Chi tiêu tháng này',
-        font: {
-          size: 16,
-          weight: 'bold'
-        }
-      },
-    },
-  };
-
-  // Stock chart options - updated for column chart
-  const stockOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    scales: {
-      x: {
-        grid: {
-          display: false,
-          drawBorder: false,
-        },
-        ticks: {
-          font: {
-            size: 10,
-          },
-          maxRotation: 0
-        }
-      },
-      y: {
-        grid: {
-          color: 'rgba(0, 0, 0, 0.05)',
-        },
-        ticks: {
-          callback: (value) => `${Math.abs(value).toLocaleString('vi-VN')}₫`,
-          font: {
-            size: 10,
-          }
-        }
-      }
-    },
-    plugins: {
-      legend: {
-        display: true,
-        position: 'top',
-      },
-      title: {
-        display: true,
-        text: 'Biến động số dư theo thời gian',
-        font: {
-          size: 16,
-          weight: 'bold'
-        }
-      },
-      tooltip: {
-        callbacks: {
-          label: (context) => {
-            const value = context.raw;
-            const formattedValue = Math.abs(value).toLocaleString('vi-VN') + '₫';
-            return `${context.dataset.label}: ${formattedValue}`;
-          }
-        }
-      }
-    },
-    interaction: {
-      mode: 'index',
-      intersect: false,
-    },
-  };
-
-  // Use loading / error states to avoid ESLint unused-vars warning
-  if (loading) {
-    return (
-      <div className="fd-root">
-        <div className="fd-loading">Đang tải bảng điều khiển...</div>
-      </div>
-    );
-  }
-  if (error) {
-    return (
-      <div className="fd-root">
-        <div className="fd-error">Lỗi: {error}</div>
-      </div>
-    );
-  }
-  
   return (
     <div className="fd-root tour-stats-component" aria-label="Bảng điều khiển tài chính">
       {/* Export report button at top */}
@@ -809,7 +1092,39 @@ export default function FinanceDashboard() {
         </div>
       </div>
 
-      {/* Daily transactions stats (moved from HomePage) */}
+      {/* NEW: AI Spending Insights */}
+      <div className="fd-insights">
+        <div className="fd-insights-header">
+          <div className="fd-insights-title">Trợ lý tài chính thông minh</div>
+          <div className="fd-insights-sub">Phân tích thói quen chi tiêu cá nhân</div>
+        </div>
+        <div className="fd-insights-body">
+          <div className="fd-insights-chart">
+            {insightsChartData && <Line data={insightsChartData} options={insightLineOptions} height={150} />}
+          </div>
+          <ul className="fd-insights-list">
+            {insights && insights.length > 0 ? (
+              insights.map((t, i) => {
+                const tType = typeLookup[t];
+                return (
+                  <li key={i} className={`ins-item ${tType || 'basic'}`}>
+                    <span className="dot">•</span>
+                    {tType && <span className={`ins-badge ins-${tType}`}>{tType}</span>}
+                    <span className="ins-text">{t}</span>
+                  </li>
+                );
+              })
+            ) : (
+              <li className="ins-item basic"><span className="dot">•</span><span className="ins-text">Chưa đủ dữ liệu để phân tích.</span></li>
+            )}
+          </ul>
+        </div>
+      </div>
+
+      {/* Timeline chi tiêu (moved here, above daily stats table) */}
+      <SpendingTimeline />
+
+      {/* Daily transactions stats (kept below timeline) */}
       <div style={{ marginTop: 16 }} className="home-stat-table">
         <div className="home-stat-title" style={{ marginBottom: 8, fontWeight: 800 }}>Bảng thống kê giao dịch trong ngày</div>
         <table style={{ width: '100%', borderCollapse: 'collapse', background: '#fff', borderRadius: 8 }}>

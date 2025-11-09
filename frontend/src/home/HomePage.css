@@ -215,6 +215,7 @@ body.tour-open {
   display: flex;
   flex-direction: column;
   gap: 30px;
+  /* đảm bảo timeline không dính vào dashboard */
 }
 
 .home-card {

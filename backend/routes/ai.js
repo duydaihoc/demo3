@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const router = express.Router();
-const { auth } = require('../middleware/auth');
+const { auth, requireAuth } = require('../middleware/auth');
 const Transaction = require('../models/Transaction');
 const Wallet = require('../models/Wallet');
 const Category = require('../models/Category');
@@ -591,8 +591,19 @@ CÂU NÓI VỀ GIAO DỊCH: "${message}"
 - categoryId PHẢI là ID trong dấu ngoặc (ID: ...), KHÔNG phải tên danh mục
 - Nếu không tìm thấy danh mục phù hợp, trả về categoryId = null
 
+**MAPPING KEYWORDS:**
+- Ăn, uống, cafe, cơm, bún, phở, tối, sáng, trưa → "Ăn uống"
+- Xăng, xe, taxi, grab → "Đi lại" hoặc "Xe cộ"
+- Quần áo, giày dép, mua sắm → "Mua sắm" hoặc "Quần áo"
+- Điện, nước, internet, điện thoại → "Hóa đơn" hoặc "Tiện ích"
+
+**VÍ DỤ:**
+Input: "ăn tối 50k"
+Danh sách có: "- Ăn uống (🍔) (ID: 507f1f77bcf86cd799439011)"
+Output: {{"categoryId": "507f1f77bcf86cd799439011", "categoryName": "Ăn uống", "confidence": 0.9}}
+
 Trả về JSON (KHÔNG markdown, CHỈ JSON):
-{
+{{
   "categoryId": "ID dạng 507f1f77bcf86cd799439011" hoặc null,
   "categoryName": "Tên danh mục" hoặc null,
   "confidence": 0-1,
@@ -603,53 +614,96 @@ Trả về JSON (KHÔNG markdown, CHỈ JSON):
     const result = await model.generateContent(categoryPrompt);
     const response = await result.response;
     let text = response.text().trim();
+    
     text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    
+    console.log('🤖 Gemini category analysis raw:', text);
     
     const analysis = JSON.parse(text);
     
-    // Validate category exists
+    console.log('📊 Parsed analysis:', {
+      categoryId: analysis.categoryId,
+      categoryName: analysis.categoryName,
+      idType: typeof analysis.categoryId
+    });
+    
+    // SỬA: Validate và fix categoryId
     let validatedCategoryId = null;
     let validatedCategoryName = null;
     
     if (analysis.categoryId && typeof analysis.categoryId === 'string') {
-      const found = categories.find(c => String(c._id) === String(analysis.categoryId));
-      if (found) {
-        validatedCategoryId = found._id;
-        validatedCategoryName = found.name;
-      } else if (analysis.categoryId.match(/^[0-9a-fA-F]{24}$/)) {
-        // Try to find by name if ID doesn't match
-        const foundByName = categories.find(c => 
-          c.name.toLowerCase() === analysis.categoryId.toLowerCase()
-        );
-        if (foundByName) {
-          validatedCategoryId = foundByName._id;
-          validatedCategoryName = foundByName.name;
+      // Nếu categoryId là tên danh mục, tìm ID thực
+      const foundByName = categories.find(c => 
+        c.name.toLowerCase() === analysis.categoryId.toLowerCase()
+      );
+      
+      if (foundByName) {
+        console.log('🔧 Fixed: categoryId was name, found actual ID:', foundByName._id);
+        validatedCategoryId = foundByName._id;
+        validatedCategoryName = foundByName.name;
+      } else {
+        // Kiểm tra xem có phải ObjectId format không
+        if (analysis.categoryId.match(/^[0-9a-fA-F]{24}$/)) {
+          // Là ObjectId, kiểm tra có tồn tại không
+          const foundById = categories.find(c => 
+            String(c._id) === String(analysis.categoryId)
+          );
+          
+          if (foundById) {
+            console.log('✅ Valid ObjectId found in wallet');
+            validatedCategoryId = foundById._id;
+            validatedCategoryName = foundById.name;
+          } else {
+            console.warn('⚠️ ObjectId not found in wallet categories');
+          }
+        } else {
+          console.warn('⚠️ categoryId is neither valid name nor ObjectId:', analysis.categoryId);
         }
       }
     }
-    
+
+    // Nếu vẫn chưa tìm thấy, dùng categoryName để tìm
     if (!validatedCategoryId && analysis.categoryName) {
-      const found = categories.find(c => 
+      const foundByName = categories.find(c => 
         c.name.toLowerCase().includes(analysis.categoryName.toLowerCase()) ||
         analysis.categoryName.toLowerCase().includes(c.name.toLowerCase())
       );
-      if (found) {
-        validatedCategoryId = found._id;
-        validatedCategoryName = found.name;
+      
+      if (foundByName) {
+        console.log('🔧 Found by categoryName:', foundByName.name);
+        validatedCategoryId = foundByName._id;
+        validatedCategoryName = foundByName.name;
       }
     }
+
+    console.log('✅ Final validated result:', {
+      categoryId: validatedCategoryId,
+      categoryName: validatedCategoryName
+    });
 
     return {
       categoryId: validatedCategoryId,
       categoryName: validatedCategoryName,
       confidence: validatedCategoryId ? analysis.confidence : 0,
       reasoning: validatedCategoryId 
-        ? (analysis.reasoning || 'Gemini AI đã phân tích')
-        : 'Không tìm thấy danh mục phù hợp'
+        ? (analysis.reasoning || 'Gemini AI đã phân tích dựa trên danh mục có trong ví')
+        : 'Không tìm thấy danh mục phù hợp trong ví này'
     };
   } catch (error) {
-    console.error('❌ analyzeCategoryForMessage error:', error);
-    throw error; // Let caller handle fallback
+    console.error('❌ Gemini category analysis error:', error);
+    // Fallback AI trực tiếp với full context
+    const fallbackResult = analyzeCategoryWithFallback(
+      message, 
+      categories
+    );
+    
+    return {
+      categoryId: fallbackResult.categoryId,
+      categoryName: fallbackResult.categoryName,
+      confidence: fallbackResult.confidence,
+      reasoning: fallbackResult.reasoning + ' (Fallback AI)',
+      fallback: true
+    };
   }
 }
 
@@ -1891,6 +1945,732 @@ function fallbackAnalyzeEditIntent(message, recentTransactions) {
     return null;
   }
 }
+
+// ======================== POST /api/ai/insights ========================
+// Endpoint phân tích và cung cấp thông tin chi tiết về giao dịch
+router.get('/insights', auth, requireAuth, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const monthsParam = Math.max(1, Math.min(6, parseInt(req.query.months || '3', 10)));
+    const months = buildMonthsWindow(monthsParam);
+
+    // Time window bounds (from earliest month start to last month end)
+    const from = months[0].start;
+    const to = months[months.length - 1].end;
+
+    // Wallet filter for current user
+    let walletFilter = {};
+    if (req.query.walletId) {
+      walletFilter = { _id: req.query.walletId };
+    }
+    const wallets = await Wallet.find({ owner: userId, ...walletFilter }).select('_id').lean();
+    const walletIds = wallets.map(w => w._id);
+
+    // Pull transactions within time window for user's wallets, or by user field if available
+    const txQuery = {
+      date: { $gte: from, $lt: to }
+    };
+    if (walletIds.length > 0) {
+      txQuery.wallet = { $in: walletIds };
+    } else {
+      // fallback if wallet ownership not used in your schema
+      txQuery.user = userId;
+    }
+
+    const txs = await Transaction.find(txQuery)
+      .populate('category', 'name icon type')
+      .populate('wallet', 'name currency')
+      .lean();
+
+    const payload = aggregateInsights(txs || [], months);
+    return res.json({
+      ok: true,
+      ...payload
+    });
+  } catch (err) {
+    console.error('AI insights error:', err);
+    res.status(500).json({ ok: false, message: 'Failed to compute insights', error: err.message });
+  }
+});
+
+// ======================== Helper functions (tiếp theo) ========================
+
+// Helper: month boundaries
+function startOfMonth(d) {
+  return new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
+}
+function endOfMonth(d) {
+  return new Date(d.getFullYear(), d.getMonth() + 1, 1, 0, 0, 0, 0);
+}
+
+// Helper: build months window (latest at end)
+function buildMonthsWindow(count = 3) {
+  const now = new Date();
+  const arr = [];
+  for (let i = count - 1; i >= 0; i--) {
+    const head = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    arr.push({
+      label: head.toLocaleDateString('vi-VN', { month: '2-digit', year: '2-digit' }),
+      start: startOfMonth(head),
+      end: endOfMonth(head)
+    });
+  }
+  return arr;
+}
+
+// Helper: aggregate insights
+function aggregateInsights(transactions, months) {
+  const perMonthTotals = months.map(() => ({ expense: 0, income: 0 }));
+  const perMonthByCat = months.map(() => ({}));
+  const perMonthNightExpense = months.map(() => 0);
+
+  transactions.forEach(t => {
+    if (!t?.date) return;
+    const d = new Date(t.date);
+    const idx = months.findIndex(m => d >= m.start && d < m.end);
+    if (idx === -1) return;
+
+    const amt = Number(t.amount) || 0;
+    if (t.type === 'income') {
+      perMonthTotals[idx].income += amt;
+    } else if (t.type === 'expense') {
+      perMonthTotals[idx].expense += amt;
+      const catName = (t.category && t.category.name) || 'Khác';
+      perMonthByCat[idx][catName] = (perMonthByCat[idx][catName] || 0) + amt;
+      const hr = d.getHours();
+      if (hr < 6 || hr >= 21) perMonthNightExpense[idx] += amt;
+    }
+  });
+
+  // Current vs previous month stats
+  const curIdx = months.length - 1;
+  const prevIdx = months.length - 2;
+  const curTotalExp = perMonthTotals[curIdx]?.expense || 0;
+  const curCatMap = perMonthByCat[curIdx] || {};
+  const prevCatMap = perMonthByCat[prevIdx] || {};
+  const nightCur = perMonthNightExpense[curIdx] || 0;
+  const nightPrev = perMonthNightExpense[prevIdx] || 0;
+
+  // Top category share
+  let topCat = 'Khác';
+  let topAmt = 0;
+  const entries = Object.entries(curCatMap).sort((a, b) => b[1] - a[1]);
+  if (entries.length) {
+    [topCat, topAmt] = entries[0];
+  }
+  const topShare = curTotalExp > 0 ? Math.round((topAmt / curTotalExp) * 100) : 0;
+  let topDeltaTxt = '';
+  if (months.length >= 2) {
+    const prevTotalExp = perMonthTotals[prevIdx]?.expense || 0;
+    const prevTopAmt = prevCatMap[topCat] || 0;
+    const prevShare = prevTotalExp > 0 ? Math.round((prevTopAmt / prevTotalExp) * 100) : 0;
+    const diff = topShare - prevShare;
+    if (diff !== 0) topDeltaTxt = diff > 0 ? `, tăng ${diff}% so với tháng trước` : `, giảm ${Math.abs(diff)}% so với tháng trước`;
+  }
+
+  // Night spending change
+  let nightChangePct = 0;
+  if (months.length >= 2 && nightPrev > 0) {
+    nightChangePct = Math.round(((nightCur - nightPrev) / nightPrev) * 100);
+  }
+
+  // Suggestions
+  const suggestions = [];
+  if (curTotalExp > 0) {
+    suggestions.push(`Bạn chi ${topShare}% cho ${topCat}${topDeltaTxt}.`);
+    if (topShare >= 30) {
+      suggestions.push(`Gợi ý: đặt mục tiêu tiết kiệm 5–10% cho danh mục ${topCat} trong tháng tới.`);
+    }
+  }
+  if (months.length >= 2 && Math.abs(nightChangePct) >= 20) {
+    suggestions.push(`Chi tiêu ban đêm ${nightChangePct >= 0 ? 'tăng' : 'giảm'} ${Math.abs(nightChangePct)}% so với tháng trước.`);
+  }
+
+  // Line dataset for chart (expense focus)
+  const lineData = {
+    labels: months.map(m => m.label),
+    datasets: [
+      {
+        label: 'Chi tiêu theo tháng',
+        data: perMonthTotals.map(x => x.expense),
+        borderColor: 'rgba(231, 76, 60, 0.9)',
+        backgroundColor: 'rgba(231, 76, 60, 0.25)',
+        tension: 0.35,
+        pointRadius: 3,
+        pointHoverRadius: 4
+      }
+    ]
+  };
+
+  // Top categories breakdown current month
+  const topCategories = entries.slice(0, 6).map(([name, total]) => ({
+    name,
+    total,
+    share: curTotalExp > 0 ? Math.round((total / curTotalExp) * 100) : 0
+  }));
+
+  return {
+    months,
+    totals: perMonthTotals,
+    topCategories,
+    nightSpending: { current: nightCur, previous: nightPrev, changePct: nightChangePct },
+    suggestions,
+    lineData
+  };
+}
+
+/**
+ * GET /api/ai/insights
+ * Query:
+ * - months: number of months window (1..6), default 3
+ * - walletId: optional filter by a specific wallet
+ */
+router.get('/insights', auth, requireAuth, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const monthsParam = Math.max(1, Math.min(6, parseInt(req.query.months || '3', 10)));
+    const months = buildMonthsWindow(monthsParam);
+
+    // Time window bounds (from earliest month start to last month end)
+    const from = months[0].start;
+    const to = months[months.length - 1].end;
+
+    // Wallet filter for current user
+    let walletFilter = {};
+    if (req.query.walletId) {
+      walletFilter = { _id: req.query.walletId };
+    }
+    const wallets = await Wallet.find({ owner: userId, ...walletFilter }).select('_id').lean();
+    const walletIds = wallets.map(w => w._id);
+
+    // Pull transactions within time window for user's wallets, or by user field if available
+    const txQuery = {
+      date: { $gte: from, $lt: to }
+    };
+    if (walletIds.length > 0) {
+      txQuery.wallet = { $in: walletIds };
+    } else {
+      // fallback if wallet ownership not used in your schema
+      txQuery.user = userId;
+    }
+
+    const txs = await Transaction.find(txQuery)
+      .populate('category', 'name icon type')
+      .populate('wallet', 'name currency')
+      .lean();
+
+    const payload = aggregateInsights(txs || [], months);
+    return res.json({
+      ok: true,
+      ...payload
+    });
+  } catch (err) {
+    console.error('AI insights error:', err);
+    res.status(500).json({ ok: false, message: 'Failed to compute insights', error: err.message });
+  }
+});
+
+// ======================== FALLBACK ANALYZE INTENT ========================
+// THÊM: Helper phân tích ý intention xóa giao dịch
+async function analyzeDeleteTransactionIntent(message, userId, wallets, categories, model) {
+  try {
+    // Lấy danh sách giao dịch gần đây
+    const recentTransactions = await Transaction.find({ 
+      wallet: { $in: wallets.map(w => w._id) } 
+    })
+      .populate('wallet', 'name')
+      .populate('category', 'name icon type')
+      .sort({ createdAt: -1 })
+      .limit(30);
+
+    console.log('🗑️ ===== DELETE ANALYSIS DEBUG =====');
+    console.log('🗑️ Total transactions:', recentTransactions.length);
+    
+    const transactionsList = recentTransactions.map((t, idx) => {
+      const txName = t.title || t.description || 'Không có tên';
+      const dateStr = new Date(t.date || t.createdAt).toLocaleDateString('vi-VN');
+      const walletName = t.wallet?.name || 'Không rõ ví';
+      
+      console.log(`🗑️ #${idx + 1}:`, {
+        id: String(t._id),
+        title: t.title,
+        description: t.description,
+        displayName: txName,
+        amount: t.amount,
+        wallet: walletName
+      });
+      
+      return `${idx + 1}. "${txName}" | ${t.amount.toLocaleString('vi-VN')} VND | ${dateStr} | Ví: ${walletName} | (ID: ${t._id})`;
+    }).join('\n');
+
+    console.log('🗑️ User message:', message);
+    console.log('🗑️ ===== END DEBUG =====\n');
+
+    const analysisPrompt = `
+Bạn là AI tìm kiếm giao dịch để XÓA.
+
+**DANH SÁCH ${recentTransactions.length} GIAO DỊCH (Tên trong dấu ngoặc kép ""):**
+${transactionsList}
+
+**CÂU NÓI:** "${message}"
+
+**CÁCH TÌM:**
+1. Lấy từ khóa sau "xóa/xoá/hủy/bỏ"
+   - Ví dụ: "xóa ăn tối" → từ khóa là "ăn tối"
+   
+2. Tìm giao dịch có TÊN chứa từ khóa đó
+   - "ăn tối" khớp với: "ăn tối", "đi ăn tối", "ăn tối với bạn"
+   - KHÔNG phân biệt HOA/thường
+   - Tìm trong TÊN giao dịch (trong dấu ngoặc kép "")
+
+3. Trả về TẤT CẢ giao dịch khớp
+
+**VÍ DỤ:**
+User: "xóa ăn tối"
+List: 1. "ăn tối" | 50000, 2. "cafe sáng" | 30000
+→ Trả về #1
+
+User: "xóa cafe"  
+List: 1. "cafe sáng" | 30000, 2. "mua cafe" | 25000
+→ Trả về CẢ 2
+
+Trả về JSON thuần (KHÔNG markdown):
+{{
+  "hasDeleteIntent": true,
+  "foundTransactions": [
+    {
+      "id": "ID",
+      "description": "tên hiển thị",
+      "amount": số,
+      "date": "ISO date",
+      "wallet": "tên ví",
+      "category": "tên danh mục hoặc null"
+    }
+  ],
+  "multipleMatches": true/false,
+  "confidence": 0.9,
+  "reasoning": "Tìm theo tên giao dịch để xóa"
+}}
+`;
+
+    const result = await model.generateContent(analysisPrompt);
+    const response = await result.response;
+    let text = response.text().trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    
+    console.log('🔍 Gemini delete response:', text);
+    
+    const analysis = JSON.parse(text);
+    
+    console.log('✅ Delete analysis found:', {
+      count: analysis.foundTransactions?.length || 0,
+      transactions: analysis.foundTransactions
+    });
+    
+    if (analysis.hasDeleteIntent && analysis.confidence > 0.6) {
+      return {
+        success: true,
+        deleteIntent: {
+          foundTransactions: analysis.foundTransactions || [],
+          multipleMatches: analysis.multipleMatches || false,
+          confidence: analysis.confidence,
+          reasoning: analysis.reasoning
+        }
+      };
+    }
+    
+    return { success: false, reason: 'Không tìm thấy giao dịch để xóa' };
+    
+  } catch (error) {
+    console.error('❌ Error analyzing delete intent:', error);
+    return { success: false, reason: error.message };
+  }
+}
+
+// THÊM: Fallback tìm giao dịch để xóa
+function fallbackAnalyzeDeleteIntent(message, recentTransactions) {
+  try {
+    console.log('\n🔄 ===== FALLBACK DELETE SEARCH =====');
+    console.log('Message:', message);
+    console.log('Total transactions:', recentTransactions.length);
+    
+    const lower = message.toLowerCase();
+    
+    const normalize = (s) => (s || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .trim();
+    
+    const keywords = ['xóa', 'xoá', 'hủy', 'bỏ', 'xóa bỏ'];
+    const hasDelete = keywords.some(k => lower.includes(k));
+    
+    if (!hasDelete) {
+      console.log('⚠️ No delete keyword');
+      return null;
+    }
+
+    // Trích xuất từ khóa tìm kiếm
+    let searchTerm = lower;
+    keywords.forEach(k => {
+      searchTerm = searchTerm.replace(new RegExp(`\\b${k}\\b`, 'gi'), '');
+    });
+    searchTerm = searchTerm.replace(/\bgiao dịch\b/gi, '').trim();
+
+    console.log('Delete search term:', searchTerm);
+
+    if (!searchTerm) {
+      return {
+        success: true,
+        deleteIntent: {
+          foundTransactions: [],
+          multipleMatches: false,
+          confidence: 0.7,
+          reasoning: 'Không có từ khóa tìm kiếm'
+        }
+      };
+    }
+
+    const normSearch = normalize(searchTerm);
+    const searchWords = normSearch.split(/\s+/).filter(w => w.length > 1);
+    
+    console.log('Normalized delete search:', normSearch);
+    console.log('Delete search words:', searchWords);
+    
+    // Tìm trong cả title và description
+    const matches = recentTransactions.filter(t => {
+      const titleNorm = normalize(t.title || '');
+      const descNorm = normalize(t.description || '');
+      const combined = `${titleNorm} ${descNorm}`.trim();
+      
+      const exactMatch = combined.includes(normSearch);
+      const allWordsMatch = searchWords.length > 0 && searchWords.every(word => combined.includes(word));
+      
+      const found = exactMatch || allWordsMatch;
+      
+      if (found) {
+        console.log('✅ Delete match found:', {
+          id: t._id,
+          title: t.title,
+          description: t.description,
+          combined,
+          normSearch,
+          matchType: exactMatch ? 'exact' : 'words'
+        });
+      }
+      
+      return found;
+    });
+    
+    const found = matches.map(t => ({
+      id: String(t._id),
+      description: t.title || t.description || 'Giao dịch',
+      amount: t.amount,
+      date: new Date(t.date || t.createdAt).toISOString(),
+      wallet: t.wallet?.name,
+      category: t.category?.name
+    }));
+
+    console.log('✅ Total delete matches found:', found.length);
+    console.log('===== END FALLBACK DELETE =====\n');
+
+    return {
+      success: true,
+      deleteIntent: {
+        foundTransactions: found,
+        multipleMatches: found.length > 1,
+        confidence: found.length > 0 ? 0.85 : 0.6,
+        reasoning: `Tìm ${found.length} giao dịch có tên chứa "${searchTerm}" để xóa`
+      }
+    };
+  } catch (e) {
+    console.error('❌ Fallback delete error:', e);
+    return null;
+  }
+}
+
+// THÊM: Helper: Phân tích ý intention sửa giao dịch
+async function analyzeEditTransactionIntent(message, userId, wallets, categories, model) {
+  try {
+    // Lấy danh sách giao dịch gần đây
+    const recentTransactions = await Transaction.find({ 
+      wallet: { $in: wallets.map(w => w._id) } 
+    })
+      .populate('wallet', 'name')
+      .populate('category', 'name icon type')
+      .sort({ createdAt: -1 })
+      .limit(30);
+
+    // Log để debug
+    console.log('📋 ===== EDIT ANALYSIS DEBUG =====');
+    console.log('📋 Total transactions:', recentTransactions.length);
+    
+    // SỬA: Format list với CẢ title VÀ description
+    const transactionsList = recentTransactions.map((t, idx) => {
+      // Ưu tiên title (tạo tay), fallback sang description (AI)
+      const txName = t.title || t.description || 'Không có tên';
+      const dateStr = new Date(t.date || t.createdAt).toLocaleDateString('vi-VN');
+      const walletName = t.wallet?.name || 'Không rõ ví';
+      
+      // Log chi tiết
+      console.log(`📝 #${idx + 1}:`, {
+        id: String(t._id),
+        title: t.title,
+        description: t.description,
+        displayName: txName,
+        amount: t.amount,
+        wallet: walletName
+      });
+      
+      return `${idx + 1}. "${txName}" | ${t.amount.toLocaleString('vi-VN')} VND | ${dateStr} | Ví: ${walletName} | (ID: ${t._id})`;
+    }).join('\n');
+
+    console.log('📋 User message:', message);
+    console.log('📋 ===== END DEBUG =====\n');
+
+    const analysisPrompt = `
+Bạn là AI tìm kiếm giao dịch để sửa.
+
+**DANH SÁCH ${recentTransactions.length} GIAO DỊCH (Tên trong dấu ngoặc kép ""):**
+${transactionsList}
+
+**CÂU NÓI:** "${message}"
+
+**CÁCH TÌM:**
+1. Lấy từ khóa sau "sửa/đổi/chỉnh"
+   - Ví dụ: "sửa ăn tối" → từ khóa là "ăn tối"
+   
+2. Tìm giao dịch có TÊN chứa từ khóa
+   - "ăn tối" khớp với: "ăn tối", "đi ăn tối", "ăn tối với bạn"
+   - KHÔNG phân biệt HOA/thường
+   - Tìm trong TÊN giao dịch (trong dấu ngoặc kép "")
+
+3. Trả về TẤT CẢ giao dịch khớp
+
+**VÍ DỤ:**
+User: "sửa ăn tối"
+List: 1. "ăn tối" | 50000, 2. "cafe sáng" | 30000
+→ Trả về #1
+
+User: "sửa cafe"  
+List: 1. "cafe sáng" | 30000, 2. "mua cafe" | 25000
+→ Trả về CẢ 2
+
+Trả về JSON thuần (KHÔNG markdown):
+{{
+  "hasEditIntent": true,
+  "foundTransactions": [
+    {
+      "id": "ID",
+      "description": "tên hiển thị",
+      "amount": số,
+      "date": "ISO date",
+      "wallet": "tên ví",
+      "category": "tên danh mục hoặc null"
+    }
+  ],
+  "multipleMatches": true/false,
+  "updates": {{"amount": null, "description": null}},
+  "confidence": 0.9,
+  "reasoning": "Tìm theo tên giao dịch"
+}}
+`;
+
+    const result = await model.generateContent(analysisPrompt);
+    const response = await result.response;
+    let text = response.text().trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    
+    console.log('🔍 Gemini response:', text);
+    
+    const analysis = JSON.parse(text);
+    
+    console.log('✅ Found:', {
+      count: analysis.foundTransactions?.length || 0,
+      transactions: analysis.foundTransactions
+    });
+    
+    if (analysis.hasEditIntent && analysis.confidence > 0.6) {
+      return {
+        success: true,
+        editIntent: {
+          foundTransactions: analysis.foundTransactions || [],
+          multipleMatches: analysis.multipleMatches || false,
+          updates: analysis.updates || {},
+          confidence: analysis.confidence,
+          reasoning: analysis.reasoning
+        }
+      };
+    }
+    
+    return { success: false, reason: 'Không tìm thấy' };
+    
+  } catch (error) {
+    console.error('❌ Error:', error);
+    return { success: false, reason: error.message };
+  }
+}
+
+// THÊM: Fallback tìm theo CẢ title VÀ description
+function fallbackAnalyzeEditIntent(message, recentTransactions) {
+  try {
+    console.log('\n🔄 ===== FALLBACK SEARCH =====');
+    console.log('Message:', message);
+    console.log('Total transactions:', recentTransactions.length);
+    
+    const lower = message.toLowerCase();
+    
+    // Normalize text
+    const normalize = (s) => (s || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .trim();
+    
+    const keywords = ['sửa', 'chỉnh', 'cập nhật', 'đổi', 'thay đổi'];
+    const hasEdit = keywords.some(k => lower.includes(k));
+    
+    if (!hasEdit) {
+      console.log('⚠️ No edit keyword');
+      return null;
+    }
+
+    // Trích xuất từ khóa
+    let searchTerm = lower;
+    keywords.forEach(k => {
+      searchTerm = searchTerm.replace(new RegExp(`\\b${k}\\b`, 'gi'), '');
+    });
+    searchTerm = searchTerm.replace(/\bgiao dịch\b/gi, '').trim();
+    searchTerm = searchTerm.replace(/\bthành\b.*/gi, '').trim();
+
+    console.log('Search term:', searchTerm);
+
+    if (!searchTerm) {
+      return {
+        success: true,
+        editIntent: {
+          foundTransactions: [],
+          multipleMatches: false,
+          updates: {},
+          confidence: 0.7,
+          reasoning: 'Không có từ khóa'
+        }
+      };
+    }
+
+    const normSearch = normalize(searchTerm);
+    const searchWords = normSearch.split(/\s+/).filter(w => w.length > 1);
+    
+    console.log('Normalized search:', normSearch);
+    console.log('Search words:', searchWords);
+    
+    // SỬA: TÌM TRONG CẢ title VÀ description
+    const matches = recentTransactions.filter(t => {
+      // Normalize cả title và description
+      const titleNorm = normalize(t.title || '');
+      const descNorm = normalize(t.description || '');
+      
+      // Kết hợp cả 2 để tìm kiếm
+      const combined = `${titleNorm} ${descNorm}`.trim();
+      
+      // Check exact match hoặc all words match
+      const exactMatch = combined.includes(normSearch);
+      const allWordsMatch = searchWords.length > 0 && searchWords.every(word => combined.includes(word));
+      
+      const found = exactMatch || allWordsMatch;
+      
+      if (found) {
+        console.log('✅ Match found:', {
+          id: t._id,
+          title: t.title,
+          description: t.description,
+          titleNorm,
+          descNorm,
+          combined,
+          normSearch,
+          matchType: exactMatch ? 'exact' : 'words'
+        });
+      }
+      
+      return found;
+    });
+    
+    // Map kết quả - ưu tiên title, fallback description
+    const found = matches.map(t => ({
+      id: String(t._id),
+      description: t.title || t.description || 'Giao dịch', // Trả về title nếu có
+      amount: t.amount,
+      date: new Date(t.date || t.createdAt).toISOString(),
+      wallet: t.wallet?.name,
+      category: t.category?.name
+    }));
+
+    console.log('✅ Total found:', found.length);
+    console.log('Found transactions:', found);
+    console.log('===== END FALLBACK =====\n');
+
+    return {
+      success: true,
+      editIntent: {
+        foundTransactions: found,
+        multipleMatches: found.length > 1,
+        updates: {},
+        confidence: found.length > 0 ? 0.85 : 0.6,
+        reasoning: `Tìm ${found.length} giao dịch có tên chứa "${searchTerm}"`
+      }
+    };
+  } catch (e) {
+    console.error('❌ Fallback error:', e);
+    return null;
+  }
+}
+
+// ======================== POST /api/ai/insights ========================
+// Endpoint phân tích và cung cấp thông tin chi tiết về giao dịch
+router.get('/insights', auth, requireAuth, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const monthsParam = Math.max(1, Math.min(6, parseInt(req.query.months || '3', 10)));
+    const months = buildMonthsWindow(monthsParam);
+
+    // Time window bounds (from earliest month start to last month end)
+    const from = months[0].start;
+    const to = months[months.length - 1].end;
+
+    // Wallet filter for current user
+    let walletFilter = {};
+    if (req.query.walletId) {
+      walletFilter = { _id: req.query.walletId };
+    }
+    const wallets = await Wallet.find({ owner: userId, ...walletFilter }).select('_id').lean();
+    const walletIds = wallets.map(w => w._id);
+
+    // Pull transactions within time window for user's wallets, or by user field if available
+    const txQuery = {
+      date: { $gte: from, $lt: to }
+    };
+    if (walletIds.length > 0) {
+      txQuery.wallet = { $in: walletIds };
+    } else {
+      // fallback if wallet ownership not used in your schema
+      txQuery.user = userId;
+    }
+
+    const txs = await Transaction.find(txQuery)
+      .populate('category', 'name icon type')
+      .populate('wallet', 'name currency')
+      .lean();
+
+    const payload = aggregateInsights(txs || [], months);
+    return res.json({
+      ok: true,
+      ...payload
+    });
+  } catch (err) {
+    console.error('AI insights error:', err);
+    res.status(500).json({ ok: false, message: 'Failed to compute insights', error: err.message });
+  }
+});
 
 // ======================== Helper functions (tiếp theo) ========================
 

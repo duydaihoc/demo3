@@ -350,8 +350,9 @@ const HomePageContent = () => {
         </div>
         <div className="home-content">
           <section className="home-left">
-            {/* FinanceDashboard renders the composition + daily stats table now */}
+            {/* FinanceDashboard renders everything (Timeline moved inside FinanceDashboard) */}
             <FinanceDashboard />
+            {/* <SpendingTimeline />  // ...removed... */}
           </section>
           <aside className="home-right">
             {/* Đưa Wallets sang bên phải */}
