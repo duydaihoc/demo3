@@ -1,8 +1,26 @@
 /* eslint-disable no-undef */ // temporary: silence false-positive no-undef errors during build
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom'; // NEW: SPA navigation helper
 import Sidebar from './Sidebar';
 import './TransactionsPage.css';
+
+// NEW: Leaflet dynamic loader (reuse pattern)
+const loadLeaflet = async () => {
+  if (typeof window === 'undefined') return null;
+  if (window.L) return window.L;
+  await new Promise((resolve, reject) => {
+    const css = document.createElement('link');
+    css.rel='stylesheet';
+    css.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(css);
+    const js = document.createElement('script');
+    js.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    js.onload=resolve;
+    js.onerror=()=>reject(new Error('Leaflet load failed'));
+    document.head.appendChild(js);
+  });
+  return window.L;
+};
 
 function TransactionsPage() {
   const navigate = useNavigate(); // NEW
@@ -27,7 +45,12 @@ function TransactionsPage() {
     categoryId: '',
     amount: '',
     date: new Date().toISOString().slice(0,10),
-    note: ''
+    note: '',
+    // NEW location fields
+    placeName: '',
+    lat: '',
+    lng: '',
+    accuracy: ''
   });
   const [saving, setSaving] = useState(false);
   const [txMessage, setTxMessage] = useState(null);
@@ -41,6 +64,21 @@ function TransactionsPage() {
   // thêm state cho lọc theo ngày
   const [startDate, setStartDate] = useState(''); // format yyyy-mm-dd
   const [endDate, setEndDate] = useState('');     // format yyyy-mm-dd
+
+  // Map search state
+  const [mapSearch, setMapSearch] = useState('');
+  const [mapResults, setMapResults] = useState([]);
+  const [mapLoading, setMapLoading] = useState(false);
+  const mapRef = useRef(null);
+  const leafletMapRef = useRef(null);
+  const markerRef = useRef(null);
+
+  // NEW: modal state for map picker
+  const [showMapModal, setShowMapModal] = useState(false);
+  const [showTxMapModal, setShowTxMapModal] = useState(false);          // NEW
+  const [txMapTarget, setTxMapTarget] = useState(null);                 // NEW
+  const txViewMapRef = useRef(null);                                    // NEW
+  const txViewLeafletRef = useRef(null);                                // NEW
 
   const formatCurrency = (amount, currency) => {
     try {
@@ -201,6 +239,20 @@ function TransactionsPage() {
     }
   };
 
+  // NEW: auto geolocation
+  const grabGeo = () => {
+    if (!navigator.geolocation) return showToast('Thiết bị không hỗ trợ GPS', 'error');
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const { latitude, longitude, accuracy } = pos.coords;
+        setForm(prev => ({ ...prev, lat: latitude.toFixed(6), lng: longitude.toFixed(6), accuracy: Math.round(accuracy) }));
+        showToast('Đã lấy vị trí', 'success');
+      },
+      err => showToast(`GPS lỗi: ${err.code}`, 'error'),
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+    );
+  };
+
   // categories available for selected wallet & type
   const availableCategories = (() => {
     if (!form.walletId) return [];
@@ -233,7 +285,14 @@ function TransactionsPage() {
         title: form.name,
         description: form.note,
         // Always use server-localized ISO timestamp for "added now"
-        date: new Date().toISOString()
+        date: new Date().toISOString(),
+        // NEW: include location only if lat & lng present
+        location: (form.lat && form.lng) ? {
+          lat: Number(form.lat),
+          lng: Number(form.lng),
+          placeName: form.placeName || '',
+          accuracy: form.accuracy ? Number(form.accuracy) : undefined
+        } : undefined
       };
 
       const res = await fetch('http://localhost:5000/api/transactions', { method: 'POST', headers, body: JSON.stringify(body) });
@@ -270,7 +329,17 @@ function TransactionsPage() {
       } catch (ignoreErr) { /* ignore */ }
 
       // reset form (keep selected wallet to ease multiple entries)
-      setForm(prev => ({ ...prev, name: '', categoryId: '', amount: '', date: new Date().toISOString().slice(0,10), note: '' }));
+      setForm(prev => ({
+        ...prev,
+        name: '',
+        categoryId: '',
+        amount: '',
+        note: '',
+        placeName: '',
+        lat: '',
+        lng: '',
+        accuracy: ''
+      }));
     } catch (err) {
       console.error('Create transaction failed', err);
       const msg = err.message || 'Lỗi khi thêm giao dịch';
@@ -444,6 +513,124 @@ function TransactionsPage() {
     setExpenseByCurrency(prev => mapsEqual(prev, exp) ? prev : exp);
   }, [transactions, walletFilter, startDate, endDate, wallets]); // recompute when source data or filters change
 
+  // NEW: perform geocode search (Nominatim)
+  const performSearch = async () => {
+    if (!mapSearch.trim()) return;
+    setMapLoading(true);
+    setMapResults([]);
+    try {
+      const q = encodeURIComponent(mapSearch.trim());
+      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=8&q=${q}`;
+      const res = await fetch(url, { headers: { 'Accept-Language': 'vi' } });
+      const data = await res.json();
+      setMapResults(data || []);
+    } catch (e) {
+      showToast('Không tìm được địa điểm', 'error');
+    } finally {
+      setMapLoading(false);
+    }
+  };
+
+  // NEW: init map only when modal opens
+  useEffect(() => {
+    if (!showMapModal) {
+      // NEW: cleanup when modal closes to allow re-init on next open
+      if (leafletMapRef.current) {
+        try { leafletMapRef.current.remove(); } catch(_) {}
+        leafletMapRef.current = null;
+        markerRef.current = null;
+      }
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      // NEW: wait a tick for DOM to be ready after modal opens
+      await new Promise(r => setTimeout(r, 50));
+      if (!mapRef.current || cancelled) return;
+      try {
+        const L = await loadLeaflet();
+        if (!L || cancelled) return;
+        // NEW: always create new map instance (previous was removed on close)
+        const center = [21.0278,105.8342];
+        const map = L.map(mapRef.current).setView(center, 6);
+        leafletMapRef.current = map;
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution:'© OpenStreetMap'
+        }).addTo(map);
+        map.on('click', e => {
+          const { lat, lng } = e.latlng;
+          setForm(prev => ({ ...prev, lat: lat.toFixed(6), lng: lng.toFixed(6) }));
+          if (!markerRef.current) {
+            markerRef.current = L.marker([lat,lng]).addTo(map);
+          } else {
+            markerRef.current.setLatLng([lat,lng]);
+          }
+        });
+      } catch (err) {
+        console.error('Map init error:', err);
+        showToast('Không thể tải bản đồ', 'error');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showMapModal]);
+
+  // NEW: focus selected search result
+  const selectSearchResult = (r) => {
+    const lat = Number(r.lat);
+    const lng = Number(r.lon);
+    setForm(prev => ({
+      ...prev,
+      placeName: r.display_name,
+      lat: lat.toFixed(6),
+      lng: lng.toFixed(6)
+    }));
+    if (leafletMapRef.current && window.L) {
+      leafletMapRef.current.setView([lat,lng], 14);
+      if (!markerRef.current) markerRef.current = window.L.marker([lat,lng]).addTo(leafletMapRef.current);
+      else markerRef.current.setLatLng([lat,lng]);
+    }
+    setMapResults([]);
+  };
+
+  const openTxMap = (tx) => { // NEW
+    if (!tx?.location || typeof tx.location.lat !== 'number' || typeof tx.location.lng !== 'number') return;
+    setTxMapTarget(tx);
+    setShowTxMapModal(true);
+  };
+
+  useEffect(() => { // NEW: init per-transaction view map
+    if (!showTxMapModal) {
+      if (txViewLeafletRef.current) {
+        try { txViewLeafletRef.current.remove(); } catch(_) {}
+        txViewLeafletRef.current = null;
+      }
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      await new Promise(r => setTimeout(r, 40)); // allow modal render
+      if (!txViewMapRef.current || !txMapTarget || cancelled) return;
+      try {
+        const L = await loadLeaflet();
+        if (!L) return;
+        const { lat, lng } = txMapTarget.location;
+        const m = L.map(txViewMapRef.current).setView([lat, lng], 14);
+        txViewLeafletRef.current = m;
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap'
+        }).addTo(m);
+        L.marker([lat, lng]).addTo(m).bindPopup(
+          `<b>${(txMapTarget.title || txMapTarget.description || 'Giao dịch').replace(/"/g,'&quot;')}</b><br/>${lat}, ${lng}<br/>${txMapTarget.location.placeName || ''}`
+        ).openPopup();
+      } catch (e) {
+        showToast('Không thể hiển thị bản đồ giao dịch', 'error');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [showTxMapModal, txMapTarget]);
+
   return (
     <div>
       <Sidebar userName={userName} />
@@ -567,6 +754,23 @@ function TransactionsPage() {
 
             <input type="number" placeholder="Số tiền" value={form.amount} onChange={(e) => handleFormChange('amount', e.target.value)} required min="0" />
             <input type="text" placeholder="Ghi chú" value={form.note} onChange={(e) => handleFormChange('note', e.target.value)} style={{ gridColumn: '1 / span 3' }} />
+
+            {/* NEW: Map button replaces inline map picker */}
+            <button
+              type="button"
+              onClick={() => setShowMapModal(true)}
+              style={{ padding: '10px 14px', borderRadius: 8, background: 'linear-gradient(90deg,#2a5298,#4ecdc4)', color: '#fff', fontWeight: 700, cursor: 'pointer', border: 'none' }}
+            >
+              📍 Bản đồ
+            </button>
+
+            {/* Show current location if set */}
+            {(form.lat || form.lng || form.placeName) && (
+              <div style={{ gridColumn: '1 / -1', fontSize: '.85rem', color: '#506a82', fontWeight: 600 }}>
+                {form.placeName && <div>Địa điểm: {form.placeName}</div>}
+                {(form.lat && form.lng) && <div>Tọa độ: {form.lat}, {form.lng}</div>}
+              </div>
+            )}
 
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="save-btn" type="submit" disabled={saving} style={{ minWidth: 160 }}>
@@ -799,6 +1003,14 @@ function TransactionsPage() {
                           Chi tiết
                         </button>
                       )}
+                      {!isGroupTx && !isFamilyTransfer && !isFamilyPersonal && tx.location && typeof tx.location.lat === 'number' && typeof tx.location.lng === 'number' && (
+                        <button
+                          type="button"
+                          className="tx-row-map-btn"
+                          onClick={() => openTxMap(tx)}
+                          title="Xem vị trí giao dịch"
+                        >📍</button>
+                      )}
                     </td>
                   </tr>
                 );
@@ -868,8 +1080,112 @@ function TransactionsPage() {
           </div>
         </div>
       )}
+
+      {/* NEW: Map Modal */}
+      {showMapModal && (
+        <div className="tx-overlay">
+          <div className="tx-map-modal">
+            <div className="tx-map-modal-header">
+              <div className="tx-map-modal-title">Chọn vị trí trên bản đồ</div>
+              <button className="tx-map-modal-close" onClick={() => setShowMapModal(false)}>×</button>
+            </div>
+            <div className="tx-map-picker">
+              <div className="tx-map-search-row">
+                <input
+                  type="text"
+                  placeholder="Tìm địa điểm (VD: quán cà phê, đường...)"
+                  value={mapSearch}
+                  onChange={e => setMapSearch(e.target.value)}
+                />
+                <button type="button" onClick={performSearch} disabled={mapLoading}>
+                  {mapLoading ? 'Đang tìm...' : 'Tìm'}
+                </button>
+              </div>
+              {mapResults.length > 0 && (
+                <div className="tx-map-results">
+                  {mapResults.map(r => (
+                    <div
+                      key={r.place_id}
+                      className="tx-map-results-item"
+                      onClick={() => selectSearchResult(r)}
+                      title="Chọn địa điểm"
+                    >
+                      {r.display_name}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="tx-map-canvas" ref={mapRef} aria-label="Bản đồ chọn vị trí"></div>
+              <div className="tx-map-hint">
+                Nhấp trên bản đồ để đặt tọa độ hoặc dùng ô tìm kiếm.
+              </div>
+
+              {/* Location manual inputs — HIDDEN lat/lng */}
+              <input
+                type="text"
+                placeholder="Tên địa điểm (ví dụ: Quán cà phê A)"
+                value={form.placeName}
+                onChange={(e) => handleFormChange('placeName', e.target.value)}
+                style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #e3f6f5' }}
+              />
+              {/* REMOVED: lat/lng visible inputs in modal — values set by map click / search result */}
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button
+                  type="button"
+                  onClick={grabGeo}
+                  style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #d0e4ef', background: '#eef7fb', cursor: 'pointer', fontWeight: 600 }}
+                >
+                  GPS
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm(prev => ({ ...prev, lat: '', lng: '', accuracy: '', placeName: '' }))}
+                  style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #e6e6e6', background: '#fafafa', cursor: 'pointer', fontWeight: 600 }}
+                >
+                  Xóa vị trí
+                </button>
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowMapModal(false)}
+                  style={{ marginLeft: 'auto', padding: '8px 16px', borderRadius: 8, background: 'linear-gradient(90deg,#2a5298,#4ecdc4)', color: '#fff', fontWeight: 700, border: 'none', cursor: 'pointer' }}
+                >
+                  Xong
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NEW: per-transaction location view modal */}
+      {showTxMapModal && txMapTarget && (
+        <div className="tx-overlay">
+          <div className="tx-map-view-modal">
+            <div className="tx-map-view-header">
+              <div className="tx-map-view-title">
+                Vị trí giao dịch: {txMapTarget.title || txMapTarget.description || '—'}
+              </div>
+              <button
+                type="button"
+                className="tx-map-view-close"
+                onClick={() => { setShowTxMapModal(false); setTxMapTarget(null); }}
+              >×</button>
+            </div>
+            <div className="tx-map-view-meta">
+              {txMapTarget.location.placeName && <div><b>Địa điểm:</b> {txMapTarget.location.placeName}</div>}
+              <div><b>Tọa độ:</b> {txMapTarget.location.lat}, {txMapTarget.location.lng}</div>
+            </div>
+            <div ref={txViewMapRef} className="tx-map-view-canvas" aria-label="Bản đồ vị trí giao dịch" />
+            <div className="tx-map-view-footer">
+              Bản đồ chỉ hiển thị giao dịch này. Đóng để quay lại danh sách.
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-export default TransactionsPage;
+export default TransactionsPage;;

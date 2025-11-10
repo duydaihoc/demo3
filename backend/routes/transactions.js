@@ -31,7 +31,7 @@ const revertTransactionOnWallet = (wallet, type, amount) => {
 // POST create transaction
 router.post('/', requireAuth, async (req, res) => {
   try {
-    const { wallet: walletId, category: categoryId, type, amount, title, description, date } = req.body;
+    const { wallet: walletId, category: categoryId, type, amount, title, description, date, location } = req.body;
 
     if (!walletId || !isValidId(walletId)) return res.status(400).json({ message: 'wallet is required' });
     if (!categoryId || !isValidId(categoryId)) return res.status(400).json({ message: 'category is required' });
@@ -61,7 +61,13 @@ router.post('/', requireAuth, async (req, res) => {
       title: title || '',
       description: description || '',
       date: date ? new Date(date) : Date.now(),
-      createdBy: req.user ? req.user._id : undefined
+      createdBy: req.user?._id,
+      location: location && (location.lat || location.lng) ? {
+        lat: Number(location.lat),
+        lng: Number(location.lng),
+        placeName: location.placeName || '',
+        accuracy: location.accuracy != null ? Number(location.accuracy) : undefined
+      } : undefined
     });
 
     // apply to wallet balance
@@ -512,6 +518,54 @@ router.delete('/:id', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('Delete transaction error:', err);
     res.status(500).json({ message: 'Server Error', error: err.message });
+  }
+});
+
+// NEW: heatmap data (expense only, with coordinates) GET /api/transactions/geo/heat
+router.get('/geo/heat', requireAuth, async (req, res) => {
+  try {
+    // Build ownership filter similar to main list
+    let walletFilter = {};
+    if (req.user && req.user.role === 'admin') {
+      // admin: optional ?userId to scope
+      if (req.query.userId && isValidId(req.query.userId)) {
+        const wallets = await Wallet.find({ owner: req.query.userId }).select('_id');
+        walletFilter.wallet = { $in: wallets.map(w => w._id) };
+      }
+    } else {
+      const wallets = await Wallet.find({ owner: req.user._id }).select('_id');
+      walletFilter.wallet = { $in: wallets.map(w => w._id) };
+    }
+
+    const rows = await Transaction.find({
+      ...walletFilter,
+      type: 'expense',
+      'location.lat': { $exists: true },
+      'location.lng': { $exists: true }
+    }).select('amount location').lean();
+
+    const buckets = {};
+    rows.forEach(r => {
+      const lat = Number(r.location?.lat);
+      const lng = Number(r.location?.lng);
+      if (isNaN(lat) || isNaN(lng)) return;
+      const key = `${lat.toFixed(3)},${lng.toFixed(3)}`;
+      if (!buckets[key]) {
+        buckets[key] = {
+          lat: Number(lat.toFixed(3)),
+          lng: Number(lng.toFixed(3)),
+          total: 0,
+          count: 0,
+          placeName: r.location?.placeName || ''
+        };
+      }
+      buckets[key].total += Number(r.amount) || 0;
+      buckets[key].count += 1;
+    });
+
+    res.json({ ok: true, items: Object.values(buckets) });
+  } catch (e) {
+    res.status(500).json({ ok:false, message:'Không thể tạo dữ liệu bản đồ', error:e.message });
   }
 });
 

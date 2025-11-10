@@ -9,6 +9,7 @@ import FinanceDashboard from './FinanceDashboard';
 import SavingsGoals from './SavingsGoals';
 import AiAssistant from './AiAssistant';
 import { useNavigate } from 'react-router-dom';
+import SpendingMap from './SpendingMap'; // NEW
 
 // Custom next/previous button component for the tour
 const TourNavigation = (props) => {
@@ -352,6 +353,8 @@ const HomePageContent = () => {
           <section className="home-left">
             {/* FinanceDashboard renders everything (Timeline moved inside FinanceDashboard) */}
             <FinanceDashboard />
+            {/* NEW: Spending heat map */}
+            <SpendingMap />
             {/* <SpendingTimeline />  // ...removed... */}
           </section>
           <aside className="home-right">
