@@ -31,11 +31,34 @@ function SavingsGoals() {
   const [notification, setNotification] = useState({ message: '', type: '' }); // type: 'success' | 'error'
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, goal: null });
 
+  // NEW: gamification state
+  const [gamification, setGamification] = useState(null);
+  const [showGamifyHelp, setShowGamifyHelp] = useState(false); // NEW
+
   // Fetch goals and wallets on component mount
   useEffect(() => {
     fetchGoals();
     fetchWallets();
+    fetchGamification(); // NEW
   }, []);
+
+  // NEW: fetch gamification
+  const fetchGamification = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('http://localhost:5000/api/savings/gamification', {
+        headers: {
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        }
+      });
+      const data = await res.json().catch(()=> ({}));
+      if (res.ok && data && data.ok) {
+        setGamification(data);
+      }
+    } catch (e) {
+      // silent fail
+    }
+  };
 
   // Handler functions
   const handleGoalInputChange = (e) => {
@@ -130,6 +153,7 @@ function SavingsGoals() {
       setUiMode('list');
       await fetchGoals();
       showNotification('Đã tạo mục tiêu thành công!', 'success');
+      fetchGamification();
        
     } catch (error) {
       console.error('Error creating goal:', error);
@@ -253,6 +277,7 @@ function SavingsGoals() {
       setUiMode('list');
       setSelectedGoal(null);
       await fetchGoals();
+      fetchGamification();
     } catch (err) {
       console.error('Update error:', err);
       showNotification(err.message || 'Lỗi khi cập nhật mục tiêu', 'error');
@@ -320,6 +345,7 @@ function SavingsGoals() {
       // Refresh data
       fetchGoals();
       fetchWallets();
+      fetchGamification();
 
     } catch (error) {
       console.error('Deposit error:', error);
@@ -390,6 +416,7 @@ function SavingsGoals() {
       if (!res.ok) throw new Error(body.message || 'Xóa thất bại');
       showNotification('Đã xóa mục tiêu', 'success');
       await fetchGoals();
+      fetchGamification();
     } catch (err) {
       showNotification(err.message || 'Lỗi khi xóa mục tiêu', 'error');
     }
@@ -414,7 +441,7 @@ function SavingsGoals() {
 
       showNotification('Đã báo cáo hoàn thành mục tiêu!', 'success');
       fetchGoals(); // Refresh danh sách
-
+      fetchGamification();
       // Tải PDF báo cáo
       const pdfResponse = await fetch(`http://localhost:5000/api/savings/${goalId}/report-pdf`, {
         headers: {
@@ -445,6 +472,54 @@ function SavingsGoals() {
     }
   };
 
+  // NEW: export PDF for completed / overdue goal
+  const downloadGoalPdf = async (goal) => {
+    if (!goal || !goal._id) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:5000/api/savings/${goal._id}/report-pdf`, {
+        headers: { ...(token && { 'Authorization': `Bearer ${token}` }) }
+      });
+      if (!res.ok) throw new Error('Không thể xuất PDF');
+      const blob = await res.blob();
+      if (!blob.size) throw new Error('File PDF rỗng');
+
+      // Try filename from server header first
+      let filename = null;
+      const cd = res.headers.get('content-disposition');
+      if (cd) {
+        // parse filename*=UTF-8''... or filename="..."
+        const matchUtf8 = cd.match(/filename\*\=UTF-8''([^;]+)/i);
+        const matchBasic = cd.match(/filename="([^"]+)"/i);
+        if (matchUtf8) filename = decodeURIComponent(matchUtf8[1]);
+        else if (matchBasic) filename = matchBasic[1];
+      }
+      // Fallback: keep Vietnamese accents, just remove illegal characters
+      if (!filename) {
+        const base = (goal.name || 'mục tiêu')
+          .toString()
+          .normalize('NFC')
+          .replace(/[<>:"/\\|?*\x00-\x1F]/g, '')
+          .trim()
+          .replace(/\s+/g, '-')
+          .slice(0, 80) || 'bao-cao-muc-tieu';
+        filename = `bao-cao-muc-tieu-${base}.pdf`;
+      }
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+      showNotification('Đã tải PDF', 'success');
+    } catch (e) {
+      showNotification(e.message || 'Lỗi xuất PDF', 'error');
+    }
+  };
+
   // UI notification component
   const Notification = ({ message, type }) => (
     message ? (
@@ -470,6 +545,210 @@ function SavingsGoals() {
     ) : null
   );
 
+  // NEW: Help modal for levels & badges
+  const GamifyHelpModal = ({ open, data, onClose, goals = [] }) => {
+    if (!open || !data) return null;
+    const { thresholds = [], badges = [], level, progressPct, totals } = data;
+
+    // NEW: build dynamic details per badge
+    const contributionsCount = goals.reduce((sum, g) => sum + (Array.isArray(g.contributions) ? g.contributions.length : 0), 0);
+    const bigGoalReached = (min) => goals.some(g =>
+      (g.status === 'completed' || g.currentAmount >= g.targetAmount) && g.targetAmount >= min
+    );
+    const buildBadgeDetail = (b) => {
+      const remainingText = (need) => need <= 0 ? 'Đã đạt' : `Còn thiếu ${need.toLocaleString('vi-VN')}₫`;
+      switch (b.key) {
+        case 'starter':
+          return { process: '1) Bấm "+ Thêm mục tiêu" 2) Nhập thông tin 3) Lưu', status: totals.goals >= 1 ? 'Đã tạo ≥ 1 mục tiêu' : 'Chưa có mục tiêu', missing: totals.goals >= 1 ? null : 'Tạo ít nhất 1 mục tiêu.' };
+        case 'first_complete':
+          return { process: 'Nạp tiền đủ 100% rồi bấm "Báo cáo hoàn thành".', status: totals.completed >= 1 ? 'Đã hoàn thành 1 mục tiêu' : 'Chưa hoàn thành mục tiêu', missing: totals.completed >= 1 ? null : 'Hoàn thành 1 mục tiêu.' };
+        case 'silver_saver':
+          return { process: 'Hoàn thành 3 mục tiêu (đạt 100% & báo cáo).', status: `${totals.completed}/3`, missing: totals.completed >= 3 ? null : `Còn ${3 - totals.completed} mục tiêu nữa.` };
+        case 'gold_saver':
+          return { process: 'Hoàn thành 5 mục tiêu.', status: `${totals.completed}/5`, missing: totals.completed >= 5 ? null : `Còn ${5 - totals.completed} mục tiêu.` };
+        case 'master_spender':
+          return { process: 'Hoàn thành 10 mục tiêu.', status: `${totals.completed}/10`, missing: totals.completed >= 10 ? null : `Còn ${10 - totals.completed} mục tiêu.` };
+        case 'ten_million': {
+          const need = 10_000_000 - totals.totalSaved;
+          return { process: 'Tổng số tiền đã nạp vào các mục tiêu đạt 10.000.000₫.', status: `${totals.totalSaved.toLocaleString('vi-VN')}₫ / 10.000.000₫`, missing: need <= 0 ? null : remainingText(need) };
+        }
+        case 'twenty_million_total': {
+          const need = 20_000_000 - totals.totalSaved;
+          return { process: 'Tiết kiệm cộng dồn đạt 20.000.000₫.', status: `${totals.totalSaved.toLocaleString('vi-VN')}₫ / 20.000.000₫`, missing: need <= 0 ? null : remainingText(need) };
+        }
+        case 'fifty_million_total': {
+          const need = 50_000_000 - totals.totalSaved;
+          return { process: 'Tiết kiệm cộng dồn đạt 50.000.000₫.', status: `${totals.totalSaved.toLocaleString('vi-VN')}₫ / 50.000.000₫`, missing: need <= 0 ? null : remainingText(need) };
+        }
+        case 'hundred_million_total': {
+          const need = 100_000_000 - totals.totalSaved;
+          return { process: 'Tiết kiệm cộng dồn đạt 100.000.000₫.', status: `${totals.totalSaved.toLocaleString('vi-VN')}₫ / 100.000.000₫`, missing: need <= 0 ? null : remainingText(need) };
+        }
+        case 'big_goal_20m':
+          return { process: 'Tạo & hoàn thành 1 mục tiêu có target ≥ 20.000.000₫.', status: bigGoalReached(20_000_000) ? 'Đã có mục tiêu ≥20M hoàn thành' : 'Chưa có', missing: bigGoalReached(20_000_000) ? null : 'Hoàn thành mục tiêu ≥20M.' };
+        case 'big_goal_50m':
+          return { process: 'Hoàn thành mục tiêu target ≥ 50.000.000₫.', status: bigGoalReached(50_000_000) ? 'Đã có' : 'Chưa có', missing: bigGoalReached(50_000_000) ? null : 'Hoàn thành mục tiêu ≥50M.' };
+        case 'big_goal_100m':
+          return { process: 'Hoàn thành mục tiêu target ≥ 100.000.000₫.', status: bigGoalReached(100_000_000) ? 'Đã có' : 'Chưa có', missing: bigGoalReached(100_000_000) ? null : 'Hoàn thành mục tiêu ≥100M.' };
+        case 'fast_finisher_30d': {
+          const any = goals.some(g => g.completedAt && g.startDate && (new Date(g.completedAt) - new Date(g.startDate)) / 86400000 <= 30);
+          return { process: 'Hoàn thành mục tiêu trong ≤30 ngày kể từ ngày tạo.', status: any ? 'Đã đạt' : 'Chưa đạt', missing: any ? null : 'Hoàn thành nhanh một mục tiêu.' };
+        }
+        case 'precise_finisher': {
+          const any = goals.some(g => g.status === 'completed' && Math.abs((g.currentAmount || 0) - (g.targetAmount || 0)) <= 1000);
+          return { process: 'Kết thúc với số tiền đúng (±1.000₫).', status: any ? 'Đã có mục tiêu chuẩn' : 'Chưa có', missing: any ? null : 'Hoàn thành mục tiêu với số tiền chính xác.' };
+        }
+        case 'streak_3_months': {
+          // simple recompute: months already in backend logic—show completed count
+          return { process: 'Hoàn thành ít nhất 1 mục tiêu mỗi tháng trong 3 tháng liên tiếp.', status: badges.find(x => x.key === 'streak_3_months')?.unlocked ? 'Đã đạt' : 'Chưa đạt', missing: badges.find(x => x.key === 'streak_3_months')?.unlocked ? null : 'Duy trì hoàn thành mục tiêu mỗi tháng.' };
+        }
+        case 'contributor_10':
+          return { process: 'Tổng số lần nạp (contributions) ≥ 10.', status: `${contributionsCount}/10`, missing: contributionsCount >= 10 ? null : `Còn ${10 - contributionsCount} lần nạp.` };
+        case 'contributor_25':
+          return { process: 'Tổng số lần nạp ≥ 25.', status: `${contributionsCount}/25`, missing: contributionsCount >= 25 ? null : `Còn ${25 - contributionsCount} lần nạp.` };
+        case 'overdue_recovery': {
+          const any = goals.some(g => g.status === 'completed' && g.targetDate && g.completedAt && new Date(g.completedAt) > new Date(g.targetDate));
+          return { process: 'Hoàn thành mục tiêu sau khi đã quá hạn.', status: any ? 'Đã có mục tiêu quá hạn hoàn thành' : 'Chưa có', missing: any ? null : 'Hoàn thành một mục tiêu quá hạn.' };
+        }
+        case 'early_bird': {
+            const any = goals.some(g => g.completedAt && g.targetDate && (new Date(g.targetDate) - new Date(g.completedAt)) / 86400000 >= 7);
+            return { process: 'Hoàn thành ít nhất 7 ngày trước hạn.', status: any ? 'Đã có mục tiêu hoàn thành sớm' : 'Chưa có', missing: any ? null : 'Hoàn thành sớm một mục tiêu.' };
+        }
+        default:
+          return { process: '—', status: b.unlocked ? 'Đã đạt' : 'Chưa đạt', missing: null };
+      }
+    };
+
+    return (
+      <div className="sg-modal-backdrop">
+        <div className="sg-help-modal">
+          <div className="sg-help-header">
+            <div className="sg-help-title">Giải thích cấp độ & huy hiệu</div>
+            <button className="sg-help-close" onClick={onClose}>×</button>
+          </div>
+          <div className="sg-help-section">
+            <div className="sg-help-subtitle">Cấp độ tài chính</div>
+            <p className="sg-help-text">
+              Cấp độ dựa trên số mục tiêu hoàn thành. Bạn ở <b>Lv {level}</b> (tiến độ {progressPct}%).
+            </p>
+            <ul className="sg-level-list">
+              {thresholds.map((t,i) => (
+                <li key={i} className={totals.completed >= t ? 'reached' : ''}>
+                  Lv {i} — Hoàn thành ≥ {t} mục tiêu
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="sg-help-section">
+            <div className="sg-help-subtitle">Huy hiệu</div>
+            <p className="sg-help-text">
+              Mỗi huy hiệu có điều kiện rõ ràng. Phần "Còn thiếu" giúp biết bước tiếp theo.
+            </p>
+            <ul className="sg-badge-list">
+              {badges.map(b => {
+                const detail = buildBadgeDetail(b);
+                return (
+                  <li key={b.key} className={`badge-row ${b.unlocked ? 'unlocked' : 'locked'}`}>
+                    <span className="badge-name">{b.name}</span>
+                    <span className="badge-desc">{b.description}</span>
+                    <span className="badge-state">{b.unlocked ? '✓' : '—'}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+          {/* NEW: detailed process table */}
+          <div className="sg-help-section">
+            <div className="sg-help-subtitle">Quy trình đạt huy hiệu</div>
+            <div className="sg-badge-detail-table">
+              {badges.map(b => {
+                const d = buildBadgeDetail(b);
+                return (
+                  <div key={b.key} className={`bd-row ${b.unlocked ? 'done' : ''}`}>
+                    <div className="bd-left">
+                      <div className="bd-title">{b.name}</div>
+                      <div className="bd-process">{d.process}</div>
+                    </div>
+                    <div className="bd-mid">
+                      <span className="bd-status">{d.status}</span>
+                      {d.missing && !b.unlocked && <span className="bd-missing">{d.missing}</span>}
+                    </div>
+                    <div className="bd-right">
+                      {b.unlocked ? <span className="bd-badge-ok">✓</span> : <span className="bd-badge-pending">... </span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Render gamification card
+  const GamificationCard = () => {
+    if (!gamification) return null;
+    const level = gamification.level ?? 0;
+    const progress = gamification.progressPct ?? 0;
+    const badges = Array.isArray(gamification.badges) ? gamification.badges : [];
+    const completed = gamification.totals?.completed || 0;
+    const totalSaved = gamification.totals?.totalSaved || 0;
+    // NEW: guidance fields
+    const levelNote = gamification.levelNote || '';
+    const levelGuides = Array.isArray(gamification.levelGuides) ? gamification.levelGuides : [];
+
+    return (
+      <div className="sg-gamify-card">
+        <div className="sg-gamify-left">
+          {/* NEW: place help button inside level frame only */}
+          <button
+            type="button"
+            className="sg-help-btn"
+            aria-label="Giải thích cấp độ & huy hiệu"
+            onClick={() => setShowGamifyHelp(true)}
+          >?</button>
+
+          <div className="sg-level">Cấp độ tài chính: <b>Lv {level}</b></div>
+          <div className="sg-progress-wrap" aria-label="Tiến độ lên cấp">
+            <div className="sg-progress-bar">
+              <div className="sg-progress-fill" style={{ width: `${progress}%` }} />
+            </div>
+            <div className="sg-progress-meta">
+              <span>Tiến độ: {progress}%</span>
+              <span>Hoàn thành: {completed} mục tiêu</span>
+              <span>Đã tiết kiệm: {new Intl.NumberFormat('vi-VN').format(totalSaved)}₫</span>
+            </div>
+          </div>
+
+          {/* NEW: level guidance note + guides */}
+          {levelNote ? <div className="sg-level-note">{levelNote}</div> : null}
+          {levelGuides.length > 0 && (
+            <div className="sg-guides">
+              {levelGuides.map(g => (
+                <div key={g.level} className={`sg-guide ${g.level <= level ? 'unlocked' : ''}`}>
+                  <b>Lv {g.level}</b> — {g.note}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="sg-gamify-right">
+          <div className="sg-badges-title">Huy hiệu</div>
+          <div className="sg-badges">
+            {badges.map(b => (
+              <div key={b.key} className={`sg-badge ${b.unlocked ? 'unlocked' : 'locked'}`} title={b.description}>
+                <div className="sg-badge-icon">{b.unlocked ? '🏅' : '🔒'}</div>
+                <div className="sg-badge-name">{b.name}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Display the add goal button for empty state
   if (uiMode === 'list' && goals.length === 0) {
     return (
@@ -484,6 +763,7 @@ function SavingsGoals() {
         <div className="savings-header">
           <h2 className="savings-title">Mục tiêu tiết kiệm</h2>
         </div>
+        <GamificationCard />
         <div className="empty-goals-container">
           <div className="add-goal-card" onClick={() => setUiMode('create')}>
             <div className="add-goal-icon">+</div>
@@ -945,7 +1225,15 @@ function SavingsGoals() {
         <h2 className="savings-title">Mục tiêu tiết kiệm</h2>
         <button className="add-goal-btn" onClick={() => setUiMode('create')}>+ Thêm mục tiêu</button>
       </div>
-      
+
+      <GamificationCard />
+      <GamifyHelpModal
+        open={showGamifyHelp}
+        data={gamification}
+        goals={goals}              // NEW pass goals
+        onClose={() => setShowGamifyHelp(false)}
+      />
+
       {loading.goals ? (
         <div className="loading-container">Đang tải mục tiêu...</div>
       ) : error.goals ? (
@@ -1013,6 +1301,14 @@ function SavingsGoals() {
                     <button className="goal-action-btn deposit" onClick={() => openDepositForm(goal)}>Nạp tiền</button>
                     <button className="goal-action-btn edit" onClick={() => openEditForm(goal)}>Sửa</button>
                   </>
+                )}
+                {(goal.status === 'completed' || goal.status === 'overdue') && (
+                  <button
+                    className="goal-action-btn pdf"
+                    onClick={() => downloadGoalPdf(goal)}
+                  >
+                    PDF
+                  </button>
                 )}
                 <button className="goal-action-btn delete" onClick={() => setDeleteConfirm({ open: true, goal })}>Xóa</button>
               </div>

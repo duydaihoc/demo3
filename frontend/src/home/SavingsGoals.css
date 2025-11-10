@@ -291,6 +291,14 @@
   background: rgba(255, 99, 71, 0.5);
 }
 
+/* New PDF button styles */
+.goal-action-btn.pdf {
+  background: rgba(33,150,243,0.35);
+}
+.goal-action-btn.pdf:hover {
+  background: rgba(33,150,243,0.55);
+}
+
 /* Goal creation container */
 .goal-creation-container {
   background: #fff;
@@ -922,7 +930,111 @@
   color: #ff9800;
 }
 
-/* Responsive adjustments */
+/* Gamification card */
+.sg-gamify-card {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(42,82,152,0.08);
+  padding: 16px;
+  margin-bottom: 20px;
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 16px;
+  border: 1px solid #eef2f8;
+}
+
+.sg-gamify-left { 
+  display: flex; 
+  flex-direction: column; 
+  gap: 10px; 
+  position: relative; /* NEW: so .sg-help-btn is within level frame */
+}
+.sg-level {
+  font-weight: 800;
+  color: #2a5298;
+  font-size: 1.05rem;
+}
+.sg-progress-wrap { display: flex; flex-direction: column; gap: 8px; }
+.sg-progress-bar {
+  height: 10px;
+  background: #f1f6fb;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px #e8eef5;
+}
+.sg-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg,#2a5298,#4ecdc4);
+  transition: width 0.4s ease;
+  border-radius: 10px;
+}
+.sg-progress-meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: #506a82;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.sg-gamify-right { display: flex; flex-direction: column; }
+.sg-badges-title {
+  font-weight: 800;
+  color: #083047;
+  margin-bottom: 8px;
+  font-size: 0.95rem;
+}
+.sg-badges {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+}
+.sg-badge {
+  background: #f7fafd;
+  border: 1px solid #eef2f8;
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  color: #163a5a;
+}
+.sg-badge.unlocked { background: linear-gradient(180deg,#ffffff,#f8fbff); }
+.sg-badge.locked { opacity: 0.6; }
+.sg-badge-icon { font-size: 20px; }
+.sg-badge-name { font-size: 0.9rem; }
+
+/* NEW: level guidance */
+.sg-level-note {
+  background: #f7fafd;
+  border: 1px solid #eef2f8;
+  border-radius: 10px;
+  padding: 8px 10px;
+  color: #163a5a;
+  font-weight: 700;
+}
+
+.sg-guides {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+.sg-guide {
+  background: #f9fbfd;
+  border: 1px dashed #e8eef5;
+  border-radius: 8px;
+  padding: 6px 10px;
+  color: #163a5a;
+  font-weight: 700;
+}
+.sg-guide.unlocked {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
 @media (max-width: 900px) {
   .goal-form,
   .goal-deposit-container {
@@ -971,4 +1083,183 @@
     padding: 4px 8px;
     font-size: 10px;
   }
+}
+
+/* Help button and modal styles */
+.sg-help-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: linear-gradient(90deg,#2a5298,#4ecdc4);
+  color:#fff;
+  border:none;
+  width:32px;
+  height:32px;
+  border-radius:50%;
+  font-weight:800;
+  cursor:pointer;
+  box-shadow:0 4px 12px rgba(42,82,152,0.25);
+  transition:transform .2s;
+}
+.sg-help-btn:hover { transform:translateY(-3px); }
+
+.sg-help-modal {
+  background:#fff;
+  border-radius:14px;
+  width:520px;
+  max-width:92vw;
+  max-height:85vh;
+  overflow-y:auto;
+  padding:20px 24px 24px;
+  box-shadow:0 10px 40px rgba(0,0,0,0.25);
+  animation:sg-modal-fadein .25s;
+  font-weight:600;
+  color:#163a5a;
+}
+.sg-help-header {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:8px;
+}
+.sg-help-title {
+  font-size:1.05rem;
+  font-weight:800;
+  color:#2a5298;
+}
+.sg-help-close {
+  background:none;
+  border:none;
+  font-size:24px;
+  cursor:pointer;
+  color:#607d8b;
+}
+.sg-help-close:hover { color:#2a5298; }
+
+.sg-help-section { margin-top:14px; }
+.sg-help-subtitle {
+  font-size:.9rem;
+  font-weight:800;
+  color:#083047;
+  margin-bottom:6px;
+}
+.sg-help-text {
+  font-size:.78rem;
+  line-height:1.25rem;
+  color:#496577;
+  margin:0 0 6px;
+  font-weight:600;
+}
+
+.sg-level-list {
+  list-style:none;
+  margin:0;
+  padding:0;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  font-size:.75rem;
+}
+.sg-level-list li {
+  padding:6px 10px;
+  background:#f7fafd;
+  border:1px solid #eef2f8;
+  border-radius:8px;
+  font-weight:700;
+  display:flex;
+  justify-content:space-between;
+}
+.sg-level-list li.reached {
+  background:linear-gradient(90deg,#2a5298,#4ecdc4);
+  color:#fff;
+  border:none;
+}
+
+.sg-badge-list {
+  list-style:none;
+  margin:0;
+  padding:0;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  font-size:.72rem;
+}
+.badge-row {
+  display:grid;
+  grid-template-columns: 1.2fr 2.2fr .4fr;
+  gap:6px;
+  align-items:center;
+  padding:6px 8px;
+  background:#f9fbfd;
+  border:1px solid #e6eef5;
+  border-radius:8px;
+}
+.badge-row.unlocked {
+  background:linear-gradient(180deg,#ffffff,#eef7ff);
+  border:1px solid #d5e7f5;
+}
+.badge-name { font-weight:800; color:#2a5298; }
+.badge-desc { font-weight:600; color:#445e70; }
+.badge-state { text-align:center; font-weight:800; color:#2a5298; }
+.badge-row.locked .badge-state { color:#7b97ab; }
+
+.sg-badge-detail-table {
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  margin-top:8px;
+  font-size:.7rem;
+}
+.bd-row {
+  display:grid;
+  grid-template-columns: 1.6fr 1fr .35fr;
+  gap:8px;
+  padding:8px 10px;
+  background:#f7fafd;
+  border:1px solid #eef2f8;
+  border-radius:8px;
+  font-weight:600;
+}
+.bd-row.done {
+  background:linear-gradient(180deg,#ffffff,#eef7ff);
+  border-color:#d5e7f5;
+  opacity:.95;
+}
+.bd-title {
+  font-weight:800;
+  color:#2a5298;
+  margin-bottom:4px;
+  font-size:.75rem;
+}
+.bd-process {
+  color:#455e70;
+  line-height:1.05rem;
+}
+.bd-status {
+  display:block;
+  font-weight:700;
+  color:#163a5a;
+  margin-bottom:4px;
+}
+.bd-missing {
+  display:block;
+  color:#ff6b6b;
+  font-weight:700;
+}
+.bd-right {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:.9rem;
+  font-weight:800;
+}
+.bd-badge-ok {
+  color:#27ae60;
+}
+.bd-badge-pending {
+  color:#7b97ab;
+}
+@media (max-width:650px){
+  .bd-row { grid-template-columns: 1fr; }
+  .bd-right { justify-content:flex-start; }
 }

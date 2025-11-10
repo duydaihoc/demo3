@@ -6,6 +6,65 @@ const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
 
+// NEW: helpers for Unicode PDF text and safe filenames
+function stripAccents(s = '') {
+  // Convert to NFD, remove combining marks, and normalize Vietnamese đ/Đ
+  return String(s)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D');
+}
+function sanitizeForFilename(name = '', asciiOnly = false) {
+  let base = String(name || '').trim();
+
+  // Guard against CR/LF in headers
+  base = base.replace(/[\r\n]+/g, ' ');
+
+  // Normalize and (optionally) strip accents
+  base = asciiOnly ? stripAccents(base) : base.normalize('NFC');
+
+  // Remove characters illegal or dangerous in headers/filenames
+  // - OS reserved: <>:"/\|?* and control chars
+  // - Header-param breakers: ; and =
+  base = base
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, '')
+    .replace(/[;=]/g, '');
+
+  // If ASCII-only fallback requested, drop any remaining non-ASCII bytes
+  if (asciiOnly) {
+    base = base.replace(/[^\x20-\x7E]/g, '');
+  }
+
+  // Collapse spaces to single dashes and trim leading/trailing dots/dashes
+  base = base.replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^[\.\-]+|[\.\-]+$/g, '');
+
+  return base || 'bao-cao-muc-tieu';
+}
+function resolveUnicodeFont() {
+  const candidates = [
+    path.join(__dirname, '..', 'fonts', 'DejaVuSans.ttf'),
+    path.join(process.cwd(), 'fonts', 'DejaVuSans.ttf'),
+    // Linux
+    '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+    '/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf',
+    // Windows
+    'C:\\Windows\\Fonts\\arial.ttf',
+    'C:\\Windows\\Fonts\\tahoma.ttf',
+    'C:\\Windows\\Fonts\\segoeui.ttf',
+    // macOS
+    '/Library/Fonts/Arial Unicode.ttf',
+    '/System/Library/Fonts/Supplemental/Arial Unicode.ttf',
+    '/Library/Fonts/Arial.ttf'
+  ];
+  for (const p of candidates) {
+    try {
+      if (fs.existsSync(p)) return p;
+    } catch {}
+  }
+  return null;
+}
+
 // lightweight JWT payload parser (no verification) to extract user id if token provided
 function parseJwt(token) {
   try {
@@ -26,6 +85,201 @@ function getUserIdFromHeader(req) {
   const p = parseJwt(token);
   return p && (p.id || p._id || p.sub) ? (p.id || p._id || p.sub) : null;
 }
+
+// Helper: build gamification summary from goals
+function buildGamification(goals = []) {
+  const totalGoals = goals.length;
+  const completedGoals = goals.filter(g => (g.currentAmount || 0) >= (g.targetAmount || Number.MAX_SAFE_INTEGER) || g.status === 'completed').length;
+  const totalSaved = goals.reduce((s, g) => s + (Number(g.currentAmount) || 0), 0);
+
+  // Level thresholds by completed goals
+  const thresholds = [0, 1, 3, 5, 10, 15, 20];
+  let levelIndex = 0;
+  for (let i = 0; i < thresholds.length; i++) {
+    if (completedGoals >= thresholds[i]) levelIndex = i;
+    else break;
+  }
+  const level = levelIndex; // Level starts at 0
+  const curBase = thresholds[levelIndex] || 0;
+  const nextBase = thresholds[levelIndex + 1] ?? curBase;
+  const span = Math.max(1, nextBase - curBase);
+  const progressPct = Math.max(0, Math.min(100, Math.round(((completedGoals - curBase) / span) * 100)));
+
+  // XP: simple formula
+  const xp = (completedGoals * 100) + (Math.floor(totalSaved / 1_000_000) * 20);
+  const nextLevelXp = (nextBase * 100); // rough guide
+
+  // Base badges
+  const badges = [
+    {
+      key: 'starter',
+      name: 'Người bắt đầu',
+      description: 'Tạo mục tiêu tiết kiệm đầu tiên',
+      unlocked: totalGoals >= 1
+    },
+    {
+      key: 'first_complete',
+      name: 'Hoàn thành đầu tiên',
+      description: 'Hoàn thành mục tiêu đầu tiên',
+      unlocked: completedGoals >= 1
+    },
+    {
+      key: 'silver_saver',
+      name: 'Người tiết kiệm bạc',
+      description: 'Hoàn thành 3 mục tiêu',
+      unlocked: completedGoals >= 3
+    },
+    {
+      key: 'gold_saver',
+      name: 'Người tiết kiệm vàng',
+      description: 'Hoàn thành 5 mục tiêu',
+      unlocked: completedGoals >= 5
+    },
+    {
+      key: 'master_spender',
+      name: 'Bậc thầy chi tiêu',
+      description: 'Hoàn thành 10 mục tiêu',
+      unlocked: completedGoals >= 10
+    },
+    {
+      key: 'ten_million',
+      name: 'Tiết kiệm 10 triệu',
+      description: 'Tổng số tiền đã tiết kiệm đạt 10.000.000₫',
+      unlocked: totalSaved >= 10_000_000
+    }
+  ];
+
+  // NEW: big goal completion milestones (by targetAmount)
+  const completedList = goals.filter(g => g.status === 'completed' || (g.currentAmount || 0) >= (g.targetAmount || Number.MAX_SAFE_INTEGER));
+  const has20mGoal = completedList.some(g => (g.targetAmount || 0) >= 20_000_000);
+  const has50mGoal = completedList.some(g => (g.targetAmount || 0) >= 50_000_000);
+  const has100mGoal = completedList.some(g => (g.targetAmount || 0) >= 100_000_000);
+  badges.push(
+    { key: 'big_goal_20m', name: 'Mục tiêu 20 triệu', description: 'Hoàn thành mục tiêu ≥ 20.000.000₫', unlocked: !!has20mGoal },
+    { key: 'big_goal_50m', name: 'Mục tiêu 50 triệu', description: 'Hoàn thành mục tiêu ≥ 50.000.000₫', unlocked: !!has50mGoal },
+    { key: 'big_goal_100m', name: 'Mục tiêu 100 triệu', description: 'Hoàn thành mục tiêu ≥ 100.000.000₫', unlocked: !!has100mGoal }
+  );
+
+  // NEW: total saved milestones
+  badges.push(
+    { key: 'twenty_million_total', name: 'Tiết kiệm 20 triệu', description: 'Tổng đã tiết kiệm đạt 20.000.000₫', unlocked: totalSaved >= 20_000_000 },
+    { key: 'fifty_million_total', name: 'Tiết kiệm 50 triệu', description: 'Tổng đã tiết kiệm đạt 50.000.000₫', unlocked: totalSaved >= 50_000_000 },
+    { key: 'hundred_million_total', name: 'Tiết kiệm 100 triệu', description: 'Tổng đã tiết kiệm đạt 100.000.000₫', unlocked: totalSaved >= 100_000_000 }
+  );
+
+  // NEW: fast finisher (<= 30 days from start to complete)
+  const fastFinish = completedList.some(g => {
+    const start = g.startDate ? new Date(g.startDate) : null;
+    const done = g.completedAt ? new Date(g.completedAt) : null;
+    if (!start || !done) return false;
+    const days = Math.round((done - start) / 86400000);
+    return days >= 0 && days <= 30;
+  });
+  badges.push({
+    key: 'fast_finisher_30d',
+    name: 'Về đích nhanh',
+    description: 'Hoàn thành một mục tiêu trong ≤ 30 ngày',
+    unlocked: fastFinish
+  });
+
+  // NEW: precise finisher (currentAmount ~= targetAmount when done)
+  const preciseFinish = completedList.some(g => {
+    const t = Number(g.targetAmount) || 0;
+    const c = Number(g.currentAmount) || 0;
+    // tolerance 1.000đ để tránh sai số
+    return t > 0 && Math.abs(c - t) <= 1_000;
+  });
+  badges.push({
+    key: 'precise_finisher',
+    name: 'Chuẩn xác',
+    description: 'Hoàn thành đúng bằng số tiền mục tiêu',
+    unlocked: preciseFinish
+  });
+
+  // NEW: 3-month completion streak (each of last 3 months has >=1 completed)
+  const now = new Date();
+  const months = [];
+  for (let i = 2; i >= 0; i--) {
+    const head = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const start = new Date(head.getFullYear(), head.getMonth(), 1);
+    const end = new Date(head.getFullYear(), head.getMonth() + 1, 1);
+    months.push({ start, end });
+  }
+  const monthHits = months.map(m =>
+    completedList.some(g => g.completedAt && new Date(g.completedAt) >= m.start && new Date(g.completedAt) < m.end)
+  );
+  badges.push({
+    key: 'streak_3_months',
+    name: 'Chuỗi 3 tháng',
+    description: 'Mỗi tháng trong 3 tháng gần đây đều hoàn thành ≥ 1 mục tiêu',
+    unlocked: monthHits.every(Boolean)
+  });
+
+  // NEW: contributions-based badges
+  const totalContribs = goals.reduce((sum, g) => sum + ((Array.isArray(g.contributions) ? g.contributions.length : 0)), 0);
+  badges.push(
+    { key: 'contributor_10', name: 'Chăm chỉ', description: 'Có từ 10 lần đóng góp trở lên', unlocked: totalContribs >= 10 },
+    { key: 'contributor_25', name: 'Rất chăm chỉ', description: 'Có từ 25 lần đóng góp trở lên', unlocked: totalContribs >= 25 }
+  );
+
+  // NEW: completed an overdue goal
+  const recoverOverdue = completedList.some(g => g.targetDate && g.completedAt && new Date(g.completedAt) > new Date(g.targetDate));
+  badges.push({
+    key: 'overdue_recovery',
+    name: 'Lội ngược dòng',
+    description: 'Hoàn thành một mục tiêu sau khi đã quá hạn',
+    unlocked: recoverOverdue
+  });
+
+  // NEW: completed at least 7 days before target date
+  const earlyFinish = completedList.some(g => {
+    if (!g.targetDate || !g.completedAt) return false;
+    const diffDays = Math.round((new Date(g.targetDate) - new Date(g.completedAt)) / 86400000);
+    return diffDays >= 7;
+  });
+  badges.push({
+    key: 'early_bird',
+    name: 'Về đích sớm',
+    description: 'Hoàn thành mục tiêu sớm ít nhất 7 ngày',
+    unlocked: earlyFinish
+  });
+
+  // NEW: guidance for levels (unchanged)
+  const hasNext = thresholds[levelIndex + 1] !== undefined;
+  const nextLevel = hasNext ? levelIndex + 1 : levelIndex;
+  const remainingToNext = hasNext ? Math.max(0, thresholds[levelIndex + 1] - completedGoals) : 0;
+  const levelNote = hasNext
+    ? `Hoàn thành thêm ${remainingToNext} mục tiêu để đạt Lv ${nextLevel}.`
+    : 'Bạn đã đạt cấp tối đa theo số mục tiêu hoàn thành.';
+  const levelGuides = thresholds.slice(1).map((need, idx) => ({
+    level: idx + 1,
+    needCompleted: need,
+    note: `Hoàn thành ${need} mục tiêu`
+  }));
+
+  return {
+    level,
+    xp,
+    nextLevelXp,
+    progressPct,
+    badges,
+    totals: { goals: totalGoals, completed: completedGoals, totalSaved },
+    // NEW fields
+    thresholds,
+    nextLevel,
+    remainingToNext,
+    levelNote,
+    levelGuides
+  };
+}
+
+// NEW: validate ObjectId parameters (prevents "gamification" being treated as :id)
+router.param('id', (req, res, next, id) => {
+  if (!/^[0-9a-fA-F]{24}$/.test(id)) {
+    return res.status(400).json({ message: 'ID không hợp lệ' });
+  }
+  next();
+});
 
 // GET /api/savings - list goals for authenticated user
 router.get('/', async (req, res) => {
@@ -120,6 +374,25 @@ router.post('/', async (req, res) => {
   }
 });
 
+// GET /api/savings/gamification - gamification summary for current user
+router.get('/gamification', async (req, res) => {
+  try {
+    const userId = getUserIdFromHeader(req);
+    if (!userId) return res.status(401).json({ message: 'Chưa đăng nhập' });
+
+    // NEW: include completedAt, startDate, contributions for richer badges
+    const goals = await SavingsGoal.find({ owner: userId })
+      .select('name targetAmount currentAmount status createdAt startDate targetDate completedAt contributions')
+      .lean();
+
+    const payload = buildGamification(goals || []);
+    return res.json({ ok: true, ...payload });
+  } catch (err) {
+    console.error('Gamification error:', err);
+    return res.status(500).json({ ok: false, message: 'Lỗi tính gamification', error: err.message });
+  }
+});
+
 // GET /api/savings/:id - get a single goal (owner only)
 router.get('/:id', async (req, res) => {
   try {
@@ -204,6 +477,15 @@ router.post('/:id/deposit', async (req, res) => {
       note: note || `Nạp tiền vào mục tiêu ${goal.name}`
     });
     if (!goal.walletId) goal.walletId = wallet._id;
+
+    // NEW: auto mark completed if reached/exceeded target
+    try {
+      if ((goal.currentAmount || 0) >= (goal.targetAmount || Number.MAX_SAFE_INTEGER)) {
+        goal.status = 'completed';
+        if (!goal.completedAt) goal.completedAt = new Date();
+      }
+    } catch (_) {}
+
     await goal.save();
 
     // Notify any event listeners about the wallet update
@@ -441,59 +723,62 @@ router.get('/:id/report-pdf', async (req, res) => {
       margin: 50
     });
 
-    // Không set font tùy chỉnh, dùng font mặc định Helvetica
-    // Lưu ý: Font mặc định không hỗ trợ tiếng Việt tốt, text có thể hiển thị sai
-    // Để hỗ trợ tiếng Việt, cần cài font Unicode như DejaVu Sans vào thư mục fonts/
+    // NEW: choose a Unicode font if available
+    const unicodeFontPath = resolveUnicodeFont();
+    const hasUnicode = !!unicodeFontPath;
+    if (hasUnicode) {
+      try { doc.font(unicodeFontPath); } catch (e) { /* fallback below if load fails */ }
+    }
 
-    // Tạo tên file an toàn (loại bỏ dấu và ký tự đặc biệt)
-    const safeName = goal.name
-      .normalize('NFD') // Tách dấu ra khỏi ký tự
-      .replace(/[\u0300-\u036f]/g, '') // Loại bỏ dấu
-      .replace(/[^a-zA-Z0-9\s-]/g, '') // Loại bỏ ký tự đặc biệt
-      .replace(/\s+/g, '-') // Thay khoảng trắng bằng dấu gạch ngang
-      .toLowerCase();
-    
-    const filename = `bao-cao-muc-tieu-${safeName}.pdf`;
-    
-    // Set headers cho response
+    // NEW: filename with UTF-8 header + ASCII fallback (safe)
+    const preferredName = `bao-cao-muc-tieu-${sanitizeForFilename(goal.name, false)}.pdf`;
+    const asciiFallback = `bao-cao-muc-tieu-${sanitizeForFilename(goal.name, true)}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(preferredName)}`
+    );
     res.setHeader('Cache-Control', 'no-cache');
 
-    // Pipe PDF vào response
+    // Pipe PDF
     doc.pipe(res);
 
     // Header
     doc.fontSize(24).fillColor('#2a5298')
-       .text('BAO CAO HOAN THANH MUC TIEU TIET KIEM', { align: 'center' });
-    
+       .text(hasUnicode ? 'BÁO CÁO HOÀN THÀNH MỤC TIÊU TIẾT KIỆM'
+                        : 'BAO CAO HOAN THANH MUC TIEU TIET KIEM',
+             { align: 'center' });
     doc.moveDown(2);
 
-    // Thông tin mục tiêu
+    // Section title
     doc.fontSize(16).fillColor('#000')
-       .text('Thong tin muc tieu:', { underline: true });
+       .text(hasUnicode ? 'Thông tin mục tiêu:' : 'Thong tin muc tieu:', { underline: true });
     doc.moveDown(0.5);
-    
+
+    // Body info (strip accents if no Unicode font)
     doc.fontSize(12).fillColor('#333');
-    // Loại bỏ dấu khỏi tên mục tiêu và dùng format tiền đơn giản
-    const goalNameNoAccent = goal.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    doc.text(`Ten muc tieu: ${goalNameNoAccent}`);
-    doc.text(`Muc tieu so tien: ${goal.targetAmount.toLocaleString('vi-VN')} VND`);
-    doc.text(`So tien hien tai: ${goal.currentAmount.toLocaleString('vi-VN')} VND`);
-    doc.text(`Ngay bat dau: ${new Date(goal.startDate).toLocaleDateString('vi-VN')}`);
-    doc.text(`Ngay ket thuc: ${goal.targetDate ? new Date(goal.targetDate).toLocaleDateString('vi-VN') : 'Chua dat'}`);
-    doc.text(`Ngay hoan thanh: ${goal.completedAt ? new Date(goal.completedAt).toLocaleDateString('vi-VN') : 'Chua hoan thanh'}`);
-    doc.text(`Trang thai: ${goal.status === 'completed' ? 'Da hoan thanh' : goal.status === 'overdue' ? 'Qua han' : 'Dang thuc hien'}`);
-    
+    const goalNameText = hasUnicode ? goal.name : stripAccents(goal.name);
+    doc.text(`${hasUnicode ? 'Tên mục tiêu' : 'Ten muc tieu'}: ${goalNameText}`);
+    doc.text(`${hasUnicode ? 'Mục tiêu số tiền' : 'Muc tieu so tien'}: ${goal.targetAmount.toLocaleString('vi-VN')} VND`);
+    doc.text(`${hasUnicode ? 'Số tiền hiện tại' : 'So tien hien tai'}: ${goal.currentAmount.toLocaleString('vi-VN')} VND`);
+    doc.text(`${hasUnicode ? 'Ngày bắt đầu' : 'Ngay bat dau'}: ${new Date(goal.startDate).toLocaleDateString('vi-VN')}`);
+    doc.text(`${hasUnicode ? 'Ngày kết thúc' : 'Ngay ket thuc'}: ${goal.targetDate ? new Date(goal.targetDate).toLocaleDateString('vi-VN') : (hasUnicode ? 'Chưa đặt' : 'Chua dat')}`);
+    doc.text(`${hasUnicode ? 'Ngày hoàn thành' : 'Ngay hoan thanh'}: ${goal.completedAt ? new Date(goal.completedAt).toLocaleDateString('vi-VN') : (hasUnicode ? 'Chưa hoàn thành' : 'Chua hoan thanh')}`);
+    doc.text(`${hasUnicode ? 'Trạng thái' : 'Trang thai'}: ${
+      goal.status === 'completed'
+        ? (hasUnicode ? 'Đã hoàn thành' : 'Da hoan thanh')
+        : goal.status === 'overdue'
+          ? (hasUnicode ? 'Quá hạn' : 'Qua han')
+          : (hasUnicode ? 'Đang thực hiện' : 'Dang thuc hien')
+    }`);
     if (goal.walletId) {
-      doc.text(`Vi chinh: ${goal.walletId.name}`);
+      const walletNameText = hasUnicode ? goal.walletId.name : stripAccents(goal.walletId.name);
+      doc.text(`${hasUnicode ? 'Ví chính' : 'Vi chinh'}: ${walletNameText}`);
     }
 
     doc.moveDown(2);
-
-    // Thống kê đóng góp
     doc.fontSize(16).fillColor('#000')
-       .text('Thong ke dong gop:', { underline: true });
+       .text(hasUnicode ? 'Thống kê đóng góp:' : 'Thong ke dong gop:', { underline: true });
     doc.moveDown(0.5);
 
     if (goal.contributions && goal.contributions.length > 0) {
@@ -502,65 +787,52 @@ router.get('/:id/report-pdf', async (req, res) => {
       const avgContribution = totalAmount / totalContributions;
 
       doc.fontSize(12).fillColor('#333');
-      doc.text(`Tong so lan dong gop: ${totalContributions}`);
-      doc.text(`Tong so tien dong gop: ${totalAmount.toLocaleString('vi-VN')} VND`);
-      doc.text(`So tien trung binh moi lan: ${avgContribution.toLocaleString('vi-VN')} VND`);
-      
+      doc.text(`${hasUnicode ? 'Tổng số lần đóng góp' : 'Tong so lan dong gop'}: ${totalContributions}`);
+      doc.text(`${hasUnicode ? 'Tổng số tiền đóng góp' : 'Tong so tien dong gop'}: ${totalAmount.toLocaleString('vi-VN')} VND`);
+      doc.text(`${hasUnicode ? 'Số tiền trung bình mỗi lần' : 'So tien trung binh moi lan'}: ${avgContribution.toLocaleString('vi-VN')} VND`);
       doc.moveDown(1);
 
-      // Bảng chi tiết đóng góp
       doc.fontSize(14).fillColor('#000')
-         .text('Chi tiet cac lan dong gop:', { underline: true });
+         .text(hasUnicode ? 'Chi tiết các lần đóng góp:' : 'Chi tiet cac lan dong gop:', { underline: true });
       doc.moveDown(0.5);
 
-      // Header bảng
       const tableTop = doc.y;
       doc.fontSize(10);
-      doc.text('Ngay', 50, tableTop);
-      doc.text('So tien', 150, tableTop);
-      doc.text('Vi', 250, tableTop);
-      doc.text('Ghi chu', 350, tableTop);
-      
-      // Dòng kẻ
+      doc.text(hasUnicode ? 'Ngày' : 'Ngay', 50, tableTop);
+      doc.text(hasUnicode ? 'Số tiền' : 'So tien', 150, tableTop);
+      doc.text(hasUnicode ? 'Ví' : 'Vi', 250, tableTop);
+      doc.text(hasUnicode ? 'Ghi chú' : 'Ghi chu', 350, tableTop);
       doc.moveTo(50, tableTop + 15).lineTo(550, tableTop + 15).stroke();
-      
-      // Dữ liệu bảng
+
       let yPosition = tableTop + 25;
       doc.fontSize(9);
-      
-      goal.contributions.forEach((contribution, index) => {
-        if (yPosition > 700) { // Nếu gần cuối trang, xuống dòng
-          doc.addPage();
-          yPosition = 50;
-        }
-        
+
+      goal.contributions.forEach((contribution) => {
+        if (yPosition > 700) { doc.addPage(); yPosition = 50; }
         const date = new Date(contribution.date).toLocaleDateString('vi-VN');
-        const amount = `${contribution.amount.toLocaleString('vi-VN')} VND`;
-        const wallet = contribution.walletId ? contribution.walletId.name : 'N/A';
-        const note = contribution.note || '';
-        
+        const amount = `${(contribution.amount || 0).toLocaleString('vi-VN')} VND`;
+        const wallet = contribution.walletId
+          ? (hasUnicode ? contribution.walletId.name : stripAccents(contribution.walletId.name))
+          : 'N/A';
+        const note = hasUnicode ? (contribution.note || '') : stripAccents(contribution.note || '');
+
         doc.text(date, 50, yPosition);
         doc.text(amount, 150, yPosition);
         doc.text(wallet, 250, yPosition);
         doc.text(note, 350, yPosition, { width: 150 });
-        
         yPosition += 20;
       });
     } else {
       doc.fontSize(12).fillColor('#666')
-         .text('Chua co dong gop nao.');
+         .text(hasUnicode ? 'Chưa có đóng góp nào.' : 'Chua co dong gop nao.');
     }
 
     doc.moveDown(2);
-
-    // Footer
     doc.fontSize(10).fillColor('#666')
-       .text(`Bao cao duoc tao vao: ${new Date().toLocaleString('vi-VN')}`, { align: 'center' });
-    doc.text('Ung dung Quan ly Tai chinh Ca nhan', { align: 'center' });
+       .text(`${hasUnicode ? 'Báo cáo được tạo vào' : 'Bao cao duoc tao vao'}: ${new Date().toLocaleString('vi-VN')}`, { align: 'center' });
+    doc.text(hasUnicode ? 'Ứng dụng Quản lý Tài chính Cá nhân' : 'Ung dung Quan ly Tai chinh Ca nhan', { align: 'center' });
 
-    // Kết thúc PDF
     doc.end();
-
   } catch (err) {
     console.error('Error generating PDF:', err);
     res.status(500).json({ message: 'Loi khi tao bao cao PDF' });
