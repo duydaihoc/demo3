@@ -351,10 +351,10 @@ const HomePageContent = () => {
         </div>
         <div className="home-content">
           <section className="home-left">
-            {/* FinanceDashboard renders everything (Timeline moved inside FinanceDashboard) */}
-            <FinanceDashboard />
-            {/* NEW: Spending heat map */}
+            {/* NEW: Move SpendingMap to top */}
             <SpendingMap />
+            {/* FinanceDashboard renders below the map now */}
+            <FinanceDashboard />
             {/* <SpendingTimeline />  // ...removed... */}
           </section>
           <aside className="home-right">

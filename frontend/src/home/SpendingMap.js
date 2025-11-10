@@ -53,6 +53,7 @@ export default function SpendingMap() {
   const [txPoints, setTxPoints] = useState([]);
   const markerIndexRef = useRef({}); // NEW: map txId -> marker
   const [activeTxId, setActiveTxId] = useState(null); // NEW: highlight selected
+  const [viewMode, setViewMode] = useState('all'); // NEW: 'all' | 'heat' | 'pins'
 
   // Map/container refs (always render map)
   const containerRef = useRef(null);
@@ -152,89 +153,69 @@ export default function SpendingMap() {
       if (!L) return;
 
       // Remove previous layers
-      if (heatLayerRef.current) {
-        try { map.removeLayer(heatLayerRef.current); } catch(_) {}
-        heatLayerRef.current = null;
-      }
-      if (pinLayerRef.current) {
-        try { map.removeLayer(pinLayerRef.current); } catch(_) {}
-        pinLayerRef.current = null;
-      }
-      markerIndexRef.current = {}; // NEW: reset marker registry
+      if (heatLayerRef.current) { try { map.removeLayer(heatLayerRef.current); } catch(_) {} heatLayerRef.current = null; }
+      if (pinLayerRef.current)  { try { map.removeLayer(pinLayerRef.current); } catch(_) {}  pinLayerRef.current  = null; }
+      markerIndexRef.current = {};
 
-      // Heat layer (if available and has items)
-      if (Array.isArray(items) && items.length && L.heatLayer) {
+      // Heat layer (respect viewMode)
+      if ((viewMode === 'all' || viewMode === 'heat') && Array.isArray(items) && items.length && L.heatLayer) {
         const pts = items.map(p => {
           const amtNum = Number(p && p.amount ? p.amount : 0);
           const intensity = amtNum > 0 ? Math.sqrt(amtNum) / 250 : 0.15;
           return [p.lat, p.lng, intensity];
         });
-        heatLayerRef.current = L.heatLayer(pts, {
-          radius: 26,
-          blur: 18,
-          minOpacity: 0.3,
-          maxZoom: 16
-        }).addTo(map);
+        heatLayerRef.current = L.heatLayer(pts, { radius: 26, blur: 18, minOpacity: 0.3, maxZoom: 16 }).addTo(map);
       } else if (Array.isArray(items) && items.length && !L.heatLayer) {
         setLibErr('Heat layer không khả dụng (thiếu leaflet.heat) — vẫn hiển thị ghim giao dịch.');
       }
 
-      // Pin markers (heat buckets + raw)
-      const pinLayer = L.layerGroup();
-      // Buckets as small dots with tooltip
-      (Array.isArray(items) ? items : []).forEach(p => {
-        if (typeof p?.lat !== 'number' || typeof p?.lng !== 'number') return;
-        const amtText = Number(p.amount || 0).toLocaleString('vi-VN');
-        const cntText = (p.count != null ? p.count : 0);
-        const label = `${p.placeName || 'Điểm'}\n${amtText}₫ (${cntText} lần)`;
-        L.circleMarker([p.lat, p.lng], {
-          radius: 5,
-          color: '#2a5298',
-          weight: 1,
-          fillColor: '#4ecdc4',
-          fillOpacity: 0.85
-        }).addTo(pinLayer).bindTooltip(label.replace(/\n/g, '<br/>'), { direction: 'top' });
-      });
-      // Individual transaction pins (store reference)
-      (Array.isArray(txPoints) ? txPoints : []).forEach(tx => {
-        const lat = tx.location?.lat;
-        const lng = tx.location?.lng;
-        if (typeof lat !== 'number' || typeof lng !== 'number') return;
-        const title = tx.title || tx.description || 'Giao dịch';
-        const amountText = Number(tx.amount || 0).toLocaleString('vi-VN') + '₫';
-        const dateText = tx.date ? new Date(tx.date).toLocaleDateString('vi-VN') : '';
-        const category = tx.category && (tx.category.name || '');
-        const place = tx.location?.placeName || '';
-        const html = `
-          <div style="min-width:160px">
-            <div style="font-weight:800;color:#2a5298">${title}</div>
-            <div>${amountText} • ${dateText}</div>
-            ${category ? `<div>Danh mục: ${category}</div>` : ''}
-            ${place ? `<div>Địa điểm: ${place}</div>` : ''}
-          </div>
-        `;
-        const m = L.marker([lat, lng], { title, alt: title }).addTo(pinLayer).bindPopup(html);
-        markerIndexRef.current[tx._id] = m; // NEW
-      });
-      pinLayer.addTo(map);
-      pinLayerRef.current = pinLayer;
+      // Pins (respect viewMode)
+      if (viewMode === 'all' || viewMode === 'pins') {
+        const pinLayer = L.layerGroup();
+        // Buckets as dots
+        (Array.isArray(items) ? items : []).forEach(p => {
+          if (typeof p?.lat !== 'number' || typeof p?.lng !== 'number') return;
+          const amtText = Number(p.amount || 0).toLocaleString('vi-VN');
+          const cntText = (p.count != null ? p.count : 0);
+          const label = `${p.placeName || 'Điểm'}\n${amtText}₫ (${cntText} lần)`;
+          L.circleMarker([p.lat, p.lng], {
+            radius: 5, color: '#2a5298', weight: 1, fillColor: '#4ecdc4', fillOpacity: 0.85
+          }).addTo(pinLayer).bindTooltip(label.replace(/\n/g, '<br/>'), { direction: 'top' });
+        });
+        // Individual tx pins
+        (Array.isArray(txPoints) ? txPoints : []).forEach(tx => {
+          const lat = tx.location?.lat, lng = tx.location?.lng;
+          if (typeof lat !== 'number' || typeof lng !== 'number') return;
+          const title = tx.title || tx.description || 'Giao dịch';
+          const amountText = Number(tx.amount || 0).toLocaleString('vi-VN') + '₫';
+          const dateText = tx.date ? new Date(tx.date).toLocaleDateString('vi-VN') : '';
+          const category = tx.category && (tx.category.name || '');
+          const place = tx.location?.placeName || '';
+          const html = `
+            <div style="min-width:160px">
+              <div style="font-weight:800;color:#2a5298">${title}</div>
+              <div>${amountText} • ${dateText}</div>
+              ${category ? `<div>Danh mục: ${category}</div>` : ''}
+              ${place ? `<div>Địa điểm: ${place}</div>` : ''}
+            </div>
+          `;
+          const m = L.marker([lat, lng], { title, alt: title }).addTo(pinLayer).bindPopup(html);
+          markerIndexRef.current[tx._id] = m;
+        });
+        pinLayer.addTo(map);
+        pinLayerRef.current = pinLayer;
+      }
 
-      // Fit bounds if we have any points
+      // Fit bounds (always consider all points for a pleasant default view)
       const allLatLngs = [];
-      (Array.isArray(items) ? items : []).forEach(p => {
-        if (typeof p?.lat === 'number' && typeof p?.lng === 'number') allLatLngs.push([p.lat, p.lng]);
-      });
-      (Array.isArray(txPoints) ? txPoints : []).forEach(t => {
-        if (typeof t?.location?.lat === 'number' && typeof t?.location?.lng === 'number') {
-          allLatLngs.push([t.location.lat, t.location.lng]);
-        }
-      });
-      if (allLatLngs.length > 1) {
-        const bounds = L.latLngBounds(allLatLngs);
+      (Array.isArray(items) ? items : []).forEach(p => { if (typeof p?.lat === 'number' && typeof p?.lng === 'number') allLatLngs.push([p.lat, p.lng]); });
+      (Array.isArray(txPoints) ? txPoints : []).forEach(t => { if (typeof t?.location?.lat === 'number' && typeof t?.location?.lng === 'number') allLatLngs.push([t.location.lat, t.location.lng]); });
+      if (allLatLngs.length > 1 && window.L) {
+        const bounds = window.L.latLngBounds(allLatLngs);
         map.fitBounds(bounds.pad(0.15));
       }
     })();
-  }, [items, txPoints]);
+  }, [items, txPoints, viewMode]); // CHANGED: include viewMode
 
   // NEW: focus handler
   const focusTx = (txId) => {
@@ -277,20 +258,30 @@ export default function SpendingMap() {
   };
 
   return (
-    <div className="sp-map-layout">
-      <div className="sp-map-main">
-        {(libErr || err) && (
-          <div className="sp-map-banners">
-            {libErr && <div className="sp-map-banner error">{libErr}</div>}
-            {err && <div className="sp-map-banner error">{err}</div>}
+    <div className="sp-map-card sp-glow">
+      <div className="sp-map-header">
+        <div className="sp-map-title">Bản đồ chi tiêu</div>
+        <div className="sp-map-controls">
+          <div className="sp-view-toggle" role="tablist" aria-label="Chế độ hiển thị bản đồ">
+            <button
+              className={`sp-toggle-btn ${viewMode === 'all' ? 'active' : ''}`}
+              onClick={() => setViewMode('all')}
+              role="tab"
+              aria-selected={viewMode === 'all'}
+            >Tất cả</button>
+            <button
+              className={`sp-toggle-btn ${viewMode === 'heat' ? 'active' : ''}`}
+              onClick={() => setViewMode('heat')}
+              role="tab"
+              aria-selected={viewMode === 'heat'}
+            >Heat</button>
+            <button
+              className={`sp-toggle-btn ${viewMode === 'pins' ? 'active' : ''}`}
+              onClick={() => setViewMode('pins')}
+              role="tab"
+              aria-selected={viewMode === 'pins'}
+            >Pins</button>
           </div>
-        )}
-        <div ref={containerRef} className="spending-map-container" />
-        {loading && <div className="loading-overlay">Đang tải bản đồ...</div>}
-      </div>
-      <aside className="sp-map-list">
-        <div className="sp-map-list-header">
-          <span>Giao dịch có vị trí ({txPoints.length})</span>
           <button
             type="button"
             className="sp-map-reset-btn"
@@ -301,36 +292,57 @@ export default function SpendingMap() {
             Tất cả
           </button>
         </div>
-        {txPoints.length === 0 && (
-          <div className="sp-map-list-empty">Chưa có giao dịch chi tiêu có vị trí.</div>
-        )}
-        <ul className="sp-map-ul">
-          {(txPoints || []).map(tx => {
-            const amt = Number(tx.amount || 0).toLocaleString('vi-VN') + '₫';
-            const date = tx.date ? new Date(tx.date).toLocaleDateString('vi-VN') : '';
-            const cat = tx.category && (tx.category.name || '');
-            const place = tx.location?.placeName || '';
-            return (
-              <li
-                key={tx._id}
-                className={`sp-map-item ${activeTxId === tx._id ? 'active' : ''}`}
-                onClick={() => focusTx(tx._id)}
-                title="Xem trên bản đồ"
-              >
-                <div className="sp-map-item-top">
-                  <span className="sp-map-item-title">{tx.title || tx.description || 'Giao dịch'}</span>
-                  <span className="sp-map-item-amt">{amt}</span>
-                </div>
-                <div className="sp-map-item-meta">
-                  {date && <span>{date}</span>}
-                  {cat && <span>• {cat}</span>}
-                </div>
-                {place && <div className="sp-map-item-place">{place}</div>}
-              </li>
-            );
-          })}
-        </ul>
-      </aside>
+      </div>
+
+      {(libErr || err) && (
+        <div className="sp-map-banners">
+          {libErr && <div className="sp-map-banner error">{libErr}</div>}
+          {err && <div className="sp-map-banner error">{err}</div>}
+        </div>
+      )}
+
+      <div className="sp-map-layout">
+        <div className="sp-map-main">
+          <div ref={containerRef} className="spending-map-container" />
+          {loading && <div className="loading-overlay"><div className="spinner" /> Đang tải bản đồ...</div>}
+        </div>
+        <aside className="sp-map-list">
+          <div className="sp-map-list-header">
+            <span>Giao dịch có vị trí ({txPoints.length})</span>
+            {/* reset button moved to header; keep layout balanced */}
+            <span className="sp-map-subtle">{viewMode === 'heat' ? 'Chế độ Heat' : viewMode === 'pins' ? 'Chế độ Pins' : 'Chế độ kết hợp'}</span>
+          </div>
+          {txPoints.length === 0 && (
+            <div className="sp-map-list-empty">Chưa có giao dịch chi tiêu có vị trí.</div>
+          )}
+          <ul className="sp-map-ul">
+            {(txPoints || []).map(tx => {
+              const amt = Number(tx.amount || 0).toLocaleString('vi-VN') + '₫';
+              const date = tx.date ? new Date(tx.date).toLocaleDateString('vi-VN') : '';
+              const cat = tx.category && (tx.category.name || '');
+              const place = tx.location?.placeName || '';
+              return (
+                <li
+                  key={tx._id}
+                  className={`sp-map-item ${activeTxId === tx._id ? 'active pulse' : ''}`}
+                  onClick={() => focusTx(tx._id)}
+                  title="Xem trên bản đồ"
+                >
+                  <div className="sp-map-item-top">
+                    <span className="sp-map-item-title">{tx.title || tx.description || 'Giao dịch'}</span>
+                    <span className="sp-map-item-amt">{amt}</span>
+                  </div>
+                  <div className="sp-map-item-meta">
+                    {date && <span>{date}</span>}
+                    {cat && <span>• {cat}</span>}
+                  </div>
+                  {place && <div className="sp-map-item-place">{place}</div>}
+                </li>
+              );
+            })}
+          </ul>
+        </aside>
+      </div>
     </div>
   );
 }
