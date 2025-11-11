@@ -366,7 +366,6 @@
   box-shadow: 0 3px 10px rgba(42,82,152,0.06);
   position: relative;
   overflow: hidden;
-  min-height: 85px; /* NEW: ensure minimum height for multi-line content */
 }
 .sp-map-item::before {
   content: '';
@@ -416,21 +415,19 @@
 .sp-map-item-top {
   display:flex;
   justify-content:space-between;
-  align-items:flex-start; /* CHANGED from center to flex-start for better multi-line alignment */
+  align-items:center;
   gap:10px;
 }
 .sp-map-item-title {
   font-weight:800;
   font-size:.75rem;
   flex:1;
-  white-space:normal; /* CHANGED from nowrap to normal to allow wrapping */
-  overflow:visible; /* CHANGED from hidden to visible */
-  text-overflow:clip; /* CHANGED from ellipsis to clip */
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
   display: flex;
-  align-items: flex-start; /* CHANGED from center to flex-start */
+  align-items: center;
   gap: 5px;
-  line-height: 1.3; /* NEW: better line spacing */
-  word-break: break-word; /* NEW: prevent overflow on long words */
 }
 .sp-map-item-title::before {
   content: '📍';
@@ -474,21 +471,18 @@
   flex-wrap:wrap;
   font-size:.65rem;
   color:#607d8b;
-  line-height: 1.4; /* NEW: improve readability */
 }
 .sp-map-item.active .sp-map-item-meta { color:rgba(255,255,255,0.92); }
 .sp-map-item-place {
   font-size:.65rem;
   font-weight:700;
   color:#2a5298;
-  white-space:normal; /* CHANGED from nowrap to normal */
-  overflow:visible; /* CHANGED from hidden to visible */
-  text-overflow:clip; /* CHANGED from ellipsis to clip */
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
   display: flex;
   align-items: center;
   gap: 4px;
-  line-height: 1.3; /* NEW: better line spacing */
-  word-break: break-word; /* NEW: prevent overflow */
 }
 .sp-map-item-place::before {
   content: '🏠';
