@@ -444,7 +444,17 @@ router.put('/:id', requireAuth, async (req, res) => {
     revertTransactionOnWallet(wallet, tx.type, tx.amount);
 
     // apply new values
-    const { wallet: newWalletId, category: newCategoryId, type, amount, title, description, date } = req.body;
+    const {
+      wallet: newWalletId,
+      category: newCategoryId,
+      type,
+      amount,
+      title,
+      description,
+      date,
+      location,          // NEW: accept location object
+      removeLocation     // NEW: explicit flag to remove location
+    } = req.body;
 
     // if wallet changed, we need to move effect from old wallet to new wallet
     let targetWallet = wallet;
@@ -470,6 +480,27 @@ router.put('/:id', requireAuth, async (req, res) => {
     if (title !== undefined) tx.title = title;
     if (description !== undefined) tx.description = description;
     if (date !== undefined) tx.date = date ? new Date(date) : tx.date;
+
+    // NEW: location update logic
+    // - removeLocation === true OR location === null -> remove the location field
+    // - if location provided with lat & lng -> set/replace the location subdoc
+    if (removeLocation === true || location === null) {
+      tx.location = undefined;
+      try { tx.markModified('location'); } catch (_) {}
+    } else if (location && (location.lat !== undefined && location.lng !== undefined)) {
+      const lat = Number(location.lat);
+      const lng = Number(location.lng);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        tx.location = {
+          lat,
+          lng,
+          placeName: location.placeName || '',
+          accuracy: location.accuracy != null ? Number(location.accuracy) : undefined
+        };
+        try { tx.markModified('location'); } catch (_) {}
+      }
+    }
+    // else: ignore location if not properly provided
 
     // apply new effect to targetWallet
     applyTransactionToWallet(targetWallet, tx.type, tx.amount);

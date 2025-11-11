@@ -825,6 +825,13 @@ export default function FinanceDashboard() {
     setPieChartType(type);
   };
 
+  // When Export modal is open, mark body and ensure overlays take precedence over Leaflet panes
+  useEffect(() => {
+    if (showExportModal) document.body.classList.add('export-open');
+    else document.body.classList.remove('export-open');
+    return () => document.body.classList.remove('export-open');
+  }, [showExportModal]);
+
   // helper: primary currency to display amounts (fallback to VND)
   const primaryCurrency = Object.keys(walletTotals)[0] || 'VND';
 

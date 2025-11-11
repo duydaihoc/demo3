@@ -1,6 +1,6 @@
-/* eslint-disable no-undef */ // temporary: silence false-positive no-undef errors during build
+/* eslint-disable no-undef */ 
 import React, { useEffect, useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom'; // NEW: SPA navigation helper
+import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import './TransactionsPage.css';
 
@@ -60,6 +60,8 @@ function TransactionsPage() {
   const [expenseByCurrency, setExpenseByCurrency] = useState({});
   // confirm delete state for transactions
   const [confirmDelete, setConfirmDelete] = useState({ show: false, txId: null, title: '' });
+  // ADD: scope filter state
+  const [scopeFilter, setScopeFilter] = useState('all'); // 'all' | 'personal' | 'group' | 'family'
 
   // thêm state cho lọc theo ngày
   const [startDate, setStartDate] = useState(''); // format yyyy-mm-dd
@@ -79,6 +81,18 @@ function TransactionsPage() {
   const [txMapTarget, setTxMapTarget] = useState(null);                 // NEW
   const txViewMapRef = useRef(null);                                    // NEW
   const txViewLeafletRef = useRef(null);                                // NEW
+
+  // NEW: state for Edit-Location modal (separate from add-transaction map modal)
+  const [showEditMapModal, setShowEditMapModal] = useState(false);
+  const [editLocTarget, setEditLocTarget] = useState(null);
+  const editMapRef = useRef(null);
+  const editLeafletMapRef = useRef(null);
+  const editMarkerRef = useRef(null);
+  const [editMapSearch, setEditMapSearch] = useState('');
+  const [editMapResults, setEditMapResults] = useState([]);
+  const [editMapLoading, setEditMapLoading] = useState(false);
+  const [editLocForm, setEditLocForm] = useState({ placeName: '', lat: '', lng: '', accuracy: '' });
+  const [savingLocation, setSavingLocation] = useState(false);
 
   const formatCurrency = (amount, currency) => {
     try {
@@ -184,21 +198,18 @@ function TransactionsPage() {
     return () => { ctrl.abort(); };
    }, []);
 
-  // filtered transactions by walletFilter AND date range
+  // filtered transactions by walletFilter AND date range (+ scope filter)
   const filteredTransactions = transactions.filter(tx => {
     // wallet filter
     if (walletFilter && walletFilter !== '') {
-      // Pending transactions (chưa trả nợ nhóm) hiển thị cho tất cả ví
-      // vì chưa biết sẽ dùng ví nào để trả
       if (tx.isPending) {
-        // show for all wallets - don't filter pending debts
+        // pending debts are shown regardless of wallet
       } else {
-        // Settled transactions: filter theo ví đã dùng
         const wid = tx.wallet && (typeof tx.wallet === 'string' ? tx.wallet : tx.wallet._id);
         if (String(wid) !== String(walletFilter)) return false;
       }
     }
-    // date filter: tx.date may be string or Date
+    // date filter
     if (startDate || endDate) {
       const txDate = tx.date ? new Date(tx.date) : null;
       if (!txDate) return false;
@@ -213,12 +224,20 @@ function TransactionsPage() {
         if (txDate > ed) return false;
       }
     }
-    
-    // Không lọc theo groupTransaction, giữ tất cả các loại giao dịch
+    // scope filter
+    const isGroupTx = tx.groupTransaction === true;
+    const isFamilyTx = !!(tx.metadata && (tx.metadata.familyId || tx.metadata.familyTransactionId ||
+      tx.metadata.source === 'family_transfer' || tx.metadata.source === 'family_personal'));
+    const isPersonalTx = !isGroupTx && !isFamilyTx;
+
+    if (scopeFilter === 'group' && !isGroupTx) return false;
+    if (scopeFilter === 'family' && !isFamilyTx) return false;
+    if (scopeFilter === 'personal' && !isPersonalTx) return false;
+
     return true;
   });
 
-  // ensure deterministic ordering on the client: prefer createdAt desc, fallback to date
+  // ensure deterministic ordering
   const sortedTransactions = (filteredTransactions || []).slice().sort((a, b) => {
     const aStamp = a && (a.createdAt || a.date) ? (a.createdAt || a.date) : 0;
     const bStamp = b && (b.createdAt || b.date) ? (b.createdAt || b.date) : 0;
@@ -237,6 +256,18 @@ function TransactionsPage() {
     if (k === 'walletId' || k === 'type') {
       setForm(prev => ({ ...prev, categoryId: '' }));
     }
+  };
+
+  // add: edit form change handler (fix ReferenceError: handleEditChange is not defined)
+  const handleEditChange = (key, value) => {
+    setEditForm(prev => {
+      const next = { ...prev, [key]: value };
+      // when wallet or type changes, reset category to force re-pick a valid one
+      if (key === 'walletId' || key === 'type') {
+        next.categoryId = '';
+      }
+      return next;
+    });
   };
 
   // NEW: auto geolocation
@@ -368,15 +399,112 @@ function TransactionsPage() {
       categoryId,
       walletId
     });
+    // Initialize location form from tx.location
+    const curr = tx.location || {};
+    setEditLocForm({
+      placeName: curr.placeName || '',
+      lat: typeof curr.lat === 'number' ? curr.lat.toFixed(6) : '',
+      lng: typeof curr.lng === 'number' ? curr.lng.toFixed(6) : '',
+      accuracy: typeof curr.accuracy === 'number' ? Math.round(curr.accuracy) : ''
+    });
+    setEditMapSearch('');
+    setEditMapResults([]);
     setEditModal({ show: true, tx, saving: false });
   };
 
-  // edit form change handler
-  const handleEditChange = (k, v) => {
-    setEditForm(prev => ({ ...prev, [k]: v }));
+  // Initialize Leaflet map inside the Edit modal
+  useEffect(() => {
+    if (!editModal.show) {
+      if (editLeafletMapRef.current) {
+        try { editLeafletMapRef.current.remove(); } catch(_) {}
+        editLeafletMapRef.current = null;
+        editMarkerRef.current = null;
+      }
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      await new Promise(r => setTimeout(r, 50)); // wait DOM
+      if (!editMapRef.current || cancelled) return;
+      try {
+        const L = await loadLeaflet();
+        if (!L || cancelled) return;
+        const lat = editLocForm.lat ? Number(editLocForm.lat) : 21.0278;
+        const lng = editLocForm.lng ? Number(editLocForm.lng) : 105.8342;
+        const zoom = editLocForm.lat && editLocForm.lng ? 14 : 6;
+        const map = L.map(editMapRef.current).setView([lat, lng], zoom);
+        editLeafletMapRef.current = map;
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+        if (editLocForm.lat && editLocForm.lng) {
+          editMarkerRef.current = L.marker([Number(editLocForm.lat), Number(editLocForm.lng)]).addTo(map);
+        }
+        map.on('click', e => {
+          const { lat, lng } = e.latlng;
+          setEditLocForm(prev => ({ ...prev, lat: lat.toFixed(6), lng: lng.toFixed(6) }));
+          if (!editMarkerRef.current) {
+            editMarkerRef.current = L.marker([lat, lng]).addTo(map);
+          } else {
+            editMarkerRef.current.setLatLng([lat, lng]);
+          }
+        });
+      } catch (err) {
+        console.error('Edit modal map init error:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [editModal.show]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Geocode search for location inside Edit modal
+  const performEditSearch = async () => {
+    if (!editMapSearch.trim()) return;
+    setEditMapLoading(true);
+    setEditMapResults([]);
+    try {
+      const q = encodeURIComponent(editMapSearch.trim());
+      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=8&q=${q}`;
+      const res = await fetch(url, { headers: { 'Accept-Language': 'vi' } });
+      const data = await res.json();
+      setEditMapResults(data || []);
+    } catch (e) {
+      showToast('Không tìm được địa điểm', 'error');
+    } finally {
+      setEditMapLoading(false);
+    }
   };
 
-  // submit edit
+  // Select a search result in Edit modal
+  const selectEditSearchResult = (r) => {
+    const lat = Number(r.lat);
+    const lng = Number(r.lon);
+    setEditLocForm(prev => ({ ...prev, placeName: r.display_name, lat: lat.toFixed(6), lng: lng.toFixed(6) }));
+    if (editLeafletMapRef.current && window.L) {
+      editLeafletMapRef.current.setView([lat, lng], 14);
+      if (!editMarkerRef.current) editMarkerRef.current = window.L.marker([lat, lng]).addTo(editLeafletMapRef.current);
+      else editMarkerRef.current.setLatLng([lat, lng]);
+    }
+    setEditMapResults([]);
+  };
+
+  // GPS for Edit modal
+  const grabEditGeo = () => {
+    if (!navigator.geolocation) return showToast('Thiết bị không hỗ trợ GPS', 'error');
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const { latitude, longitude, accuracy } = pos.coords;
+        setEditLocForm(prev => ({ ...prev, lat: latitude.toFixed(6), lng: longitude.toFixed(6), accuracy: Math.round(accuracy) }));
+        // REMOVED setEditRemoveLocation(false);
+        if (editLeafletMapRef.current) {
+          editLeafletMapRef.current.setView([latitude, longitude], 14);
+          if (!editMarkerRef.current) editMarkerRef.current = window.L.marker([latitude, longitude]).addTo(editLeafletMapRef.current);
+          else editMarkerRef.current.setLatLng([latitude, longitude]);
+        }
+      },
+      err => showToast(`GPS lỗi: ${err.code}`, 'error'),
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+    );
+  };
+
+  // submit edit (now includes location/removeLocation)
   const submitEdit = async (e) => {
     e && e.preventDefault();
     if (!editModal.tx) return;
@@ -391,8 +519,22 @@ function TransactionsPage() {
         type: editForm.type,
         amount: Number(editForm.amount),
         title: editForm.name,
-        description: ''
+        description: '',
+        // date: editForm.date ? new Date(editForm.date) : undefined
       };
+      const hadLocationBefore = !!editModal.tx.location;
+      const hasCoordsNow = editLocForm.lat && editLocForm.lng;
+      if (hasCoordsNow) {
+        body.location = {
+          lat: Number(editLocForm.lat),
+          lng: Number(editLocForm.lng),
+          placeName: editLocForm.placeName || '',
+          accuracy: editLocForm.accuracy ? Number(editLocForm.accuracy) : undefined
+        };
+      } else if (hadLocationBefore) {
+        // User cleared selection -> remove location
+        body.removeLocation = true;
+      }
       const res = await fetch(`http://localhost:5000/api/transactions/${editModal.tx._id}`, { method: 'PUT', headers, body: JSON.stringify(body) });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -400,9 +542,7 @@ function TransactionsPage() {
       }
       const updated = await res.json();
       setTransactions(prev => prev.map(t => t._id === updated._id ? updated : t));
-      try { window.dispatchEvent(new CustomEvent('transactionsUpdated', { detail: updated })); } catch(_) {}
       showToast('Đã cập nhật giao dịch', 'success');
-      // ensure wallets/totals are updated immediately after editing a transaction
       refreshWallets();
       setEditModal({ show: false, tx: null, saving: false });
     } catch (err) {
@@ -600,32 +740,42 @@ function TransactionsPage() {
     setShowTxMapModal(true);
   };
 
-  useEffect(() => { // NEW: init per-transaction view map
-    if (!showTxMapModal) {
+  // FIX: re-add map init for per-transaction view modal (pin)
+  useEffect(() => {
+    if (!showTxMapModal || !txMapTarget) {
+      // cleanup
       if (txViewLeafletRef.current) {
-        try { txViewLeafletRef.current.remove(); } catch(_) {}
+        try { txViewLeafletRef.current.remove(); } catch (_) {}
         txViewLeafletRef.current = null;
       }
       return;
     }
     let cancelled = false;
     (async () => {
-      await new Promise(r => setTimeout(r, 40)); // allow modal render
-      if (!txViewMapRef.current || !txMapTarget || cancelled) return;
+      // wait a tick for modal DOM layout
+      await new Promise(r => setTimeout(r, 50));
+      if (!txViewMapRef.current || cancelled) return;
       try {
         const L = await loadLeaflet();
-        if (!L) return;
-        const { lat, lng } = txMapTarget.location;
-        const m = L.map(txViewMapRef.current).setView([lat, lng], 14);
-        txViewLeafletRef.current = m;
+        if (!L || cancelled) return;
+        const { lat, lng } = txMapTarget.location || {};
+        if (typeof lat !== 'number' || typeof lng !== 'number') return;
+        const map = L.map(txViewMapRef.current).setView([lat, lng], 14);
+        txViewLeafletRef.current = map;
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           attribution: '© OpenStreetMap'
-        }).addTo(m);
-        L.marker([lat, lng]).addTo(m).bindPopup(
+        }).addTo(map);
+        L.marker([lat, lng]).addTo(map).bindPopup(
           `<b>${(txMapTarget.title || txMapTarget.description || 'Giao dịch').replace(/"/g,'&quot;')}</b><br/>${lat}, ${lng}<br/>${txMapTarget.location.placeName || ''}`
         ).openPopup();
+        // ensure proper sizing after render
+        setTimeout(() => {
+          if (!cancelled) {
+            try { map.invalidateSize(); } catch (_) {}
+          }
+        }, 120);
       } catch (e) {
-        showToast('Không thể hiển thị bản đồ giao dịch', 'error');
+        console.error('View map init error', e);
       }
     })();
     return () => { cancelled = true; };
@@ -782,8 +932,36 @@ function TransactionsPage() {
           </form>
         </div>
         <div className="transactions-list-section">
-          <div className="transactions-list-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="transactions-list-title" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:12 }}>
             <span>Danh sách giao dịch</span>
+
+            {/* SCOPE FILTER BAR */}
+            <div className="tx-scope-filters">
+              <button
+                type="button"
+                className={`tx-scope-btn ${scopeFilter==='all'?'active':''}`}
+                onClick={()=>setScopeFilter('all')}
+                title="Hiện tất cả"
+              >TẤT CẢ</button>
+              <button
+                type="button"
+                className={`tx-scope-btn ${scopeFilter==='personal'?'active':''}`}
+                onClick={()=>setScopeFilter('personal')}
+                title="Chỉ giao dịch cá nhân"
+              >CÁ NHÂN</button>
+              <button
+                type="button"
+                className={`tx-scope-btn ${scopeFilter==='group'?'active':''}`}
+                onClick={()=>setScopeFilter('group')}
+                title="Chỉ giao dịch nhóm"
+              >NHÓM</button>
+              <button
+                type="button"
+                className={`tx-scope-btn ${scopeFilter==='family'?'active':''}`}
+                onClick={()=>setScopeFilter('family')}
+                title="Chỉ giao dịch gia đình"
+              >GIA ĐÌNH</button>
+            </div>
 
             {/* DATE RANGE PICKER */}
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -848,10 +1026,7 @@ function TransactionsPage() {
                 // Xác định kiểu hiển thị và style cho giao dịch nhóm
                 const isGroupTx = tx.groupTransaction === true;
                 const isPending = tx.isPending === true;
-
-                // NEW: detect family transfer wallet transactions
                 const isFamilyTransfer = tx.metadata && tx.metadata.source === 'family_transfer';
-                // NEW: detect family personal-linked wallet transactions (family personal scope)
                 const isFamilyPersonal = tx.metadata && tx.metadata.source === 'family_personal';
                 const familyName = tx.metadata && tx.metadata.familyName ? tx.metadata.familyName : '';
                 const familyDirection = tx.metadata && tx.metadata.direction ? tx.metadata.direction : ''; // 'to-family' | 'from-family'
@@ -878,10 +1053,20 @@ function TransactionsPage() {
                   }
                 }
 
+                // FIX: compute badges kinds once (remove duplicate const isGroupTx)
+                const isFamilyTx = !!(tx.metadata && (tx.metadata.familyId || tx.metadata.familyTransactionId || isFamilyTransfer || isFamilyPersonal));
+                const isPersonalTx = !isGroupTx && !isFamilyTx;
+
                 return (
                   <tr key={tx._id} style={rowStyle}>
                     <td>{new Date(tx.date).toLocaleDateString()}</td>
                     <td>
+                      <div className="tx-badges">
+                        {isPersonalTx && <span className="tx-badge personal">CÁ NHÂN</span>}
+                        {isGroupTx && <span className="tx-badge group">NHÓM</span>}
+                        {isFamilyTx && <span className="tx-badge family">GIA ĐÌNH</span>}
+                        {isPending && <span className="tx-badge" style={{ background:'#ffe2d3', color:'#c05621' }}>PENDING</span>}
+                      </div>
                       {/* Hiển thị chú thích khi đây là giao dịch gia đình nhưng linked vào ví cá nhân (personal) */}
                       {isFamilyPersonal && (
                         <div style={{ fontSize: 12, color: '#6b7280', fontWeight: 700, marginBottom: 4 }}>
@@ -893,7 +1078,7 @@ function TransactionsPage() {
                           {familyDirection === 'to-family' ? 'Nạp vào quỹ:' : familyDirection === 'from-family' ? 'Nhận từ quỹ:' : 'Quỹ:'} {familyName || tx.metadata.familyId || ''}
                         </div>
                       )}
-                      {isGroupTx && <span style={{ marginRight: '5px' }}>{actionIcon}</span>}
+                      {isGroupTx && <span style={{ marginRight:4 }}>{actionIcon}</span>}
                       <strong style={isPending ? { fontStyle: 'italic' } : {}}>{titleText}</strong>
                       {isPending && <span style={{ color: '#f57c00', marginLeft: '5px', fontSize: '12px' }}>(Chưa thanh toán)</span>}
                       {isGroupTx && detailText && (
@@ -1028,12 +1213,13 @@ function TransactionsPage() {
         </div>
       )}
 
-      {/* Edit Transaction Modal */}
+      {/* Edit Transaction Modal with Location section */}
       {editModal.show && (
         <div className="tx-overlay">
           <div className="tx-edit-modal" role="dialog" aria-modal="true" aria-label="Sửa giao dịch">
             <h3 style={{ marginTop: 0 }}>Sửa giao dịch</h3>
             <form onSubmit={submitEdit} style={{ display: 'grid', gap: 8 }}>
+              {/* ...existing inputs wallet/name/type/category/amount/date... */}
               <select value={editForm.walletId} onChange={(e) => handleEditChange('walletId', e.target.value)} required>
                 <option value="">-- Chọn ví --</option>
                 {wallets.map(w => <option key={w._id} value={w._id}>{w.name}</option>)}
@@ -1058,6 +1244,71 @@ function TransactionsPage() {
               </select>
               <input type="number" value={editForm.amount} onChange={(e) => handleEditChange('amount', e.target.value)} min="0" required />
               <input type="date" value={editForm.date} onChange={(e) => handleEditChange('date', e.target.value)} required />
+
+              {/* Location section */}
+              <div className="tx-edit-loc-section">
+                <div className="tx-edit-loc-title">Vị trí giao dịch</div>
+
+                <div className="tx-edit-loc-row">
+                  <input
+                    type="text"
+                    placeholder="Tìm địa điểm"
+                    value={editMapSearch}
+                    onChange={(e) => setEditMapSearch(e.target.value)}
+                  />
+                  <button type="button" onClick={performEditSearch} className="tx-edit-loc-secondary" disabled={editMapLoading}>
+                    {editMapLoading ? 'Đang tìm...' : 'Tìm'}
+                  </button>
+                </div>
+
+                {editMapResults.length > 0 && (
+                  <div className="tx-map-results">
+                    {editMapResults.map(r => (
+                      <div
+                        key={r.place_id}
+                        className="tx-map-results-item"
+                        onClick={() => selectEditSearchResult(r)}
+                        title="Chọn địa điểm"
+                      >
+                        {r.display_name}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="tx-map-canvas" ref={editMapRef} aria-label="Bản đồ sửa vị trí"></div>
+
+                <input
+                  type="text"
+                  placeholder="Tên địa điểm (ví dụ: Quán cà phê A)"
+                  value={editLocForm.placeName}
+                  onChange={(e) => setEditLocForm(prev => ({ ...prev, placeName: e.target.value }))}
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #e3f6f5' }}
+                />
+
+                {(editLocForm.lat || editLocForm.lng) && (
+                  <div style={{ fontSize: '.8rem', color: '#506a82', fontWeight: 600 }}>
+                    Tọa độ hiện tại: {editLocForm.lat || '—'}, {editLocForm.lng || '—'}
+                  </div>
+                )}
+
+                <div className="tx-edit-loc-actions">
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button type="button" onClick={grabEditGeo} className="tx-edit-loc-secondary">GPS</button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditLocForm({ placeName: '', lat: '', lng: '', accuracy: '' });
+                        if (editMarkerRef.current) { try { editMarkerRef.current.remove(); } catch(_) {} editMarkerRef.current = null; }
+                      }}
+                      className="tx-edit-loc-secondary"
+                    >
+                      Xóa chọn trên bản đồ
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                 <button type="button" onClick={() => setEditModal({ show: false, tx: null, saving: false })}>Hủy</button>
                 <button type="submit" disabled={editModal.saving}>{editModal.saving ? 'Đang lưu...' : 'Lưu'}</button>
@@ -1067,15 +1318,20 @@ function TransactionsPage() {
         </div>
       )}
 
-      {/* Delete confirmation modal */}
+      {/* DELETE CONFIRM MODAL (RESTORED) */}
       {confirmDelete.show && (
-        <div className="tx-overlay" role="dialog" aria-modal="true">
+        <div className="tx-overlay" role="dialog" aria-modal="true" aria-label="Xác nhận xóa giao dịch">
           <div className="tx-edit-modal" style={{ maxWidth: 420 }}>
-            <h3 style={{ marginTop: 0 }}>Xác nhận xóa</h3>
-            <p>Bạn có chắc chắn muốn xóa giao dịch "<strong>{confirmDelete.title}</strong>"? Sau khi xóa, số tiền sẽ được hoàn về ví.</p>
+            <h3 style={{ marginTop: 0 }}>Xóa giao dịch</h3>
+            <p>Bạn có chắc muốn xóa "<strong>{confirmDelete.title}</strong>"? Số dư ví sẽ được điều chỉnh lại.</p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
               <button type="button" onClick={cancelDelete} style={{ padding: '8px 12px', borderRadius: 8 }}>Hủy</button>
-              <button type="button" onClick={handleDeleteConfirmed} className="tx-delete-btn" style={{ padding: '8px 12px', borderRadius: 8 }}>Xóa</button>
+              <button
+                type="button"
+                onClick={handleDeleteConfirmed}
+                className="tx-delete-btn"
+                style={{ padding: '8px 12px', borderRadius: 8 }}
+              >Xóa</button>
             </div>
           </div>
         </div>

@@ -577,3 +577,191 @@
   .tx-map-view-canvas { height:200px; }
   .tx-map-view-modal { width:100%; }
 }
+
+/* Edit-location map modal (separate from add-transaction map modal) */
+.tx-edit-map-modal {
+  background: #fff;
+  border-radius: 14px;
+  padding: 18px;
+  width: 620px;
+  max-width: 92vw;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 14px 48px rgba(7,22,37,0.18);
+  color: #0f2940;
+}
+.tx-edit-map-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  border-bottom: 1px solid #eef2f8;
+  padding-bottom: 10px;
+}
+.tx-edit-map-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #2a5298;
+}
+.tx-edit-map-close {
+  background: none;
+  border: none;
+  font-size: 26px;
+  cursor: pointer;
+  color: #607d8b;
+}
+.tx-edit-map-close:hover { color: #2a5298; }
+
+.tx-edit-map-body { display: flex; flex-direction: column; gap: 10px; }
+.tx-edit-map-row { display: flex; gap: 8px; }
+.tx-edit-map-row input[type="text"] {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid #d6e3ec;
+  border-radius: 8px;
+}
+.tx-edit-map-row button {
+  padding: 8px 14px;
+  border: none;
+  background: linear-gradient(90deg,#2a5298,#4ecdc4);
+  color: #fff;
+  font-weight: 700;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.tx-edit-map-results {
+  max-height: 140px;
+  overflow-y: auto;
+  border: 1px solid #e3ecf3;
+  border-radius: 8px;
+  background: #f8fbfe;
+  font-size: .8rem;
+}
+.tx-edit-map-results-item {
+  padding: 6px 8px;
+  cursor: pointer;
+  border-bottom: 1px solid #e9f1f6;
+}
+.tx-edit-map-results-item:hover { background: #e9f3fb; }
+.tx-edit-map-canvas {
+  width: 100%;
+  height: 260px;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.06);
+  position: relative;
+  background: #f7fafc;
+}
+.tx-edit-map-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.tx-edit-map-secondary {
+  background: #f2f7fa !important;
+  border: 1px solid rgba(15,40,64,0.06) !important;
+  color: #0f2940 !important;
+}
+
+/* Small edit-location button can reuse .tx-row-map-btn visuals */
+.tx-row-map-edit-btn { composes: tx-row-map-btn; } /* if your build doesn't support composes, keep same className */
+
+/* New styles for location section inside edit modal */
+.tx-edit-loc-section {
+  margin-top: 10px;
+  border-top: 1px solid #eef2f8;
+  padding-top: 10px;
+}
+.tx-edit-loc-title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #2a5298;
+  margin-bottom: 8px;
+}
+.tx-edit-loc-row { display: flex; gap: 8px; }
+.tx-edit-loc-row input[type="text"] {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid #e6f0f4;
+  border-radius: 8px;
+  font-size: 0.95rem;
+}
+.tx-edit-loc-secondary {
+  background: #f2f7fa !important;
+  border: 1px solid rgba(15,40,64,0.06) !important;
+  color: #0f2940 !important;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.tx-edit-loc-actions { display: flex; gap: 8px; justify-content: space-between; align-items: center; }
+
+.tx-scope-filters {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+.tx-scope-btn {
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 1px solid #d6e3ec;
+  background: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: .5px;
+  cursor: pointer;
+  color: #2a5298;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all .18s;
+}
+.tx-scope-btn:hover { background:#eef6fa; }
+.tx-scope-btn.active {
+  background: linear-gradient(90deg,#2a5298,#4ecdc4);
+  color: #fff;
+  border-color: #2a5298;
+  box-shadow: 0 4px 14px rgba(42,82,152,.18);
+  transform: translateY(-2px);
+}
+
+.transactions-table tbody tr:nth-child(odd) {
+  background: #fafcfe;
+}
+.transactions-table tbody tr:hover {
+  background: #eef6fa;
+  transition: background .15s;
+}
+
+.tx-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.tx-badge {
+  font-size: 0.55rem;
+  font-weight: 800;
+  padding: 4px 7px;
+  border-radius: 10px;
+  letter-spacing: .5px;
+  background: #e3eef7;
+  color:#2a5298;
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  box-shadow: 0 2px 6px rgba(7,22,37,0.08);
+}
+.tx-badge.group { background:#ffe9cc; color:#a85c00; }
+.tx-badge.family { background:#e9f9f2; color:#0d7e52; }
+.tx-badge.personal { background:#e3eef7; color:#2a5298; }
+
+.tx-title-line {
+  font-weight:600;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  line-height:1.2;
+}
