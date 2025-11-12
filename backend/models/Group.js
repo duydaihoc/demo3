@@ -51,6 +51,19 @@ const groupSchema = new mongoose.Schema({
   color: {
     type: String,
     default: '#4CAF50'
+  },
+  isPublic: { type: Boolean, default: false },
+  shareSettings: {
+    enabled: { type: Boolean, default: false },
+    shareKey: { type: String, unique: true, sparse: true }, // Link chia sẻ duy nhất
+    allowedData: {
+      transactions: { type: Boolean, default: true },
+      members: { type: Boolean, default: false }, // Chỉ hiển thị số lượng, không hiển thị tên
+      statistics: { type: Boolean, default: true },
+      charts: { type: Boolean, default: true }
+    },
+    createdAt: { type: Date },
+    expiresAt: { type: Date } // Tùy chọn hết hạn
   }
 }, {
   timestamps: true

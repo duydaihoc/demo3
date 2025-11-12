@@ -6,6 +6,7 @@ const Group = require('../models/Group');
 const GroupTransaction = require('../models/GroupTransaction');
 const Notification = require('../models/Notification');
 const { auth } = require('../middleware/auth');
+const crypto = require('crypto');
 
 // GET /api/groups - Get groups for current user
 router.get('/', auth, async (req, res) => {
@@ -460,6 +461,192 @@ router.delete('/:groupId', auth, async (req, res) => {
     res.json({ message: 'Đã xóa nhóm' });
   } catch (err) {
     console.error('Groups DELETE error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// POST /api/groups/:groupId/share - Tạo/cập nhật chia sẻ công khai
+router.post('/:groupId/share', auth, async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const { enabled, allowedData, expiresInDays } = req.body;
+    const frontendBase = process.env.FRONTEND_URL || 'http://localhost:3000';
+
+    const group = await Group.findById(groupId);
+    if (!group) return res.status(404).json({ message: 'Group not found' });
+    if (String(group.owner) !== String(req.user._id))
+      return res.status(403).json({ message: 'Chỉ chủ nhóm mới có thể cấu hình chia sẻ' });
+
+    if (enabled) {
+      if (!group.shareSettings?.shareKey) {
+        const crypto = require('crypto');
+        let shareKey, unique = false;
+        while (!unique) {
+          shareKey = crypto.randomBytes(16).toString('hex');
+          const exists = await Group.findOne({ 'shareSettings.shareKey': shareKey });
+          if (!exists) unique = true;
+        }
+        group.shareSettings = group.shareSettings || {};
+        group.shareSettings.shareKey = shareKey;
+      }
+      group.shareSettings.enabled = true;
+      group.shareSettings.allowedData = {
+        transactions: allowedData?.transactions ?? true,
+        members: allowedData?.members ?? false,
+        statistics: allowedData?.statistics ?? true,
+        charts: allowedData?.charts ?? true
+      };
+      group.shareSettings.createdAt = group.shareSettings.createdAt || new Date();
+      if (expiresInDays && expiresInDays > 0) {
+        const expires = new Date();
+        expires.setDate(expires.getDate() + expiresInDays);
+        group.shareSettings.expiresAt = expires;
+      } else {
+        group.shareSettings.expiresAt = null;
+      }
+      group.isPublic = true;
+    } else {
+      group.shareSettings.enabled = false;
+      group.isPublic = false;
+    }
+
+    await group.save();
+    res.json({
+      success: true,
+      shareKey: group.shareSettings.shareKey,
+      shareUrl: group.shareSettings.enabled
+        ? `${frontendBase}/public/group/${group.shareSettings.shareKey}`
+        : null,
+      shareSettings: group.shareSettings
+    });
+  } catch (e) {
+    console.error('Share group error:', e);
+    res.status(500).json({ message: 'Server error', error: e.message });
+  }
+});
+
+// GET /api/groups/:groupId/share - Lấy thông tin chia sẻ hiện tại
+router.get('/:groupId/share', auth, async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const frontendBase = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const group = await Group.findById(groupId);
+    if (!group) return res.status(404).json({ message: 'Group not found' });
+    if (String(group.owner) !== String(req.user._id))
+      return res.status(403).json({ message: 'Chỉ chủ nhóm mới có thể xem cấu hình chia sẻ' });
+
+    const shareUrl = group.shareSettings?.enabled && group.shareSettings?.shareKey
+      ? `${frontendBase}/public/group/${group.shareSettings.shareKey}`
+      : null;
+
+    res.json({
+      shareSettings: group.shareSettings || { enabled: false },
+      shareUrl,
+      isExpired: group.shareSettings?.expiresAt
+        ? new Date() > group.shareSettings.expiresAt
+        : false
+    });
+  } catch (e) {
+    console.error('Get share settings error:', e);
+    res.status(500).json({ message: 'Server error', error: e.message });
+  }
+});
+
+// GET /api/public/group/:shareKey - Xem thông tin nhóm công khai
+router.get('/public/:shareKey', async (req, res) => {
+  try {
+    const { shareKey } = req.params;
+    
+    if (!shareKey) {
+      return res.status(400).json({ message: 'Share key is required' });
+    }
+
+    const group = await Group.findOne({ 
+      'shareSettings.shareKey': shareKey,
+      'shareSettings.enabled': true
+    })
+      .populate('owner', 'name')
+      .populate('members.user', 'name')
+      .lean();
+
+    if (!group) {
+      return res.status(404).json({ message: 'Nhóm không tồn tại hoặc đã ngừng chia sẻ' });
+    }
+
+    // Kiểm tra hết hạn
+    if (group.shareSettings?.expiresAt && new Date() > group.shareSettings.expiresAt) {
+      return res.status(410).json({ message: 'Link chia sẻ đã hết hạn' });
+    }
+
+    // Lấy dữ liệu theo cấu hình chia sẻ
+    const allowedData = group.shareSettings.allowedData || {};
+    const response = {
+      groupInfo: {
+        name: group.name,
+        description: group.description,
+        color: group.color,
+        createdAt: group.createdAt,
+        ownerName: group.owner?.name || 'Người quản lý'
+      },
+      shareSettings: allowedData
+    };
+
+    // Thêm số lượng thành viên nếu được phép
+    if (allowedData.members) {
+      response.membersCount = group.members?.length || 0;
+    }
+
+    // Lấy giao dịch nếu được phép
+    if (allowedData.transactions) {
+      const transactions = await GroupTransaction.find({ groupId: group._id })
+        .populate('category', 'name icon')
+        .select('title amount date transactionType category participants settled')
+        .sort({ date: -1 })
+        .limit(20)
+        .lean();
+
+      response.transactions = transactions.map(tx => ({
+        _id: tx._id,
+        title: tx.title,
+        amount: tx.amount,
+        date: tx.date,
+        transactionType: tx.transactionType,
+        category: tx.category,
+        participantsCount: tx.participants?.length || 0,
+        settledCount: tx.participants?.filter(p => p.settled)?.length || 0,
+        isFullySettled: tx.participants?.length > 0 && tx.participants?.every(p => p.settled)
+      }));
+    }
+
+    // Tính thống kê nếu được phép
+    if (allowedData.statistics) {
+      const allTransactions = await GroupTransaction.find({ groupId: group._id }).lean();
+      
+      const totalAmount = allTransactions.reduce((sum, tx) => sum + (tx.amount || 0), 0);
+      const totalTransactions = allTransactions.length;
+      const settledTransactions = allTransactions.filter(tx => 
+        tx.participants?.length > 0 && tx.participants.every(p => p.settled)
+      ).length;
+
+      // Thống kê theo loại giao dịch
+      const typeStats = {};
+      allTransactions.forEach(tx => {
+        const type = tx.transactionType || 'other';
+        typeStats[type] = (typeStats[type] || 0) + (tx.amount || 0);
+      });
+
+      response.statistics = {
+        totalAmount,
+        totalTransactions,
+        settledTransactions,
+        settlementRate: totalTransactions > 0 ? (settledTransactions / totalTransactions * 100).toFixed(1) : 0,
+        typeStats
+      };
+    }
+
+    res.json(response);
+  } catch (err) {
+    console.error('Get public group error:', err);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });

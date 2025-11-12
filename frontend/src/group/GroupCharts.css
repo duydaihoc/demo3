@@ -181,7 +181,8 @@
 .gc-line canvas, 
 .gc-bar canvas, 
 .gc-debt-bar canvas,
-.gc-network canvas {
+.gc-network canvas,
+.gc-doughnut canvas {
   max-height: 340px !important;
   width: 100% !important;
 }

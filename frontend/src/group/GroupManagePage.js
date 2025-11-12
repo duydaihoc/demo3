@@ -5,6 +5,7 @@ import './GroupManagePage.css';
 import { showNotification } from '../utils/notify';
 import GroupCharts from './GroupCharts';
 import './GroupCharts.css';
+import GroupShareModal from './GroupShareModal';
 
 
 export default function GroupManagePage() {
@@ -37,6 +38,9 @@ export default function GroupManagePage() {
 	const [txs, setTxs] = useState([]);
 	const [loadingTxs, setLoadingTxs] = useState(false);
 	const [txError, setTxError] = useState('');
+
+	// Thêm state cho modal chia sẻ
+	const [showShareModal, setShowShareModal] = useState(false);
 
 	const API_BASE = 'http://localhost:5000';
 	const token = localStorage.getItem('token');
@@ -678,13 +682,20 @@ const getUserNameById = (userIdOrEmail) => {
 									<i className="fas fa-layer-group"></i>
 									{group.name}
 								</h2>
-								{/* Actions: edit is owner-only, transactions available to all members when not editing */}
+								{/* Actions: thêm nút chia sẻ */}
 								{!editing && (
 									<div style={{display:'flex', gap:8, alignItems:'center'}}>
 										{isOwner && (
 											<>
 												<button className="gm-btn primary" onClick={() => setEditing(true)}>
 													<i className="fas fa-edit"></i> Quản lý nhóm
+												</button>
+												<button 
+													className="gm-btn secondary" 
+													onClick={() => setShowShareModal(true)}
+													style={{background:'#10b981', borderColor:'#10b981'}}
+												>
+													<i className="fas fa-share-alt"></i> Chia sẻ
 												</button>
 											</>
 										)}
@@ -1431,6 +1442,13 @@ const getUserNameById = (userIdOrEmail) => {
 						</div>
 					</div>
 				)}
+
+				{/* Share Modal */}
+				<GroupShareModal
+					groupId={groupId}
+					isOpen={showShareModal}
+					onClose={() => setShowShareModal(false)}
+				/>
 						</div>
 					</>
 				)}

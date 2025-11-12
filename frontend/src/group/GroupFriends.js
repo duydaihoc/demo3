@@ -369,7 +369,7 @@ export default function GroupFriends() {
                           </div>
                           <div className="friend-actions">
                             <button className="remove-btn" onClick={() => handleRemoveFriend(f.id || f._id || f.email)} title="Xóa bạn bè">
-                              <i className="fas fa-times"></i>
+                              <i className="fas fa-times-color">Xóa</i>
                             </button>
                           </div>
                         </div>

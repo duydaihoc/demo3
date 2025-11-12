@@ -843,7 +843,7 @@ export default function GroupTransactions() {
       title: editTitle,
       description: editDescription,
       amount: Number(editAmount),
-      category: editCategory,
+      category: editCategory, // Đảm bảo category được gửi
       transactionType: editTransactionType,
       participants,
       perPerson: true,
@@ -853,6 +853,9 @@ export default function GroupTransactions() {
     if (editTransactionType === 'percentage_split') {
       payload.percentages = (percentages || []).map(p => ({ user: p.id, email: p.email, percentage: Number(p.percentage || 0) }));
     }
+
+    // Debug log để kiểm tra payload
+    console.log('Update payload:', payload);
 
     // Close modal UI while saving but keep a copy to restore on error
     setIsEditing(false);

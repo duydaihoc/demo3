@@ -434,19 +434,63 @@ router.post('/:groupId/transactions', auth, async (req, res) => {
    }
  });
  
+// Helper function to clean and populate category data
+const cleanTransactionCategories = async (transactions) => {
+  const Category = mongoose.model('Category');
+  const cleanedTxs = [];
+  
+  for (const tx of transactions) {
+    const cleanedTx = { ...tx };
+    
+    if (tx.category && typeof tx.category === 'string') {
+      // Try to populate manually if it's just an ObjectId string
+      try {
+        if (mongoose.Types.ObjectId.isValid(tx.category)) {
+          const categoryData = await Category.findById(tx.category).select('name icon').lean();
+          cleanedTx.category = categoryData || null;
+        } else {
+          cleanedTx.category = null;
+        }
+      } catch (e) {
+        cleanedTx.category = null;
+      }
+    } else if (!tx.category || (typeof tx.category === 'object' && !tx.category.name)) {
+      cleanedTx.category = null;
+    }
+    
+    cleanedTxs.push(cleanedTx);
+  }
+  
+  return cleanedTxs;
+};
+
 // GET /api/groups/:groupId/transactions
 router.get('/:groupId/transactions', auth, async (req, res) => {
   try {
     const { groupId } = req.params;
-    // Query both possible fields: some code paths save as `group` while others use `groupId`.
-    // This makes the endpoint robust and returns all transactions for the group regardless of storage field.
     const query = { $or: [{ group: groupId }, { groupId: groupId }] };
-    const txs = await GroupTransaction.find(query)
+    let txs = await GroupTransaction.find(query)
       .sort({ createdAt: -1 })
       .populate('payer', 'name email')
       .populate('participants.user', 'name email')
-      .populate('category', 'name icon')
-      .populate('createdBy', 'name email');
+      .populate({
+        path: 'category',
+        select: 'name icon',
+        options: { strictPopulate: false }
+      })
+      .populate('createdBy', 'name email')
+      .lean();
+
+    // Clean up category data for any missed cases
+    txs = await cleanTransactionCategories(txs);
+
+    // Commented out debug log to reduce console noise
+    // console.log('Sample transactions after cleanup:', txs.slice(0, 2).map(tx => ({
+    //   id: tx._id,
+    //   title: tx.title,
+    //   category: tx.category,
+    //   amount: tx.amount
+    // })));
 
     res.json(txs);
   } catch (err) {
@@ -851,6 +895,9 @@ router.put('/:groupId/transactions/:txId', auth, async (req, res) => {
     if (req.body.description !== undefined) transaction.description = req.body.description;
     if (req.body.participants) transaction.participants = req.body.participants;
     if (req.body.percentages) transaction.percentages = req.body.percentages;
+    
+    // Thêm dòng này để cập nhật category
+    if (req.body.category !== undefined) transaction.category = req.body.category;
 
     // Validation: Các giao dịch ghi nợ bắt buộc phải có người tham gia
     const debtTransactionTypes = ['payer_for_others', 'equal_split', 'percentage_split'];
@@ -1396,7 +1443,7 @@ router.post('/:groupId/transactions/:txId/repay', auth, async (req, res) => {
       await Notification.create({
         recipient: transaction.payer._id,
         sender: req.user._id,
-        type: 'group.transaction.debt.paid', // Sửa lại cho đúng enum
+        type: 'group.transaction.debt.paid',
         message: `${req.user.name || 'Người dùng'} đã trả ${formattedAmount} đồng cho giao dịch "${transaction.title}"`,
         data: {
           transactionId: txId,

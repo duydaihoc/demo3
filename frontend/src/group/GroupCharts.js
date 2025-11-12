@@ -12,7 +12,7 @@ import {
 	Legend,
 	TimeScale
 } from 'chart.js';
-import { Line, Bar } from 'react-chartjs-2';
+import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import * as d3 from 'd3';
 
 ChartJS.register(
@@ -596,6 +596,118 @@ export default function GroupCharts({ txs = [], members = [] }) {
 		maintainAspectRatio: false
 	};
 
+	// Chi tiêu theo danh mục (6 tháng gần đây) - với debug
+	const categorySpending = useMemo(() => {
+		const map = new Map();
+		const now = new Date();
+		const sixMonthsAgo = new Date();
+		sixMonthsAgo.setMonth(now.getMonth() - 6);
+
+		// Commented out debug log to reduce console noise
+		// console.log('Processing transactions for category chart:', txs.length);
+
+		for (const tx of (txs || [])) {
+			const d = new Date(tx.date || tx.createdAt || Date.now());
+			if (isNaN(d.getTime()) || d < sixMonthsAgo) continue;
+			
+			// Commented out debug log to reduce console noise
+			// console.log('Transaction category:', {
+			//   txId: tx._id,
+			//   category: tx.category,
+			//   categoryType: typeof tx.category,
+			//   amount: tx.amount
+			// });
+			
+			// Xử lý tên danh mục một cách robust hơn
+			let catName = 'Chưa phân loại';
+			if (tx.category) {
+				if (typeof tx.category === 'object' && tx.category !== null) {
+					// Category đã được populate
+					if (tx.category.name) {
+						catName = tx.category.name;
+					} else if (tx.category._id) {
+						catName = `Danh mục ID: ${tx.category._id}`;
+					} else {
+						catName = 'Danh mục không hợp lệ';
+					}
+				} else if (typeof tx.category === 'string' && tx.category.trim() !== '') {
+					// Category là ObjectId string
+					catName = `Chưa load tên (${tx.category.substring(0, 8)}...)`;
+				} else {
+					catName = 'Danh mục trống';
+				}
+			}
+			
+			const amt = Number(tx.amount) || 0;
+			if (!amt) continue;
+			
+			// Commented out debug log to reduce console noise
+			// console.log('Adding to category:', catName, 'amount:', amt);
+			map.set(catName, (map.get(catName) || 0) + amt);
+		}
+
+		const entries = Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+		
+		// Commented out debug log to reduce console noise
+		// console.log('Final category spending:', entries);
+		
+		return {
+			labels: entries.map(e => e[0]),
+			values: entries.map(e => e[1]),
+		};
+	}, [txs]);
+
+	// Màu sắc cho biểu đồ doughnut
+	const categoryPalette = useMemo(() => [
+		'#67e8f9', '#60a5fa', '#a78bfa', '#f472b6', '#fb7185',
+		'#f59e0b', '#34d399', '#22c55e', '#14b8a6', '#0ea5e9', '#ef4444'
+	], []);
+
+	const categoryDonutData = useMemo(() => {
+		const colors = categorySpending.labels.map((_, i) => categoryPalette[i % categoryPalette.length]);
+		return {
+			labels: categorySpending.labels,
+			datasets: [{
+				data: categorySpending.values,
+				backgroundColor: colors,
+				borderColor: '#ffffff',
+				borderWidth: 2
+			}]
+		};
+	}, [categorySpending, categoryPalette]);
+
+	const categoryDonutOptions = useMemo(() => ({
+		responsive: true,
+		plugins: {
+			legend: {
+				position: 'right',
+				labels: {
+					usePointStyle: true,
+					boxWidth: 10
+				}
+			},
+			tooltip: {
+				backgroundColor: 'rgba(15, 23, 42, 0.9)',
+				titleFont: { size: 13 },
+				bodyFont: { size: 12 },
+				padding: 12,
+				cornerRadius: 6,
+				callbacks: {
+					label: (context) => {
+						const label = context.label || '';
+						const val = context.parsed || 0;
+						const total = (context.dataset?.data || []).reduce((s, v) => s + (Number(v) || 0), 0);
+						const pct = total ? (val / total) * 100 : 0;
+						const money = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
+						return `${label}: ${money} (${pct.toFixed(1)}%)`;
+					}
+				}
+			}
+		},
+		cutout: '55%',
+		maintainAspectRatio: false
+	}), []);
+
 	// Create force-directed network chart for debt relationships
 	useEffect(() => {
 		if (activeTab !== 'debts' || debtBalances.length === 0 || !networkChartRef.current) {
@@ -894,6 +1006,26 @@ export default function GroupCharts({ txs = [], members = [] }) {
 									<div className="gc-empty-state">
 										<i className="fas fa-users"></i>
 										<p>Chưa có dữ liệu hoạt động thành viên</p>
+									</div>
+								)}
+							</div>
+						</div>
+
+						{/* NEW: Biểu đồ chi tiêu theo danh mục */}
+						<div className="gc-card">
+							<div className="gc-card-header">
+								<h3><i className="fas fa-tags"></i> Chi tiêu theo danh mục</h3>
+								<div className="gc-card-badge">
+									<i className="fas fa-layer-group"></i> {categorySpending.labels.length} danh mục
+								</div>
+							</div>
+							<div className="gc-chart gc-doughnut">
+								{categorySpending.labels.length > 0 ? (
+									<Doughnut data={categoryDonutData} options={categoryDonutOptions} />
+								) : (
+									<div className="gc-empty-state">
+										<i className="fas fa-tags"></i>
+										<p>Chưa có dữ liệu danh mục</p>
 									</div>
 								)}
 							</div>
