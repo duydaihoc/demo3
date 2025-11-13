@@ -140,11 +140,15 @@ router.get('/invitations', authenticateToken, async (req, res) => {
   try {
     const userEmail = req.user.email;
 
+    // THAY ĐỔI: Thêm populate cho family để có tên gia đình
     const invitations = await FamilyInvitation.find({
       email: userEmail,
       status: 'pending',
       expiresAt: { $gt: new Date() }
-    }).populate('family', 'name').populate('invitedBy', 'name email').sort({ createdAt: -1 });
+    })
+    .populate('family', 'name description color') // THÊM: populate family với nhiều field hơn
+    .populate('invitedBy', 'name email')
+    .sort({ createdAt: -1 });
 
     res.json(invitations);
   } catch (error) {
@@ -1570,16 +1574,12 @@ router.post('/:familyId/todo-list', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'Bạn không có quyền truy cập gia đình này' });
     }
 
-    // THAY ĐỔI: Khởi tạo completionStatus cho tất cả người được phân công
-    const completionStatus = [];
-    if (assignedToArray.length > 0) {
-      assignedToArray.forEach(assigneeId => {
-        completionStatus.push({
-          user: assigneeId,
-          completed: false
-        });
-      });
-    }
+    // SỬA LỖI: Khởi tạo completionStatus cho TẤT CẢ người được phân công với trạng thái false
+    const completionStatus = assignedToArray.map(assigneeId => ({
+      user: assigneeId,
+      completed: false,
+      completedAt: null
+    }));
 
     // Tạo item mới
     const newItem = {
@@ -1588,7 +1588,7 @@ router.post('/:familyId/todo-list', authenticateToken, async (req, res) => {
       priority: priority || 'medium',
       dueDate: dueDate ? new Date(dueDate) : null,
       assignedTo: assignedToArray,
-      completionStatus: completionStatus, // THÊM: khởi tạo completion status
+      completionStatus: completionStatus, // Đảm bảo khởi tạo đầy đủ
       completed: false,
       createdBy: userId,
       createdAt: new Date()
@@ -1604,12 +1604,12 @@ router.post('/:familyId/todo-list', authenticateToken, async (req, res) => {
     // Lấy item vừa tạo với thông tin người tạo và người được phân công
     const createdItem = family.todoList[family.todoList.length - 1];
     await Family.populate(createdItem, { path: 'createdBy', select: 'name email' });
-    await Family.populate(createdItem, { path: 'assignedTo', select: 'name email' }); // THAY ĐỔI: populate mảng
+    await Family.populate(createdItem, { path: 'assignedTo', select: 'name email' });
 
     const responseItem = {
       ...createdItem.toObject(),
       creatorName: createdItem.createdBy?.name || 'Thành viên',
-      assignedToNames: createdItem.assignedTo ? createdItem.assignedTo.map(assignee => assignee.name || 'Thành viên') : [] // THAY ĐỔI: mảng tên
+      assignedToNames: createdItem.assignedTo ? createdItem.assignedTo.map(assignee => assignee.name || 'Thành viên') : []
     };
 
     res.status(201).json(responseItem);
@@ -1652,29 +1652,65 @@ router.patch('/:familyId/todo-list/:itemId/toggle-completion', authenticateToken
       return res.status(400).json({ message: 'Công việc đã quá hạn, không thể thay đổi trạng thái hoàn thành' });
     }
 
+    // SỬA LỖI: Kiểm tra xem user có phải là người được phân công không
+    const isAssignedTo = item.assignedTo && item.assignedTo.some(assignee => 
+      String(assignee._id || assignee) === String(userId)
+    );
+
+    // Nếu user không được phân công, không cho phép toggle
+    if (!isAssignedTo) {
+      return res.status(403).json({ message: 'Bạn không được phân công làm công việc này' });
+    }
+
+    // SỬA LỖI MỚI: Khởi tạo completionStatus nếu chưa có
+    if (!Array.isArray(item.completionStatus)) {
+      item.completionStatus = [];
+    }
+
+    // SỬA LỖI MỚI: Đảm bảo tất cả người trong assignedTo đều có entry trong completionStatus
+    item.assignedTo.forEach(assignee => {
+      const assigneeId = String(assignee._id || assignee);
+      const hasEntry = item.completionStatus.some(cs => String(cs.user) === assigneeId);
+      
+      if (!hasEntry) {
+        // Nếu chưa có entry, tạo mới với trạng thái chưa hoàn thành
+        item.completionStatus.push({
+          user: assigneeId,
+          completed: false,
+          completedAt: null
+        });
+      }
+    });
+
     // Tìm completion status của user hiện tại
-    let userCompletion = item.completionStatus.find(s => s.user.toString() === req.user.id);
+    let userCompletion = item.completionStatus.find(s => String(s.user) === String(userId));
 
     if (!userCompletion) {
-      // Nếu chưa có, tạo mới
+      // Nếu vẫn chưa có (edge case), tạo mới
       userCompletion = {
-        user: req.user.id,
+        user: userId,
         completed: false,
         completedAt: null
       };
       item.completionStatus.push(userCompletion);
     }
 
-    // Toggle trạng thái
+    // Toggle trạng thái - SỬA LỖI: Cho phép toggle độc lập
     userCompletion.completed = !userCompletion.completed;
     userCompletion.completedAt = userCompletion.completed ? new Date() : null;
 
-    // Cập nhật trạng thái tổng thể
+    // Cập nhật trạng thái tổng thể - CHỈ DỰA TRÊN ASSIGNEDTO
     const totalAssigned = item.assignedTo.length;
-    const completedCount = item.completionStatus.filter(s => s.completed).length;
+    const completedCount = item.completionStatus.filter(cs => {
+      // Chỉ đếm những người trong assignedTo
+      const isInAssignedTo = item.assignedTo.some(a => String(a._id || a) === String(cs.user));
+      return cs.completed && isInAssignedTo;
+    }).length;
+    
     item.completed = completedCount === totalAssigned && totalAssigned > 0;
     item.completedAt = item.completed ? new Date() : null;
-    item.completedBy = item.completed ? req.user.id : null;
+    // SỬA LỖI: Chỉ set completedBy khi tất cả hoàn thành
+    item.completedBy = item.completed ? userId : null;
 
     await family.save();
 
@@ -2145,7 +2181,7 @@ router.get('/:familyId/receipt-images', authenticateToken, async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const paginatedImages = receiptImages.slice(skip, skip + parseInt(limit));
 
-    // Thêm URL để xem hình ảnh - SỬA LẠI PHẦN NÀY
+    // Thêm URL để xem hình ảnh
     const imagesWithUrls = paginatedImages.map(img => ({
       ...img.toObject(),
       imageUrl: `http://localhost:5000/uploads/receipts/${img.filename}`, // URL trực tiếp đến file
@@ -2598,7 +2634,7 @@ router.get('/:familyId/receipt-images/search', authenticateToken, async (req, re
     // Sắp xếp theo ngày upload mới nhất
     receiptImages = receiptImages.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
 
-    // Thêm URL để xem hình ảnh
+    // Thêm URL để xem hình ảnh - SỬA LẠI PHẦN NÀY
     const imagesWithUrls = receiptImages.map(img => ({
       ...img.toObject(),
       imageUrl: `/api/family/${familyId}/receipt-images/${img._id}/view`,

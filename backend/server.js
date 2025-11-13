@@ -14,6 +14,7 @@ const groupRoutes = require('./routes/groups'); // Import group routes
 const notificationRoutes = require('./routes/notifications'); // Import notification routes
 const aiRoutes = require('./routes/ai'); // Import AI routes
 const familyRoutes = require('./routes/family'); // Import family routes
+const userRoutes = require('./routes/user'); // Import user routes
 const http = require('http');
 let Server = null;
 try {
@@ -92,6 +93,8 @@ app.use('/api/groups', groupRoutes);
 app.use('/api/ai', aiRoutes);
 // Mount family routes (includes family management)
 app.use('/api/family', familyRoutes);
+// Mount user routes
+app.use('/api/users', userRoutes);
 
 // Mount family transactions routes (includes transactions endpoints)
 app.use('/api/family', require('./routes/familyTransactions'));

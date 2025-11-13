@@ -46,8 +46,10 @@ function AppRoutes() {
 	const half = Math.round(duration / 2);
 
 	useEffect(() => {
-		// If pathname didn't change, do nothing
-		if (location.pathname === displayLocation.pathname) return;
+		// If both pathname and search didn't change, do nothing
+		const samePath = location.pathname === displayLocation.pathname;
+		const sameSearch = location.search === displayLocation.search;
+		if (samePath && sameSearch) return;
 
 		// Only animate when switching between /home and /group
 		const from = displayLocation.pathname;
@@ -56,7 +58,8 @@ function AppRoutes() {
 			(from === '/home' && to === '/group') || (from === '/group' && to === '/home');
 
 		if (!isHomeGroupTransition) {
-			// immediate swap without animation for other route changes
+			// immediate swap without animation for other route changes,
+			// including when only the query string changes (e.g. /settings <-> /settings?tab=categories)
 			setDisplayLocation(location);
 			setTransitionStage('idle');
 			return;

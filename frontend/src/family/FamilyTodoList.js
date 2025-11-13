@@ -250,10 +250,7 @@ export default function FamilyTodoList() {
   const canToggleStatus = (item) => {
     if (!currentUser) return false;
     
-    // Owner và người tạo luôn có thể toggle
-    if (isOwner || isItemCreator(item)) return true;
-    
-    // Người được phân công cũng có thể toggle trạng thái
+    // CHỈ người được phân công mới có thể toggle
     if (item.assignedTo && Array.isArray(item.assignedTo)) {
       return item.assignedTo.some(assignee => 
         String(assignee._id || assignee) === String(currentUser.id)
@@ -333,7 +330,7 @@ export default function FamilyTodoList() {
     }
   };
 
-  // Compute stats for dashboard (sử dụng isItemExpired)
+  // Compute stats for dashboard (sửa lại logic tính toán)
   const stats = React.useMemo(() => {
     const total = todoItems.length;
     const completed = todoItems.filter(i => i.allCompleted).length;
@@ -342,7 +339,7 @@ export default function FamilyTodoList() {
       if (!i.dueDate || i.allCompleted) return false;
       return isItemExpired(i);
     }).length;
-    const highPriority = todoItems.filter(i => i.priority === 'high').length;
+    const highPriority = todoItems.filter(i => i.priority === 'high' && !i.allCompleted).length;
     return { total, completed, pending, overdue, highPriority };
   }, [todoItems]);
 
@@ -851,10 +848,6 @@ export default function FamilyTodoList() {
                         <span className="ftl-note-creator ftl-note-creator-badge">
                           <i className="fas fa-user"></i> {item.creatorName || 'Thành viên'}
                         </span>
-                        {/* XÓA: Không hiển thị ngày tạo ở đây nữa */}
-                        {/* <span className="ftl-note-date">
-                          <i className="fas fa-calendar-alt"></i> {new Date(item.createdAt).toLocaleDateString('vi-VN')}
-                        </span> */}
                       </div>
 
                       <div className="ftl-note-actions">
@@ -864,7 +857,7 @@ export default function FamilyTodoList() {
                             Sửa
                           </button>
                         )}
-                        {/* Nút hoàn thành nếu chưa hoàn thành và chưa quá hạn */}
+                        {/* CHỈ hiển thị nút nếu user ĐƯỢC PHÂN CÔNG */}
                         {canToggleStatus(item) && !item.allCompleted && (!item.dueDate || !isItemExpired(item)) && (
                           <button 
                             className={`ftl-note-btn check`} 
@@ -874,7 +867,7 @@ export default function FamilyTodoList() {
                             Hoàn thành
                           </button>
                         )}
-                        {/* Nút hoàn tác nếu đã hoàn thành */}
+                        {/* Nút hoàn tác nếu đã hoàn thành - CHỈ cho người được phân công */}
                         {canToggleStatus(item) && item.allCompleted && (
                           <button 
                             className="ftl-note-btn undo"

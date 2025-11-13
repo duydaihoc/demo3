@@ -6,13 +6,14 @@ export default function FamilySelectorPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [families, setFamilies] = useState({ owned: [], joined: [] });
+  const [invitations, setInvitations] = useState([]); // THÊM: state cho lời mời
   const [error, setError] = useState('');
-  // Thêm state cho modal tạo gia đình
+  const [creating, setCreating] = useState(false);
+  const [joining, setJoining] = useState(false); // THÊM: state cho joining
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [familyName, setFamilyName] = useState('');
   const [familyDescription, setFamilyDescription] = useState('');
   const [familyColor, setFamilyColor] = useState('#10b981');
-  const [creating, setCreating] = useState(false);
 
   const API_BASE = 'http://localhost:5000';
   const token = localStorage.getItem('token');
@@ -26,25 +27,39 @@ export default function FamilySelectorPage() {
 
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE}/api/family/my-families`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      
+      // THÊM: Lấy lời mời song song với danh sách gia đình
+      const [familiesRes, invitationsRes] = await Promise.all([
+        fetch(`${API_BASE}/api/family/my-families`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        fetch(`${API_BASE}/api/family/invitations`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+      ]);
 
-      if (res.status === 401) {
+      if (familiesRes.status === 401 || invitationsRes.status === 401) {
         localStorage.removeItem('token');
         navigate('/login');
         return;
       }
 
-      if (!res.ok) {
+      if (!familiesRes.ok) {
         throw new Error('Không thể tải danh sách gia đình');
       }
 
-      const data = await res.json();
-      setFamilies(data);
+      const familiesData = await familiesRes.json();
+      setFamilies(familiesData);
 
-      // Nếu không có gia đình nào, chuyển đến trang tạo gia đình
-      if (data.total === 0) {
+      // THÊM: Xử lý lời mời
+      let invitationsData = []; // THÊM: Khai báo biến
+      if (invitationsRes.ok) {
+        invitationsData = await invitationsRes.json();
+        setInvitations(invitationsData || []);
+      }
+
+      // Nếu không có gia đình và không có lời mời, chuyển đến trang tạo gia đình
+      if (familiesData.total === 0 && (!invitationsData || invitationsData.length === 0)) {
         navigate('/family-switch');
         return;
       }
@@ -147,6 +162,67 @@ export default function FamilySelectorPage() {
     navigate('/family');
   };
 
+  // THÊM: Handler cho việc tham gia gia đình từ lời mời
+  const handleJoinFamily = async (invitationId) => {
+    if (!token) {
+      localStorage.removeItem('token');
+      navigate('/login');
+      return;
+    }
+
+    setJoining(true);
+    setError('');
+
+    try {
+      const res = await fetch(`${API_BASE}/api/family/join/${invitationId}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (res.status === 401) {
+        localStorage.removeItem('token');
+        navigate('/login');
+        return;
+      }
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.message || 'Không thể tham gia gia đình');
+      }
+
+      // Tham gia thành công, refresh danh sách
+      await fetchFamilies();
+      
+    } catch (err) {
+      console.error('Error joining family:', err);
+      setError(err.message || 'Lỗi khi tham gia gia đình');
+    } finally {
+      setJoining(false);
+    }
+  };
+
+  // THÊM: Handler cho việc từ chối lời mời
+  const handleDeclineInvitation = async (invitationId) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/family/invitations/${invitationId}/decline`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (res.status === 401) {
+        localStorage.removeItem('token');
+        navigate('/login');
+        return;
+      }
+      
+      // Cập nhật danh sách lời mời
+      setInvitations(prev => prev.filter(inv => inv._id !== invitationId));
+      
+    } catch (err) {
+      console.error('Error declining invitation:', err);
+    }
+  };
+
   if (loading) {
     return (
       <div className="family-selector-page">
@@ -182,6 +258,45 @@ export default function FamilySelectorPage() {
         </div>
 
         <div className="fs-content">
+          {/* THÊM: Lời mời tham gia gia đình */}
+          {invitations.length > 0 && (
+            <div className="fs-section">
+              <h2><i className="fas fa-envelope"></i> Lời mời tham gia gia đình ({invitations.length})</h2>
+              <div className="fs-invitations">
+                {invitations.map(invitation => (
+                  <div key={invitation._id} className="fs-invitation-card">
+                    <div className="fs-invitation-info">
+                      <div className="fs-invitation-name">
+                        {invitation.family?.name || 'Gia đình'}
+                      </div>
+                      <div className="fs-invitation-sender">
+                        Mời bởi: {invitation.invitedBy?.name || invitation.invitedBy?.email || 'Người dùng'}
+                      </div>
+                      <div className="fs-invitation-date">
+                        {new Date(invitation.createdAt).toLocaleDateString('vi-VN')}
+                      </div>
+                    </div>
+                    <div className="fs-invitation-actions">
+                      <button 
+                        className="fs-btn primary"
+                        onClick={() => handleJoinFamily(invitation._id)}
+                        disabled={joining}
+                      >
+                        {joining ? 'Đang tham gia...' : 'Tham gia'}
+                      </button>
+                      <button 
+                        className="fs-btn secondary"
+                        onClick={() => handleDeclineInvitation(invitation._id)}
+                      >
+                        Từ chối
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Gia đình đã tạo */}
           {families.owned.length > 0 && (
             <div className="fs-section">

@@ -27,29 +27,31 @@ export default function FamilySwitchPage() {
     }
 
     try {
-      // Kiểm tra gia đình hiện tại
-      const familyRes = await fetch(`${API_BASE}/api/family/my-family`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (familyRes.ok) {
-        // Nếu đã có gia đình, chuyển trực tiếp đến trang gia đình
-        navigate('/family');
-        return;
-      }
-
-      // Nếu không có gia đình, kiểm tra lời mời
+      // Khai báo biến invites trước để có thể dùng trong toàn bộ try block
+      let invites = [];
+      
+      // THAY ĐỔI: Luôn kiểm tra lời mời trước, không quan tâm đã có gia đình hay chưa
       const inviteRes = await fetch(`${API_BASE}/api/family/invitations`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
       if (inviteRes.ok) {
-        const invites = await inviteRes.json();
+        invites = await inviteRes.json();
         setInvitations(invites || []);
       } else if (inviteRes.status === 401) {
-        // Token không hợp lệ, chuyển đến trang đăng nhập
         localStorage.removeItem('token');
         navigate('/login');
+        return;
+      }
+
+      // Kiểm tra gia đình hiện tại - KHÔNG tự động chuyển hướng nữa
+      const familyRes = await fetch(`${API_BASE}/api/family/my-family`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      // Nếu không có lời mời và đã có gia đình, mới chuyển hướng
+      if (familyRes.ok && (!invites || invites.length === 0)) {
+        navigate('/family');
         return;
       }
 
@@ -247,7 +249,7 @@ export default function FamilySwitchPage() {
           {/* Lời mời tham gia gia đình */}
           {invitations.length > 0 && (
             <div className="fs-section">
-              <h2><i className="fas fa-envelope"></i> Lời mời tham gia gia đình</h2>
+              <h2><i className="fas fa-envelope"></i> Lời mời tham gia gia đình ({invitations.length})</h2>
               <div className="fs-invitations">
                 {invitations.map(invitation => (
                   <div key={invitation._id} className="fs-invitation-card">
