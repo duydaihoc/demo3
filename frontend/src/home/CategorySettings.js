@@ -31,24 +31,43 @@ export default function CategorySettings({ token }) {
   };
   const cancelConfirm = () => setConfirm({ open: false, id: null, name: '' });
 
-  const confirmDelete = async () => {
-    const id = confirm.id;
-    if (!id) return cancelConfirm();
-    try {
-      const res = await fetch(`http://localhost:5000/api/categories/${id}`, { method: 'DELETE', headers });
-      if (!res.ok) {
-        const txt = await res.text().catch(()=> 'Xóa thất bại');
-        throw new Error(txt || 'Xóa thất bại');
+  // Thêm state cho animations và interactions
+  const [animatingCards, setAnimatingCards] = useState(new Set());
+  const [selectedType, setSelectedType] = useState('all');
+  const [isCreating, setIsCreating] = useState(false);
+
+  // Icon suggestions
+  const iconSuggestions = [
+    '🍔', '☕', '🚗', '🏠', '💰', '🎮', '📱', '👕', '💊', '📚',
+    '🎬', '✈️', '⛽', '🛒', '💳', '🏦', '💡', '🎵', '🏥', '🎯'
+  ];
+
+  const handleDelete = async (id, name) => {
+    setAnimatingCards(prev => new Set(prev).add(id));
+    setTimeout(async () => {
+      try {
+        const res = await fetch(`http://localhost:5000/api/categories/${id}`, { method: 'DELETE', headers });
+        if (!res.ok) {
+          const txt = await res.text().catch(()=> 'Xóa thất bại');
+          throw new Error(txt || 'Xóa thất bại');
+        }
+        await fetchCategories();
+        showNotification('🗑️ Xóa danh mục thành công', 'success');
+      } catch (err) {
+        console.error(err);
+        showNotification(err.message || 'Lỗi khi xóa danh mục', 'error');
+      } finally {
+        setAnimatingCards(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(id);
+          return newSet;
+        });
+        cancelConfirm();
       }
-      await fetchCategories();
-      showNotification('Xóa danh mục thành công', 'success');
-    } catch (err) {
-      console.error(err);
-      showNotification(err.message || 'Lỗi khi xóa danh mục', 'error');
-    } finally {
-      cancelConfirm();
-    }
+    }, 300);
   };
+
+  const confirmDelete = () => handleDelete(confirm.id, confirm.name);
 
   // small search to filter categories on client side
   const [search, setSearch] = useState('');
@@ -59,6 +78,12 @@ export default function CategorySettings({ token }) {
     if (!q) return categories;
     return (categories || []).filter(c => (c.name || '').toLowerCase().includes(q) || (c.type || '').toLowerCase().includes(q));
   }, [categories, search]);
+
+  // Filter categories by type
+  const filteredByType = useMemo(() => {
+    if (selectedType === 'all') return filteredCategories;
+    return filteredCategories.filter(c => c.type === selectedType);
+  }, [filteredCategories, selectedType]);
 
   // stable headers memoized by token
   const headers = useMemo(() => (
@@ -116,6 +141,8 @@ export default function CategorySettings({ token }) {
   const handleCreate = async (e) => {
     e.preventDefault();
     if (!name.trim()) return showNotification('Tên danh mục là bắt buộc', 'error');
+    
+    setIsCreating(true);
     try {
       const res = await fetch('http://localhost:5000/api/categories', {
         method: 'POST',
@@ -128,10 +155,12 @@ export default function CategorySettings({ token }) {
       }
       setName(''); setIcon('');
       await fetchCategories();
-      showNotification('Tạo danh mục thành công', 'success');
+      showNotification('✨ Tạo danh mục thành công!', 'success');
     } catch (err) {
       console.error(err);
       showNotification(err.message || 'Lỗi khi tạo danh mục', 'error');
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -147,22 +176,39 @@ export default function CategorySettings({ token }) {
 
   return (
     <div className="cat-settings bank-style">
-      {/* notification */}
+      {/* Enhanced notification with icon */}
       {notif && (
-        <div className={`cat-notif ${notif.type === 'error' ? 'error' : 'success'}`} role="status">
-          {notif.message}
+        <div className={`cat-notif ${notif.type === 'error' ? 'error' : 'success'} slide-down`} role="status">
+          <div className="cat-notif-content">
+            <span className="cat-notif-icon">
+              {notif.type === 'error' ? '⚠️' : '✅'}
+            </span>
+            {notif.message}
+          </div>
+          <button className="cat-notif-close" onClick={() => setNotif(null)}>×</button>
         </div>
       )}
 
-      {/* confirmation modal for delete */}
+      {/* Enhanced confirmation modal */}
       {confirm.open && (
-        <div className="confirm-overlay" role="dialog" aria-modal="true">
-          <div className="confirm-dialog">
-            <div className="confirm-title">Xác nhận xóa</div>
-            <div className="confirm-body">Bạn có chắc chắn muốn xóa danh mục "<strong>{confirm.name}</strong>" không?</div>
+        <div className="confirm-overlay fade-in" role="dialog" aria-modal="true">
+          <div className="confirm-dialog scale-in">
+            <div className="confirm-header">
+              <div className="confirm-icon">🗑️</div>
+              <div className="confirm-title">Xác nhận xóa danh mục</div>
+            </div>
+            <div className="confirm-body">
+              Bạn có chắc chắn muốn xóa danh mục "<strong>{confirm.name}</strong>" không? 
+              <br />
+              <small className="warning-text">Hành động này không thể hoàn tác.</small>
+            </div>
             <div className="confirm-actions">
-              <button className="btn-cancel" onClick={cancelConfirm}>Hủy</button>
-              <button className="btn-danger" onClick={confirmDelete}>Xóa</button>
+              <button className="btn-cancel" onClick={cancelConfirm}>
+                <span>Hủy</span>
+              </button>
+              <button className="btn-danger" onClick={confirmDelete}>
+                <span>Xóa danh mục</span>
+              </button>
             </div>
           </div>
         </div>
@@ -170,38 +216,85 @@ export default function CategorySettings({ token }) {
 
       <div className="cat-left">
         <div className="cat-header">
-          <h3>Danh mục của bạn</h3>
+          <h3>
+            <span className="cat-header-icon">📂</span>
+            Danh mục của bạn
+            <span className="cat-count">({filteredByType.length})</span>
+          </h3>
           <div className="cat-actions">
-            <input
-              className="cat-search"
-              placeholder="Tìm kiếm danh mục..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
+            <div className="cat-filter-tabs">
+              <button 
+                className={`filter-tab ${selectedType === 'all' ? 'active' : ''}`}
+                onClick={() => setSelectedType('all')}
+              >
+                Tất cả
+              </button>
+              <button 
+                className={`filter-tab ${selectedType === 'expense' ? 'active' : ''}`}
+                onClick={() => setSelectedType('expense')}
+              >
+                Chi tiêu
+              </button>
+              <button 
+                className={`filter-tab ${selectedType === 'income' ? 'active' : ''}`}
+                onClick={() => setSelectedType('income')}
+              >
+                Thu nhập
+              </button>
+            </div>
+            <div className="search-wrapper">
+              <input
+                className="cat-search"
+                placeholder="Tìm kiếm danh mục..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+              <span className="search-icon">🔍</span>
+            </div>
           </div>
         </div>
 
         <div className="cat-grid">
           {loading ? (
-            <div className="cat-loading">Đang tải danh mục...</div>
-          ) : filteredCategories.length === 0 ? (
+            <div className="cat-loading">
+              <div className="loading-spinner"></div>
+              <span>Đang tải danh mục...</span>
+            </div>
+          ) : filteredByType.length === 0 ? (
             <div className="cat-empty-illustration">
-              <div className="empty-ico">📂</div>
-              <div>Chưa có danh mục nào khớp</div>
+              <div className="empty-ico animate-bounce">📂</div>
+              <div className="empty-title">Chưa có danh mục nào</div>
+              <div className="empty-subtitle">
+                {search ? 'Không tìm thấy kết quả phù hợp' : 'Hãy tạo danh mục đầu tiên của bạn'}
+              </div>
             </div>
           ) : (
-            filteredCategories.map(c => (
-              <div key={c._id} className="cat-card">
+            filteredByType.map((c, index) => (
+              <div 
+                key={c._id} 
+                className={`cat-card ${animatingCards.has(c._id) ? 'deleting' : ''}`}
+                style={{ animationDelay: `${index * 0.05}s` }}
+              >
                 <div className="cat-card-left">
-                  <div className="cat-avatar">{c.icon || '📁'}</div>
+                  <div className="cat-avatar">
+                    <span className="cat-icon">{c.icon || '📁'}</span>
+                  </div>
                   <div className="cat-meta">
                     <div className="cat-title">{c.name}</div>
-                    <div className={`cat-badge ${c.type === 'income' ? 'income' : 'expense'}`}>{c.type === 'income' ? 'Thu nhập' : 'Chi tiêu'}</div>
+                    <div className={`cat-badge ${c.type === 'income' ? 'income' : 'expense'}`}>
+                      {c.type === 'income' ? '💰 Thu nhập' : '💸 Chi tiêu'}
+                    </div>
                   </div>
                 </div>
                 <div className="cat-card-right">
-                  <div className="cat-id">{String(c._id).slice(-6)}</div>
-                  <button className="cat-delete" onClick={() => openConfirm(c._id, c.name)}>Xóa</button>
+                  <div className="cat-id">#{String(c._id).slice(-6)}</div>
+                  <button 
+                    className="cat-delete" 
+                    onClick={() => openConfirm(c._id, c.name)}
+                    title="Xóa danh mục"
+                  >
+                    <span>🗑️</span>
+                  </button>
                 </div>
               </div>
             ))
@@ -211,20 +304,90 @@ export default function CategorySettings({ token }) {
 
       <aside className="cat-right">
         <div className="cat-create-card">
-          <h4>Tạo danh mục mới</h4>
-          <p className="muted">Tạo danh mục để phân loại giao dịch của bạn.</p>
+          <div className="create-header">
+            <h4>
+              <span className="create-icon">✨</span>
+              Tạo danh mục mới
+            </h4>
+            <p className="muted">Tạo danh mục để phân loại giao dịch của bạn một cách dễ dàng.</p>
+          </div>
+          
           <form className="cat-form" onSubmit={handleCreate}>
-            <label>Tên danh mục</label>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="Ví dụ: Ăn uống" />
-            <label>Loại</label>
-            <select value={type} onChange={e => setType(e.target.value)}>
-              <option value="expense">Chi tiêu</option>
-              <option value="income">Thu nhập</option>
-            </select>
-            <label>Icon</label>
-            <input value={icon} onChange={e => setIcon(e.target.value)} placeholder="📌" />
+            <div className="form-group">
+              <label>Tên danh mục</label>
+              <input 
+                value={name} 
+                onChange={e => setName(e.target.value)} 
+                placeholder="Ví dụ: Ăn uống, Du lịch..." 
+                className="form-input"
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Loại danh mục</label>
+              <div className="type-selector">
+                <button
+                  type="button"
+                  className={`type-option ${type === 'expense' ? 'active' : ''}`}
+                  onClick={() => setType('expense')}
+                >
+                  <span className="type-icon">💸</span>
+                  <span>Chi tiêu</span>
+                </button>
+                <button
+                  type="button"
+                  className={`type-option ${type === 'income' ? 'active' : ''}`}
+                  onClick={() => setType('income')}
+                >
+                  <span className="type-icon">💰</span>
+                  <span>Thu nhập</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>Biểu tượng</label>
+              <div className="icon-input-wrapper">
+                <input 
+                  value={icon} 
+                  onChange={e => setIcon(e.target.value)} 
+                  placeholder="Chọn biểu tượng..." 
+                  className="form-input icon-input"
+                />
+                <div className="icon-preview">{icon || '📁'}</div>
+              </div>
+              <div className="icon-suggestions">
+                <span className="suggestions-label">Gợi ý:</span>
+                {iconSuggestions.map((ico, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    className="icon-suggestion"
+                    onClick={() => setIcon(ico)}
+                  >
+                    {ico}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="cat-create-actions">
-              <button type="submit" className="btn-primary">Tạo danh mục</button>
+              <button 
+                type="submit" 
+                className={`btn-primary ${isCreating ? 'loading' : ''}`}
+                disabled={isCreating}
+              >
+                {isCreating ? (
+                  <>
+                    <span className="btn-spinner"></span>
+                    Đang tạo...
+                  </>
+                ) : (
+                  <>
+                    <span>✨ Tạo danh mục</span>
+                  </>
+                )}
+              </button>
             </div>
           </form>
         </div>
@@ -232,4 +395,4 @@ export default function CategorySettings({ token }) {
     </div>
   );
 }
-              
+
