@@ -465,7 +465,7 @@ router.delete('/:groupId', auth, async (req, res) => {
   }
 });
 
-// POST /api/groups/:groupId/share - Tạo/cập nhật chia sẻ công khai
+// POST /api/groups/:groupId/share - tạo/cập nhật chia sẻ
 router.post('/:groupId/share', auth, async (req, res) => {
   try {
     const { groupId } = req.params;
@@ -475,16 +475,14 @@ router.post('/:groupId/share', auth, async (req, res) => {
     const group = await Group.findById(groupId);
     if (!group) return res.status(404).json({ message: 'Group not found' });
     if (String(group.owner) !== String(req.user._id))
-      return res.status(403).json({ message: 'Chỉ chủ nhóm mới có thể cấu hình chia sẻ' });
+      return res.status(403).json({ message: 'Không có quyền' });
 
     if (enabled) {
-      if (!group.shareSettings?.shareKey) {
-        const crypto = require('crypto');
-        let shareKey, unique = false;
-        while (!unique) {
+      if (!group.shareSettings || !group.shareSettings.shareKey) {
+        let shareKey, ok = false;
+        while (!ok) {
           shareKey = crypto.randomBytes(16).toString('hex');
-          const exists = await Group.findOne({ 'shareSettings.shareKey': shareKey });
-          if (!exists) unique = true;
+          ok = !(await Group.findOne({ 'shareSettings.shareKey': shareKey }));
         }
         group.shareSettings = group.shareSettings || {};
         group.shareSettings.shareKey = shareKey;
@@ -498,34 +496,34 @@ router.post('/:groupId/share', auth, async (req, res) => {
       };
       group.shareSettings.createdAt = group.shareSettings.createdAt || new Date();
       if (expiresInDays && expiresInDays > 0) {
-        const expires = new Date();
-        expires.setDate(expires.getDate() + expiresInDays);
-        group.shareSettings.expiresAt = expires;
+        const exp = new Date();
+        exp.setDate(exp.getDate() + expiresInDays);
+        group.shareSettings.expiresAt = exp;
       } else {
         group.shareSettings.expiresAt = null;
       }
       group.isPublic = true;
     } else {
-      group.shareSettings.enabled = false;
+      if (group.shareSettings) group.shareSettings.enabled = false;
       group.isPublic = false;
     }
 
     await group.save();
     res.json({
       success: true,
-      shareKey: group.shareSettings.shareKey,
-      shareUrl: group.shareSettings.enabled
+      shareKey: group.shareSettings?.shareKey,
+      shareUrl: group.shareSettings?.enabled
         ? `${frontendBase}/public/group/${group.shareSettings.shareKey}`
         : null,
       shareSettings: group.shareSettings
     });
   } catch (e) {
-    console.error('Share group error:', e);
+    console.error('share config error', e);
     res.status(500).json({ message: 'Server error', error: e.message });
   }
 });
 
-// GET /api/groups/:groupId/share - Lấy thông tin chia sẻ hiện tại
+// GET /api/groups/:groupId/share - lấy cấu hình chia sẻ
 router.get('/:groupId/share', auth, async (req, res) => {
   try {
     const { groupId } = req.params;
@@ -533,7 +531,7 @@ router.get('/:groupId/share', auth, async (req, res) => {
     const group = await Group.findById(groupId);
     if (!group) return res.status(404).json({ message: 'Group not found' });
     if (String(group.owner) !== String(req.user._id))
-      return res.status(403).json({ message: 'Chỉ chủ nhóm mới có thể xem cấu hình chia sẻ' });
+      return res.status(403).json({ message: 'Không có quyền' });
 
     const shareUrl = group.shareSettings?.enabled && group.shareSettings?.shareKey
       ? `${frontendBase}/public/group/${group.shareSettings.shareKey}`
@@ -542,70 +540,62 @@ router.get('/:groupId/share', auth, async (req, res) => {
     res.json({
       shareSettings: group.shareSettings || { enabled: false },
       shareUrl,
-      isExpired: group.shareSettings?.expiresAt
-        ? new Date() > group.shareSettings.expiresAt
-        : false
+      isExpired: group.shareSettings?.expiresAt ? new Date() > group.shareSettings.expiresAt : false
     });
   } catch (e) {
-    console.error('Get share settings error:', e);
+    console.error('get share settings error', e);
     res.status(500).json({ message: 'Server error', error: e.message });
   }
 });
 
-// GET /api/public/group/:shareKey - Xem thông tin nhóm công khai
+// GET /api/public/group/:shareKey - dữ liệu công khai
 router.get('/public/:shareKey', async (req, res) => {
   try {
     const { shareKey } = req.params;
-    
-    if (!shareKey) {
-      return res.status(400).json({ message: 'Share key is required' });
-    }
+    if (!shareKey) return res.status(400).json({ message: 'Share key required' });
 
-    const group = await Group.findOne({ 
+    const group = await Group.findOne({
       'shareSettings.shareKey': shareKey,
       'shareSettings.enabled': true
     })
       .populate('owner', 'name')
-      .populate('members.user', 'name')
+      .populate('members.user', 'name email')
       .lean();
 
-    if (!group) {
-      return res.status(404).json({ message: 'Nhóm không tồn tại hoặc đã ngừng chia sẻ' });
-    }
+    if (!group) return res.status(404).json({ message: 'Link không hợp lệ hoặc đã tắt' });
+    if (group.shareSettings?.expiresAt && new Date() > group.shareSettings.expiresAt)
+      return res.status(410).json({ message: 'Link đã hết hạn' });
 
-    // Kiểm tra hết hạn
-    if (group.shareSettings?.expiresAt && new Date() > group.shareSettings.expiresAt) {
-      return res.status(410).json({ message: 'Link chia sẻ đã hết hạn' });
-    }
+    const allowed = group.shareSettings.allowedData || {};
 
-    // Lấy dữ liệu theo cấu hình chia sẻ
-    const allowedData = group.shareSettings.allowedData || {};
-    const response = {
+    const payload = {
       groupInfo: {
         name: group.name,
         description: group.description,
         color: group.color,
         createdAt: group.createdAt,
-        ownerName: group.owner?.name || 'Người quản lý'
+        ownerName: group.owner?.name || 'Quản lý'
       },
-      shareSettings: allowedData
+      shareSettings: allowed
     };
 
-    // Thêm số lượng thành viên nếu được phép
-    if (allowedData.members) {
-      response.membersCount = group.members?.length || 0;
+    // members count
+    if (allowed.members) {
+      payload.membersCount = Array.isArray(group.members) ? group.members.length : 0;
     }
 
-    // Lấy giao dịch nếu được phép
-    if (allowedData.transactions) {
-      const transactions = await GroupTransaction.find({ groupId: group._id })
+    // transactions
+    let txs = [];
+    if (allowed.transactions || allowed.statistics || allowed.charts) {
+      txs = await GroupTransaction.find({ groupId: group._id })
         .populate('category', 'name icon')
-        .select('title amount date transactionType category participants settled')
+        .select('title amount date transactionType category participants payer createdAt')
         .sort({ date: -1 })
-        .limit(20)
         .lean();
+    }
 
-      response.transactions = transactions.map(tx => ({
+    if (allowed.transactions) {
+      payload.transactions = txs.slice(0, 30).map(tx => ({
         _id: tx._id,
         title: tx.title,
         amount: tx.amount,
@@ -613,42 +603,106 @@ router.get('/public/:shareKey', async (req, res) => {
         transactionType: tx.transactionType,
         category: tx.category,
         participantsCount: tx.participants?.length || 0,
-        settledCount: tx.participants?.filter(p => p.settled)?.length || 0,
-        isFullySettled: tx.participants?.length > 0 && tx.participants?.every(p => p.settled)
+        settledCount: tx.participants?.filter(p => p.settled).length || 0,
+        isFullySettled: Array.isArray(tx.participants) && tx.participants.length > 0 && tx.participants.every(p => p.settled)
       }));
     }
 
-    // Tính thống kê nếu được phép
-    if (allowedData.statistics) {
-      const allTransactions = await GroupTransaction.find({ groupId: group._id }).lean();
-      
-      const totalAmount = allTransactions.reduce((sum, tx) => sum + (tx.amount || 0), 0);
-      const totalTransactions = allTransactions.length;
-      const settledTransactions = allTransactions.filter(tx => 
-        tx.participants?.length > 0 && tx.participants.every(p => p.settled)
+    if (allowed.statistics) {
+      const totalAmount = txs.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+      const totalTransactions = txs.length;
+      const settledTransactions = txs.filter(t =>
+        Array.isArray(t.participants) &&
+        t.participants.length > 0 &&
+        t.participants.every(p => p.settled)
       ).length;
-
-      // Thống kê theo loại giao dịch
       const typeStats = {};
-      allTransactions.forEach(tx => {
-        const type = tx.transactionType || 'other';
-        typeStats[type] = (typeStats[type] || 0) + (tx.amount || 0);
+      txs.forEach(t => {
+        const k = t.transactionType || 'other';
+        typeStats[k] = (typeStats[k] || 0) + (Number(t.amount) || 0);
       });
-
-      response.statistics = {
+      payload.statistics = {
         totalAmount,
         totalTransactions,
         settledTransactions,
-        settlementRate: totalTransactions > 0 ? (settledTransactions / totalTransactions * 100).toFixed(1) : 0,
+        settlementRate: totalTransactions ? Number(((settledTransactions / totalTransactions) * 100).toFixed(1)) : 0,
         typeStats
       };
     }
 
-    res.json(response);
-  } catch (err) {
-    console.error('Get public group error:', err);
-    res.status(500).json({ message: 'Server error', error: err.message });
+    if (allowed.charts) {
+      const now = new Date();
+      const start = new Date();
+      start.setMonth(start.getMonth() - 6);
+      const dayMap = new Map();
+      for (let d = new Date(start); d <= now; d.setDate(d.getDate() + 1)) {
+        dayMap.set(d.toISOString().slice(0, 10), 0);
+      }
+      txs.forEach(tx => {
+        const d = new Date(tx.date || tx.createdAt);
+        if (isNaN(d.getTime())) return;
+        const key = d.toISOString().slice(0, 10);
+        if (dayMap.has(key)) {
+          dayMap.set(key, dayMap.get(key) + (Number(tx.amount) || 0));
+        }
+      });
+      const trendLabels = Array.from(dayMap.keys()).sort();
+      const trendValues = trendLabels.map(k => dayMap.get(k) || 0);
+      let cum = 0;
+      const trendCumulative = trendValues.map(v => (cum += v));
+
+      const catMap = new Map();
+      txs.forEach(tx => {
+        const name = tx.category?.name || 'Chưa phân loại';
+        catMap.set(name, (catMap.get(name) || 0) + (Number(tx.amount) || 0));
+      });
+      const categoryBreakdown = Array.from(catMap.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, amount]) => ({ name, amount }));
+
+      let membersOverview = [];
+      if (allowed.members) {
+        const agg = new Map();
+        const ensure = (k, n) => {
+          if (!agg.has(k)) agg.set(k, { name: n, paid: 0, borrowed: 0, owed: 0 });
+          return agg.get(k);
+        };
+        txs.forEach(tx => {
+          const payerId = tx.payer && (tx.payer._id || tx.payer);
+            const payerName = tx.payer && typeof tx.payer === 'object'
+              ? (tx.payer.name || tx.payer.email || 'Người tạo')
+              : 'Người tạo';
+          if (payerId) ensure(String(payerId), payerName).paid += Number(tx.amount) || 0;
+          (tx.participants || []).forEach(p => {
+            const pid = p.user && (p.user._id || p.user);
+            const pname = p.user && typeof p.user === 'object'
+              ? (p.user.name || p.user.email || 'Thành viên')
+              : (p.email || 'Thành viên');
+            if (pid && String(pid) !== String(payerId)) {
+              ensure(String(pid), pname).borrowed += Number(p.shareAmount) || 0;
+              if (payerId) ensure(String(payerId), payerName).owed += Number(p.shareAmount) || 0;
+            }
+          });
+        });
+        membersOverview = Array.from(agg.values())
+          .filter(m => m.paid || m.borrowed || m.owed)
+          .sort((a, b) => (b.owed + b.paid) - (a.owed + a.paid))
+          .slice(0, 8);
+      }
+
+      payload.charts = {
+        trend: { labels: trendLabels, values: trendValues, cumulative: trendCumulative },
+        categories: categoryBreakdown,
+        members: membersOverview
+      };
+    }
+
+    res.json(payload);
+  } catch (e) {
+    console.error('public group error', e);
+    res.status(500).json({ message: 'Server error', error: e.message });
   }
 });
 
+// đảm bảo xuất router
 module.exports = router;

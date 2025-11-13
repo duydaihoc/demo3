@@ -121,11 +121,10 @@ if (!fs.existsSync(receiptsDir)) {
 // Serve static files cho uploads
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Redirect public share URL (user truy cập nhầm backend)
+// Redirect public share URL to frontend (avoid white page when opening backend link)
 app.get('/public/group/:shareKey', (req, res) => {
   const frontendBase = process.env.FRONTEND_URL || 'http://localhost:3000';
-  const { shareKey } = req.params;
-  return res.redirect(`${frontendBase}/public/group/${shareKey}`);
+  return res.redirect(`${frontendBase}/public/group/${req.params.shareKey}`);
 });
 
 // create http server and attach socket.io if available
