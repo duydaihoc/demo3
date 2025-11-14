@@ -60,6 +60,17 @@ export default function FamilyArchive() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('newest'); // newest | oldest | amount-desc | amount-asc
 
+  // THÊM: State cho modal sửa ảnh hóa đơn
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingReceipt, setEditingReceipt] = useState(null);
+  const [editForm, setEditForm] = useState({
+    description: '',
+    amount: '',
+    date: '',
+    category: ''
+  });
+  const [updating, setUpdating] = useState(false);
+
   const API_BASE = 'http://localhost:5000';
   const token = localStorage.getItem('token');
   const selectedFamilyId = localStorage.getItem('selectedFamilyId');
@@ -343,6 +354,14 @@ export default function FamilyArchive() {
     return String(ownerId) === String(currentUser.id);
   }, [currentUser, familyInfo]);
 
+  // Check if user can edit receipt image
+  const canEditReceipt = useCallback((receipt) => {
+    if (!currentUser || !familyInfo) return false;
+    const isOwner = String(familyInfo.owner?._id || familyInfo.owner) === String(currentUser.id);
+    const isUploader = String(receipt.uploadedBy?._id || receipt.uploadedBy) === String(currentUser.id);
+    return isOwner || isUploader;
+  }, [currentUser, familyInfo]);
+
   // Verify receipt image (owner only)
   const verifyReceiptImage = async (imageId, isVerified) => {
     if (!isOwner()) return;
@@ -428,6 +447,20 @@ export default function FamilyArchive() {
     if (!uploadForm.file) {
       showNotification('Vui lòng chọn file hình ảnh', 'error');
       return;
+    }
+
+    // THÊM: Kiểm tra nếu chọn giao dịch đã liên kết
+    if (uploadForm.linkedTransactionId) {
+      // Kiểm tra xem giao dịch này đã được liên kết chưa
+      const isLinked = receiptImages.some(img => 
+        img.linkedTransaction && 
+        (String(img.linkedTransaction._id || img.linkedTransaction) === String(uploadForm.linkedTransactionId))
+      );
+      
+      if (isLinked) {
+        showNotification('Giao dịch này đã được liên kết với ảnh hóa đơn khác. Mỗi giao dịch chỉ có thể liên kết với một ảnh hóa đơn.', 'error');
+        return;
+      }
     }
 
     setUploading(true);
@@ -587,6 +620,74 @@ export default function FamilyArchive() {
     });
     return Array.from(map.values()).sort((a,b) => new Date(b.key + '-01') - new Date(a.key + '-01'));
   }, [receiptImages, searchQuery, sortBy]);
+
+  // THÊM: Hàm mở modal sửa
+  const openEditModal = (receipt) => {
+    setEditingReceipt(receipt);
+    setEditForm({
+      description: receipt.description || '',
+      amount: receipt.amount || '',
+      date: receipt.date ? new Date(receipt.date).toISOString().slice(0, 10) : '',
+      category: receipt.categoryInfo?._id || receipt.category || ''
+    });
+    setShowEditModal(true);
+  };
+
+  // THÊM: Hàm đóng modal sửa
+  const closeEditModal = () => {
+    setShowEditModal(false);
+    setEditingReceipt(null);
+    setEditForm({
+      description: '',
+      amount: '',
+      date: '',
+      category: ''
+    });
+  };
+
+  // THÊM: Hàm xử lý thay đổi form sửa
+  const handleEditFormChange = (key, value) => {
+    setEditForm(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
+  // THÊM: Hàm cập nhật ảnh hóa đơn
+  const updateReceiptImage = async () => {
+    if (!editingReceipt) return;
+
+    setUpdating(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/receipt-images/${editingReceipt._id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          description: editForm.description,
+          amount: editForm.amount ? Number(editForm.amount) : null,
+          date: editForm.date,
+          category: editForm.category || null
+        })
+      });
+
+      if (res.ok) {
+        showNotification('Cập nhật ảnh hóa đơn thành công', 'success');
+        closeEditModal();
+        await fetchReceiptImages(); // Refresh danh sách
+      } else {
+        const errorData = await res.json();
+        throw new Error(errorData.message || 'Cập nhật thất bại');
+      }
+    } catch (err) {
+      console.error('Error updating receipt:', err);
+      showNotification(err.message || 'Không thể cập nhật ảnh hóa đơn', 'error');
+    } finally {
+      setUpdating(false);
+    }
+  };
 
   return (
     <div className="family-page">
@@ -828,7 +929,12 @@ export default function FamilyArchive() {
                                       <i className={`fas ${item.isVerified ? 'fa-times' : 'fa-check'}`}></i> {item.isVerified ? 'Bỏ xác minh' : 'Xác minh'}
                                     </button>
                                   )}
-                                  {(isOwner() || item.uploadedBy === currentUser?.id) && (
+                                  {canEditReceipt(item) && (
+                                    <button className="fa-action-btn edit" onClick={() => openEditModal(item)} title="Sửa">
+                                      <i className="fas fa-edit"></i> Sửa
+                                    </button>
+                                  )}
+                                  {canEditReceipt(item) && (
                                     <button className="fa-action-btn delete" onClick={() => deleteReceiptImage(item._id)} title="Xóa">
                                       <i className="fas fa-trash"></i> Xóa
                                     </button>
@@ -1209,6 +1315,128 @@ export default function FamilyArchive() {
               </button>
               <button className="fa-btn primary" onClick={() => window.open(selectedReceipt.imageUrl, '_blank')}>
                 <i className="fas fa-external-link-alt"></i> Xem ảnh lớn
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* THÊM: Modal sửa ảnh hóa đơn */}
+      {showEditModal && editingReceipt && (
+        <div className="fa-modal-overlay">
+          <div className="fa-modal">
+            <div className="fa-modal-header">
+              <h3>
+                <i className="fas fa-edit"></i>
+                Chỉnh sửa ảnh hóa đơn
+              </h3>
+              <button className="fa-modal-close" onClick={closeEditModal}>
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+            
+            <div className="fa-modal-body">
+              <div className="fa-upload-form">
+                {/* Preview ảnh hiện tại */}
+                <div className="fa-form-group">
+                  <label>Ảnh hóa đơn hiện tại</label>
+                  <div className="fa-image-preview">
+                    <img 
+                      src={editingReceipt.imageUrl} 
+                      alt="Preview"
+                      style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '8px' }}
+                    />
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div className="fa-form-group">
+                  <label>Mô tả hóa đơn</label>
+                  <textarea
+                    value={editForm.description}
+                    onChange={(e) => handleEditFormChange('description', e.target.value)}
+                    placeholder="Mô tả chi tiết về hóa đơn này..."
+                    rows={3}
+                  />
+                </div>
+
+                {/* Amount */}
+                <div className="fa-form-group">
+                  <label>Số tiền</label>
+                  <input
+                    type="number"
+                    value={editForm.amount}
+                    onChange={(e) => handleEditFormChange('amount', e.target.value)}
+                    placeholder="Nhập số tiền trên hóa đơn"
+                    min="0"
+                  />
+                </div>
+
+                {/* Date */}
+                <div className="fa-form-group">
+                  <label>Ngày hóa đơn</label>
+                  <input
+                    type="date"
+                    value={editForm.date}
+                    onChange={(e) => handleEditFormChange('date', e.target.value)}
+                  />
+                </div>
+
+                {/* Category */}
+                <div className="fa-form-group">
+                  <label>Danh mục</label>
+                  <select
+                    value={editForm.category}
+                    onChange={(e) => handleEditFormChange('category', e.target.value)}
+                  >
+                    <option value="">-- Chọn danh mục --</option>
+                    {categories.map(cat => (
+                      <option key={cat._id} value={cat._id}>
+                        {cat.icon} {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Thông tin bổ sung */}
+                <div className="fa-form-group">
+                  <div style={{ 
+                    padding: '12px', 
+                    background: '#f0f9ff', 
+                    borderRadius: '8px',
+                    fontSize: '0.9rem',
+                    color: '#0369a1'
+                  }}>
+                    <strong>Lưu ý:</strong> Không thể thay đổi file ảnh. Nếu cần thay ảnh, vui lòng xóa và tạo ảnh hóa đơn mới.
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="fa-modal-footer">
+              <button 
+                className="fa-btn secondary" 
+                onClick={closeEditModal}
+                disabled={updating}
+              >
+                Hủy
+              </button>
+              <button 
+                className="fa-btn primary" 
+                onClick={updateReceiptImage}
+                disabled={updating}
+              >
+                {updating ? (
+                  <>
+                    <i className="fas fa-spinner fa-spin"></i>
+                    Đang cập nhật...
+                  </>
+                ) : (
+                  <>
+                    <i className="fas fa-save"></i>
+                    Lưu thay đổi
+                  </>
+                )}
               </button>
             </div>
           </div>

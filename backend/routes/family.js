@@ -2060,7 +2060,7 @@ router.post('/:familyId/receipt-images', authenticateToken, uploadReceipt.single
       }
     }
 
-    // Validate linkedTransaction nếu có
+    // THÊM: Validate linkedTransaction nếu có - kiểm tra xem giao dịch đã được liên kết chưa
     if (linkedTransactionId && !mongoose.Types.ObjectId.isValid(linkedTransactionId)) {
       return res.status(400).json({ message: 'ID giao dịch liên kết không hợp lệ' });
     }
@@ -2072,6 +2072,18 @@ router.post('/:familyId/receipt-images', authenticateToken, uploadReceipt.single
       });
       if (!transactionExists) {
         return res.status(404).json({ message: 'Giao dịch liên kết không tồn tại' });
+      }
+
+      // THÊM: Kiểm tra xem giao dịch này đã được liên kết với ảnh hóa đơn khác chưa
+      const existingReceipt = family.receiptImages.find(img => 
+        img.linkedTransaction && String(img.linkedTransaction) === String(linkedTransactionId)
+      );
+
+      if (existingReceipt) {
+        return res.status(400).json({ 
+          message: 'Giao dịch này đã được liên kết với một ảnh hóa đơn khác. Mỗi giao dịch chỉ có thể liên kết với một ảnh hóa đơn.',
+          existingReceiptId: existingReceipt._id
+        });
       }
     }
 
@@ -2273,16 +2285,16 @@ router.patch('/:familyId/receipt-images/:imageId', authenticateToken, async (req
     // Tìm hình ảnh
     const receiptImage = family.receiptImages.id(imageId);
     if (!receiptImage) {
-      return res.status(404).json({ message: 'Không tìm thấy hình ảnh hóa đôn' });
+      return res.status(404).json({ message: 'Không tìm thấy hình ảnh hóa đơn' });
     }
 
-    // Kiểm tra quyền chỉnh sửa
+    // SỬA: Kiểm tra quyền chỉnh sửa - OWNER hoặc người upload
     const isOwner = String(family.owner) === String(userId);
     const isUploader = String(receiptImage.uploadedBy) === String(userId);
 
     if (!isOwner && !isUploader) {
       return res.status(403).json({ 
-        message: 'Bạn chỉ có thể chỉnh sửa hình ảnh hóa đơn do bạn upload' 
+        message: 'Chỉ chủ gia đình hoặc người upload mới có thể chỉnh sửa hình ảnh hóa đơn này' 
       });
     }
 
@@ -2493,13 +2505,27 @@ router.patch('/:familyId/receipt-images/:imageId/link-transaction', authenticate
       return res.status(404).json({ message: 'Giao dịch không tồn tại trong gia đình này' });
     }
 
-    // Kiểm tra quyền chỉnh sửa
+    // THÊM: Kiểm tra xem giao dịch này đã được liên kết với ảnh hóa đơn khác chưa
+    const existingReceipt = family.receiptImages.find(img => 
+      img.linkedTransaction && 
+      String(img.linkedTransaction) === String(transactionId) &&
+      String(img._id) !== String(imageId) // Bỏ qua ảnh hiện tại
+    );
+
+    if (existingReceipt) {
+      return res.status(400).json({ 
+        message: 'Giao dịch này đã được liên kết với một ảnh hóa đơn khác. Mỗi giao dịch chỉ có thể liên kết với một ảnh hóa đơn.',
+        existingReceiptId: existingReceipt._id
+      });
+    }
+
+    // SỬA: Kiểm tra quyền chỉnh sửa - OWNER hoặc người upload
     const isOwner = String(family.owner) === String(userId);
     const isUploader = String(receiptImage.uploadedBy) === String(userId);
 
     if (!isOwner && !isUploader) {
       return res.status(403).json({ 
-        message: 'Bạn chỉ có thể liên kết hình ảnh hóa đơn do bạn upload' 
+        message: 'Chỉ chủ gia đình hoặc người upload mới có thể liên kết hình ảnh hóa đơn này' 
       });
     }
 
@@ -2545,13 +2571,13 @@ router.patch('/:familyId/receipt-images/:imageId/unlink-transaction', authentica
       return res.status(404).json({ message: 'Không tìm thấy hình ảnh hóa đơn' });
     }
 
-    // Kiểm tra quyền chỉnh sửa
+    // SỬA: Kiểm tra quyền chỉnh sửa - OWNER hoặc người upload
     const isOwner = String(family.owner) === String(userId);
     const isUploader = String(receiptImage.uploadedBy) === String(userId);
 
     if (!isOwner && !isUploader) {
       return res.status(403).json({ 
-        message: 'Bạn chỉ có thể hủy liên kết hình ảnh hóa đơn do bạn upload' 
+        message: 'Chỉ chủ gia đình hoặc người upload mới có thể hủy liên kết hình ảnh hóa đơn này' 
       });
     }
 

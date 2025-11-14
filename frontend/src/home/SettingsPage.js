@@ -28,6 +28,10 @@ function SettingsPage() {
   // Notification state
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
 
+  // THÊM: Statistics state
+  const [statistics, setStatistics] = useState(null);
+  const [statisticsLoading, setStatisticsLoading] = useState(true);
+
   const token = localStorage.getItem('token');
 
   useEffect(() => {
@@ -39,6 +43,14 @@ function SettingsPage() {
   useEffect(() => {
     if (activeTab === 'account' && token) {
       fetchProfile();
+    }
+  }, [activeTab, token]);
+
+  // THÊM: Fetch statistics
+  useEffect(() => {
+    if (activeTab === 'account' && token) {
+      fetchProfile();
+      fetchStatistics(); // THÊM: Fetch statistics
     }
   }, [activeTab, token]);
 
@@ -55,6 +67,23 @@ function SettingsPage() {
       showNotification('Không thể tải thông tin người dùng', 'error');
     } finally {
       setProfileLoading(false);
+    }
+  };
+
+  // THÊM: Fetch statistics function
+  const fetchStatistics = async () => {
+    try {
+      const res = await fetch('http://localhost:5000/api/users/statistics', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Không thể tải thống kê');
+      const data = await res.json();
+      setStatistics(data);
+    } catch (err) {
+      console.error(err);
+      showNotification('Không thể tải thống kê', 'error');
+    } finally {
+      setStatisticsLoading(false);
     }
   };
 
@@ -155,6 +184,160 @@ function SettingsPage() {
         <div className="settings-content">
           {activeTab === 'account' ? (
             <>
+            {/* THÊM: Statistics section */}
+            <section className="settings-card statistics-card">
+              <div className="settings-card-title">📊 Thống kê tài khoản</div>
+              {statisticsLoading ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: '#2a5298' }}>
+                  <div style={{ fontSize: '2rem', marginBottom: '12px' }}>⏳</div>
+                  Đang tải thống kê...
+                </div>
+              ) : statistics ? (
+                <div className="statistics-grid">
+                  {/* THÊM: Thông tin tài khoản */}
+                  <div className="stat-item account-info">
+                    <div className="stat-icon">👤</div>
+                    <div className="stat-content">
+                      <div className="stat-value">{statistics.account.age}</div>
+                      <div className="stat-label">Ngày đã tham gia</div>
+                      <div className="stat-detail">
+                        Từ ngày: {new Date(statistics.account.createdAt).toLocaleDateString('vi-VN', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* THÊM: Số bạn bè */}
+                  <div className="stat-item friends-info">
+                    <div className="stat-icon">👥</div>
+                    <div className="stat-content">
+                      <div className="stat-value">{statistics.account.friends}</div>
+                      <div className="stat-label">Bạn bè</div>
+                    </div>
+                  </div>
+
+                  {/* Ví */}
+                  <div className="stat-item">
+                    <div className="stat-icon">💳</div>
+                    <div className="stat-content">
+                      <div className="stat-value">{statistics.wallets}</div>
+                      <div className="stat-label">Ví cá nhân</div>
+                    </div>
+                  </div>
+
+                  {/* Nhóm */}
+                  <div className="stat-item">
+                    <div className="stat-icon">👥</div>
+                    <div className="stat-content">
+                      <div className="stat-value">{statistics.groups.total}</div>
+                      <div className="stat-label">Nhóm</div>
+                      <div className="stat-detail">
+                        Tạo: {statistics.groups.created} | Tham gia: {statistics.groups.joined}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Gia đình */}
+                  <div className="stat-item">
+                    <div className="stat-icon">🏠</div>
+                    <div className="stat-content">
+                      <div className="stat-value">{statistics.families.total}</div>
+                      <div className="stat-label">Gia đình</div>
+                      <div className="stat-detail">
+                        Tạo: {statistics.families.created} | Tham gia: {statistics.families.joined}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Giao dịch cá nhân */}
+                  <div className="stat-item">
+                    <div className="stat-icon">💰</div>
+                    <div className="stat-content">
+                      <div className="stat-value">{statistics.transactions.personal}</div>
+                      <div className="stat-label">Giao dịch cá nhân</div>
+                    </div>
+                  </div>
+
+                  {/* Giao dịch nhóm */}
+                  <div className="stat-item">
+                    <div className="stat-icon">👫</div>
+                    <div className="stat-content">
+                      <div className="stat-value">{statistics.transactions.group}</div>
+                      <div className="stat-label">Giao dịch nhóm</div>
+                      {/* THÊM: Hiển thị chi tiết theo loại nếu có */}
+                      {statistics.transactions.groupByType && (
+                        <div className="stat-detail-list">
+                          {statistics.transactions.groupByType.payer_single > 0 && (
+                            <div className="detail-row">
+                              <span className="detail-icon">💳</span>
+                              <span>Trả đơn: {statistics.transactions.groupByType.payer_single}</span>
+                            </div>
+                          )}
+                          {statistics.transactions.groupByType.payer_for_others > 0 && (
+                            <div className="detail-row">
+                              <span className="detail-icon">🤝</span>
+                              <span>Trả giúp: {statistics.transactions.groupByType.payer_for_others}</span>
+                            </div>
+                          )}
+                          {statistics.transactions.groupByType.equal_split > 0 && (
+                            <div className="detail-row">
+                              <span className="detail-icon">⚖️</span>
+                              <span>Chia đều: {statistics.transactions.groupByType.equal_split}</span>
+                            </div>
+                          )}
+                          {statistics.transactions.groupByType.percentage_split > 0 && (
+                            <div className="detail-row">
+                              <span className="detail-icon">📊</span>
+                              <span>Chia %: {statistics.transactions.groupByType.percentage_split}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Giao dịch gia đình */}
+                  <div className="stat-item family-transactions">
+                    <div className="stat-icon">🏡</div>
+                    <div className="stat-content">
+                      <div className="stat-value">{statistics.transactions.family.total}</div>
+                      <div className="stat-label">Giao dịch gia đình</div>
+                      <div className="stat-detail-list">
+                        <div className="detail-row">
+                          <span className="detail-icon">🔄</span>
+                          <span>Nạp/Rút quỹ: {statistics.transactions.family.transfer}</span>
+                        </div>
+                        <div className="detail-row">
+                          <span className="detail-icon">👤</span>
+                          <span>Chi tiêu cá nhân: {statistics.transactions.family.personal}</span>
+                        </div>
+                        <div className="detail-row">
+                          <span className="detail-icon">💰</span>
+                          <span>Chi tiêu quỹ GĐ: {statistics.transactions.family.fund}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Tổng giao dịch */}
+                  <div className="stat-item total-transactions">
+                    <div className="stat-icon">📈</div>
+                    <div className="stat-content">
+                      <div className="stat-value">{statistics.transactions.total}</div>
+                      <div className="stat-label">Tổng giao dịch</div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>
+                  Không có dữ liệu thống kê
+                </div>
+              )}
+            </section>
+
             <section className="settings-card">
               <div className="settings-card-title">👤 Thông tin hồ sơ</div>
               {profileLoading ? (

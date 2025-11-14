@@ -144,4 +144,183 @@ router.get('/create-test', async (req, res) => {
   }
 });
 
+// GET /api/users/statistics - Lấy thống kê người dùng
+router.get('/statistics', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id || req.user._id || req.user.userId;
+    const mongoose = require('mongoose');
+    const Wallet = mongoose.model('Wallet');
+    const Group = mongoose.model('Group');
+    const Family = mongoose.model('Family');
+    const Transaction = mongoose.model('Transaction');
+    const GroupTransaction = mongoose.model('GroupTransaction');
+    const FamilyTransaction = mongoose.model('FamilyTransaction');
+
+    // Lấy thông tin user để lấy createdAt và đếm friends
+    const user = await User.findById(userId).select('createdAt friends email');
+    if (!user) {
+      return res.status(404).json({ message: 'Không tìm thấy người dùng' });
+    }
+
+    // 1. Đếm số ví
+    const walletCount = await Wallet.countDocuments({ owner: userId });
+
+    // 2. Đếm số nhóm (tạo và tham gia)
+    const createdGroups = await Group.countDocuments({ owner: userId });
+    const joinedGroups = await Group.countDocuments({
+      'members.user': userId,
+      owner: { $ne: userId }
+    });
+
+    // 3. Đếm số gia đình (tạo và tham gia)
+    const createdFamilies = await Family.countDocuments({ owner: userId });
+    const joinedFamilies = await Family.countDocuments({
+      'members.user': userId,
+      owner: { $ne: userId }
+    });
+
+    // 4. Đếm giao dịch cá nhân THUẦN TÚY
+    const userWallets = await Wallet.find({ owner: userId }).select('_id');
+    const walletIds = userWallets.map(w => w._id);
+    
+    const personalTransactions = await Transaction.countDocuments({
+      wallet: { $in: walletIds },
+      $and: [
+        { 'metadata.familyId': { $exists: false } },
+        { 'metadata.familyTransactionId': { $exists: false } }
+      ]
+    });
+
+    // 5. Đếm giao dịch nhóm
+    const allUserCreatedTxs = await GroupTransaction.find({
+      $or: [
+        { createdBy: userId },
+        { createdBy: new mongoose.Types.ObjectId(userId) },
+        { 'createdBy._id': userId },
+        { 'createdBy._id': new mongoose.Types.ObjectId(userId) },
+        { createdBy: { $eq: userId } },
+        { createdBy: { $eq: new mongoose.Types.ObjectId(userId) } }
+      ]
+    }).select('_id transactionType createdBy payer participants').lean();
+    
+    const allGroupTxs = allUserCreatedTxs.filter(tx => {
+      if (!tx.createdBy) return false;
+      
+      if (typeof tx.createdBy === 'string' || tx.createdBy instanceof mongoose.Types.ObjectId) {
+        return String(tx.createdBy) === String(userId);
+      }
+      
+      if (tx.createdBy._id) {
+        return String(tx.createdBy._id) === String(userId);
+      }
+      
+      if (Array.isArray(tx.createdBy)) {
+        return tx.createdBy.some(id => String(id) === String(userId));
+      }
+      
+      return false;
+    });
+
+    const uniqueGroupTxMap = new Map();
+    allGroupTxs.forEach(tx => {
+      const key = String(tx._id);
+      if (!uniqueGroupTxMap.has(key)) {
+        uniqueGroupTxMap.set(key, tx);
+      }
+    });
+
+    const uniqueGroupTxs = Array.from(uniqueGroupTxMap.values());
+    const groupTransactions = uniqueGroupTxs.length;
+
+    const groupTxByType = {
+      payer_single: 0,
+      payer_for_others: 0,
+      equal_split: 0,
+      percentage_split: 0
+    };
+
+    uniqueGroupTxs.forEach(tx => {
+      const type = tx.transactionType || 'equal_split';
+      if (groupTxByType.hasOwnProperty(type)) {
+        groupTxByType[type]++;
+      }
+    });
+
+    // 6. Đếm giao dịch gia đình
+    const userFamilies = await Family.find({
+      $or: [
+        { owner: userId },
+        { 'members.user': userId }
+      ]
+    }).select('_id');
+    
+    const familyIds = userFamilies.map(f => f._id);
+
+    const familyTransferTransactions = await FamilyTransaction.countDocuments({
+      familyId: { $in: familyIds },
+      createdBy: userId,
+      tags: 'transfer'
+    });
+
+    const familyPersonalTransactions = await FamilyTransaction.countDocuments({
+      familyId: { $in: familyIds },
+      createdBy: userId,
+      transactionScope: 'personal',
+      tags: { $ne: 'transfer' }
+    });
+
+    const familyFundTransactions = await FamilyTransaction.countDocuments({
+      familyId: { $in: familyIds },
+      createdBy: userId,
+      transactionScope: 'family',
+      tags: { $ne: 'transfer' }
+    });
+
+    const totalFamilyTransactions = familyTransferTransactions + familyPersonalTransactions + familyFundTransactions;
+
+    // Tính số ngày đã tạo tài khoản
+    const accountAge = {
+      createdAt: user.createdAt,
+      days: Math.floor((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24))
+    };
+
+    // Đếm số bạn bè
+    const friendsCount = Array.isArray(user.friends) ? user.friends.length : 0;
+
+    res.json({
+      account: {
+        createdAt: accountAge.createdAt,
+        age: accountAge.days,
+        friends: friendsCount
+      },
+      wallets: walletCount,
+      groups: {
+        created: createdGroups,
+        joined: joinedGroups,
+        total: createdGroups + joinedGroups
+      },
+      families: {
+        created: createdFamilies,
+        joined: joinedFamilies,
+        total: createdFamilies + joinedFamilies
+      },
+      transactions: {
+        personal: personalTransactions,
+        group: groupTransactions,
+        groupByType: groupTxByType,
+        family: {
+          transfer: familyTransferTransactions,
+          personal: familyPersonalTransactions,
+          fund: familyFundTransactions,
+          total: totalFamilyTransactions
+        },
+        total: personalTransactions + groupTransactions + totalFamilyTransactions
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching user statistics:', err);
+    res.status(500).json({ message: 'Lỗi server', error: err.message });
+  }
+});
+
 module.exports = router;
