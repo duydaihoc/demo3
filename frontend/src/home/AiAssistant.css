@@ -126,17 +126,31 @@
 }
 
 .ai-modal-enhanced {
-  background: white;
+  background: radial-gradient(circle at top left, #f9fafb 0%, #e5e7eb 45%, #e5e7eb 100%);
   border-radius: 24px;
   width: 100%;
   max-width: 480px;
   height: 600px;
   max-height: 90vh;
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 25px 60px rgba(15, 23, 42, 0.35);
+  border: 1px solid rgba(148, 163, 184, 0.35);
   animation: modalSlideUp 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* Màu theo tính cách chatbot */
+.persona-balanced.ai-modal-enhanced {
+  background: radial-gradient(circle at top left, #f9fafb 0%, #e5e7eb 45%, #e5e7eb 100%);
+}
+
+.persona-friendly.ai-modal-enhanced {
+  background: radial-gradient(circle at top left, #fefce8 0%, #fef3c7 35%, #fee2e2 100%);
+}
+
+.persona-aggressive.ai-modal-enhanced {
+  background: radial-gradient(circle at top left, #111827 0%, #1f2937 40%, #111827 100%);
 }
 
 @keyframes modalSlideUp {
@@ -156,7 +170,16 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: linear-gradient(135deg, #f8f9fa 0%, #e8eaed 100%);
+  background: linear-gradient(135deg, #0f172a 0%, #1f2937 45%, #111827 100%);
+  color: #e5e7eb;
+}
+
+.persona-friendly .ai-modal-header {
+  background: linear-gradient(135deg, #fb7185 0%, #f97316 35%, #facc15 100%);
+}
+
+.persona-aggressive .ai-modal-header {
+  background: linear-gradient(135deg, #b91c1c 0%, #7f1d1d 40%, #111827 100%);
 }
 
 .ai-header-info {
@@ -179,9 +202,10 @@
 
 .ai-header-text h3 {
   margin: 0;
-  color: #202124;
+  color: #f9fafb;
   font-size: 18px;
   font-weight: 600;
+  letter-spacing: 0.3px; /* SỬA: Spacing cho dễ đọc */
 }
 
 .ai-status {
@@ -189,8 +213,9 @@
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #5f6368;
+  color: #cbd5f5;
   margin-top: 2px;
+  font-weight: 500; /* SỬA: Đậm hơn */
 }
 
 .ai-status-dot {
@@ -199,6 +224,36 @@
   background: #34a853;
   border-radius: 50%;
   animation: pulse 2s infinite;
+}
+
+/* THÊM: Persona switch (tính cách chatbot) */
+.ai-persona-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 8px;
+}
+
+.ai-persona-btn {
+  border: 1px solid #dadce0;
+  background: #ffffff;
+  color: #5f6368;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.ai-persona-btn:hover {
+  background: #f1f3f4;
+}
+
+.ai-persona-btn.active {
+  background: #1a73e8;
+  border-color: #1a73e8;
+  color: #ffffff;
 }
 
 /* Gemini badge trong message */
@@ -254,11 +309,20 @@
   flex-direction: column;
   overflow: hidden;
   min-height: 0; /* FIX: Prevent flex item overflow */
+  background: linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 45%, #e5e7eb 100%);
+}
+
+.persona-friendly .ai-chat-container {
+  background: linear-gradient(180deg, #fff7ed 0%, #fffbeb 45%, #fef3c7 100%);
+}
+
+.persona-aggressive .ai-chat-container {
+  background: linear-gradient(180deg, #111827 0%, #1f2937 45%, #111827 100%);
 }
 
 .ai-messages {
   flex: 1;
-  padding: 16px;
+  padding: 16px 18px 12px;
   overflow-y: auto;
   overflow-x: hidden; /* FIX: Prevent horizontal scroll */
   scrollbar-width: thin;
@@ -311,32 +375,50 @@
   border-radius: 18px;
   white-space: pre-wrap;
   word-wrap: break-word;
-  line-height: 1.4;
+  line-height: 1.6; /* SỬA: Tăng line-height */
   font-size: 14px;
+  color: #111827; /* SỬA: Đảm bảo màu text rõ ràng */
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
 }
 
 .ai-message.user .ai-message-bubble {
-  background: linear-gradient(135deg, #4285f4, #1a73e8);
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
   color: white;
   border-bottom-right-radius: 6px;
 }
 
 .ai-message.ai .ai-message-bubble {
-  background: #f1f3f4;
-  color: #202124;
+  background: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  color: #111827; /* SỬA: Text màu đen rõ ràng */
   border-bottom-left-radius: 6px;
 }
 
+.persona-friendly .ai-message.ai .ai-message-bubble {
+  background: #fff7ed;
+  border-color: #fdba74;
+}
+
+.persona-aggressive .ai-message.ai .ai-message-bubble {
+  background: #111827;
+  border-color: #f97373;
+  color: #f9fafb;
+}
+
+/* SỬA: Success message style */
+.ai-message-bubble.success {
+  background: linear-gradient(135deg, #ecfdf5 0%, #bbf7d0 100%);
+  border: 1px solid #34d399;
+  color: #064e3b; /* SỬA: Text màu xanh đậm */
+  font-weight: 500;
+}
+
+/* SỬA: Error message style */
 .ai-message-bubble.error {
   background: #fce8e6;
   border: 1px solid #f9ab00;
-  color: #d93025;
-}
-
-.ai-message-bubble.fallback {
-  background: #fff3e0;
-  border: 1px solid #f9ab00;
-  color: #e8710a;
+  color: #d93025; /* SỬA: Text màu đỏ đậm */
+  font-weight: 500;
 }
 
 .ai-fallback-notice {
@@ -452,17 +534,17 @@
 
 /* Quick Actions */
 .ai-quick-actions {
-  padding: 16px;
-  border-top: 1px solid #e8eaed;
-  background: #f8f9fa;
+  padding: 16px 18px 14px;
+  border-top: 1px solid rgba(209, 213, 219, 0.8);
+  background: linear-gradient(180deg, #e5e7eb 0%, #f9fafb 100%);
   flex-shrink: 0; /* FIX: Prevent shrinking */
 }
 
 .ai-quick-title {
-  font-size: 12px;
-  color: #5f6368;
-  font-weight: 600;
-  margin-bottom: 8px;
+  font-size: 13px; /* SỬA: Tăng size */
+  color: #202124; /* SỬA: Màu đậm hơn */
+  font-weight: 700; /* SỬA: Đậm hơn */
+  margin-bottom: 12px; /* SỬA: Spacing */
   display: flex;
   align-items: center;
   gap: 6px;
@@ -475,8 +557,8 @@
 }
 
 .ai-quick-btn {
-  background: white;
-  border: 1px solid #dadce0;
+  background: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.7);
   border-radius: 8px;
   padding: 8px;
   cursor: pointer;
@@ -488,8 +570,9 @@
 }
 
 .ai-quick-btn:hover {
-  background: #e8f0fe;
-  border-color: #4285f4;
+  background: #eef2ff;
+  border-color: #6366f1;
+  box-shadow: 0 6px 18px rgba(79, 70, 229, 0.15);
 }
 
 .ai-quick-icon {
@@ -500,13 +583,15 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: #202124; /* SỬA: Text rõ ràng */
+  font-weight: 500;
 }
 
 /* Input Container */
 .ai-input-container {
-  padding: 16px;
-  border-top: 1px solid #e8eaed;
-  background: white;
+  padding: 14px 18px 18px;
+  border-top: 1px solid rgba(209, 213, 219, 0.9);
+  background: #f9fafb;
   flex-shrink: 0; /* FIX: Prevent shrinking */
   margin-top: 0; /* FIX: Remove any top margin */
 }
@@ -515,11 +600,13 @@
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  background: #f1f3f4;
+  background: #ffffff;
   border-radius: 24px;
   padding: 8px 12px;
   transition: all 0.2s ease;
   margin: 0; /* FIX: Remove any margin */
+  border: 1px solid rgba(148, 163, 184, 0.7);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
 }
 
 .ai-input {
@@ -540,6 +627,7 @@
 
 .ai-input::placeholder {
   color: #5f6368;
+  font-weight: 400;
 }
 
 .ai-send-btn {
@@ -575,15 +663,15 @@
 }
 
 .ai-powered-by {
-  font-size: 10px;
+  font-size: 11px; /* SỬA: Tăng nhẹ */
   color: #5f6368;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  animation: power-glow 3s ease-in-out infinite;
-  margin: 0; /* FIX: Remove margin */
-  padding: 0; /* FIX: Remove padding */
+  font-weight: 500; /* SỬA: Đậm hơn */
+  margin: 0;
+  padding: 0;
 }
 
 /* FIX: Remove extra space at bottom of messages */
@@ -769,7 +857,8 @@
 .ai-message-bubble.success {
   background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
   border: 2px solid #10b981;
-  color: #065f46;
+  color: #065f46; /* SỬA: Text màu xanh đậm */
+  font-weight: 500;
 }
 
 /* Edit Transaction Modal Styles */

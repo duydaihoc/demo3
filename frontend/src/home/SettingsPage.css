@@ -1,12 +1,14 @@
 .settings-main {
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
   min-height: 100vh;
+  max-height: 100vh; /* THÊM: Giới hạn chiều cao tối đa */
   width: calc(100vw - 220px);
   font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
   padding: 0;
   box-sizing: border-box;
   position: relative;
   overflow-x: hidden;
+  overflow-y: auto; /* THÊM: Cho phép cuộn dọc */
 }
 
 /* Animated background particles */
@@ -68,6 +70,7 @@
   padding: 24px 48px 48px 48px;
   position: relative;
   z-index: 1;
+  min-height: min-content; /* THÊM: Đảm bảo content có thể mở rộng */
 }
 
 .settings-card {
@@ -546,6 +549,7 @@
   .settings-main {
     width: 100vw;
     margin-left: 0;
+    max-height: 100vh; /* THÊM: Giữ giới hạn chiều cao trên mobile */
   }
 
   .settings-main::before {
@@ -588,4 +592,23 @@
     font-size: 1rem;
     padding: 14px 24px;
   }
+}
+
+/* THÊM: Custom scrollbar cho webkit browsers */
+.settings-main::-webkit-scrollbar {
+  width: 8px;
+}
+
+.settings-main::-webkit-scrollbar-track {
+  background: rgba(42, 82, 152, 0.05);
+  border-radius: 10px;
+}
+
+.settings-main::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #4ecdc4 0%, #2a5298 100%);
+  border-radius: 10px;
+}
+
+.settings-main::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #3bbaac 0%, #1f3d7a 100%);
 }

@@ -184,7 +184,111 @@ function SettingsPage() {
         <div className="settings-content">
           {activeTab === 'account' ? (
             <>
-            {/* THÊM: Statistics section */}
+            {/* 1. THÔNG TIN HỒ SƠ - ĐẨY LÊN ĐẦU */}
+            <section className="settings-card">
+              <div className="settings-card-title">👤 Thông tin hồ sơ</div>
+              {profileLoading ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: '#2a5298' }}>
+                  <div style={{ fontSize: '2rem', marginBottom: '12px' }}>⏳</div>
+                  Đang tải thông tin...
+                </div>
+              ) : (
+                <form className="settings-form" onSubmit={handleProfileSubmit}>
+                  <div className="settings-form-group">
+                    <label>Tên hiển thị</label>
+                    <input 
+                      type="text" 
+                      value={profile.name}
+                      onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+                      placeholder="Nhập tên hiển thị của bạn"
+                      disabled={profileSaving}
+                    />
+                  </div>
+                  <div className="settings-form-group">
+                    <label>Email</label>
+                    <input 
+                      type="email" 
+                      value={profile.email}
+                      onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                      placeholder="Nhập địa chỉ email"
+                      disabled={profileSaving}
+                    />
+                  </div>
+                  <div className="settings-form-row">
+                    <div className="settings-form-group">
+                      <label>Tiền tệ</label>
+                      <select disabled={profileSaving}>
+                        <option>🇻🇳 VND - Việt Nam Đồng</option>
+                        <option>🇺🇸 USD - US Dollar</option>
+                        <option>🇪🇺 EUR - Euro</option>
+                      </select>
+                    </div>
+                    <div className="settings-form-group">
+                      <label>Ngôn ngữ</label>
+                      <select disabled={profileSaving}>
+                        <option>🇻🇳 Tiếng Việt</option>
+                        <option>🇬🇧 English</option>
+                      </select>
+                    </div>
+                    <div className="settings-form-group">
+                      <label>Chủ đề</label>
+                      <select disabled={profileSaving}>
+                        <option>☀️ Sáng</option>
+                        <option>🌙 Tối</option>
+                        <option>🎨 Tự động</option>
+                      </select>
+                    </div>
+                  </div>
+                  <button type="submit" className="settings-save-btn" disabled={profileSaving}>
+                    {profileSaving ? '⏳ Đang lưu...' : '💾 Lưu thay đổi'}
+                  </button>
+                </form>
+              )}
+            </section>
+            
+            {/* 2. BẢO MẬT - Ở VỊ TRÍ THỨ 2 */}
+            <section className="settings-card">
+              <div className="settings-card-title">🔒 Bảo mật</div>
+              <form className="settings-form" onSubmit={handlePasswordSubmit}>
+                <div className="settings-form-group">
+                  <label>Mật khẩu hiện tại</label>
+                  <input 
+                    type="password" 
+                    value={passwords.currentPassword}
+                    onChange={(e) => setPasswords({ ...passwords, currentPassword: e.target.value })}
+                    placeholder="Nhập mật khẩu hiện tại của bạn"
+                    disabled={passwordSaving}
+                  />
+                </div>
+                <div className="settings-form-row">
+                  <div className="settings-form-group">
+                    <label>Mật khẩu mới</label>
+                    <input 
+                      type="password" 
+                      value={passwords.newPassword}
+                      onChange={(e) => setPasswords({ ...passwords, newPassword: e.target.value })}
+                      placeholder="Nhập mật khẩu mới"
+                      disabled={passwordSaving}
+                    />
+                  </div>
+                  <div className="settings-form-group">
+                    <label>Nhập lại mật khẩu</label>
+                    <input 
+                      type="password" 
+                      value={passwords.confirmPassword}
+                      onChange={(e) => setPasswords({ ...passwords, confirmPassword: e.target.value })}
+                      placeholder="Xác nhận mật khẩu mới"
+                      disabled={passwordSaving}
+                    />
+                  </div>
+                </div>
+                <button type="submit" className="settings-change-btn" disabled={passwordSaving}>
+                  {passwordSaving ? '⏳ Đang đổi...' : '🔑 Đổi mật khẩu'}
+                </button>
+              </form>
+            </section>
+
+            {/* 3. THỐNG KÊ TÀI KHOẢN - ĐẨY XUỐNG DƯỚI CÙNG */}
             <section className="settings-card statistics-card">
               <div className="settings-card-title">📊 Thống kê tài khoản</div>
               {statisticsLoading ? (
@@ -336,108 +440,6 @@ function SettingsPage() {
                   Không có dữ liệu thống kê
                 </div>
               )}
-            </section>
-
-            <section className="settings-card">
-              <div className="settings-card-title">👤 Thông tin hồ sơ</div>
-              {profileLoading ? (
-                <div style={{ padding: '40px', textAlign: 'center', color: '#2a5298' }}>
-                  <div style={{ fontSize: '2rem', marginBottom: '12px' }}>⏳</div>
-                  Đang tải thông tin...
-                </div>
-              ) : (
-                <form className="settings-form" onSubmit={handleProfileSubmit}>
-                  <div className="settings-form-group">
-                    <label>Tên hiển thị</label>
-                    <input 
-                      type="text" 
-                      value={profile.name}
-                      onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-                      placeholder="Nhập tên hiển thị của bạn"
-                      disabled={profileSaving}
-                    />
-                  </div>
-                  <div className="settings-form-group">
-                    <label>Email</label>
-                    <input 
-                      type="email" 
-                      value={profile.email}
-                      onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-                      placeholder="Nhập địa chỉ email"
-                      disabled={profileSaving}
-                    />
-                  </div>
-                  <div className="settings-form-row">
-                    <div className="settings-form-group">
-                      <label>Tiền tệ</label>
-                      <select disabled={profileSaving}>
-                        <option>🇻🇳 VND - Việt Nam Đồng</option>
-                        <option>🇺🇸 USD - US Dollar</option>
-                        <option>🇪🇺 EUR - Euro</option>
-                      </select>
-                    </div>
-                    <div className="settings-form-group">
-                      <label>Ngôn ngữ</label>
-                      <select disabled={profileSaving}>
-                        <option>🇻🇳 Tiếng Việt</option>
-                        <option>🇬🇧 English</option>
-                      </select>
-                    </div>
-                    <div className="settings-form-group">
-                      <label>Chủ đề</label>
-                      <select disabled={profileSaving}>
-                        <option>☀️ Sáng</option>
-                        <option>🌙 Tối</option>
-                        <option>🎨 Tự động</option>
-                      </select>
-                    </div>
-                  </div>
-                  <button type="submit" className="settings-save-btn" disabled={profileSaving}>
-                    {profileSaving ? '⏳ Đang lưu...' : '💾 Lưu thay đổi'}
-                  </button>
-                </form>
-              )}
-            </section>
-            
-            <section className="settings-card">
-              <div className="settings-card-title">🔒 Bảo mật</div>
-              <form className="settings-form" onSubmit={handlePasswordSubmit}>
-                <div className="settings-form-group">
-                  <label>Mật khẩu hiện tại</label>
-                  <input 
-                    type="password" 
-                    value={passwords.currentPassword}
-                    onChange={(e) => setPasswords({ ...passwords, currentPassword: e.target.value })}
-                    placeholder="Nhập mật khẩu hiện tại của bạn"
-                    disabled={passwordSaving}
-                  />
-                </div>
-                <div className="settings-form-row">
-                  <div className="settings-form-group">
-                    <label>Mật khẩu mới</label>
-                    <input 
-                      type="password" 
-                      value={passwords.newPassword}
-                      onChange={(e) => setPasswords({ ...passwords, newPassword: e.target.value })}
-                      placeholder="Nhập mật khẩu mới"
-                      disabled={passwordSaving}
-                    />
-                  </div>
-                  <div className="settings-form-group">
-                    <label>Nhập lại mật khẩu</label>
-                    <input 
-                      type="password" 
-                      value={passwords.confirmPassword}
-                      onChange={(e) => setPasswords({ ...passwords, confirmPassword: e.target.value })}
-                      placeholder="Xác nhận mật khẩu mới"
-                      disabled={passwordSaving}
-                    />
-                  </div>
-                </div>
-                <button type="submit" className="settings-change-btn" disabled={passwordSaving}>
-                  {passwordSaving ? '⏳ Đang đổi...' : '🔑 Đổi mật khẩu'}
-                </button>
-              </form>
             </section>
             </>
           ) : (

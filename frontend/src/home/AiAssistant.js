@@ -7,11 +7,10 @@ export default function AiAssistant() {
   const [messages, setMessages] = useState([
     { 
       id: 1, 
-      text: '👋 Xin chào! Tôi là trợ lý tài chính cá nhân thông minh.\n\n✨ **Powered by Advanced Fallback AI**\n\n🤖 **Khả năng của tôi:**\n• 💬 Phân tích dữ liệu tài chính thực tế của bạn\n• 📊 Đưa ra lời khuyên quản lý tiền bạc cá nhân hóa\n• 💡 Gợi ý tiết kiệm và đầu tư phù hợp\n• 🔍 Trả lời các câu hỏi dựa trên tình hình tài chính hiện tại\n• 📈 Phân tích xu hướng và đưa ra cảnh báo\n\n🚀 **Hệ thống AI dự phòng thông minh**\nHãy hỏi tôi bất cứ điều gì về tài chính!', 
+      text: '👋 Xin chào! Tôi là trợ lý tài chính AI.\n\n🤖 Tôi có thể giúp bạn:\n• 💰 Tạo giao dịch thu/chi\n• ✏️ Sửa giao dịch đã có\n• 🗑️ Xóa giao dịch\n• 📊 Phân tích chi tiêu\n• 💡 Tư vấn tài chính\n\nHãy thử hỏi tôi nhé!', 
       sender: 'ai',
       timestamp: new Date(),
-      geminiAvailable: false,
-      aiMode: 'Advanced Fallback AI'
+      geminiAvailable: true
     }
   ]);
   const [input, setInput] = useState('');
@@ -55,6 +54,169 @@ export default function AiAssistant() {
   const [deleteSuggestion, setDeleteSuggestion] = useState(null);
   const [selectedTransactionToDelete, setSelectedTransactionToDelete] = useState(null);
   const [deletingSaving, setDeletingSaving] = useState(false);
+
+  // THÊM: State cho tính cách chatbot (persona)
+  // 'balanced' -> neutral, 'friendly' -> friendly, 'aggressive' -> aggressive
+  const [persona, setPersona] = useState('balanced');
+
+  // THÊM: Helper format tin nhắn theo tính cách hiện tại
+  // context: { action: 'create'|'edit'|'delete', transaction, previousAmount?, walletName?, categoryName?, type? }
+  const formatByPersona = (text, context = {}) => {
+    const base = String(text || '');
+    const { action, transaction, previousAmount, walletName, categoryName, type } = context;
+
+    const txType = (type || transaction?.type || '').toLowerCase();
+    const amount = Number(transaction?.amount || 0);
+
+    // THÊM: Lấy tên giao dịch và format số tiền cho câu nhận xét
+    const txTitleRaw = (transaction?.title || transaction?.description || '').trim();
+    const txTitle = txTitleRaw || (txType === 'income' ? 'khoản thu này' : 'khoản chi này');
+    const formattedAmount = amount
+      ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount)
+      : '';
+
+    // THÊM: Phát hiện một số loại chi tiêu đặc biệt (ví dụ: thuốc lá)
+    const lowerTitle = txTitleRaw.toLowerCase();
+    const lowerCategory = String(categoryName || '').toLowerCase();
+    const isSmokingExpense =
+      txType === 'expense' &&
+      (lowerTitle.includes('thuốc lá') ||
+       lowerTitle.includes('thuoc la') ||
+       lowerCategory.includes('thuốc lá') ||
+       lowerCategory.includes('thuoc la'));
+
+    // Helper chọn ngẫu nhiên 1 câu trong danh sách
+    const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+    let extraLine = '';
+
+    if (persona === 'friendly') {
+      // Mẹ hiền: nhẹ nhàng, an ủi, khích lệ
+      if (action === 'create') {
+        if (txType === 'income') {
+          extraLine = pick([
+            `Mẹ mừng cho con với "${txTitle}" ${formattedAmount ? `(${formattedAmount}) ` : ''}, có thu nhập thì nhớ trích ra một phần để tiết kiệm nha.`,
+            `Khoản thu "${txTitle}" ${formattedAmount ? `(${formattedAmount}) ` : ''}là tín hiệu tốt, mình tranh thủ gom dần cho quỹ an toàn của con nhé.`
+          ]);
+        } else if (isSmokingExpense) {
+          extraLine = pick([
+            `"${txTitle}" ${formattedAmount ? `(${formattedAmount}) ` : ''}không tốt cho sức khỏe đâu con, nếu được thì mình giảm dần để vừa tiết kiệm tiền vừa tốt cho bản thân nha.`,
+            `Mẹ biết đôi khi con cần "${txTitle}", nhưng thử nghĩ nếu bớt ${formattedAmount || 'một phần nhỏ'} mỗi tháng, sau này con sẽ có khoản tiền đẹp hơn nhiều đó.`
+          ]);
+        } else {
+          if (amount >= 1000000) {
+            extraLine = pick([
+              `"${txTitle}" ${formattedAmount ? `(${formattedAmount}) ` : ''}là khoản chi hơi lớn, nhưng nếu thật sự cần thì mẹ vẫn ủng hộ, chỉ cần con bù lại bằng tiết kiệm chỗ khác.`,
+              `Chi cho "${txTitle}" cũng được, nhưng mình cùng xem lại ngân sách để không bị thiếu hụt cuối tháng nha.`
+            ]);
+          } else {
+            extraLine = pick([
+              `Khoản "${txTitle}" ${formattedAmount ? `(${formattedAmount}) ` : ''}cũng nhỏ thôi, miễn con theo dõi đều thì mọi thứ vẫn trong tầm kiểm soát.`,
+              `Những khoản như "${txTitle}" dù nhỏ nhưng tích lại cũng thành nhiều, mình để ý dần để tránh lặt vặt quá nhiều nha.`
+            ]);
+          }
+        }
+      } else if (action === 'edit') {
+        const oldAmount = Number(previousAmount || 0);
+        const diff = amount - oldAmount;
+        if (txType === 'expense') {
+          if (diff > 0) {
+            extraLine = pick([
+              'Con tăng thêm khoản chi, nhớ cân nhắc kỹ để không vượt quá khả năng của mình nha.',
+              'Tăng chi cũng được, miễn là con vẫn nắm rõ mình đang tiêu vào đâu.'
+            ]);
+          } else if (diff < 0) {
+            extraLine = pick([
+              `Con giảm bớt cho "${txTitle}", đó là quyết định rất tốt, mẹ khen con đó.`,
+              `Cắt bớt chi cho "${txTitle}" là bước nhỏ nhưng có ích, cứ giữ thói quen này nha.`
+            ]);
+          } else {
+            extraLine = 'Mẹ thấy con chỉnh lại cho đúng là được, miễn sổ sách rõ ràng là tốt rồi.';
+          }
+        } else if (txType === 'income') {
+          if (diff > 0) {
+            extraLine = 'Thu nhập tăng thêm chút xíu cũng đáng mừng, nhớ ưu tiên phần cho tương lai của con.';
+          } else if (diff < 0) {
+            extraLine = `Thu nhập của "${txTitle}" giảm, mình càng phải cẩn thận hơn với chi tiêu, mẹ luôn ở đây hỗ trợ con cân đối.`;
+          } else {
+            extraLine = 'Mẹ thấy con chỉnh lại giao dịch cho đúng là tốt, thông tin rõ ràng thì mới quản lý được.';
+          }
+        }
+      } else if (action === 'delete') {
+        extraLine = pick([
+          `Xóa "${txTitle}" rồi, coi như mình dọn lại sổ sách cho gọn gàng, con nhớ duy trì thói quen kiểm tra như vậy nha.`,
+          `Mẹ đã giúp con chỉnh sổ bằng cách xóa "${txTitle}", từ giờ mình theo dõi kỹ hơn để đỡ nhầm lẫn.`
+        ]);
+      }
+
+      return `😊 [Chế độ mẹ hiền]\n${base}${extraLine ? `\n\n${extraLine}` : ''}`;
+    }
+
+    if (persona === 'aggressive') {
+      // Mẹ nghiêm: thẳng thắn, hơi gắt nhưng vẫn quan tâm
+      if (action === 'create') {
+        if (txType === 'income') {
+          extraLine = pick([
+            `"${txTitle}" ${formattedAmount ? `(${formattedAmount}) ` : ''}là tiền vào thì tốt, nhưng đừng nghĩ vậy mà xài thoải mái, phải có kỷ luật nghe chưa.`,
+            `Có thêm khoản thu như "${txTitle}" mà không biết giữ thì cũng như nước đổ lá môn, nhớ khóa bớt mấy khoản chi vô lý lại.`
+          ]);
+        } else if (isSmokingExpense) {
+          extraLine = pick([
+            `Chi cho "${txTitle}" ${formattedAmount ? `(${formattedAmount}) ` : ''}vừa hại sức khỏe vừa tốn tiền, mẹ mong con suy nghĩ lại nghiêm túc đi.`,
+            `Nếu con bớt "${txTitle}" mỗi tháng, ví tiền và lá phổi của con đều đỡ khổ hơn rất nhiều đấy.`
+          ]);
+        } else {
+          if (amount >= 1000000) {
+            extraLine = pick([
+              `"${txTitle}" ${formattedAmount ? `(${formattedAmount}) ` : ''}là khoản chi nặng tay lắm đó, lần sau trước khi bấm chi nhớ tự hỏi có thật sự cần không.`,
+              `Tiêu cho "${txTitle}" vậy là hơi bạo tay rồi, phải siết lại nếu không cuối tháng mệt lắm đó.`
+            ]);
+          } else {
+            extraLine = pick([
+              `Những khoản kiểu "${txTitle}" dù nhỏ nhưng cộng lại nhiều lần là to đấy, đừng chủ quan.`,
+              'Tiêu lặt vặt nhiều là thói quen xấu, sửa dần đi con.'
+            ]);
+          }
+        }
+      } else if (action === 'edit') {
+        const oldAmount = Number(previousAmount || 0);
+        const diff = amount - oldAmount;
+        if (txType === 'expense') {
+          if (diff > 0) {
+            extraLine = pick([
+              'Tăng thêm chi tiêu à? Nhớ là ví không phải cái giếng không đáy đâu.',
+              'Chi đã nhiều còn tăng thêm, coi chừng cuối tháng than không còn tiền đó.'
+            ]);
+          } else if (diff < 0) {
+            extraLine = pick([
+              'Giảm chi là quyết định đúng, mẹ muốn thấy con giữ được kỷ luật này lâu dài.',
+              'Được, cắt bớt chi tiêu như vậy mới là hướng đi nghiêm túc.'
+            ]);
+          } else {
+            extraLine = 'Chỉnh sửa mà số tiền y như cũ, lần sau nhớ xem kỹ trước khi lưu cho đỡ mất công.';
+          }
+        } else if (txType === 'income') {
+          if (diff > 0) {
+            extraLine = 'Thu nhập tăng thì càng phải tranh thủ xây quỹ dự phòng, đừng vung tay ngay lập tức.';
+          } else if (diff < 0) {
+            extraLine = 'Thu nhập giảm mà còn tiêu như cũ là toang, phải tự kìm mình lại đó.';
+          } else {
+            extraLine = 'Dữ liệu sửa cho đúng là tốt, nhưng mẹ vẫn muốn thấy kế hoạch rõ ràng hơn của con.';
+          }
+        }
+      } else if (action === 'delete') {
+        extraLine = pick([
+          'Xóa rồi đó, nhưng đừng tạo lung tung rồi xóa hoài, như vậy rất khó kiểm soát.',
+          'Lần này mẹ cho xóa, nhưng sau phải ghi chép cẩn thận hơn, không là loạn sổ sách.'
+        ]);
+      }
+
+      return `⚠️ [Chế độ mẹ nghiêm]\n${base}${extraLine ? `\n\n${extraLine}` : ''}`;
+    }
+
+    // Cân bằng: giữ nguyên nội dung cơ bản
+    return base;
+  };
 
   const messagesEndRef = useRef(null);
 
@@ -121,7 +283,14 @@ export default function AiAssistant() {
         body: JSON.stringify({
           message: userMessage.text,
           conversationHistory: newHistory,
-          pendingTransaction: pendingTransaction // THÊM: gửi pending transaction nếu có
+          pendingTransaction: pendingTransaction, // THÊM: gửi pending transaction nếu có
+          // THÊM: gửi persona lên backend
+          persona:
+            persona === 'friendly'
+              ? 'friendly'
+              : persona === 'aggressive'
+              ? 'aggressive'
+              : 'neutral'
         }),
         signal: controller.signal
       });
@@ -133,18 +302,16 @@ export default function AiAssistant() {
       }
 
       const data = await response.json();
-      console.log('✅ Received response:', {
-        geminiAvailable: data.geminiAvailable,
-        hasTransactionSuggestion: !!data.transactionSuggestion,
-        needsMoreInfo: !!data.needsMoreInfo
-      });
+      console.log('✅ AI Response:', data);
       
-      // Update Gemini status
       setGeminiStatus(data.geminiAvailable);
+      
+      // SỬA: Đảm bảo reply luôn có nội dung
+      const replyText = data.reply || 'Xin lỗi, tôi không thể xử lý yêu cầu này.';
       
       const aiMessage = {
         id: Date.now() + 1,
-        text: data.reply,
+        text: replyText,
         sender: 'ai',
         timestamp: new Date(),
         actionSuggestion: data.actionSuggestion,
@@ -154,8 +321,7 @@ export default function AiAssistant() {
         fallback: data.fallback,
         geminiAvailable: data.geminiAvailable,
         geminiError: data.geminiError,
-        debug: data.debug,
-        needsMoreInfo: data.needsMoreInfo // THÊM: flag cần thêm thông tin
+        needsMoreInfo: data.needsMoreInfo
       };
 
       setMessages(prev => [...prev, aiMessage]);
@@ -245,27 +411,24 @@ export default function AiAssistant() {
     } catch (error) {
       console.error('❌ AI Error:', error);
       
-      // Enhanced error handling
-      let errorMessage = '😅 **Xin lỗi, tôi đang gặp sự cố kỹ thuật.**';
+      let errorMessage = '😅 Xin lỗi, tôi đang gặp sự cố.\n\n';
       
       if (error.name === 'AbortError') {
-        errorMessage += '\n\n⏱️ **Timeout:** AI mất quá nhiều thời gian để phản hồi (>25s).';
+        errorMessage += '⏱️ Phản hồi quá lâu, vui lòng thử lại.';
       } else if (error.message.includes('HTTP')) {
-        errorMessage += '\n\n🌐 **Lỗi kết nối:** Không thể kết nối đến server AI.';
+        errorMessage += '🌐 Không thể kết nối server.';
       } else {
-        errorMessage += '\n\n⚠️ **Lỗi hệ thống:** Dịch vụ AI tạm thời gián đoạn.';
+        errorMessage += '⚠️ Lỗi hệ thống tạm thời.';
       }
       
-      errorMessage += '\n\n💡 **Bạn có thể:**\n• Kiểm tra kết nối mạng\n• Thử lại sau vài giây\n• Sử dụng các tính năng khác của ứng dụng\n\n🙏 Cảm ơn bạn đã thông cảm!';
+      errorMessage += '\n\n💡 Hãy thử lại hoặc dùng tính năng khác!';
       
       const fallbackMessage = {
         id: Date.now() + 1,
         text: errorMessage,
         sender: 'ai',
         timestamp: new Date(),
-        error: true,
-        fallback: true,
-        geminiAvailable: false
+        error: true
       };
       
       setMessages(prev => [...prev, fallbackMessage]);
@@ -311,10 +474,19 @@ export default function AiAssistant() {
       // Tìm tên ví đã chọn
       const selectedWallet = wallets.find(w => w._id === selectedWalletId);
       
-      // SỬA: Hiển thị title thay vì description
+      // SỬA: Hiển thị title thay vì description + áp dụng tính cách với context giao dịch
       const successMessage = {
         id: Date.now() + 2,
-        text: `✅ **Đã tạo giao dịch thành công!**\n\n📝 ${result.transaction.title}\n💰 ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(result.transaction.amount)}\n📊 ${suggestedTransaction.categoryName || 'Không có danh mục'}\n💼 ${selectedWallet?.name || 'Ví'}\n\n${suggestedTransaction.type === 'expense' ? '💸 Chi tiêu' : '💰 Thu nhập'} đã được ghi nhận.`,
+        text: formatByPersona(
+          `✅ **Đã tạo giao dịch thành công!**\n\n📝 ${result.transaction.title}\n💰 ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(result.transaction.amount)}\n📊 ${suggestedTransaction.categoryName || 'Không có danh mục'}\n💼 ${selectedWallet?.name || 'Ví'}\n\n${suggestedTransaction.type === 'expense' ? '💸 Chi tiêu' : '💰 Thu nhập'} đã được ghi nhận.`,
+          {
+            action: 'create',
+            transaction: result.transaction,
+            walletName: selectedWallet?.name,
+            categoryName: suggestedTransaction.categoryName,
+            type: suggestedTransaction.type
+          }
+        ),
         sender: 'ai',
         timestamp: new Date(),
         success: true
@@ -411,10 +583,20 @@ export default function AiAssistant() {
       
       console.log('✅ Edit result:', result);
       
-      // SỬA: Hiển thị title
+      // SỬA: Hiển thị title + áp dụng tính cách với context giao dịch
       const successMessage = {
         id: Date.now() + 2,
-        text: `✅ **Đã cập nhật giao dịch thành công!**\n\n📝 ${result.transaction.title}\n💰 ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(result.transaction.amount)}\n📊 ${result.transaction.category?.name || 'Không có danh mục'}\n💼 ${result.transaction.wallet?.name}\n\n✏️ Giao dịch đã được cập nhật.`,
+        text: formatByPersona(
+          `✅ **Đã cập nhật giao dịch thành công!**\n\n📝 ${result.transaction.title}\n💰 ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(result.transaction.amount)}\n📊 ${result.transaction.category?.name || 'Không có danh mục'}\n💼 ${result.transaction.wallet?.name}\n\n✏️ Giao dịch đã được cập nhật.`,
+          {
+            action: 'edit',
+            transaction: result.transaction,
+            previousAmount: selectedTransactionToEdit.amount,
+            walletName: result.transaction.wallet?.name,
+            categoryName: result.transaction.category?.name,
+            type: result.transaction.type
+          }
+        ),
         sender: 'ai',
         timestamp: new Date(),
         success: true
@@ -465,10 +647,19 @@ export default function AiAssistant() {
 
       const result = await response.json();
       
-      // Hiển thị thông báo thành công
+      // Hiển thị thông báo thành công + áp dụng tính cách với context giao dịch
       const successMessage = {
         id: Date.now() + 2,
-        text: `✅ **Đã xóa giao dịch thành công!**\n\n📝 ${result.deletedTransaction.title || result.deletedTransaction.description}\n💰 ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(result.deletedTransaction.amount)}\n💼 ${result.deletedTransaction.walletName}\n\n🔄 **Đã hoàn tiền vào ví**\n💳 Số dư mới: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(result.newWalletBalance)}`,
+        text: formatByPersona(
+          `✅ **Đã xóa giao dịch thành công!**\n\n📝 ${result.deletedTransaction.title || result.deletedTransaction.description}\n💰 ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(result.deletedTransaction.amount)}\n💼 ${result.deletedTransaction.walletName}\n\n🔄 **Đã hoàn tiền vào ví**\n💳 Số dư mới: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(result.newWalletBalance)}`,
+          {
+            action: 'delete',
+            transaction: result.deletedTransaction,
+            walletName: result.deletedTransaction.walletName,
+            categoryName: result.deletedTransaction.categoryName,
+            type: result.deletedTransaction.type
+          }
+        ),
         sender: 'ai',
         timestamp: new Date(),
         success: true
@@ -498,12 +689,12 @@ export default function AiAssistant() {
     }
   };
 
-  // Enhanced quick actions với Gemini context
+  // SỬA: Quick actions ngắn gọn hơn
   const quickActions = [
-    { text: '📊 Phân tích tình hình tài chính của tôi', icon: '📊' },
-    { text: '💰 Làm sao để tiết kiệm hiệu quả?', icon: '💰' },
-    { text: '💡 Tư vấn đầu tư phù hợp với tôi', icon: '💡' },
-    { text: '📈 Đánh giá xu hướng chi tiêu gần đây', icon: '📈' }
+    { text: 'Tạo giao dịch chi tiêu', icon: '💸' },
+    { text: 'Phân tích chi tiêu tháng này', icon: '📊' },
+    { text: 'Tư vấn tiết kiệm', icon: '💰' },
+    { text: 'Xem tổng quan tài chính', icon: '📈' }
   ];
 
   const handleQuickAction = (action) => {
@@ -660,14 +851,14 @@ export default function AiAssistant() {
       <button
         className="ai-button tour-ai-component"
         onClick={toggleModal}
-        title="Trợ lý AI Gemini"
-        aria-label="Mở Trợ lý AI Gemini"
+        title="chat bot"
+        aria-label="chatbot"
       >
         <span className="ai-button-inner">
           <span className="ai-icon">
             <i className="fas fa-robot"></i>
           </span>
-          <span className="ai-label">Gemini</span>
+          <span className="ai-label">chatbot</span>
           <span className={`ai-status-indicator ${geminiStatus ? 'online' : 'offline'}`}></span>
         </span>
       </button>
@@ -675,19 +866,46 @@ export default function AiAssistant() {
       {/* Enhanced AI Modal */}
       {isOpen && (
         <div className="ai-modal-overlay" onClick={toggleModal}>
-          <div className="ai-modal ai-modal-enhanced" onClick={(e) => e.stopPropagation()}>
+          <div
+            className={`ai-modal ai-modal-enhanced persona-${persona}`}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="ai-modal-header">
               <div className="ai-header-info">
                 <div className="ai-avatar">
                   <i className="fas fa-robot"></i>
                 </div>
                 <div className="ai-header-text">
-                  <h3>Gemini AI Assistant</h3>
+                  <h3>Trợ lý AI Tài chính</h3>
                   <div className="ai-status">
                     <span className={`ai-status-dot ${geminiStatus ? 'online' : 'offline'}`}></span>
-                    {geminiStatus ? 'Đang hoạt động với Gemini' : 'Chế độ dự phòng'}
+                    {geminiStatus ? 'Đang hoạt động' : 'Chế độ dự phòng'}
                   </div>
                 </div>
+              </div>
+              {/* THÊM: Chọn tính cách chatbot */}
+              <div className="ai-persona-switch">
+                <button
+                  type="button"
+                  className={`ai-persona-btn ${persona === 'balanced' ? 'active' : ''}`}
+                  onClick={() => setPersona('balanced')}
+                >
+                  Cân bằng
+                </button>
+                <button
+                  type="button"
+                  className={`ai-persona-btn ${persona === 'friendly' ? 'active' : ''}`}
+                  onClick={() => setPersona('friendly')}
+                >
+                  Thân thiện
+                </button>
+                <button
+                  type="button"
+                  className={`ai-persona-btn ${persona === 'aggressive' ? 'active' : ''}`}
+                  onClick={() => setPersona('aggressive')}
+                >
+                  Hung dữ
+                </button>
               </div>
               <button className="ai-close-btn" onClick={toggleModal} aria-label="Đóng">
                 <i className="fas fa-times"></i>
@@ -705,35 +923,18 @@ export default function AiAssistant() {
                         </div>
                       )}
                       <div className="ai-message-content">
-                        <div className={`ai-message-bubble ${msg.error ? 'error' : ''} ${msg.fallback ? 'fallback' : ''}`}>
-                          {msg.text}
-                          {msg.fallback && !msg.error && (
-                            <div className="ai-fallback-notice">
-                              <i className="fas fa-robot"></i>
-                              {msg.aiMode || 'Advanced Fallback AI'} - Phân tích dữ liệu thực tế
-                            </div>
-                          )}
-                          {msg.geminiAvailable && !msg.fallback && (
-                            <div className="ai-gemini-badge">
-                              <i className="fas fa-sparkles"></i>
-                              Powered by Gemini AI
-                            </div>
-                          )}
+                        <div className={`ai-message-bubble ${msg.error ? 'error' : ''} ${msg.success ? 'success' : ''}`}>
+                          {/* SỬA: Hiển thị text với line breaks */}
+                          {msg.text.split('\n').map((line, i) => (
+                            <React.Fragment key={i}>
+                              {line}
+                              {i < msg.text.split('\n').length - 1 && <br />}
+                            </React.Fragment>
+                          ))}
                         </div>
                         <div className="ai-message-time">
                           {formatTime(msg.timestamp)}
                         </div>
-                        {msg.actionSuggestion?.suggested && (
-                          <div className="ai-action-suggestion">
-                            <div className="ai-suggestion-title">
-                              <i className="fas fa-lightbulb"></i>
-                              Gợi ý hành động
-                            </div>
-                            <button className="ai-suggestion-btn">
-                              {msg.actionSuggestion.type === 'create_transaction' ? '➕ Tạo giao dịch' : '📊 Xem thống kê'}
-                            </button>
-                          </div>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -752,22 +953,19 @@ export default function AiAssistant() {
                             <span></span>
                             <span></span>
                           </div>
-                          <span className="ai-typing-text">
-                            {geminiStatus ? 'Gemini AI đang suy nghĩ...' : 'Advanced AI đang phân tích...'}
-                          </span>
+                          <span className="ai-typing-text">Đang xử lý...</span>
                         </div>
                       </div>
                     </div>
                   </div>
                 )}
-                {/* FIX: Remove extra div, just use ref */}
                 <div ref={messagesEndRef} style={{ height: 0, margin: 0, padding: 0 }} />
               </div>
 
-              {/* Quick Actions */}
+              {/* Quick Actions - SỬA title */}
               {messages.length <= 1 && (
                 <div className="ai-quick-actions">
-                  <div className="ai-quick-title">💡 Câu hỏi gợi ý cho Gemini AI:</div>
+                  <div className="ai-quick-title">💡 Gợi ý câu hỏi:</div>
                   <div className="ai-quick-buttons">
                     {quickActions.map((action, index) => (
                       <button
@@ -776,7 +974,7 @@ export default function AiAssistant() {
                         onClick={() => handleQuickAction(action)}
                       >
                         <span className="ai-quick-icon">{action.icon}</span>
-                        <span className="ai-quick-text">{action.text.replace(action.icon + ' ', '')}</span>
+                        <span className="ai-quick-text">{action.text}</span>
                       </button>
                     ))}
                   </div>
@@ -786,14 +984,14 @@ export default function AiAssistant() {
               <div className="ai-input-container">
                 <div className="ai-input-wrapper">
                   <textarea
-                    placeholder={geminiStatus ? "Hỏi Gemini AI về tài chính, đầu tư, tiết kiệm..." : "Chat với trợ lý tài chính..."}
+                    placeholder="Hỏi về tài chính, tạo/sửa/xóa giao dịch..."
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyPress={handleKeyPress}
                     className="ai-input"
                     rows={1}
                     disabled={isTyping}
-                    style={{ margin: 0, padding: '4px 0' }} // FIX: Inline style to ensure no extra space
+                    style={{ margin: 0, padding: '4px 0' }}
                   />
                   <button 
                     onClick={sendMessage} 
@@ -807,10 +1005,10 @@ export default function AiAssistant() {
                     )}
                   </button>
                 </div>
-                <div className="ai-input-footer" style={{ margin: '8px 0 0 0' }}> {/* FIX: Explicit margin */}
+                <div className="ai-input-footer" style={{ margin: '8px 0 0 0' }}>
                   <span className="ai-powered-by">
                     <i className="fas fa-bolt"></i>
-                    {geminiStatus ? 'Powered by Google Gemini ⚡' : 'Powered by Advanced Fallback AI 🤖'}
+                    Trợ lý AI thông minh
                   </span>
                 </div>
               </div>
@@ -1176,7 +1374,7 @@ export default function AiAssistant() {
         </div>
       )}
 
-      {/* Edit Transaction Modal */}
+      {/* THÊM: Edit Transaction Modal */}
       {showEditModal && editSuggestion && (
         <div className="ai-modal-overlay" onClick={() => setShowEditModal(false)}>
           <div className="ai-modal ai-transaction-modal" onClick={(e) => e.stopPropagation()}>

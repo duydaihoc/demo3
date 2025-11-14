@@ -64,7 +64,24 @@ async function embedText(text) {
 function detectAdviceOrStatsIntent(message) {
   const lower = (message || '').toLowerCase();
   const adviceKeywords = ['lời khuyên', 'tiết kiệm', 'đầu tư', 'kế hoạch', 'mục tiêu', 'gợi ý', 'hướng đi'];
-  const statsKeywords = ['thống kê', 'báo cáo', 'phân tích', 'chi tiêu', 'thu nhập', 'tổng kết', 'tháng này', 'tuần này', 'năm nay'];
+  const statsKeywords = [
+    'thống kê',
+    'báo cáo',
+    'phân tích',
+    'chi tiêu',
+    'thu nhập',
+    'tổng kết',
+    'tháng này',
+    'tuần này',
+    'năm nay',
+    // THÊM: các cụm thường dùng khi muốn ĐÁNH GIÁ / TỔNG QUAN, không phải tạo giao dịch
+    'đánh giá',
+    'đánh giá thu nhập',
+    'đánh giá chi tiêu',
+    'tổng quan',
+    'tổng quan tài chính',
+    'xem tổng quan'
+  ];
   return {
     advice: adviceKeywords.some(k => lower.includes(k)),
     stats: statsKeywords.some(k => lower.includes(k))
@@ -116,17 +133,23 @@ function styleResponseByPersona(personaKey, text) {
     const persona = (personaKey || 'neutral');
     let out = String(text || '');
     if (persona === 'serious') {
-      // Loại bớt emoji và thêm giọng điệu nghiêm túc
       out = out.replace(/[😅😊😜👌👍⚡🤖💡📈📊💰💵💸🔮✅🗑️🛠️]/g, '')
                .replace(/\n\n+/g, '\n');
       out = `Lưu ý: ${out}`;
     } else if (persona === 'friendly') {
-      out = `😊 ${out}`;
+      // Mẹ hiền: nhẹ nhàng, an ủi, khích lệ
+      out = out.replace(/\n\n+/g, '\n\n');
+      out = `😊 [Chế độ mẹ hiền]\n${out}\n\n💬 Mẹ nói nhẹ nè: con cứ hỏi thoải mái, mình cùng tìm cách tốt nhất cho con nhé.`;
     } else if (persona === 'expert') {
       // Rõ ràng, súc tích, giảm emoji
       out = out.replace(/[😅😊😜👌👍⚡🤖💡📈📊💰💵💸🔮✅🗑️🛠️]/g, '')
                .replace(/\n\n+/g, '\n');
       out = `Khuyến nghị (chuyên gia):\n${out}`;
+    } else if (persona === 'aggressive') {
+      // Mẹ nghiêm: thẳng thắn, hơi gắt nhưng vẫn quan tâm
+      out = out.replace(/[😅😊😜👌👍⚡🤖💡📈📊💰💵💸🔮✅🗑️🛠️]/g, '')
+               .replace(/\n\n+/g, '\n');
+      out = `⚠️ [Chế độ mẹ nghiêm]\n${out}\n\n👀 Nếu con cứ chi tiêu kiểu này thì rất khó ổn định đó, phải siết lại nghiêm túc ngay!`;
     } else if (persona === 'humorous') {
       out = `😄 ${out}\n(Đùa chút cho bớt căng thẳng!)`;
     }
@@ -503,6 +526,26 @@ function detectIncompleteTransaction(message, pendingTransaction = null) {
         missing: 'amount',
         pendingTransaction: pendingTransaction
       };
+    }
+    
+    // BỎ QUA: nếu là câu hỏi thống kê/đánh giá/tổng quan, không nên coi là tạo giao dịch
+    const statsLikeKeywords = [
+      'thống kê',
+      'báo cáo',
+      'tổng kết',
+      'phân tích',
+      'đánh giá',
+      'đánh giá thu nhập',
+      'đánh giá chi tiêu',
+      'tổng quan',
+      'tổng quan tài chính',
+      'xem tổng quan',
+      'xem thu nhập',
+      'xem chi tiêu'
+    ];
+    const isStatsLike = statsLikeKeywords.some(keyword => lowerMessage.includes(keyword));
+    if (isStatsLike) {
+      return { complete: false, missing: null };
     }
     
     // Phát hiện ý định tạo giao dịch mới
@@ -929,8 +972,9 @@ ${categoryName ? `📊 ${categoryName}` : ''}
           }
         }
         
-        // Nếu không phải sửa/xóa, phân tích tạo giao dịch
-        if (!editSuggestion && !deleteSuggestion) {
+        // Nếu không phải sửa/xóa VÀ không phải câu hỏi thống kê/đánh giá tổng quan,
+        // mới phân tích ý định tạo giao dịch.
+        if (!editSuggestion && !deleteSuggestion && !adviceStatsIntent.stats && !adviceStatsIntent.advice) {
           const intentAnalysis = await analyzeBasicTransactionIntent(
             message, 
             model
@@ -958,7 +1002,8 @@ ${categoryName ? `📊 ${categoryName}` : ''}
           friendly: 'Giọng điệu thân thiện, khích lệ, dễ gần.',
           expert: 'Giọng điệu chuyên gia, súc tích, dựa trên dữ liệu, có cấu trúc.',
           serious: 'Giọng điệu nghiêm túc, đi thẳng vào trọng tâm, ít cảm xúc.',
-          humorous: 'Giọng điệu vui vẻ, dí dỏm nhưng vẫn lịch sự và ngắn gọn.'
+          humorous: 'Giọng điệu vui vẻ, dí dỏm nhưng vẫn lịch sự và ngắn gọn.',
+          aggressive: 'Giọng điệu thẳng thắn, hơi gắt, tập trung vào cảnh báo và kỷ luật tài chính (nhưng vẫn tôn trọng).'
         };
         const personaKey = (persona || 'neutral');
         const personaInstruction = personaMap[personaKey] || personaMap.neutral;
