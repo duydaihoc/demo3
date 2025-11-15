@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { TourProvider, useTour } from '@reactour/tour';
 import { steps } from './tourConfig';
 import { walletCreationSteps } from './walletTourConfig';
+import { savingsGoalSteps } from './savingsTourConfig';
 import Sidebar from './Sidebar';
 import Wallets from './Wallets';
 import './HomePage.css';
@@ -110,12 +111,14 @@ const HomePageContent = () => {
     setShowWelcome(false);
     // Use a small timeout to ensure the tour has time to initialize
     setTimeout(() => {
+      window.currentTourType = 'general';
       setIsOpen(true);
     }, 100);
   };
   
   // Function to show help button and trigger tour
   const showHelp = () => {
+    window.currentTourType = 'general';
     setIsOpen(true);
   };
 
@@ -155,6 +158,7 @@ const HomePageContent = () => {
   const showGeneralHelp = () => {
     setSteps(steps);
     setShowHelpDropdown(false);
+    window.currentTourType = 'general';
     setIsOpen(true);
   };
 
@@ -163,6 +167,16 @@ const HomePageContent = () => {
     setSteps(walletCreationSteps);
     setShowHelpDropdown(false);
     setCurrentStep(0);
+    window.currentTourType = 'wallet';
+    setIsOpen(true);
+  };
+
+  // Function to show savings goals creation guide
+  const showSavingsGoalGuide = () => {
+    setSteps(savingsGoalSteps);
+    setShowHelpDropdown(false);
+    setCurrentStep(0);
+    window.currentTourType = 'savings';
     setIsOpen(true);
   };
 
@@ -205,12 +219,27 @@ const HomePageContent = () => {
         setIsOpen(false);
       }
     };
+    // NEW: khi mở form tạo mục tiêu tiết kiệm trong tour "savings"
+    const onSavingsCreateFormOpened = () => {
+      if (window.currentTourType === 'savings' && currentStep === 1) {
+        setTimeout(() => setCurrentStep(2), 200);
+      }
+    };
+    const onSavingsGoalCreated = () => {
+      if (window.currentTourType === 'savings') {
+        // Hoàn tất tour tạo mục tiêu khi người dùng bấm "Tạo mục tiêu"
+        markTourAsSeen();
+        setIsOpen(false);
+      }
+    };
     window.addEventListener('walletAddModalOpened', onAddModal);
     window.addEventListener('walletCreated', onWalletCreated);
     window.addEventListener('walletExpenseCategoryChosen', onExpenseChosen);
     window.addEventListener('walletIncomeTabSelected', onIncomeTab);
     window.addEventListener('walletIncomeCategoryChosen', onIncomeChosen);
     window.addEventListener('walletCategoriesSaved', onCategoriesSaved);
+    window.addEventListener('savingsGoalCreateFormOpened', onSavingsCreateFormOpened);
+    window.addEventListener('savingsGoalCreated', onSavingsGoalCreated);
     return () => {
       window.removeEventListener('walletAddModalOpened', onAddModal);
       window.removeEventListener('walletCreated', onWalletCreated);
@@ -218,6 +247,8 @@ const HomePageContent = () => {
       window.removeEventListener('walletIncomeTabSelected', onIncomeTab);
       window.removeEventListener('walletIncomeCategoryChosen', onIncomeChosen);
       window.removeEventListener('walletCategoriesSaved', onCategoriesSaved);
+      window.removeEventListener('savingsGoalCreateFormOpened', onSavingsCreateFormOpened);
+      window.removeEventListener('savingsGoalCreated', onSavingsGoalCreated);
     };
   }, [currentStep]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -338,6 +369,13 @@ const HomePageContent = () => {
                 >
                   <i className="fas fa-wallet"></i>
                   Hướng dẫn tạo ví
+                </button>
+                <button 
+                  className="home-help-dropdown-item"
+                  onClick={showSavingsGoalGuide}
+                >
+                  <i className="fas fa-bullseye"></i>
+                  Hướng dẫn mục tiêu tiết kiệm
                 </button>
               </div>
             </div>
@@ -557,10 +595,17 @@ function HomePage() {
       onOpen={() => document.body.classList.add('tour-open')}
       onClose={() => document.body.classList.remove('tour-open')}
       onCurrentStepChange={(step) => {
-        // Handle step changes for both general and wallet creation tours
-        const currentSteps = steps.length > 0 ? steps : walletCreationSteps;
+        // Xác định bộ steps hiện tại theo loại tour đang mở
+        let currentSteps = steps;
+        if (window.currentTourType === 'wallet') {
+          currentSteps = walletCreationSteps;
+        } else if (window.currentTourType === 'savings') {
+          currentSteps = savingsGoalSteps;
+        }
+
         const stepDef = currentSteps[step];
-        
+
+        // Tự cuộn tới khu vực dashboard trung tâm
         if (stepDef?.selector === '.fd-root') {
           const target = document.querySelector('.fd-root');
           const scroller = document.querySelector('.home-main');
@@ -570,7 +615,17 @@ function HomePage() {
           }
         }
 
-        // Execute step action if available (for wallet creation guide)
+        // Tự cuộn tới khu vực mục tiêu tiết kiệm
+        if (stepDef?.selector === '.tour-goals-component') {
+          const target = document.querySelector('.tour-goals-component');
+          const scroller = document.querySelector('.home-main');
+          if (target && scroller) {
+            const top = target.offsetTop - 60;
+            scroller.scrollTo({ top, behavior: 'smooth' });
+          }
+        }
+
+        // Thực thi action nếu step có khai báo (ví dụ: auto bấm nút mở form)
         if (stepDef?.action && typeof stepDef.action === 'function') {
           setTimeout(() => {
             stepDef.action();

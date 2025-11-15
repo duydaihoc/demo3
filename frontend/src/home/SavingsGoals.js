@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import './SavingsGoals.css';
 import { HexColorPicker } from 'react-colorful';
+import { useTour } from '@reactour/tour';
+import { savingsGoalSteps } from './savingsTourConfig';
 
 function SavingsGoals() {
   const [goals, setGoals] = useState([]);
@@ -34,6 +36,25 @@ function SavingsGoals() {
   // NEW: gamification state
   const [gamification, setGamification] = useState(null);
   const [showGamifyHelp, setShowGamifyHelp] = useState(false); // NEW
+
+  // Tour hooks for "Hướng dẫn tạo mục tiêu"
+  const { setIsOpen: openTour, setSteps: setTourSteps, setCurrentStep: setTourStep } = useTour();
+
+  const startSavingsGoalTour = () => {
+    setTourSteps(savingsGoalSteps);
+    setTourStep(0);
+    openTour(true);
+  };
+
+  // Helper: mở chế độ tạo mục tiêu + thông báo cho tour
+  const openCreateGoalMode = () => {
+    setUiMode('create');
+    try {
+      window.dispatchEvent(new Event('savingsGoalCreateFormOpened'));
+    } catch (e) {
+      // ignore
+    }
+  };
 
   // Fetch goals and wallets on component mount
   useEffect(() => {
@@ -154,6 +175,12 @@ function SavingsGoals() {
       await fetchGoals();
       showNotification('Đã tạo mục tiêu thành công!', 'success');
       fetchGamification();
+      // Thông báo cho tour: đã tạo xong mục tiêu
+      try {
+        window.dispatchEvent(new Event('savingsGoalCreated'));
+      } catch (e) {
+        // ignore
+      }
        
     } catch (error) {
       console.error('Error creating goal:', error);
@@ -752,7 +779,7 @@ function SavingsGoals() {
   // Display the add goal button for empty state
   if (uiMode === 'list' && goals.length === 0) {
     return (
-      <div className="savings-container">
+      <div className="savings-container tour-goals-component">
         <Notification {...notification} />
         <DeleteConfirmModal
           open={deleteConfirm.open}
@@ -761,11 +788,21 @@ function SavingsGoals() {
           onConfirm={handleDeleteGoal}
         />
         <div className="savings-header">
-          <h2 className="savings-title">Mục tiêu tiết kiệm</h2>
+          <div className="savings-title-wrap">
+            <h2 className="savings-title">Mục tiêu tiết kiệm</h2>
+            <button
+              type="button"
+              className="sg-tour-btn"
+              title="Hướng dẫn tạo mục tiêu"
+              onClick={startSavingsGoalTour}
+            >
+              <i className="fas fa-question-circle" />
+            </button>
+          </div>
         </div>
         <GamificationCard />
         <div className="empty-goals-container">
-          <div className="add-goal-card" onClick={() => setUiMode('create')}>
+          <div className="add-goal-card" onClick={openCreateGoalMode}>
             <div className="add-goal-icon">+</div>
             <div className="add-goal-text">Thêm mục tiêu mới</div>
             <div className="add-goal-subtext">Tạo và theo dõi mục tiêu tiết kiệm</div>
@@ -1222,8 +1259,18 @@ function SavingsGoals() {
         onConfirm={handleDeleteGoal}
       />
       <div className="savings-header">
-        <h2 className="savings-title">Mục tiêu tiết kiệm</h2>
-        <button className="add-goal-btn" onClick={() => setUiMode('create')}>+ Thêm mục tiêu</button>
+        <div className="savings-title-wrap">
+          <h2 className="savings-title">Mục tiêu tiết kiệm</h2>
+          <button
+            type="button"
+            className="sg-tour-btn"
+            title="Hướng dẫn tạo mục tiêu"
+            onClick={startSavingsGoalTour}
+          >
+            <i className="fas fa-question-circle" />
+          </button>
+        </div>
+        <button className="add-goal-btn" onClick={openCreateGoalMode}>+ Thêm mục tiêu</button>
       </div>
 
       <GamificationCard />

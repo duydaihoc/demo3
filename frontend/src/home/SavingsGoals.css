@@ -70,6 +70,12 @@
   margin-bottom: 24px; /* Increased from 16px to add more space below header */
 }
 
+.savings-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .savings-goals-header {
   display: flex;
   justify-content: space-between;
@@ -95,6 +101,28 @@
   box-shadow: 0 8px 16px rgba(42, 82, 152, 0.12);
   transition: transform 0.2s, box-shadow 0.2s;
   letter-spacing: 0.5px; /* Added letter spacing to spread out text */
+}
+
+/* Tour button for savings goals */
+.sg-tour-btn {
+  border: none;
+  background: #eef4fa;
+  color: #2a5298;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(42, 82, 152, 0.15);
+  transition: all 0.2s ease;
+  font-size: 14px;
+}
+
+.sg-tour-btn:hover {
+  background: #dbe7f5;
+  transform: translateY(-1px);
 }
 
 .add-goal-btn:hover {
