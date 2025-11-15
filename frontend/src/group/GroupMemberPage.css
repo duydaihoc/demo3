@@ -225,8 +225,9 @@
 .gm-card-body {
   color: #556575;
   padding: 24px;
-  max-height: 60vh; /* Limit height for very tall content */
-  overflow-y: auto; /* Allow scrolling within cards if needed */
+  /* Bỏ scroll riêng của card, để chỉ còn 1 thanh cuộn ở trang */
+  max-height: none;
+  overflow-y: visible;
 }
 
 /* Banking-style loading and errors */
@@ -298,10 +299,36 @@
   list-style: none;
   padding: 0;
   margin: 0;
-  max-height: 50vh; /* Limit height for very long lists */
-  overflow-y: auto; /* Enable scrolling if content exceeds height */
-  scrollbar-width: thin; /* For Firefox */
-  scrollbar-color: #c1c1c1 #f1f1f1; /* For Firefox */
+  /* Dùng chung cho nhiều list, chiều cao/scroll sẽ được override bằng class phụ nếu cần */
+  max-height: none;
+  overflow-y: visible;
+}
+
+/* Riêng danh sách hoạt động nhóm: chỉ hiển thị khoảng 3 giao dịch,
+   có nhiều hơn thì cuộn trong khung hoạt động */
+.gm-activity-list {
+  max-height: 260px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #c1c1c1 #f1f1f1;
+}
+
+.gm-activity-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.gm-activity-list::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.gm-activity-list::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.gm-activity-list::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 
 .gm-members-list::-webkit-scrollbar {

@@ -46,22 +46,29 @@
 
 /* Create group button */
 .create-group-btn {
-  background-color: #1b74e4;
-  color: white;
+  background: linear-gradient(135deg, #2563eb, #4f46e5);
+  color: #ffffff;
   border: none;
-  border-radius: 6px;
-  padding: 10px 16px;
+  border-radius: 999px;
+  padding: 10px 20px;
   font-weight: 600;
-  font-size: 15px;
+  font-size: 14px;
   cursor: pointer;
-  transition: background-color 0.2s;
-  display: flex;
+  transition: all 0.2s ease;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+}
+
+.create-group-btn i {
+  font-size: 15px;
 }
 
 .create-group-btn:hover {
-  background-color: #166fe5;
+  background: linear-gradient(135deg, #1d4ed8, #4338ca);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 26px rgba(37, 99, 235, 0.4);
 }
 
 /* Card Container for Groups */
@@ -392,19 +399,22 @@
 
 /* Invite button */
 .invite-btn {
-  background-color: #42b72a;
+  background: linear-gradient(135deg, #22c55e, #16a34a);
   color: white;
   border: none;
-  border-radius: 6px;
-  padding: 6px 12px;
+  border-radius: 999px;
+  padding: 7px 18px;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.18s ease;
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
 }
 
 .invite-btn:hover {
-  background-color: #36a420;
+  background: linear-gradient(135deg, #16a34a, #15803d);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(16, 185, 129, 0.55);
 }
 
 /* Small action buttons in notification list */
@@ -872,40 +882,48 @@
 }
 
 .cancel-btn {
-  background: white;
-  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
   color: #475569;
-  border-radius: 8px;
-  padding: 10px 16px;
+  border-radius: 999px;
+  padding: 9px 18px;
   font-weight: 600;
   font-size: 14px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.18s ease;
 }
 
 .cancel-btn:hover {
   background: #f8fafc;
-  border-color: #94a3b8;
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(148, 163, 184, 0.35);
 }
 
 .create-btn {
-  background: #0ea5e9;
+  background: linear-gradient(135deg, #0ea5e9, #2563eb);
   color: white;
-  border-radius: 8px;
-  padding: 10px 24px;
+  border-radius: 999px;
+  padding: 9px 24px;
   font-weight: 600;
   font-size: 14px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.18s ease;
+  border: none;
+  box-shadow: 0 8px 20px rgba(14, 165, 233, 0.35);
 }
 
 .create-btn:hover:not(:disabled) {
-  background: #0284c7;
+  background: linear-gradient(135deg, #0284c7, #1d4ed8);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 26px rgba(37, 99, 235, 0.45);
 }
 
 .create-btn:disabled {
-  opacity: 0.7;
+  opacity: 0.6;
   cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
 }
 
 /* Friends selection list in create group modal */
@@ -1104,28 +1122,30 @@
 }
 
 .action-btn {
-  background: #1b74e4;
-  color: white;
+  background: #e5e7eb;
+  color: #111827;
   border: none;
-  border-radius: 30px;
-  padding: 8px 16px;
-  font-size: 14px;
-  font-weight: 500;
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.18s ease;
 }
 
 .action-btn:hover {
-  background: #166fe5;
+  background: #d1d5db;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(148, 163, 184, 0.35);
 }
 
 .action-btn.secondary {
-  background: #e4e6eb;
-  color: #050505;
+  background: #fef2f2;
+  color: #b91c1c;
 }
 
 .action-btn.secondary:hover {
-  background: #d8dadf;
+  background: #fee2e2;
 }
 
 /* Selection counter */
@@ -1328,36 +1348,41 @@
 }
 
 .cancel-btn {
-  background: white;
-  border: 1px solid #dde6ed;
-  border-radius: 8px;
-  color: #65676b;
-  padding: 8px 16px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  color: #475569;
+  padding: 8px 18px;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.18s ease;
 }
 
 .cancel-btn:hover {
-  background: #f7f8fa;
-  border-color: #c0c7cd;
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(148, 163, 184, 0.35);
 }
 
 .invite-btn {
-  background: #1b74e4;
+  background: linear-gradient(135deg, #2563eb, #4f46e5);
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: 999px;
   padding: 8px 24px;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.18s ease;
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.4);
 }
 
 .invite-btn:hover:not(:disabled) {
-  background: #166fe5;
+  background: linear-gradient(135deg, #1d4ed8, #4338ca);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.55);
 }
 
 .invite-btn:disabled {

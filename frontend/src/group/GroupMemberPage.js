@@ -464,8 +464,8 @@ export default function GroupMemberPage() {
 												</div>
 											</div>
 											
-											<ul className="gm-members-list">
-												{txs.slice(0,12).map(tx => {
+											<ul className="gm-members-list gm-activity-list">
+												{txs.map(tx => {
 													const getTransactionTypeInfo = (type) => {
 														switch(type) {
 															case 'equal_split':

@@ -55,6 +55,10 @@ export default function AiAssistant() {
   const [selectedTransactionToDelete, setSelectedTransactionToDelete] = useState(null);
   const [deletingSaving, setDeletingSaving] = useState(false);
 
+  // THÊM: State cho upload ảnh hóa đơn
+  const [uploadingReceipt, setUploadingReceipt] = useState(false);
+  const fileInputRef = useRef(null);
+
   // THÊM: State cho tính cách chatbot (persona)
   // 'balanced' -> neutral, 'friendly' -> friendly, 'aggressive' -> aggressive
   const [persona, setPersona] = useState('balanced');
@@ -236,6 +240,92 @@ export default function AiAssistant() {
 
   const toggleModal = () => setIsOpen(!isOpen);
 
+  // THÊM: Helper xử lý response AI chung cho text và ảnh hóa đơn
+  const handleAiResponse = async (data, userMessageText) => {
+    setGeminiStatus(data.geminiAvailable);
+    
+    const replyText = data.reply || 'Xin lỗi, tôi không thể xử lý yêu cầu này.';
+    
+    const aiMessage = {
+      id: Date.now() + 1,
+      text: replyText,
+      sender: 'ai',
+      timestamp: new Date(),
+      actionSuggestion: data.actionSuggestion,
+      transactionSuggestion: data.transactionSuggestion,
+      editSuggestion: data.editSuggestion,
+      context: data.context,
+      fallback: data.fallback,
+      geminiAvailable: data.geminiAvailable,
+      geminiError: data.geminiError,
+      needsMoreInfo: data.needsMoreInfo
+    };
+
+    setMessages(prev => [...prev, aiMessage]);
+
+    // Xử lý delete intent
+    if (data.deleteSuggestion) {
+      const found = Array.isArray(data.deleteSuggestion.foundTransactions) ? data.deleteSuggestion.foundTransactions : [];
+      const normalizedDelete = {
+        ...data.deleteSuggestion,
+        multipleMatches: found.length > 1
+      };
+      setDeleteSuggestion(normalizedDelete);
+      setShowDeleteModal(true);
+      if (found.length === 1) {
+        selectTransactionToDelete(found[0]);
+      }
+    }
+
+    // Xử lý edit intent
+    if (data.editSuggestion) {
+      const found = Array.isArray(data.editSuggestion.foundTransactions) ? data.editSuggestion.foundTransactions : [];
+      const normalizedEdit = {
+        ...data.editSuggestion,
+        multipleMatches: found.length > 1
+      };
+      setEditSuggestion(normalizedEdit);
+      setShowEditModal(true);
+      if (found.length === 1) {
+        selectTransactionToEdit(found[0]);
+      }
+    }
+
+    // Xử lý pending + suggestion tạo giao dịch
+    if (data.needsMoreInfo && data.pendingTransaction) {
+      setPendingTransaction(data.pendingTransaction);
+    } else if (data.transactionSuggestion && data.transactionSuggestion.confidence > 0.6) {
+      setPendingTransaction(null);
+      setSuggestedTransaction(data.transactionSuggestion);
+
+      // Cập nhật originalMessage cho việc phân tích danh mục
+      const baseContext =
+        (data.transactionSuggestion && data.transactionSuggestion.description) ||
+        userMessageText ||
+        '';
+      const fullContext = pendingTransaction
+        ? `${pendingTransaction.description} ${baseContext}`.trim()
+        : baseContext;
+      setOriginalMessage(fullContext);
+
+      if (wallets.length > 0) {
+        const defaultWalletId = wallets[0]._id;
+        setSelectedWalletId(defaultWalletId);
+        await analyzeCategoryForWallet(defaultWalletId, fullContext);
+      }
+
+      setShowTransactionModal(true);
+    } else {
+      setPendingTransaction(null);
+    }
+
+    // Cập nhật history với response
+    setConversationHistory(prev => [
+      ...prev,
+      { role: 'assistant', content: data.reply }
+    ].slice(-10));
+  };
+
   const sendMessage = async () => {
     if (!input.trim() || isTyping) return;
     
@@ -304,109 +394,7 @@ export default function AiAssistant() {
       const data = await response.json();
       console.log('✅ AI Response:', data);
       
-      setGeminiStatus(data.geminiAvailable);
-      
-      // SỬA: Đảm bảo reply luôn có nội dung
-      const replyText = data.reply || 'Xin lỗi, tôi không thể xử lý yêu cầu này.';
-      
-      const aiMessage = {
-        id: Date.now() + 1,
-        text: replyText,
-        sender: 'ai',
-        timestamp: new Date(),
-        actionSuggestion: data.actionSuggestion,
-        transactionSuggestion: data.transactionSuggestion,
-        editSuggestion: data.editSuggestion,
-        context: data.context,
-        fallback: data.fallback,
-        geminiAvailable: data.geminiAvailable,
-        geminiError: data.geminiError,
-        needsMoreInfo: data.needsMoreInfo
-      };
-
-      setMessages(prev => [...prev, aiMessage]);
-      
-      // THÊM: Xử lý delete intent
-      if (data.deleteSuggestion) {
-        const found = Array.isArray(data.deleteSuggestion.foundTransactions) ? data.deleteSuggestion.foundTransactions : [];
-        
-        console.log('🗑️ Delete suggestion received:', {
-          foundCount: found.length,
-          multipleMatches: data.deleteSuggestion.multipleMatches,
-          transactions: found
-        });
-        
-        const normalizedDelete = {
-          ...data.deleteSuggestion,
-          multipleMatches: found.length > 1
-        };
-        
-        setDeleteSuggestion(normalizedDelete);
-        setShowDeleteModal(true);
-        
-        // Tự động chọn nếu chỉ có 1 kết quả
-        if (found.length === 1) {
-          console.log('✅ Auto-selecting single transaction to delete');
-          selectTransactionToDelete(found[0]);
-        }
-      }
-
-      // THÊM: Xử lý edit intent
-      if (data.editSuggestion) {
-        const found = Array.isArray(data.editSuggestion.foundTransactions) ? data.editSuggestion.foundTransactions : [];
-        
-        console.log('📝 Edit suggestion received:', {
-          foundCount: found.length,
-          multipleMatches: data.editSuggestion.multipleMatches,
-          transactions: found
-        });
-        
-        // SỬA: Normalize multipleMatches dựa vào số lượng thực tế
-        const normalizedEdit = {
-          ...data.editSuggestion,
-          multipleMatches: found.length > 1 // Force recalculate
-        };
-        
-        setEditSuggestion(normalizedEdit);
-        setShowEditModal(true);
-        
-        // SỬA: Tự động chọn nếu CHỈ có 1 kết quả
-        if (found.length === 1) {
-          console.log('✅ Auto-selecting single transaction');
-          selectTransactionToEdit(found[0]);
-        }
-      }
-
-      // THÊM: Xử lý pending transaction
-      if (data.needsMoreInfo && data.pendingTransaction) {
-        setPendingTransaction(data.pendingTransaction);
-        console.log('⏳ Waiting for more info:', data.pendingTransaction);
-      } else if (data.transactionSuggestion && data.transactionSuggestion.confidence > 0.6) {
-        // Reset pending nếu đã có đủ thông tin
-        setPendingTransaction(null);
-        
-        setSuggestedTransaction(data.transactionSuggestion);
-        // SỬA: Sử dụng originalMessage đã được set ở trên (có thể bao gồm cả pending context)
-        
-        // Reset selected wallet về ví đầu tiên
-        if (wallets.length > 0) {
-          setSelectedWalletId(wallets[0]._id);
-          // THÊM: Phân tích danh mục với full context (bao gồm cả pending transaction nếu có)
-          const contextForCategory = originalMessage || userMessage.text;
-          await analyzeCategoryForWallet(wallets[0]._id, contextForCategory);
-        }
-        
-        setShowTransactionModal(true);
-      } else {
-        // Reset pending nếu không còn tạo giao dịch
-        setPendingTransaction(null);
-      }
-      
-      // Cập nhật history với response
-      setConversationHistory(prev => [
-        ...prev,
-        { role: 'assistant', content: data.reply }
-      ].slice(-10));
+      await handleAiResponse(data, userMessage.text);
 
     } catch (error) {
       console.error('❌ AI Error:', error);
@@ -686,6 +674,82 @@ export default function AiAssistant() {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
+    }
+  };
+
+  // THÊM: Xử lý chọn file ảnh hóa đơn
+  const handleReceiptButtonClick = () => {
+    if (fileInputRef.current && !uploadingReceipt && !isTyping) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleReceiptFileChange = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    // Reset input để có thể chọn lại cùng một file sau này
+    e.target.value = '';
+
+    if (!file.type.startsWith('image/')) {
+      showNotification('Vui lòng chọn file ảnh hóa đơn (jpg, png, ...)', 'error');
+      return;
+    }
+
+    setUploadingReceipt(true);
+    setIsTyping(true);
+
+    const tempUserMessage = {
+      id: Date.now(),
+      text: `📷 Đã tải lên ảnh hóa đơn: ${file.name}`,
+      sender: 'user',
+      timestamp: new Date()
+    };
+    setMessages(prev => [...prev, tempUserMessage]);
+
+    try {
+      const formData = new FormData();
+      formData.append('receipt', file);
+      formData.append('persona',
+        persona === 'friendly'
+          ? 'friendly'
+          : persona === 'aggressive'
+          ? 'aggressive'
+          : 'neutral'
+      );
+
+      const response = await fetch(`${API_BASE}/api/ai/receipt`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: Không thể phân tích hóa đơn`);
+      }
+
+      const data = await response.json();
+      console.log('✅ Receipt AI Response:', data);
+
+      // Dùng helper chung
+      await handleAiResponse(data, tempUserMessage.text);
+    } catch (error) {
+      console.error('❌ Receipt AI Error:', error);
+      showNotification(error.message || 'Không thể phân tích ảnh hóa đơn', 'error');
+
+      const fallbackMessage = {
+        id: Date.now() + 1,
+        text: '😅 Xin lỗi, tôi không thể đọc được hóa đơn này. Hãy thử lại với ảnh rõ nét hơn hoặc nhập bằng tay nhé.',
+        sender: 'ai',
+        timestamp: new Date(),
+        error: true
+      };
+      setMessages(prev => [...prev, fallbackMessage]);
+    } finally {
+      setUploadingReceipt(false);
+      setIsTyping(false);
     }
   };
 
@@ -993,6 +1057,27 @@ export default function AiAssistant() {
                     disabled={isTyping}
                     style={{ margin: 0, padding: '4px 0' }}
                   />
+                {/* Nút upload ảnh hóa đơn */}
+                <button
+                  type="button"
+                  className="ai-upload-btn"
+                  onClick={handleReceiptButtonClick}
+                  disabled={uploadingReceipt || isTyping}
+                  title="Tạo giao dịch từ ảnh hóa đơn"
+                >
+                  {uploadingReceipt ? (
+                    <i className="fas fa-spinner fa-spin"></i>
+                  ) : (
+                    <i className="fas fa-receipt"></i>
+                  )}
+                </button>
+                <input
+                  type="file"
+                  accept="image/*"
+                  ref={fileInputRef}
+                  style={{ display: 'none' }}
+                  onChange={handleReceiptFileChange}
+                />
                   <button 
                     onClick={sendMessage} 
                     className="ai-send-btn"

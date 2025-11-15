@@ -5,12 +5,21 @@ const { auth, requireAuth } = require('../middleware/auth');
 const Transaction = require('../models/Transaction');
 const Wallet = require('../models/Wallet');
 const Category = require('../models/Category');
+const multer = require('multer');
 
 // ======================== GEMINI AI SETUP ========================
 let model = null;
 let geminiAvailable = false;
 let embeddingModel = null; // THÊM: model embedding
 const userVectorStores = new Map(); // THÊM: Map lưu index FAISS và metadata
+
+// THÊM: Cấu hình multer để nhận ảnh hóa đơn (lưu trên memory)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB
+  }
+});
 
 try {
   const { GoogleGenerativeAI } = require('@google/generative-ai');
@@ -993,6 +1002,42 @@ ${categoryName ? `📊 ${categoryName}` : ''}
               reasoning: intentAnalysis.reasoning
             };
             console.log('💡 Transaction intent detected:', transactionSuggestion);
+
+            // THÊM: Phân tích danh mục tự động cho giao dịch tạo từ chat
+            try {
+              const contextForCategory = `${message} | ${intentAnalysis.description}`;
+              let catId = null;
+              let catName = null;
+
+              if (geminiAvailable && model) {
+                const catAnalysis = await analyzeCategoryForMessage(
+                  contextForCategory,
+                  categories,
+                  model,
+                  intentAnalysis.type
+                );
+                catId = catAnalysis.categoryId;
+                catName = catAnalysis.categoryName;
+              } else {
+                const fallbackCat = analyzeCategoryWithFallback(
+                  contextForCategory,
+                  categories,
+                  intentAnalysis.type
+                );
+                catId = fallbackCat.categoryId;
+                catName = fallbackCat.categoryName;
+              }
+
+              transactionSuggestion.categoryId = catId;
+              transactionSuggestion.categoryName = catName;
+
+              console.log('📊 Category for basic intent:', {
+                categoryId: catId,
+                categoryName: catName
+              });
+            } catch (catErr) {
+              console.warn('⚠️ Category analysis for basic transaction intent failed:', catErr.message);
+            }
           }
         }
         
@@ -1339,6 +1384,189 @@ router.post('/create-transaction', auth, async (req, res) => {
     res.status(500).json({ 
       error: 'Không thể tạo giao dịch',
       details: error.message 
+    });
+  }
+});
+
+// ======================== RECEIPT OCR ENDPOINT ========================
+// THÊM: POST /api/ai/receipt - đọc ảnh hóa đơn và trích xuất giao dịch
+router.post('/receipt', auth, upload.single('receipt'), async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const personaKey = (req.body && req.body.persona) || 'neutral';
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'Missing receipt image file' });
+    }
+
+    if (!geminiAvailable || !model) {
+      return res.status(503).json({
+        error: 'Gemini AI hiện không khả dụng để phân tích ảnh hóa đơn',
+        geminiAvailable: false
+      });
+    }
+
+    // Lấy context danh mục & ví của user
+    const wallets = await Wallet.find({ owner: userId }).populate('categories');
+    const categories = await Category.find({ 
+      $or: [{ isDefault: true }, { user: userId }] 
+    });
+
+    // Chuẩn bị dữ liệu ảnh cho Gemini (multimodal)
+    const inlineImage = {
+      inlineData: {
+        data: req.file.buffer.toString('base64'),
+        mimeType: req.file.mimetype || 'image/png'
+      }
+    };
+
+    const ocrPrompt = `
+Bạn đang xem **ảnh hóa đơn / bill / receipt**. 
+Hãy đọc và trích xuất thông tin giao dịch tài chính chính như sau:
+
+YÊU CẦU:
+- Tập trung vào tổng tiền phải trả (TOTAL / TỔNG CỘNG / THÀNH TIỀN / GRAND TOTAL)
+- Đơn vị mặc định là VND nếu không ghi rõ
+- Xác định đây là "expense" (chi tiêu) hay "income" (thu nhập). Đa số hóa đơn mua hàng là "expense"
+- Tạo một mô tả ngắn gọn cho giao dịch (ví dụ: "Ăn tối nhà hàng A", "Mua đồ siêu thị", "Tiền điện tháng 10")
+
+TRẢ VỀ THUẦN JSON (KHÔNG markdown, KHÔNG giải thích):
+{
+  "hasIntent": true/false,
+  "type": "expense" hoặc "income",
+  "amount": số tiền (số, không có dấu phẩy, không đơn vị),
+  "description": "mô tả ngắn gọn",
+  "confidence": số từ 0 đến 1 (độ tự tin),
+  "reasoning": "giải thích ngắn gọn cách bạn đọc hóa đơn"
+}
+
+Lưu ý:
+- Nếu có nhiều dòng, ưu tiên tổng tiền cuối cùng
+- Nếu không chắc, đặt "hasIntent": false
+`;
+
+    const result = await model.generateContent({
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: ocrPrompt },
+            inlineImage
+          ]
+        }
+      ]
+    });
+
+    const response = await result.response;
+    let text = (await response.text()).trim();
+    text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+    let analysis;
+    try {
+      analysis = JSON.parse(text);
+    } catch (e) {
+      console.error('❌ Failed to parse receipt JSON:', e.message, 'raw:', text);
+      return res.status(500).json({
+        error: 'Không thể đọc được dữ liệu từ hóa đơn',
+        details: e.message,
+        geminiAvailable
+      });
+    }
+
+    if (!analysis.hasIntent || !analysis.amount || analysis.confidence <= 0.5) {
+      const baseReply = `😅 Tôi chưa đọc rõ được hóa đơn này.\n\nHãy thử chụp lại với ánh sáng tốt hơn, không bị mờ/chéo hoặc nhập tay giúp tôi số tiền và nội dung nhé.`;
+      return res.json({
+        reply: styleResponseByPersona(personaKey, baseReply),
+        transactionSuggestion: null,
+        needsMoreInfo: false,
+        geminiAvailable,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    const amount = Math.round(Number(analysis.amount) || 0);
+    if (!amount || amount <= 0) {
+      const baseReply = `Tôi đã đọc được hóa đơn nhưng không chắc về số tiền tổng.\nBạn có thể nhập lại số tiền giúp tôi được không?`;
+      return res.json({
+        reply: styleResponseByPersona(personaKey, baseReply),
+        transactionSuggestion: null,
+        needsMoreInfo: true,
+        geminiAvailable,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    const type = analysis.type === 'income' ? 'income' : 'expense';
+    const description = analysis.description || (type === 'income' ? 'Thu nhập từ hóa đơn' : 'Chi tiêu theo hóa đơn');
+
+    // Phân tích danh mục cho mô tả này
+    let categoryId = null;
+    let categoryName = null;
+    try {
+      if (geminiAvailable && model) {
+        const catAnalysis = await analyzeCategoryForMessage(
+          description,
+          categories,
+          model,
+          type
+        );
+        categoryId = catAnalysis.categoryId;
+        categoryName = catAnalysis.categoryName;
+      } else {
+        const fallbackCat = analyzeCategoryWithFallback(description, categories, type);
+        categoryId = fallbackCat.categoryId;
+        categoryName = fallbackCat.categoryName;
+      }
+    } catch (catErr) {
+      console.warn('⚠️ Receipt category analysis failed:', catErr.message);
+    }
+
+    const fmt = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' });
+    const baseReply = `📷 **Đã đọc xong hóa đơn của bạn!**
+
+📝 ${description}
+💰 ${fmt.format(amount)}
+${type === 'income' ? '💵 Thu nhập' : '💸 Chi tiêu'}
+${categoryName ? `📊 Danh mục gợi ý: ${categoryName}` : ''}
+
+✨ Hãy chọn ví để tôi tạo giao dịch giúp bạn nhé.`;
+
+    const styledReply = styleResponseByPersona(personaKey, baseReply);
+
+    // Gợi ý giao dịch giống với luồng chat text
+    const transactionSuggestion = {
+      type,
+      amount,
+      description,
+      categoryId,
+      categoryName,
+      walletId: null,
+      walletName: null,
+      confidence: analysis.confidence || 0.8,
+      reasoning: analysis.reasoning || 'Đọc tổng tiền và nội dung từ hóa đơn'
+    };
+
+    // Lưu ngữ cảnh vào semantic memory
+    try {
+      const summary = `Giao dịch từ hóa đơn (${type}): ${description} - ${fmt.format(amount)}${categoryName ? ` | Danh mục: ${categoryName}` : ''}`;
+      await addToVectorStore(userId, summary, { type: 'receipt_suggestion' });
+    } catch (memErr) {
+      console.warn('⚠️ Receipt memory failed:', memErr.message);
+    }
+
+    return res.json({
+      reply: styledReply,
+      transactionSuggestion,
+      needsMoreInfo: false,
+      geminiAvailable,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Receipt endpoint error:', error);
+    return res.status(500).json({
+      error: 'Không thể phân tích hóa đơn',
+      details: error.message,
+      geminiAvailable
     });
   }
 });

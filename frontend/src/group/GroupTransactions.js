@@ -1397,8 +1397,16 @@ export default function GroupTransactions() {
                       return false;
                     })();
 
-                    // If percentage_split, payer_single OR payer_for_others and creator is missing, append a synthetic creator entry (read-only)
-                    if ((tx.transactionType === 'percentage_split' || tx.transactionType === 'payer_single' || tx.transactionType === 'payer_for_others') && tx.createdBy && !isCreatorPresent) {
+                    // Nếu là chia phần trăm / chia đều / trả đơn / trả giúp và creator chưa có trong participants,
+                    // thêm 1 dòng synthetic "Người tạo" để hiển thị giống UI chia phần trăm.
+                    if (
+                      (tx.transactionType === 'percentage_split' ||
+                       tx.transactionType === 'equal_split' ||
+                       tx.transactionType === 'payer_single' ||
+                       tx.transactionType === 'payer_for_others') &&
+                      tx.createdBy &&
+                      !isCreatorPresent
+                    ) {
                        // try to find creator percentage from tx.percentages if present
                        let creatorPercentage = null;
                        if (Array.isArray(tx.percentages)) {
@@ -1410,26 +1418,71 @@ export default function GroupTransactions() {
                          if (found) creatorPercentage = Number(found.percentage || 0);
                        }
 
+                       // Tên hiển thị người tạo:
+                       // 1. Ưu tiên tx.createdBy.name/email (nếu đã populate từ backend)
+                       // 2. Nếu createdBy chỉ là id, tìm trong group.owner / group.members
+                       // 3. Nếu vẫn chưa có, dùng payer.name/email (thường là người tạo)
+                       // 4. Cuối cùng fallback "Người tạo"
+                       let creatorDisplayName = 'Người tạo';
+                       if (tx.createdBy && typeof tx.createdBy === 'object' && (tx.createdBy.name || tx.createdBy.email)) {
+                         creatorDisplayName = tx.createdBy.name || tx.createdBy.email;
+                       } else if (creatorId && group) {
+                         // tìm trong owner
+                         if (group.owner && (group.owner._id || group.owner.id || group.owner.email)) {
+                           const ownerId = group.owner._id || group.owner.id || group.owner;
+                           if (String(ownerId) === String(creatorId)) {
+                             creatorDisplayName = group.owner.name || group.owner.email || creatorDisplayName;
+                           }
+                         }
+                         // nếu chưa tìm thấy, thử members
+                         if (creatorDisplayName === 'Người tạo' && Array.isArray(group.members)) {
+                           const foundMember = group.members.find(m =>
+                             (m.user && (String(m.user._id || m.user) === String(creatorId)))
+                           );
+                           if (foundMember && foundMember.user) {
+                             creatorDisplayName = foundMember.user.name || foundMember.user.email || creatorDisplayName;
+                           }
+                         }
+                       } else if (tx.payer && typeof tx.payer === 'object' && (tx.payer.name || tx.payer.email)) {
+                         creatorDisplayName = tx.payer.name || tx.payer.email;
+                       } else if (creatorEmail) {
+                         creatorDisplayName = creatorEmail;
+                       }
+
                        const creatorEntry = {
-                         // do not try to dereference user object; keep simple structure
-                         user: creatorId && !String(creatorId).includes('@') ? creatorId : undefined,
+                         // không deref user object, để đơn giản
+                         // dùng object {_id, name, email} để mọi người đều nhìn thấy tên người tạo trong ô vàng
+                         user: creatorId && !String(creatorId).includes('@')
+                           ? { _id: creatorId, name: creatorDisplayName, email: creatorEmail }
+                           : undefined,
                          email: creatorEmail || undefined,
-                         name: (tx.createdBy && typeof tx.createdBy === 'object' && (tx.createdBy.name || tx.createdBy.email)) ? (tx.createdBy.name || tx.createdBy.email) : 'Người tạo',
-                        settled: true, // creator đã trả tiền nên xem là đã settled trong UI
-                         // annotate as synthetic creator so UI can show badges and hide action buttons
+                         name: creatorDisplayName,
+                         settled: true, // creator luôn xem là đã trả
+                         // đánh dấu là creator synthetic để CSS và logic phân biệt
                          _isCreatorSynthetic: true,
-                        // For payer_single and payer_for_others, show creator paid full amount.
-                        // For percentage_split, use percentage if available.
+                         // Tính shareAmount hiển thị:
+                         // - payer_single / payer_for_others: hiển thị tổng số tiền creator đã trả
+                         // - equal_split: mỗi người = amount / totalParticipants
+                         // - percentage_split: dựa trên % nếu có
                         shareAmount:
                           tx.transactionType === 'payer_single' || tx.transactionType === 'payer_for_others'
                             ? Number(tx.amount || tx.total || 0)
-                            : (creatorPercentage !== null ? ((Number(creatorPercentage) / 100) * Number(tx.amount || tx.total || 0)) : undefined)
+                             : tx.transactionType === 'equal_split'
+                               ? (Number(tx.amount || tx.total || 0) / (totalParticipants || 1))
+                               : (creatorPercentage !== null
+                                   ? ((Number(creatorPercentage) / 100) * Number(tx.amount || tx.total || 0))
+                                   : undefined)
                        };
                        displayParticipants = [creatorEntry, ...displayParticipants];
                      }
 
+                    const typeClass = tx.transactionType ? `type-${tx.transactionType}` : 'type-default';
+
                     return (
-                      <li key={tx._id || tx.id} className={`gt-item ${isPayer ? 'i-paid' : ''} ${isParticipant ? 'i-participate' : ''}`}>
+                      <li 
+                        key={tx._id || tx.id} 
+                        className={`gt-item ${typeClass} ${isPayer ? 'i-paid' : ''} ${isParticipant ? 'i-participate' : ''}`}
+                      >
                         <div className="gt-item-header">
                           <div className="gt-title-section">
                             <div className="gt-category-badge">{category.icon} {category.name}</div>
@@ -1500,11 +1553,10 @@ export default function GroupTransactions() {
                             <div className="gt-tx-summary">
                               <div className="gt-participants-count">
                                 <i className="fas fa-users"></i> 
-                                {/* Tính số người tham gia dựa trên kiểu giao dịch */}
-                                {tx.transactionType === 'payer_for_others' 
-                                  ? `${tx.participants.length} người được trả` 
-                                  : (tx.transactionType === 'payer_single' ? `1 người (chỉ bạn)` : `${totalParticipants} người tham gia`)
-                                }
+                                {/* Hiển thị số người tham gia chung cho tất cả kiểu giao dịch */}
+                                {tx.transactionType === 'payer_single'
+                                  ? `1 người (chỉ bạn)`
+                                  : `${totalParticipants} người tham gia`}
                               </div>
                               <div className="gt-date">
                                 {new Date(tx.date || tx.createdAt || tx.created).toLocaleString()}
@@ -1545,10 +1597,9 @@ export default function GroupTransactions() {
                                 <div className="gt-participants-info">
                                   <span className="gt-info-badge">
                                     <i className="fas fa-users"></i> 
-                                    {tx.transactionType === 'payer_for_others' 
-                                      ? `${tx.participants.length} người được trả` 
-                                      : (tx.transactionType === 'payer_single' ? `1 người (chỉ bạn)` : `${totalParticipants} người tham gia`)
-                                    }
+                                    {tx.transactionType === 'payer_single'
+                                      ? `1 người (chỉ bạn)`
+                                      : `${totalParticipants} người tham gia`}
                                   </span>
                                   
                                   {tx.transactionType === 'payer_for_others' && (

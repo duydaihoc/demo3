@@ -423,6 +423,22 @@
   transform: translateY(-2px);
 }
 
+/* Nút "Tạo gia đình mới" trong khối fs-create-new: pill trắng, chữ đậm dễ đọc */
+.fs-create-new .fs-btn.secondary {
+  max-width: 320px;
+  background: #ffffff;
+  color: #0f172a;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.16);
+  font-weight: 600;
+}
+
+.fs-create-new .fs-btn.secondary:hover {
+  background: linear-gradient(90deg, #eff6ff, #e0f2fe);
+  color: #0f172a;
+}
+
 /* Create new section */
 .fs-create-new {
   display: flex;
@@ -548,7 +564,7 @@
 }
 
 .fs-create-modal {
-  background: white;
+  
   border-radius: 20px;
   width: 90%;
   max-width: 550px;
@@ -618,6 +634,9 @@
 
 .fs-modal-body {
   padding: 28px;
+  /* Bỏ background riêng, dùng nền trắng của .fs-create-modal */
+  background: transparent;
+  color: #0f172a;
 }
 
 .fs-modal-footer {
@@ -652,6 +671,7 @@
   background: #fff;
   transition: all 0.3s ease;
   font-family: inherit;
+  color: #0f172a;
 }
 
 .fs-form-group input:focus,
@@ -660,6 +680,33 @@
   border-color: #10b981;
   box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1);
   transform: translateY(-1px);
+}
+
+/* Placeholder màu xám dễ nhìn */
+.fs-form-group input::placeholder,
+.fs-form-group textarea::placeholder {
+  color: #94a3b8;
+}
+
+/* Đảm bảo input trong modal luôn có chữ đậm, không bị theme khác ghi đè */
+.fs-create-modal input,
+.fs-create-modal textarea {
+  color: #0f172a !important;
+  background-color: #ffffff;
+}
+
+/* Nút trong footer modal: Hủy / Tạo gia đình */
+.fs-modal-footer .fs-btn.secondary {
+  background: #ffffff;
+  color: #0f172a;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.16);
+  font-weight: 600;
+}
+
+.fs-modal-footer .fs-btn.secondary:hover {
+  background: #f1f5f9;
 }
 
 /* Color picker */
@@ -752,6 +799,24 @@
   font-size: 15px;
   color: #64748b;
   line-height: 1.4;
+}
+
+/* Footer: nút "Quay lại Nhóm" dạng pill nổi, dễ đọc */
+.fs-footer .fs-btn.secondary {
+  max-width: 260px;
+  margin: 0 auto;
+  background: #ffffff;
+  color: #0f172a;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+  font-weight: 600;
+}
+
+.fs-footer .fs-btn.secondary:hover {
+  background: linear-gradient(90deg, #eff6ff, #e0f2fe);
+  color: #0f172a;
+  transform: translateY(-2px);
 }
 
 /* Error */

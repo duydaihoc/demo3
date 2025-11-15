@@ -207,8 +207,9 @@
 .gm-card-body {
   color: #556575;
   padding: 24px;
-  max-height: 70vh; /* Limit height for very tall content */
-  overflow-y: auto; /* Allow scrolling within cards if needed */
+  /* Bỏ scroll riêng của card, để trang chính cuộn 1 lần duy nhất */
+  max-height: none;
+  overflow-y: visible;
 }
 
 /* Banking-style loading and errors */
@@ -333,10 +334,36 @@
   list-style: none;
   padding: 0;
   margin: 0;
-  max-height: 60vh;
+  /* Chỉ để list cao tự nhiên, cuộn theo trang (tránh 2 thanh cuộn lồng nhau) */
+  max-height: none;
+  overflow-y: visible;
+}
+
+/* Chỉ riêng danh sách hoạt động nhóm: hiển thị khoảng 3 giao dịch mới nhất,
+   nếu nhiều hơn thì cho phép cuộn trong khu vực này */
+.gm-activity-list {
+  max-height: 260px; /* ~ chiều cao 3 item */
   overflow-y: auto;
-  scrollbar-width: thin; /* For Firefox */
-  scrollbar-color: #c1c1c1 #f1f1f1; /* For Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: #c1c1c1 #f1f1f1;
+}
+
+.gm-activity-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.gm-activity-list::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.gm-activity-list::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.gm-activity-list::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 
 .gm-member-item {
