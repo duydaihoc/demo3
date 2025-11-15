@@ -2256,9 +2256,14 @@ router.get('/insights', auth, requireAuth, async (req, res) => {
       .lean();
 
     const payload = aggregateInsights(txs || [], months);
+
+    // Dùng Gemini tạo các insight "trợ lý tài chính thông minh" từ thống kê
+    const aiItems = await buildAiSpendingInsights(payload, req.user.name || 'bạn');
+
     return res.json({
       ok: true,
-      ...payload
+      ...payload,
+      aiItems
     });
   } catch (err) {
     console.error('AI insights error:', err);
@@ -2390,6 +2395,102 @@ function aggregateInsights(transactions, months) {
     suggestions,
     lineData
   };
+}
+
+// THÊM: Dùng Gemini để tạo insight "trợ lý tài chính thông minh" từ thống kê
+async function buildAiSpendingInsights(statsPayload, userName = 'bạn') {
+  try {
+    if (!geminiAvailable || !model) return [];
+
+    const { months, totals, topCategories, nightSpending, suggestions } = statsPayload || {};
+    const monthLines = (months || []).map((m, idx) => {
+      const t = totals && totals[idx] ? totals[idx] : { expense: 0, income: 0 };
+      return `- ${m.label}: Chi ${t.expense} VND, Thu ${t.income} VND`;
+    }).join('\n');
+
+    const topCatLines = (topCategories || []).map(c =>
+      `- ${c.name}: ${c.total} VND (${c.share || 0}%)`
+    ).join('\n');
+
+    const nightLine = nightSpending
+      ? `Chi tiêu ban đêm tháng hiện tại: ${nightSpending.current || 0} VND; tháng trước: ${nightSpending.previous || 0} VND; thay đổi: ${nightSpending.changePct || 0}%.`
+      : '';
+
+    const ruleSug = Array.isArray(suggestions) && suggestions.length
+      ? suggestions.map(s => `- ${s}`).join('\n')
+      : '(Chưa có gợi ý rule-based)';
+
+    const prompt = `
+Bạn là **trợ lý tài chính cá nhân thông minh** cho người dùng tên là "${userName}".
+
+Dưới đây là dữ liệu tóm tắt về thu/chi 3 tháng gần đây:
+
+THÁNG:
+${monthLines || '(không có dữ liệu)'}
+
+TOP DANH MỤC CHI TIÊU THÁNG HIỆN TẠI:
+${topCatLines || '(không có dữ liệu)'}
+
+CHI TIÊU BAN ĐÊM:
+${nightLine || '(không có dữ liệu)'}
+
+GỢI Ý QUY TẮC CÓ SẴN (rule-based):
+${ruleSug}
+
+NHIỆM VỤ:
+- Phân tích dữ liệu trên và tạo ra tối đa 4 insight ngắn gọn bằng tiếng Việt.
+- Mỗi insight nên rất thực tế, tập trung vào thói quen chi tiêu và gợi ý hành động cụ thể.
+- Phân loại insight theo một trong các loại: "TREND", "FORECAST", "ALERT", "FOCUS":
+  - TREND: Xu hướng chi tiêu/thu nhập.
+  - FORECAST: Dự báo nếu giữ nhịp hiện tại.
+  - ALERT: Cảnh báo rủi ro, chi tiêu bất thường.
+  - FOCUS: Gợi ý ưu tiên (danh mục nên xem lại, ví nên theo dõi, v.v.).
+
+ĐỊNH DẠNG TRẢ VỀ:
+- TRẢ VỀ THUẦN JSON, KHÔNG markdown, KHÔNG giải thích thêm.
+- Cấu trúc:
+{
+  "items": [
+    { "type": "TREND", "text": "nội dung insight 1" },
+    { "type": "ALERT", "text": "nội dung insight 2" }
+  ]
+}
+
+YÊU CẦU:
+- Mỗi "text" <= 2 câu, dễ hiểu với người dùng phổ thông.
+- Không nhắc đến từ "AI" hay "mô hình ngôn ngữ".
+`;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    let text = (await response.text()).trim();
+    text = text.replace(/```json\n?/g, '').replace(/```/g, '').trim();
+
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (e) {
+      console.warn('⚠️ Failed to parse AI insights JSON:', e.message, 'raw:', text);
+      return [];
+    }
+
+    if (!parsed || !Array.isArray(parsed.items)) return [];
+
+    return parsed.items
+      .map(item => {
+        if (!item || (!item.text && !item.title)) return null;
+        const rawType = String(item.type || '').toUpperCase();
+        const allowed = ['TREND', 'FORECAST', 'ALERT', 'FOCUS'];
+        const type = allowed.includes(rawType) ? rawType : 'TREND';
+        const text = String(item.text || item.title || '').trim();
+        if (!text) return null;
+        return { type, text };
+      })
+      .filter(Boolean);
+  } catch (err) {
+    console.error('❌ buildAiSpendingInsights error:', err);
+    return [];
+  }
 }
 
 /**

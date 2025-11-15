@@ -761,19 +761,32 @@ export default function FinanceDashboard() {
           const token = localStorage.getItem('token');
           const headers = token ? { Authorization: `Bearer ${token}` } : {};
           const res = await fetch(`http://localhost:5000/api/ai/insights?months=3`, { headers, signal: ctrl.signal });
+          const localAi = computeInsights(txs); // luôn chuẩn bị fallback + dữ liệu biểu đồ
+
           if (res.ok) {
             const data = await res.json();
-            const baseSuggestions = Array.isArray(data.suggestions) ? data.suggestions : [];
-            // Always compute local rawData for detailed suggestions
-            const localAi = computeInsights(txs);
-            const detailed = generateDetailedSuggestions(txs, localAi.rawData);
-            setDetailedInsightObjects(detailed);
-            // Merge and dedupe texts
-            const mergedTexts = [...new Set([...baseSuggestions, ...detailed.map(d => d.text)])];
-            setInsights(mergedTexts);
+
+            // Nếu backend có trả về insight từ AI (Gemini)
+            const aiItems = Array.isArray(data.aiItems) ? data.aiItems : [];
+            if (aiItems.length) {
+              const detailed = aiItems.map(item => ({
+                text: item.text,
+                // map type AI (TREND/FORECAST/ALERT/FOCUS) -> class css dạng thường
+                type: item.type ? String(item.type).toLowerCase() : 'basic'
+              }));
+              setDetailedInsightObjects(detailed);
+              setInsights(detailed.map(d => d.text));
+            } else {
+              // Fallback: tự tính insight chi tiết trên frontend
+              const detailed = generateDetailedSuggestions(txs, localAi.rawData);
+              setDetailedInsightObjects(detailed);
+              const baseSuggestions = Array.isArray(data.suggestions) ? data.suggestions : localAi.insights;
+              const mergedTexts = [...new Set([...baseSuggestions, ...detailed.map(d => d.text)])];
+              setInsights(mergedTexts);
+            }
+
             setInsightsChartData(data.lineData || localAi.lineData);
           } else {
-            const localAi = computeInsights(txs);
             const detailed = generateDetailedSuggestions(txs, localAi.rawData);
             setDetailedInsightObjects(detailed);
             const mergedTexts = [...new Set([...localAi.insights, ...detailed.map(d => d.text)])];
