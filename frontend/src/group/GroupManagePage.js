@@ -4,6 +4,7 @@ import GroupSidebar from './GroupSidebar';
 import './GroupManagePage.css';
 import { showNotification } from '../utils/notify';
 import GroupCharts from './GroupCharts';
+import GroupActivityFeed from './GroupActivityFeed';
 import './GroupCharts.css';
 import GroupShareModal from './GroupShareModal';
 
@@ -41,6 +42,14 @@ export default function GroupManagePage() {
 
 	// Thêm state cho modal chia sẻ
 	const [showShareModal, setShowShareModal] = useState(false);
+
+	// Group posts (hoạt động nhóm)
+	const [posts, setPosts] = useState([]);
+	const [loadingPosts, setLoadingPosts] = useState(false);
+	const [postError, setPostError] = useState('');
+	const [newPostContent, setNewPostContent] = useState('');
+	const [newPostImage, setNewPostImage] = useState('');
+	const [posting, setPosting] = useState(false);
 
 	const API_BASE = 'http://localhost:5000';
 	const token = localStorage.getItem('token');
@@ -573,9 +582,115 @@ const getUserNameById = (userIdOrEmail) => {
 		}
 	};
 
+	// ===== Group posts helpers =====
+	const fetchPosts = async () => {
+		if (!groupId || !token) return;
+		setLoadingPosts(true);
+		setPostError('');
+		try {
+			const res = await fetch(`${API_BASE}/api/groups/${groupId}/posts?limit=20`, {
+				headers: { Authorization: `Bearer ${token}` }
+			});
+			if (!res.ok) {
+				const err = await res.json().catch(() => null);
+				throw new Error(err?.message || 'Không thể tải bài viết hoạt động');
+			}
+			const data = await res.json();
+			setPosts(Array.isArray(data) ? data : []);
+		} catch (e) {
+			console.error('fetchPosts error', e);
+			setPostError(e.message || 'Lỗi khi tải bài viết');
+			setPosts([]);
+		} finally {
+			setLoadingPosts(false);
+		}
+	};
+
+	const handleCreatePost = async () => {
+		if (!groupId || !token) return;
+		if (!newPostContent.trim() && !newPostImage.trim()) return;
+		setPosting(true);
+		setPostError('');
+		try {
+			const body = {
+				content: newPostContent.trim(),
+				images: newPostImage.trim() ? [newPostImage.trim()] : []
+			};
+			const res = await fetch(`${API_BASE}/api/groups/${groupId}/posts`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`
+				},
+				body: JSON.stringify(body)
+			});
+			const data = await res.json().catch(() => null);
+			if (!res.ok) {
+				throw new Error(data?.message || 'Không thể đăng bài viết');
+			}
+			setNewPostContent('');
+			setNewPostImage('');
+			setPosts(prev => [data, ...prev]);
+		} catch (e) {
+			console.error('handleCreatePost error', e);
+			setPostError(e.message || 'Lỗi khi đăng bài viết');
+		} finally {
+			setPosting(false);
+		}
+	};
+
+	const handleToggleLike = async (postId) => {
+		if (!groupId || !token || !postId) return;
+		try {
+			const res = await fetch(`${API_BASE}/api/groups/${groupId}/posts/${postId}/like`, {
+				method: 'POST',
+				headers: { Authorization: `Bearer ${token}` }
+			});
+			const data = await res.json().catch(() => null);
+			if (!res.ok) {
+				console.error('toggle like error', data?.message);
+				return;
+			}
+			setPosts(prev =>
+				prev.map(p => p._id === data._id ? data : p)
+			);
+		} catch (e) {
+			console.error('handleToggleLike error', e);
+		}
+	};
+
+	const handleAddComment = async (postId, content) => {
+		if (!groupId || !token || !postId) return;
+		const text = (content || '').trim();
+		if (!text) return;
+		try {
+			const res = await fetch(`${API_BASE}/api/groups/${groupId}/posts/${postId}/comments`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`
+				},
+				body: JSON.stringify({ content: text })
+			});
+			const data = await res.json().catch(() => null);
+			if (!res.ok) {
+				console.error('add comment error', data?.message);
+				return;
+			}
+			setPosts(prev =>
+				prev.map(p => p._id === data._id ? data : p)
+			);
+		} catch (e) {
+			console.error('handleAddComment error', e);
+		}
+	};
+
 	useEffect(() => {
-		// when group changes, load transactions
-		if (groupId && token) fetchTxs();
+		// when group changes, load transactions & posts
+		if (groupId && token) {
+			fetchTxs();
+			fetchPosts();
+		}
 		// eslint-disable-next-line
 	}, [groupId]);
 
@@ -1129,7 +1244,8 @@ const getUserNameById = (userIdOrEmail) => {
 								</>
 							)}
 							
-							{/* NEW: Group Activity Card - Thay đổi gridColumn */}
+							{/* Group Activity (Transactions) and Posts side by side */}
+							{/* NEW: Group Activity Card - Transactions */}
 							<div className="gm-card" style={{gridColumn: "1 / span 1"}}>
 								<div className="gm-card-header">
 									<h2 className="gm-card-title"><i className="fas fa-stream"></i> Hoạt động nhóm</h2>
@@ -1253,6 +1369,9 @@ const getUserNameById = (userIdOrEmail) => {
 									)}
 								</div>
 							</div>
+
+							{/* Group posts / hoạt động bài viết (shared component) */}
+							<GroupActivityFeed groupId={groupId} canPost={true} />
 
 							{/* ADD: Charts (transactions over time + member percentage) */}
 							{/* place charts between activity and debts */}

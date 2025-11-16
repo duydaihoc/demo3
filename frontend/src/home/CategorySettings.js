@@ -144,10 +144,20 @@ export default function CategorySettings({ token }) {
     
     setIsCreating(true);
     try {
+      // Ensure we send the user ID if available
+      const body = { name: name.trim(), type, icon };
+      
+      // If we have a user ID from token, include it as owner
+      // The backend will prioritize the token, but this ensures owner is set
+      if (uid) {
+        body.owner = uid;
+        body.createdBy = 'user';
+      }
+      
       const res = await fetch('http://localhost:5000/api/categories', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ name: name.trim(), type, icon })
+        body: JSON.stringify(body)
       });
       if (!res.ok) {
         const errText = await res.text().catch(()=> 'Tạo danh mục thất bại');

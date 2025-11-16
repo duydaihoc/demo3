@@ -143,7 +143,13 @@ function AdminTransactionsPage() {
                       <td>{tx.category && (tx.category.name || tx.category._id)}</td>
                       <td>{formatDate(tx.date)}</td>
                       <td>{tx.description || '—'}</td>
-                      <td>{tx.createdBy ? (tx.createdBy.name || tx.createdBy.email || tx.createdBy) : '—'}</td>
+                      <td>
+                        {tx.createdBy ? (
+                          typeof tx.createdBy === 'object' && tx.createdBy !== null
+                            ? (tx.createdBy.name || tx.createdBy.email || tx.createdBy._id || '—')
+                            : (tx.createdBy || '—')
+                        ) : '—'}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

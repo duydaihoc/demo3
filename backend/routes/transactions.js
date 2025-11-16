@@ -75,7 +75,10 @@ router.post('/', requireAuth, async (req, res) => {
     await wallet.save();
 
     const saved = await tx.save();
-    const populated = await Transaction.findById(saved._id).populate('wallet').populate('category');
+    const populated = await Transaction.findById(saved._id)
+      .populate('wallet')
+      .populate('category')
+      .populate('createdBy', 'name email _id');
 
     res.status(201).json(populated);
   } catch (err) {
@@ -108,6 +111,7 @@ router.get('/', requireAuth, async (req, res) => {
       .sort({ date: -1 })
       .populate('wallet')
       .populate('category')
+      .populate('createdBy', 'name email _id')
       .lean();
 
     // Fetch group transactions where the current user is involved
@@ -401,7 +405,10 @@ router.get('/:id', requireAuth, async (req, res) => {
     const { id } = req.params;
     if (!isValidId(id)) return res.status(400).json({ message: 'Invalid transaction ID' });
 
-    const tx = await Transaction.findById(id).populate('wallet').populate('category');
+    const tx = await Transaction.findById(id)
+      .populate('wallet')
+      .populate('category')
+      .populate('createdBy', 'name email _id');
     if (!tx) return res.status(404).json({ message: 'Transaction not found' });
 
     // ownership check
@@ -512,7 +519,10 @@ router.put('/:id', requireAuth, async (req, res) => {
     }
 
     const updated = await tx.save();
-    const populated = await Transaction.findById(updated._id).populate('wallet').populate('category');
+    const populated = await Transaction.findById(updated._id)
+      .populate('wallet')
+      .populate('category')
+      .populate('createdBy', 'name email _id');
     res.json(populated);
   } catch (err) {
     console.error('Update transaction error:', err);

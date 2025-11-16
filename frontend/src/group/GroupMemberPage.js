@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import GroupSidebar from './GroupSidebar';
 import GroupCharts from './GroupCharts';
+import GroupActivityFeed from './GroupActivityFeed';
 import './GroupMemberPage.css';
 import './GroupCharts.css';
 
@@ -431,7 +432,8 @@ export default function GroupMemberPage() {
 								</div>
 							</div>
 
-							{/* NEW: Activity card - Thay đổi gridColumn */}
+							{/* Group Activity (Transactions) and Posts side by side */}
+							{/* NEW: Activity card - Transactions */}
 							<div className="gm-card" style={{gridColumn: "1 / span 1"}}>
 								<div className="gm-card-header">
 									<h2 className="gm-card-title"><i className="fas fa-stream"></i> Hoạt động nhóm</h2>
@@ -551,6 +553,9 @@ export default function GroupMemberPage() {
 									}
 								</div>
 							</div>
+
+							{/* Bài viết hoạt động - dùng component chung */}
+							<GroupActivityFeed groupId={groupId} canPost={true} />
 
 							{/* ADD: Charts */}
 							<div style={{gridColumn: "1 / span 1"}}>

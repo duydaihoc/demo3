@@ -183,7 +183,7 @@ export default function GroupShareModal({ groupId, isOpen, onClose }) {
                       />
                       <span className="gsm-checkbox-text">
                         <i className="fas fa-exchange-alt"></i>
-                        Danh sách giao dịch (20 giao dịch gần nhất)
+                        Danh sách giao dịch (tối đa 50 giao dịch gần nhất, gồm số tiền &amp; số người tham gia)
                       </span>
                     </label>
 
@@ -219,7 +219,7 @@ export default function GroupShareModal({ groupId, isOpen, onClose }) {
                       />
                       <span className="gsm-checkbox-text">
                         <i className="fas fa-users"></i>
-                        Số lượng thành viên (không hiện tên)
+                        Thống kê theo thành viên (ẩn bớt tên, không hiện email)
                       </span>
                     </label>
                   </div>

@@ -1,4 +1,15 @@
-.pgp-wrap { font-family: 'Inter',sans-serif; background:#f1f5f9; min-height:100vh; color:#0f172a; }
+.pgp-wrap {
+  font-family: 'Inter',sans-serif;
+  /* Nền trang dùng tông sáng từ gradient chủ đạo #2a5298 -> #4ecdc4 */
+  background:
+    radial-gradient(circle at top left, rgba(42,82,152,0.08), transparent 55%),
+    radial-gradient(circle at bottom right, rgba(78,205,196,0.12), #f1f5f9);
+  min-height:100vh;
+  /* Cho phép trang chia sẻ tự cuộn theo chiều cao nội dung / màn hình */
+  height:100vh;
+  overflow-y:auto;
+  color:#0f172a;
+}
 /* Trạng thái loaded để kích hoạt transition */
 .pgp-wrap:not(.pg-loaded) .fancy,
 .pgp-wrap:not(.pg-loaded) .pg-box,
@@ -189,7 +200,12 @@
 }
 
 /* New styles from PublicGroupView.css */
-.pgp-hero { background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; padding:36px 20px; }
+/* Hero sử dụng màu chủ đạo: #2a5298 -> #4ecdc4 */
+.pgp-hero {
+  background:linear-gradient(135deg,#2a5298 0%, #4ecdc4 100%);
+  color:#fff;
+  padding:36px 20px;
+}
 .pgp-hero-inner { max-width:1100px; margin:0 auto; display:flex; align-items:center; gap:24px; flex-wrap:wrap; }
 .pgp-avatar { width:84px; height:84px; border-radius:20px; display:flex; align-items:center; justify-content:center; font-size:40px; font-weight:800; color:#fff; box-shadow:0 6px 18px rgba(0,0,0,.25); }
 .pgp-title { margin:0 0 6px; font-size:2.1rem; font-weight:800; }
@@ -206,7 +222,13 @@
 .pgp-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; }
 .pgp-card { background:#fff; border-radius:16px; padding:16px 18px; box-shadow:0 4px 14px rgba(0,0,0,.08); display:flex; flex-direction:column; gap:4px; }
 .pgp-card-label { font-size:11px; color:#64748b; font-weight:600; display:flex; gap:6px; align-items:center; text-transform:uppercase; letter-spacing:.5px; }
-.pgp-card-value { font-size:22px; font-weight:800; background:linear-gradient(135deg,#667eea,#764ba2); -webkit-background-clip:text; color:transparent; }
+.pgp-card-value {
+  font-size:22px;
+  font-weight:800;
+  background:linear-gradient(135deg,#2a5298 0%, #4ecdc4 100%);
+  -webkit-background-clip:text;
+  color:transparent;
+}
 
 .pgp-charts-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:18px; }
 .pgp-panel { background:#fff; border-radius:16px; padding:16px 18px; box-shadow:0 4px 14px rgba(0,0,0,.07); display:flex; flex-direction:column; min-height:230px; }
@@ -214,7 +236,11 @@
 
 .pgp-bars { display:grid; grid-template-columns:repeat(30,1fr); align-items:end; gap:4px; height:140px; }
 .pgp-bar-wrap { display:flex; align-items:flex-end; }
-.pgp-bar { width:100%; border-radius:6px; background:linear-gradient(180deg,#60a5fa,#2563eb); }
+.pgp-bar {
+  width:100%;
+  border-radius:6px;
+  background:linear-gradient(180deg,#4ecdc4,#2a5298);
+}
 
 .pgp-donut-block { display:flex; gap:18px; align-items:center; flex-wrap:wrap; }
 .pgp-donut { width:130px; height:130px; border-radius:50%; box-shadow:inset 0 0 0 14px #fff,0 6px 16px rgba(0,0,0,.12); }
@@ -227,7 +253,17 @@
 
 .pgp-members-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px; }
 .pgp-member-card { background:#f8fafc; border-radius:14px; padding:12px 14px; font-size:12px; box-shadow:0 2px 8px rgba(0,0,0,.05); display:flex; gap:10px; }
-.pgp-member-avatar { width:40px; height:40px; border-radius:10px; background:linear-gradient(135deg,#4f46e5,#a855f7); color:#fff; font-weight:700; display:flex; align-items:center; justify-content:center; }
+.pgp-member-avatar {
+  width:40px;
+  height:40px;
+  border-radius:10px;
+  background:linear-gradient(135deg,#2a5298 0%, #4ecdc4 100%);
+  color:#fff;
+  font-weight:700;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
 .pgp-member-info { flex:1; }
 .pgp-member-name { font-weight:700; font-size:13px; margin-bottom:4px; color:#1e293b; }
 .pgp-member-row { display:flex; justify-content:space-between; }

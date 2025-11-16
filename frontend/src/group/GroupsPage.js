@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import GroupSidebar from './GroupSidebar';
 import './GroupsPage.css';
@@ -38,9 +38,70 @@ export default function GroupsPage() {
 
 	const [inviteSending, setInviteSending] = useState(false);
 	const [inviteResult, setInviteResult] = useState(null);
+	const [menuGroupId, setMenuGroupId] = useState(null); // group id đang mở menu 3 chấm
 
 	const API_BASE = 'http://localhost:5000';
 	const getToken = () => localStorage.getItem('token');
+
+	// ===== Pinned groups (client-side, per user) =====
+	const getCurrentUserId = () => {
+		const token = getToken();
+		if (!token) return 'guest';
+		try {
+			const payload = JSON.parse(
+				atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))
+			);
+			return (
+				payload.id ||
+				payload._id ||
+				payload.userId ||
+				payload.email ||
+				'guest'
+			);
+		} catch (e) {
+			return 'guest';
+		}
+	};
+
+	const pinnedStorageKey = `pinnedGroups_${getCurrentUserId()}`;
+
+	const [pinnedGroupIds, setPinnedGroupIds] = useState(() => {
+		try {
+			const raw = localStorage.getItem(pinnedStorageKey);
+			const parsed = raw ? JSON.parse(raw) : [];
+			return Array.isArray(parsed) ? parsed : [];
+		} catch (e) {
+			return [];
+		}
+	});
+
+	const togglePinGroup = (groupId) => {
+		if (!groupId) return;
+		setPinnedGroupIds((prev) => {
+			const set = new Set(prev);
+			if (set.has(groupId)) {
+				set.delete(groupId);
+			} else {
+				set.add(groupId);
+			}
+			const next = Array.from(set);
+			try {
+				localStorage.setItem(pinnedStorageKey, JSON.stringify(next));
+			} catch (e) {
+				// ignore storage errors
+			}
+			return next;
+		});
+	};
+
+	const toggleCardMenu = (groupId) => {
+		setMenuGroupId((prev) => (prev === groupId ? null : groupId));
+	};
+
+	const handlePinFromMenu = (groupId) => {
+		togglePinGroup(groupId);
+		setMenuGroupId(null);
+	};
 
 	// Add the missing fetchFriendsList function
 	const fetchFriendsList = useCallback(async () => {
@@ -118,9 +179,6 @@ export default function GroupsPage() {
 				ownerCount: ownerGroups.length,
 				memberCount: memberGroups.length
 			});
-			
-			// Giả định pinned groups là các nhóm đầu tiên (hoặc implement pinned functionality)
-			setPinnedGroups(data.slice(0, 3));
 			
 		} catch (err) {
 			console.error('fetchGroups error', err);
@@ -417,18 +475,35 @@ export default function GroupsPage() {
 		} catch (e) { return ''; }
 	};
 
+	// ===== Derived data for new UI =====
+	const pinnedGroupsDerived = useMemo(
+		() =>
+			groups.filter((g) =>
+				pinnedGroupIds.includes(g._id || g.id)
+			),
+		[groups, pinnedGroupIds]
+	);
+
+	const totalPinned = pinnedGroupsDerived.length;
+
 	return (
 		<div className="groups-page">
 			<GroupSidebar active="groups" />
 			
 			<main className="groups-main" role="main">
 				<header className="groups-header">
-					<div>
-						<h1>Nhóm</h1>
-						<p className="subtitle">Quản lý và tham gia nhóm chi tiêu</p>
+					<div className="groups-title-block">
+						<h1>Nhóm chi tiêu</h1>
+						<p className="subtitle">
+							Tạo nhóm cùng bạn bè, ghi lại giao dịch chung và theo dõi số dư minh bạch.
+						</p>
 					</div>
 
 					<div className="header-actions">
+						<div className="pinned-summary">
+							<span className="dot"></span>
+							<span>{totalPinned} nhóm đang được ghim</span>
+						</div>
 						<button
 							className="create-group-btn"
 							onClick={() => { setShowCreateModal(true); fetchFriendsList(); }}
@@ -438,74 +513,118 @@ export default function GroupsPage() {
 					</div>
 				</header>
 
+				<section className="groups-hero">
+					<div className="hero-main">
+						<div className="hero-label">Trung tâm nhóm</div>
+						<h2>Quản lý tất cả nhóm của bạn trong một nơi</h2>
+						<p>
+							Xem nhanh nhóm đang hoạt động, nhóm quản lý và nhóm bạn chỉ tham gia. 
+							Dùng ghim để đưa những nhóm quan trọng lên trên đầu.
+						</p>
+						<div className="hero-actions">
+							<button
+								className="hero-primary-btn"
+								onClick={() => { setShowCreateModal(true); fetchFriendsList(); }}
+							>
+								<i className="fas fa-plus"></i> Tạo nhóm mới
+							</button>
+						</div>
+
+						<div className="hero-meta-row">
+							<div className="hero-meta-item">
+								<span className="label">Tổng nhóm</span>
+								<span className="value">{groupStats.total}</span>
+							</div>
+							<div className="hero-meta-item">
+								<span className="label">Đang hoạt động</span>
+								<span className="value">{groupStats.active}</span>
+							</div>
+							<div className="hero-meta-item">
+								<span className="label">Nhóm quản lý</span>
+								<span className="value">{groupStats.ownerCount}</span>
+							</div>
+							<div className="hero-meta-item">
+								<span className="label">Nhóm tham gia</span>
+								<span className="value">{groupStats.memberCount}</span>
+							</div>
+						</div>
+					</div>
+
+					<div className="hero-side-card">
+						{totalPinned > 0 ? (
+							<>
+								<div className="hero-card-header">
+									<span className="badge">Nhóm ghim</span>
+									<span className="hint">{totalPinned} nhóm hay dùng</span>
+								</div>
+								<div className="hero-pinned-list">
+									{pinnedGroupsDerived.slice(0, 3).map((group) => {
+										const id = group._id || group.id;
+										return (
+											<button
+												type="button"
+												key={id}
+												className="hero-pinned-item"
+												onClick={() =>
+													navigate(
+														`/groups/${
+															isOwner(group) ? 'manage' : 'member'
+														}/${id}`
+													)
+												}
+											>
+												<div
+													className="hero-pinned-avatar"
+													style={{ background: getCardBackground(group) }}
+												>
+													{(group.name || '?')[0].toUpperCase()}
+												</div>
+												<div className="hero-pinned-info">
+													<div className="name">{group.name}</div>
+													<div className="meta">
+														<i className="fas fa-users"></i>{' '}
+														{(group.members && group.members.length) || 0} thành
+														viên
+													</div>
+												</div>
+												<div className="hero-pinned-role">
+													{isOwner(group) ? 'Quản lý' : 'Tham gia'}
+												</div>
+											</button>
+										);
+									})}
+								</div>
+								{totalPinned > 3 && (
+									<div className="hero-more-note">
+										+{totalPinned - 3} nhóm ghim khác
+									</div>
+								)}
+							</>
+						) : (
+							<>
+								<div className="hero-card-header">
+									<span className="badge">Mẹo</span>
+									<span className="hint">Ghim nhóm hay dùng</span>
+								</div>
+								<p>
+									Bấm nút <b>3 chấm</b> trên thẻ nhóm rồi chọn <b>Ghim nhóm</b> để đưa
+									nhóm đó lên khu vực ghim. Bạn cũng có thể bỏ ghim bằng cách làm tương
+									tự.
+								</p>
+							</>
+						)}
+					</div>
+				</section>
+
 				{errorMsg && (
 					<div className="groups-error-alert">
 						<i className="fas fa-exclamation-circle"></i> {errorMsg}
 					</div>
 				)}
 
-				{/* Bảng điều khiển thống kê */}
-				<section className="groups-dashboard">
-					<div className="groups-stat-card">
-						<div className="stat-value">{groupStats.total}</div>
-						<div className="stat-label">Tổng số nhóm</div>
-						<i className="fas fa-layer-group stat-icon"></i>
-					</div>
-					<div className="groups-stat-card">
-						<div className="stat-value">{groupStats.ownerCount}</div>
-						<div className="stat-label">Nhóm quản lý</div>
-						<i className="fas fa-user-shield stat-icon"></i>
-					</div>
-					<div className="groups-stat-card">
-						<div className="stat-value">{groupStats.memberCount}</div>
-						<div className="stat-label">Nhóm tham gia</div>
-						<i className="fas fa-users stat-icon"></i>
-					</div>
-					<div className="groups-stat-card">
-						<div className="stat-value">{groupStats.active}</div>
-						<div className="stat-label">Nhóm hoạt động</div>
-						<i className="fas fa-chart-line stat-icon"></i>
-					</div>
-				</section>
-
-				{/* Phần nhóm ghim */}
-				{pinnedGroups.length > 0 && (
-					<section className="groups-section">
-						<div className="section-header">
-							<h2 className="section-title"><i className="fas fa-thumbtack"></i> Nhóm ghim</h2>
-						</div>
-						<div className="pinned-groups-grid">
-							{pinnedGroups.map(group => (
-								<div 
-									key={group._id || group.id} 
-									className="pinned-group-card"
-									onClick={() => navigate(`/groups/${isOwner(group) ? 'manage' : 'member'}/${group._id || group.id}`)}
-									style={{ background: getCardBackground(group) }}
-								>
-									<div className="pg-content">
-										<h3 className="pg-name">{group.name}</h3>
-										<div className="pg-meta">
-											<div className="pg-members">
-												<i className="fas fa-users"></i> {(group.members && group.members.length) || 0} thành viên
-											</div>
-											<div className="pg-role">
-												{isOwner(group) ? (
-													<span className="role-badge owner"><i className="fas fa-crown"></i> Quản trị viên</span>
-												) : (
-													<span className="role-badge member"><i className="fas fa-user"></i> Thành viên</span>
-												)}
-											</div>
-										</div>
-									</div>
-								</div>
-							))}
-						</div>
-					</section>
-				)}
-
 				{/* Nhóm gần đây */}
 				{recentGroups.length > 0 && (
-					<section className="groups-section">
+					<section className="groups-section groups-section-recent">
 						<div className="section-header">
 							<h2 className="section-title"><i className="fas fa-history"></i> Nhóm gần đây</h2>
 							<div className="section-actions">
@@ -550,7 +669,7 @@ export default function GroupsPage() {
 				)}
 
 				{/* Tất cả nhóm - Card Grid */}
-				<section className="groups-section">
+				<section className="groups-section groups-section-all">
 					<div className="section-header">
 						<h2 className="section-title"><i className="fas fa-th-large"></i> Tất cả nhóm của bạn</h2>
 					</div>
@@ -564,10 +683,39 @@ export default function GroupsPage() {
 						<div className="groups-card-container">
 							{groups.map(group => {
 								const role = getRole(group);
+								const id = group._id || group.id || group.id;
+								const isPinned = pinnedGroupIds.includes(id);
 								return (
-									<div key={group._id || group.id || group.id} className="group-card-v2 bank-card" style={{ background: getCardBackground(group) }}>
+									<div key={id} className="group-card-v2 bank-card" style={{ background: getCardBackground(group) }}>
 										<div className="wc-bg-shape wc-bg-a" />
 										<div className="wc-bg-shape wc-bg-b" />
+
+										<div
+											className="card-more-wrapper"
+											onClick={(e) => e.stopPropagation()}
+										>
+											<button
+												type="button"
+												className="card-more-btn"
+												onClick={() => toggleCardMenu(id)}
+												title="Tùy chọn nhóm"
+											>
+												<i className="fas fa-ellipsis-h"></i>
+												<span className="card-more-label">Khác</span>
+											</button>
+											{menuGroupId === id && (
+												<div className="card-menu">
+													<button
+														type="button"
+														className="card-menu-item"
+														onClick={() => handlePinFromMenu(id)}
+													>
+														<i className="fas fa-thumbtack"></i>
+														{isPinned ? 'Bỏ ghim nhóm' : 'Ghim nhóm lên trên'}
+													</button>
+												</div>
+											)}
+										</div>
 
 										<div className="bank-top" aria-hidden>
 											<div className="card-chip-small" />

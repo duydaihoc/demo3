@@ -4,9 +4,33 @@ const mongoose = require('mongoose');
 const User = require('../models/User');
 const Group = require('../models/Group');
 const GroupTransaction = require('../models/GroupTransaction');
+const GroupPost = require('../models/GroupPost');
 const Notification = require('../models/Notification');
 const { auth } = require('../middleware/auth');
 const crypto = require('crypto');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// Helper: kiểm tra user có thuộc nhóm (owner hoặc member) hay không
+async function ensureGroupMember(groupId, userId) {
+  const group = await Group.findById(groupId).select('_id owner members');
+  if (!group) return { ok: false, status: 404, message: 'Group not found' };
+  const isOwner = String(group.owner) === String(userId);
+  const isMember =
+    isOwner ||
+    group.members.some(
+      (m) =>
+        (m.user && String(m.user) === String(userId)) ||
+        (m.email &&
+          String(m.email).toLowerCase().trim() ===
+            String((userId.email || '')).toLowerCase().trim())
+    );
+  if (!isMember) {
+    return { ok: false, status: 403, message: 'Bạn không thuộc nhóm này' };
+  }
+  return { ok: true, group };
+}
 
 // GET /api/groups - Get groups for current user
 router.get('/', auth, async (req, res) => {
@@ -568,11 +592,21 @@ router.get('/public/:shareKey', async (req, res) => {
 
     const allowed = group.shareSettings.allowedData || {};
 
+    // Parse color if it was stored as JSON string so frontend luôn nhận đúng cấu trúc { colors, direction }
+    let publicColor = group.color;
+    if (publicColor && typeof publicColor === 'string') {
+      try {
+        publicColor = JSON.parse(publicColor);
+      } catch (e) {
+        // nếu không parse được thì giữ nguyên string
+      }
+    }
+
     const payload = {
       groupInfo: {
         name: group.name,
         description: group.description,
-        color: group.color,
+        color: publicColor,
         createdAt: group.createdAt,
         ownerName: group.owner?.name || 'Quản lý'
       },
@@ -595,7 +629,8 @@ router.get('/public/:shareKey', async (req, res) => {
     }
 
     if (allowed.transactions) {
-      payload.transactions = txs.slice(0, 30).map(tx => ({
+      // Chia sẻ nhiều hơn nhưng vẫn giới hạn để tránh load quá nặng: 50 giao dịch gần nhất
+      payload.transactions = txs.slice(0, 50).map(tx => ({
         _id: tx._id,
         title: tx.title,
         amount: tx.amount,
@@ -701,6 +736,342 @@ router.get('/public/:shareKey', async (req, res) => {
   } catch (e) {
     console.error('public group error', e);
     res.status(500).json({ message: 'Server error', error: e.message });
+  }
+});
+
+// ===== Group Posts (Hoạt động nhóm) =====
+
+// Cấu hình multer cho upload hình ảnh bài viết nhóm
+const postImageStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadPath = path.join(__dirname, '../uploads/group-posts');
+    // Tạo thư mục nếu chưa tồn tại
+    if (!fs.existsSync(uploadPath)) {
+      fs.mkdirSync(uploadPath, { recursive: true });
+    }
+    cb(null, uploadPath);
+  },
+  filename: function (req, file, cb) {
+    // Tạo tên file unique với timestamp và random string
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    cb(null, `post-${uniqueSuffix}${ext}`);
+  }
+});
+
+// File filter cho hình ảnh
+const postImageFileFilter = (req, file, cb) => {
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Chỉ cho phép upload file hình ảnh (JPEG, PNG, GIF, WebP)'), false);
+  }
+};
+
+const uploadPostImage = multer({
+  storage: postImageStorage,
+  fileFilter: postImageFileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  }
+});
+
+// POST /api/groups/:groupId/posts/upload-image - upload image for post
+router.post('/:groupId/posts/upload-image', auth, uploadPostImage.single('image'), async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const { ok, status, message } = await ensureGroupMember(groupId, req.user._id);
+    if (!ok) return res.status(status).json({ message });
+
+    if (!req.file) {
+      return res.status(400).json({ message: 'Vui lòng chọn file hình ảnh để upload' });
+    }
+
+    // Trả về URL của ảnh đã upload
+    const imageUrl = `/uploads/group-posts/${req.file.filename}`;
+    res.json({ imageUrl });
+  } catch (err) {
+    console.error('Groups upload image error:', err);
+    // Xóa file đã upload nếu có lỗi
+    if (req.file && req.file.path) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (unlinkError) {
+        console.error('Error deleting uploaded file:', unlinkError);
+      }
+    }
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// GET /api/groups/:groupId/posts - list posts for a group (latest first)
+router.get('/:groupId/posts', auth, async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const { ok, status, message } = await ensureGroupMember(groupId, req.user._id);
+    if (!ok) return res.status(status).json({ message });
+
+    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50);
+    const skip = parseInt(req.query.skip, 10) || 0;
+
+    const posts = await GroupPost.find({ group: groupId })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate('author', 'name email')
+      .populate('comments.user', 'name email')
+      .populate('likes.user', 'name email')
+      .lean();
+
+    res.json(posts);
+  } catch (err) {
+    console.error('Groups posts list error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// POST /api/groups/:groupId/posts - create a new post
+router.post('/:groupId/posts', auth, async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const { ok, status, message, group } = await ensureGroupMember(
+      groupId,
+      req.user._id
+    );
+    if (!ok) return res.status(status).json({ message });
+
+    const { content = '', images = [] } = req.body || {};
+    if (!content && (!images || !images.length)) {
+      return res
+        .status(400)
+        .json({ message: 'Nội dung hoặc hình ảnh là bắt buộc' });
+    }
+
+    const post = await GroupPost.create({
+      group: group._id,
+      author: req.user._id,
+      content: content.trim(),
+      images: Array.isArray(images)
+        ? images.filter((u) => typeof u === 'string' && u.trim())
+        : [],
+    });
+
+    const populated = await GroupPost.findById(post._id)
+      .populate('author', 'name email')
+      .populate('comments.user', 'name email')
+      .populate('likes.user', 'name email')
+      .lean();
+
+    res.status(201).json(populated);
+  } catch (err) {
+    console.error('Groups create post error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// POST /api/groups/:groupId/posts/:postId/like - toggle like
+router.post('/:groupId/posts/:postId/like', auth, async (req, res) => {
+  try {
+    const { groupId, postId } = req.params;
+    const { ok, status, message } = await ensureGroupMember(groupId, req.user._id);
+    if (!ok) return res.status(status).json({ message });
+
+    const post = await GroupPost.findOne({ _id: postId, group: groupId });
+    if (!post) return res.status(404).json({ message: 'Post not found' });
+
+    const existingIndex = post.likes.findIndex(
+      (l) => String(l.user) === String(req.user._id)
+    );
+    if (existingIndex !== -1) {
+      post.likes.splice(existingIndex, 1);
+    } else {
+      post.likes.push({ user: req.user._id });
+    }
+    await post.save();
+
+    const populated = await GroupPost.findById(post._id)
+      .populate('author', 'name email')
+      .populate('comments.user', 'name email')
+      .populate('likes.user', 'name email')
+      .lean();
+
+    res.json(populated);
+  } catch (err) {
+    console.error('Groups like post error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// POST /api/groups/:groupId/posts/:postId/comments - add comment
+router.post('/:groupId/posts/:postId/comments', auth, async (req, res) => {
+  try {
+    const { groupId, postId } = req.params;
+    const { content } = req.body || {};
+    const { ok, status, message } = await ensureGroupMember(groupId, req.user._id);
+    if (!ok) return res.status(status).json({ message });
+
+    if (!content || !content.trim()) {
+      return res.status(400).json({ message: 'Nội dung bình luận không được để trống' });
+    }
+
+    const post = await GroupPost.findOne({ _id: postId, group: groupId });
+    if (!post) return res.status(404).json({ message: 'Post not found' });
+
+    post.comments.push({
+      user: req.user._id,
+      content: content.trim(),
+    });
+
+    await post.save();
+
+    const populated = await GroupPost.findById(post._id)
+      .populate('author', 'name email')
+      .populate('comments.user', 'name email')
+      .populate('likes.user', 'name email')
+      .lean();
+
+    res.status(201).json(populated);
+  } catch (err) {
+    console.error('Groups comment on post error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// PUT /api/groups/:groupId/posts/:postId - update post (only author)
+router.put('/:groupId/posts/:postId', auth, async (req, res) => {
+  try {
+    const { groupId, postId } = req.params;
+    const { content, images } = req.body || {};
+    const { ok, status, message } = await ensureGroupMember(groupId, req.user._id);
+    if (!ok) return res.status(status).json({ message });
+
+    const post = await GroupPost.findOne({ _id: postId, group: groupId });
+    if (!post) return res.status(404).json({ message: 'Post not found' });
+
+    // Only author can update
+    if (String(post.author) !== String(req.user._id)) {
+      return res.status(403).json({ message: 'Chỉ người tạo bài viết mới được sửa' });
+    }
+
+    if (content !== undefined) post.content = content.trim();
+    if (images !== undefined) {
+      post.images = Array.isArray(images)
+        ? images.filter((u) => typeof u === 'string' && u.trim())
+        : [];
+    }
+
+    post.updatedAt = new Date();
+    await post.save();
+
+    const populated = await GroupPost.findById(post._id)
+      .populate('author', 'name email')
+      .populate('comments.user', 'name email')
+      .populate('likes.user', 'name email')
+      .lean();
+
+    res.json(populated);
+  } catch (err) {
+    console.error('Groups update post error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// DELETE /api/groups/:groupId/posts/:postId - delete post (only author)
+router.delete('/:groupId/posts/:postId', auth, async (req, res) => {
+  try {
+    const { groupId, postId } = req.params;
+    const { ok, status, message } = await ensureGroupMember(groupId, req.user._id);
+    if (!ok) return res.status(status).json({ message });
+
+    const post = await GroupPost.findOne({ _id: postId, group: groupId });
+    if (!post) return res.status(404).json({ message: 'Post not found' });
+
+    // Only author can delete
+    if (String(post.author) !== String(req.user._id)) {
+      return res.status(403).json({ message: 'Chỉ người tạo bài viết mới được xóa' });
+    }
+
+    await post.deleteOne();
+
+    res.json({ message: 'Đã xóa bài viết' });
+  } catch (err) {
+    console.error('Groups delete post error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// PUT /api/groups/:groupId/posts/:postId/comments/:commentId - update comment (only comment author)
+router.put('/:groupId/posts/:postId/comments/:commentId', auth, async (req, res) => {
+  try {
+    const { groupId, postId, commentId } = req.params;
+    const { content } = req.body || {};
+    const { ok, status, message } = await ensureGroupMember(groupId, req.user._id);
+    if (!ok) return res.status(status).json({ message });
+
+    if (!content || !content.trim()) {
+      return res.status(400).json({ message: 'Nội dung bình luận không được để trống' });
+    }
+
+    const post = await GroupPost.findOne({ _id: postId, group: groupId });
+    if (!post) return res.status(404).json({ message: 'Post not found' });
+
+    const comment = post.comments.id(commentId);
+    if (!comment) return res.status(404).json({ message: 'Comment not found' });
+
+    // Only comment author can update
+    if (String(comment.user) !== String(req.user._id)) {
+      return res.status(403).json({ message: 'Chỉ người tạo bình luận mới được sửa' });
+    }
+
+    comment.content = content.trim();
+    await post.save();
+
+    const populated = await GroupPost.findById(post._id)
+      .populate('author', 'name email')
+      .populate('comments.user', 'name email')
+      .populate('likes.user', 'name email')
+      .lean();
+
+    res.json(populated);
+  } catch (err) {
+    console.error('Groups update comment error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// DELETE /api/groups/:groupId/posts/:postId/comments/:commentId - delete comment (only comment author)
+router.delete('/:groupId/posts/:postId/comments/:commentId', auth, async (req, res) => {
+  try {
+    const { groupId, postId, commentId } = req.params;
+    const { ok, status, message } = await ensureGroupMember(groupId, req.user._id);
+    if (!ok) return res.status(status).json({ message });
+
+    const post = await GroupPost.findOne({ _id: postId, group: groupId });
+    if (!post) return res.status(404).json({ message: 'Post not found' });
+
+    const comment = post.comments.id(commentId);
+    if (!comment) return res.status(404).json({ message: 'Comment not found' });
+
+    // Only comment author can delete
+    if (String(comment.user) !== String(req.user._id)) {
+      return res.status(403).json({ message: 'Chỉ người tạo bình luận mới được xóa' });
+    }
+
+    // Remove comment from array
+    post.comments.pull(commentId);
+    await post.save();
+
+    const populated = await GroupPost.findById(post._id)
+      .populate('author', 'name email')
+      .populate('comments.user', 'name email')
+      .populate('likes.user', 'name email')
+      .lean();
+
+    res.json(populated);
+  } catch (err) {
+    console.error('Groups delete comment error:', err);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 

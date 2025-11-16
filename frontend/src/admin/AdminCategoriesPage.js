@@ -377,10 +377,24 @@ function AdminCategoriesPage() {
                             </span>
                           </td>
                           <td>
-                            <span className={`creator-badge ${category.createdBy || 'user'}`}>
-                              {category.createdBy === 'admin' ? 'Quản trị viên' : 
-                               category.createdBy === 'system' ? 'Hệ thống' : 'Người dùng'}
-                            </span>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <span className={`creator-badge ${category.createdBy || 'user'}`}>
+                                {category.createdBy === 'admin' ? 'Quản trị viên' : 
+                                 category.createdBy === 'system' ? 'Hệ thống' : 'Người dùng'}
+                              </span>
+                              {category.createdBy !== 'system' && (
+                                <span style={{ 
+                                  fontSize: '12px', 
+                                  color: '#666',
+                                  fontStyle: 'italic'
+                                }}>
+                                  {category.ownerName || 
+                                   (category.owner && typeof category.owner === 'object' && category.owner.name) || 
+                                   category.creatorName || 
+                                   'Người dùng'}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td>{category.description || '-'}</td>
                           <td className="action-buttons">

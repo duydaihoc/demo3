@@ -1,0 +1,1171 @@
+/* Instagram-style Activity Feed - Giống như .gm-activity-list */
+.gaf-container {
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 100%;
+  width: 100%;
+  /* Giới hạn chiều cao để có thể cuộn, hiển thị đầy đủ các bài viết */
+  max-height: 700px; /* Chiều cao tối đa để có thể cuộn */
+  overflow-y: auto; /* Tự động hiển thị scrollbar khi cần, giống gm-activity-list */
+  overflow-x: hidden;
+  padding: 8px 8px 8px 0; /* Tạo khoảng trống cho scrollbar */
+  position: relative;
+  /* Scrollbar styling giống gm-activity-list */
+  scrollbar-width: thin;
+  scrollbar-color: #c1c1c1 #f1f1f1;
+  /* Đảm bảo container có thể scroll được */
+  box-sizing: border-box;
+}
+
+/* Custom scrollbar cho container - Giống như gm-activity-list */
+.gaf-container::-webkit-scrollbar {
+  width: 8px; /* Giống gm-activity-list */
+}
+
+.gaf-container::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px; /* Giống gm-activity-list */
+}
+
+.gaf-container::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px; /* Giống gm-activity-list */
+}
+
+.gaf-container::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8; /* Giống gm-activity-list */
+}
+
+
+/* Create Post Section - Instagram Style - Cải thiện */
+.gaf-create-post {
+  padding: 18px 20px;
+  background: #ffffff;
+  border: 1px solid #e8e8e8;
+  border-radius: 16px;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+}
+
+.gaf-create-post:hover {
+  border-color: #d0d0d0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.gaf-create-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #833ab4 0%, #fd1d1d 50%, #fcb045 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 16px;
+  flex-shrink: 0;
+  border: 2px solid white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.gaf-create-avatar::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transform: rotate(45deg);
+  animation: shimmer 3s infinite;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+  100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+}
+
+.gaf-create-input-wrapper {
+  flex: 1;
+  position: relative;
+}
+
+.gaf-create-input {
+  width: 100%;
+  padding: 10px 16px;
+  border: 1px solid #dbdbdb;
+  border-radius: 24px;
+  background: #fafafa;
+  font-size: 14px;
+  color: #262626;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.gaf-create-input:hover {
+  background: #f0f0f0;
+  border-color: #b2b2b2;
+}
+
+.gaf-create-input:focus {
+  outline: none;
+  background: white;
+  border-color: #8e8e8e;
+}
+
+.gaf-create-expanded {
+  padding: 20px;
+  background: #ffffff;
+  border: 1px solid #e8e8e8;
+  border-radius: 16px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.gaf-create-textarea {
+  width: 100%;
+  min-height: 130px;
+  padding: 14px 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  background: #fafafa;
+  font-size: 15px;
+  color: #1a1a1a;
+  resize: vertical;
+  font-family: inherit;
+  margin-bottom: 16px;
+  line-height: 1.6;
+  transition: all 0.2s ease;
+}
+
+.gaf-create-textarea:focus {
+  outline: none;
+  border-color: #c1c1c1;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(131, 58, 180, 0.08);
+}
+
+.gaf-create-textarea::placeholder {
+  color: #8e8e8e;
+}
+
+/* Image Upload Section - Instagram Style */
+.gaf-image-upload-section {
+  margin-bottom: 16px;
+}
+
+.gaf-image-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #833ab4 0%, #fd1d1d 50%, #fcb045 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s;
+  box-shadow: 0 2px 4px rgba(131, 58, 180, 0.3);
+}
+
+.gaf-image-upload-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(131, 58, 180, 0.4);
+}
+
+.gaf-image-upload-btn:active {
+  transform: translateY(0);
+}
+
+.gaf-image-upload-btn i {
+  font-size: 16px;
+}
+
+.gaf-image-preview {
+  position: relative;
+  margin-top: 16px;
+  display: inline-block;
+  max-width: 100%;
+  background: #fafafa;
+  border: 1px solid #dbdbdb;
+  border-radius: 12px;
+  overflow: hidden;
+  padding: 8px;
+}
+
+.gaf-image-preview img {
+  max-width: 100%;
+  max-height: 250px;
+  width: auto;
+  height: auto;
+  border-radius: 8px;
+  object-fit: contain;
+  display: block;
+}
+
+.gaf-image-remove-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  font-size: 14px;
+  backdrop-filter: blur(4px);
+}
+
+.gaf-image-remove-btn:hover {
+  background: rgba(0, 0, 0, 0.9);
+  transform: scale(1.1);
+}
+
+.gaf-image-remove-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.gaf-create-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 12px;
+  border-top: 1px solid #efefef;
+}
+
+.gaf-create-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.gaf-create-btn {
+  padding: 8px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gaf-create-btn-primary {
+  background: linear-gradient(135deg, #833ab4 0%, #fd1d1d 50%, #fcb045 100%);
+  color: white;
+  box-shadow: 0 2px 4px rgba(131, 58, 180, 0.3);
+}
+
+.gaf-create-btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(131, 58, 180, 0.4);
+}
+
+.gaf-create-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.gaf-create-btn-secondary {
+  background: #fafafa;
+  color: #262626;
+  border: 1px solid #dbdbdb;
+}
+
+.gaf-create-btn-secondary:hover {
+  background: #f0f0f0;
+}
+
+/* Post Card - Instagram Style - Cải thiện */
+.gaf-post {
+  padding: 0;
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 16px;
+  margin-bottom: 20px;
+  overflow: visible; /* Đổi từ hidden sang visible để hiển thị đầy đủ comment input và menu */
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+/* Wrapper bên trong để giữ border-radius cho các phần tử chính */
+.gaf-post-inner {
+  overflow: hidden;
+  border-radius: 16px 16px 0 0; /* Bo góc trên */
+}
+
+.gaf-post:hover {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+  border-color: #d0d0d0;
+  transform: translateY(-2px);
+}
+
+.gaf-post-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid #f0f0f0;
+  position: relative;
+  background: #ffffff;
+}
+
+.gaf-post-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #833ab4 0%, #fd1d1d 50%, #fcb045 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: 16px;
+  flex-shrink: 0;
+  border: 3px solid white;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.gaf-post-avatar:hover {
+  transform: scale(1.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.gaf-post-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.gaf-post-author {
+  font-weight: 700;
+  font-size: 15px;
+  color: #1a1a1a;
+  margin-bottom: 3px;
+  letter-spacing: -0.2px;
+}
+
+.gaf-post-time {
+  font-size: 13px;
+  color: #8e8e8e;
+  font-weight: 400;
+}
+
+.gaf-post-menu {
+  margin-left: auto;
+  position: relative;
+}
+
+.gaf-post-menu-dropdown {
+  position: relative;
+}
+
+.gaf-menu-btn {
+  padding: 8px;
+  border: none;
+  background: transparent;
+  color: #262626;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: all 0.2s;
+  font-size: 14px;
+  font-weight: 600;
+  min-width: auto;
+}
+
+.gaf-menu-btn:hover {
+  background: #fafafa;
+}
+
+.gaf-menu-btn-text {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.gaf-menu-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.gaf-post-menu-items {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  min-width: 180px;
+  z-index: 1000;
+  display: none;
+  overflow: hidden;
+  border: 1px solid #dbdbdb;
+}
+
+.gaf-post-menu-dropdown:hover .gaf-post-menu-items,
+.gaf-post-menu-dropdown:focus-within .gaf-post-menu-items {
+  display: block;
+}
+
+.gaf-menu-item {
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  background: white;
+  color: #262626;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  transition: background 0.2s;
+  border-bottom: 1px solid #fafafa;
+}
+
+.gaf-menu-item:last-child {
+  border-bottom: none;
+}
+
+.gaf-menu-item:hover {
+  background: #fafafa;
+}
+
+.gaf-menu-item.danger {
+  color: #ed4956;
+}
+
+.gaf-menu-item.danger:hover {
+  background: #fff5f5;
+  color: #dc2626;
+}
+
+.gaf-menu-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.gaf-menu-item i {
+  width: 18px;
+  text-align: center;
+  font-size: 16px;
+}
+
+.gaf-post-content {
+  font-size: 15px;
+  color: #1a1a1a;
+  line-height: 1.6;
+  padding: 16px 18px;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  background: #ffffff;
+  font-weight: 400;
+}
+
+.gaf-post-content:empty {
+  display: none;
+}
+
+.gaf-post-image-wrapper {
+  width: 100%;
+  margin: 0;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  max-height: 500px;
+  position: relative;
+  overflow: hidden;
+}
+
+.gaf-post-image {
+  width: 100%;
+  height: auto;
+  max-height: 500px;
+  object-fit: contain;
+  display: block;
+  cursor: pointer;
+}
+
+.gaf-post-image:hover {
+  opacity: 0.98;
+}
+
+/* Edit Post - Instagram Style */
+.gaf-edit-post {
+  padding: 16px;
+  background: #fafafa;
+  border-radius: 8px;
+  margin: 12px 16px;
+}
+
+.gaf-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #efefef;
+}
+
+/* Post Actions - Instagram Style */
+.gaf-post-actions {
+  display: flex;
+  align-items: center;
+  padding: 10px 18px;
+  border-top: 1px solid #f0f0f0;
+  gap: 20px;
+  background: #ffffff;
+}
+
+.gaf-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 24px;
+  border: none;
+  background: #fee;
+  color: #ed4956;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 10px;
+  transition: all 0.2s ease;
+  position: relative;
+  text-align: center;
+  width: auto;
+}
+
+.gaf-action-btn:hover {
+  background: #fdd;
+  transform: scale(1.05);
+}
+
+.gaf-action-btn.liked {
+  color: #ed4956;
+  background: #fee;
+}
+
+.gaf-action-btn.liked:hover {
+  background: #fcc;
+}
+
+.gaf-action-btn i {
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  color: #ed4956;
+}
+
+.gaf-action-btn.liked i {
+  color: #ed4956;
+}
+
+.gaf-action-btn span {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  display: block;
+  width: 100%;
+}
+
+/* Nút bình luận với màu xanh */
+.gaf-action-btn-comment {
+  color: #0095f6;
+  background: #e6f3ff;
+}
+
+.gaf-action-btn-comment:hover {
+  background: #cce7ff;
+}
+
+.gaf-action-btn-comment i {
+  color: #0095f6;
+}
+
+.gaf-action-btn.liked:active i {
+  animation: heartBeat 0.3s ease;
+}
+
+@keyframes heartBeat {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.3); }
+  100% { transform: scale(1); }
+}
+
+.gaf-action-btn:active i {
+  transform: scale(0.9);
+}
+
+/* Post Stats - Instagram Style */
+.gaf-post-stats {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  font-size: 14px;
+  color: #1a1a1a;
+  font-weight: 600;
+  background: #ffffff;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.gaf-likes-count {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  position: relative;
+}
+
+.gaf-likes-count:hover {
+  opacity: 0.7;
+}
+
+.gaf-likes-count i {
+  color: #ed4956;
+  font-size: 16px;
+}
+
+/* Tooltip hiển thị danh sách người đã like */
+.gaf-likes-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 8px;
+  background: #1a1a1a;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  min-width: 200px;
+  max-width: 240px;
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 1000;
+  border: 1px solid #000000;
+}
+
+.gaf-likes-tooltip-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #2a2a2a;
+  font-weight: 600;
+  font-size: 12px;
+  color: #ffffff;
+  background: #1a1a1a;
+  border-radius: 8px 8px 0 0;
+}
+
+.gaf-likes-tooltip-header i {
+  color: #ed4956;
+  font-size: 12px;
+}
+
+.gaf-likes-tooltip-list {
+  padding: 4px 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.gaf-likes-tooltip-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  transition: background 0.2s ease;
+  cursor: pointer;
+}
+
+.gaf-likes-tooltip-item:hover {
+  background: #2a2a2a;
+}
+
+.gaf-likes-tooltip-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #833ab4 0%, #fd1d1d 50%, #fcb045 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: 11px;
+  flex-shrink: 0;
+  border: 1px solid #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.gaf-likes-tooltip-name {
+  font-size: 12px;
+  color: #e0e0e0;
+  font-weight: 500;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Custom scrollbar cho tooltip */
+.gaf-likes-tooltip-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.gaf-likes-tooltip-list::-webkit-scrollbar-track {
+  background: #333333;
+  border-radius: 3px;
+}
+
+.gaf-likes-tooltip-list::-webkit-scrollbar-thumb {
+  background: #555555;
+  border-radius: 3px;
+}
+
+.gaf-likes-tooltip-list::-webkit-scrollbar-thumb:hover {
+  background: #666666;
+}
+
+.gaf-comments-count {
+  cursor: pointer;
+  color: #8e8e8e;
+  font-weight: 400;
+}
+
+.gaf-comments-count:hover {
+  color: #262626;
+  text-decoration: underline;
+}
+
+/* Comments Section - Instagram Style */
+.gaf-comments {
+  padding: 12px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #ffffff;
+}
+
+.gaf-comment {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 4px;
+  position: relative;
+  padding: 4px 0;
+}
+
+.gaf-comment-wrapper {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+}
+
+.gaf-comment-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #833ab4 0%, #fd1d1d 50%, #fcb045 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+  border: 2px solid white;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.gaf-comment-avatar:hover {
+  transform: scale(1.08);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
+}
+
+.gaf-comment-content {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
+.gaf-comment-author {
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-right: 8px;
+  font-size: 14px;
+}
+
+.gaf-comment-text {
+  color: #1a1a1a;
+  word-wrap: break-word;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.gaf-comment-menu {
+  display: inline-flex;
+  gap: 8px;
+  margin-left: 8px;
+  opacity: 1;
+  vertical-align: middle;
+  align-items: center;
+}
+
+.gaf-comment-menu-btn {
+  padding: 6px 12px;
+  border: none;
+  background: #f5f5f5;
+  color: #666666;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.gaf-comment-menu-btn:hover {
+  background: #e8e8e8;
+  color: #333333;
+}
+
+.gaf-comment-menu-btn i {
+  font-size: 12px;
+}
+
+.gaf-comment-menu-btn-delete {
+  background: #fee;
+  color: #ed4956;
+}
+
+.gaf-comment-menu-btn-delete:hover {
+  background: #fcc;
+  color: #dc2626;
+}
+
+.gaf-comment-menu-btn-delete i {
+  color: #ed4956;
+}
+
+.gaf-comment-menu-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Comment Input - Instagram Style */
+.gaf-comment-input-wrapper {
+  display: flex;
+  gap: 12px;
+  padding: 14px 18px;
+  border-top: 1px solid #f0f0f0;
+  align-items: center;
+  background: #ffffff;
+  border-radius: 0 0 16px 16px; /* Bo góc dưới để khớp với card */
+}
+
+.gaf-comment-input-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #833ab4 0%, #fd1d1d 50%, #fcb045 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+  border: 2px solid white;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.gaf-comment-input-avatar:hover {
+  transform: scale(1.08);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
+}
+
+.gaf-comment-input {
+  flex: 1;
+  padding: 10px 16px;
+  border: 1px solid #e8e8e8;
+  border-radius: 24px;
+  background: #f8f8f8;
+  font-size: 14px;
+  color: #1a1a1a;
+  font-family: inherit;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.gaf-comment-input:focus {
+  background: white;
+  border-color: #c1c1c1;
+  box-shadow: 0 0 0 2px rgba(131, 58, 180, 0.1);
+}
+
+.gaf-comment-input::placeholder {
+  color: #8e8e8e;
+}
+
+/* Nút Gửi bình luận */
+.gaf-comment-send-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  background: #0095f6;
+  color: white;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+  opacity: 1;
+  visibility: visible;
+}
+
+.gaf-comment-send-btn:hover:not(:disabled) {
+  background: #0084d4;
+  transform: scale(1.05);
+}
+
+.gaf-comment-send-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.gaf-comment-send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #c1c1c1;
+}
+
+.gaf-comment-send-btn i {
+  font-size: 12px;
+}
+
+.gaf-comment-send-btn span {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Edit Comment - Instagram Style */
+.gaf-edit-comment {
+  background: #fafafa;
+  border-radius: 8px;
+  padding: 8px 12px;
+  border: 1px solid #dbdbdb;
+}
+
+.gaf-comment-edit-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #dbdbdb;
+  border-radius: 8px;
+  background: white;
+  font-size: 14px;
+  color: #262626;
+  font-family: inherit;
+  margin-bottom: 8px;
+  outline: none;
+  resize: vertical;
+  min-height: 60px;
+  line-height: 1.5;
+}
+
+.gaf-comment-edit-input:focus {
+  border-color: #8e8e8e;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+
+.gaf-comment-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.gaf-comment-edit-btn {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #fafafa;
+  color: #262626;
+  border: 1px solid #dbdbdb;
+}
+
+.gaf-comment-edit-btn:hover {
+  background: #f0f0f0;
+}
+
+.gaf-comment-edit-btn.primary {
+  background: linear-gradient(135deg, #833ab4 0%, #fd1d1d 50%, #fcb045 100%);
+  color: white;
+  border: none;
+  box-shadow: 0 2px 4px rgba(131, 58, 180, 0.3);
+}
+
+.gaf-comment-edit-btn.primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(131, 58, 180, 0.4);
+}
+
+.gaf-comment-edit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Loading and Empty States */
+.gaf-loading,
+.gaf-empty {
+  padding: 60px 20px;
+  text-align: center;
+  color: #8e8e8e;
+  font-size: 14px;
+}
+
+.gaf-empty i {
+  font-size: 64px;
+  color: #dbdbdb;
+  margin-bottom: 16px;
+  display: block;
+}
+
+/* Loading more indicator */
+.gaf-loading-more {
+  padding: 24px 20px;
+  text-align: center;
+  color: #8e8e8e;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.gaf-loading-more i {
+  font-size: 18px;
+  color: #833ab4;
+}
+
+/* End message */
+.gaf-end-message {
+  padding: 24px 20px;
+  text-align: center;
+  color: #8e8e8e;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-top: 1px solid #e8e8e8;
+  margin-top: 8px;
+}
+
+.gaf-end-message i {
+  font-size: 16px;
+  color: #10b981;
+}
+
+/* Error Message */
+.gaf-error {
+  padding: 12px 16px;
+  background: #fff5f5;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #dc2626;
+  font-size: 13px;
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .gaf-post {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    margin-bottom: 0;
+  }
+
+  .gaf-post-header {
+    padding: 12px;
+  }
+
+  .gaf-post-actions {
+    padding: 8px 12px;
+  }
+
+  .gaf-comments {
+    padding: 0 12px 8px 12px;
+  }
+
+  .gaf-comment-input-wrapper {
+    padding: 12px;
+  }
+
+  .gaf-action-btn {
+    font-size: 12px;
+    padding: 6px;
+  }
+
+  .gaf-action-btn i {
+    font-size: 20px;
+  }
+}

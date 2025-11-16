@@ -112,6 +112,7 @@ app.use('/api/backup', require('./routes/backup'));
 // Tạo thư mục uploads nếu chưa tồn tại
 const uploadsDir = path.join(__dirname, 'uploads');
 const receiptsDir = path.join(uploadsDir, 'receipts');
+const groupPostsDir = path.join(uploadsDir, 'group-posts');
 
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
@@ -119,6 +120,10 @@ if (!fs.existsSync(uploadsDir)) {
 
 if (!fs.existsSync(receiptsDir)) {
   fs.mkdirSync(receiptsDir, { recursive: true });
+}
+
+if (!fs.existsSync(groupPostsDir)) {
+  fs.mkdirSync(groupPostsDir, { recursive: true });
 }
 
 // Serve static files cho uploads

@@ -38,6 +38,16 @@ export default function PublicGroupView() {
   const fmtMoney = v => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(v || 0);
   const fmtDate = d => d ? new Date(d).toLocaleDateString('vi-VN') : '';
 
+  // Ẩn bớt thông tin tên để bảo mật hơn trên trang chia sẻ công khai
+  const maskName = (name) => {
+    if (!name) return 'Thành viên';
+    const parts = String(name).trim().split(/\s+/);
+    if (parts.length === 1) return parts[0];
+    const first = parts[0];
+    const lastInitial = parts[parts.length - 1].charAt(0).toUpperCase();
+    return `${first} ${lastInitial}.`;
+  };
+
   if (loading) {
     return (
       <div className="pgp-wrap">
@@ -191,9 +201,9 @@ export default function PublicGroupView() {
                   <div className="pgp-members-grid">
                     {charts.members.map((m, i) => (
                       <div key={i} className="pgp-member-card">
-                        <div className="pgp-member-avatar">{(m.name || 'U').charAt(0).toUpperCase()}</div>
+                        <div className="pgp-member-avatar">{(maskName(m.name || 'U')).charAt(0).toUpperCase()}</div>
                         <div className="pgp-member-info">
-                          <div className="pgp-member-name">{m.name}</div>
+                          <div className="pgp-member-name">{maskName(m.name)}</div>
                           <div className="pgp-member-row"><span>Đã trả</span><strong>{fmtMoney(m.paid)}</strong></div>
                           <div className="pgp-member-row"><span>Đã mượn</span><strong>{fmtMoney(m.borrowed)}</strong></div>
                           <div className="pgp-member-row"><span>Được nợ</span><strong>{fmtMoney(m.owed)}</strong></div>

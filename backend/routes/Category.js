@@ -14,8 +14,10 @@ const extractUserInfo = (req, res, next) => {
       const decoded = require('jsonwebtoken').verify(token, 'secretKey');
       req.user = decoded;
     } catch (err) {
-      console.warn('Invalid token in request:', err.message);
+      req.user = null;
     }
+  } else {
+    req.user = null;
   }
   
   // If we have user in request already (e.g. from another middleware), use it
@@ -33,10 +35,27 @@ router.use(extractUserInfo);
 // @access  Public
 router.get('/', async (req, res) => {
   try {
-    // Populate owner thông tin để hiển thị trong admin
+    // Get all categories
     const categories = await Category.find()
-      .populate('owner', 'name email _id')
       .sort({ type: 1, name: 1 });
+    
+    // Collect all owner IDs that are valid ObjectIds
+    const ownerIds = [];
+    categories.forEach(cat => {
+      const owner = cat.owner;
+      if (owner && mongoose.Types.ObjectId.isValid(owner)) {
+        ownerIds.push(new mongoose.Types.ObjectId(owner));
+      }
+    });
+    
+    // Fetch all users in one query
+    const usersMap = new Map();
+    if (ownerIds.length > 0) {
+      const users = await User.find({ _id: { $in: ownerIds } }).select('name email _id');
+      users.forEach(user => {
+        usersMap.set(String(user._id), user);
+      });
+    }
       
     // Map to properly include owner info
     const enhancedCategories = categories.map(cat => {
@@ -44,23 +63,35 @@ router.get('/', async (req, res) => {
       
       // Ensure owner info is available for UI display
       if (category.owner) {
-        // If owner is populated object
-        if (typeof category.owner === 'object') {
-          if (!category.creatorName && category.owner.name) {
-            category.creatorName = category.owner.name;
-          }
-          // Ensure owner ID is visible to frontend
-          category.ownerId = category.owner._id || category.owner.id;
-        } 
-        // If owner is just an ID
-        else {
+        const ownerId = String(category.owner);
+        
+        // Check if we have user info in the map
+        const userInfo = usersMap.get(ownerId);
+        
+        if (userInfo) {
+          // We have user info from database
+          category.ownerName = userInfo.name || userInfo.email || 'Người dùng';
+          category.creatorName = userInfo.name || userInfo.email || category.creatorName || 'Người dùng';
+          category.ownerId = userInfo._id;
+          // Add owner object for frontend
+          category.owner = {
+            _id: userInfo._id,
+            name: userInfo.name,
+            email: userInfo.email
+          };
+        } else {
+          // No user found, use creatorName if available
           category.ownerId = category.owner;
+          category.ownerName = category.creatorName || 'Người dùng';
         }
         
         // If we have owner but no createdBy, set it
         if (!category.createdBy) {
           category.createdBy = 'user';
         }
+      } else {
+        // No owner - system category
+        category.ownerName = category.creatorName || 'Hệ thống';
       }
       
       return category;
@@ -68,7 +99,6 @@ router.get('/', async (req, res) => {
     
     res.json(enhancedCategories);
   } catch (err) {
-    console.error(err.message);
     res.status(500).json({ message: 'Server Error', error: err.message });
   }
 });
@@ -108,7 +138,7 @@ router.post('/', async (req, res) => {
     // Priority 1: authenticated user (from token middleware)
     if (req.user && (req.user.id || req.user._id)) {
       const uid = req.user.id || req.user._id;
-      // store actual ObjectId
+      // store actual ObjectId - this ensures each user has a unique owner
       categoryData.owner = createObjectId(uid);
       if (req.user.role === 'admin') {
         categoryData.createdBy = 'admin';
@@ -119,6 +149,7 @@ router.post('/', async (req, res) => {
       }
     } 
     // Priority 2: frontend provided owner / creatorName
+    // Note: This should only be used if token extraction failed
     else if (owner) {
       // If owner is a valid ObjectId string -> use it and try to resolve name
       if (mongoose.Types.ObjectId.isValid(owner)) {
@@ -153,6 +184,7 @@ router.post('/', async (req, res) => {
               categoryData.creatorName = foundUser.name || creatorName;
             } else {
               // no matching user found — keep temp owner string
+              // This allows anonymous users to create categories with unique temp IDs
               categoryData.owner = owner;
               categoryData.createdBy = createdBy === 'admin' ? 'admin' : 'user';
               // prefer provided creatorName, or mark as temporary user
@@ -174,21 +206,88 @@ router.post('/', async (req, res) => {
     } 
     // Priority 3: no owner provided => system category
     else {
+      // If no owner is set and no user is authenticated, this should be a system category
+      // But to prevent conflicts, we should ensure owner is explicitly null for system categories
+      categoryData.owner = null;
       categoryData.createdBy = 'system';
       categoryData.creatorName = 'Hệ thống';
     }
 
-    console.log('Creating category with data:', categoryData);
+    // Ensure owner is set for user-created categories to prevent conflicts
+    // If owner is still undefined at this point and createdBy is 'user', we need to handle it
+    if (categoryData.createdBy === 'user' && !categoryData.owner) {
+      // This shouldn't happen, but if it does, we need to generate a unique identifier
+      // For now, we'll throw an error to catch this case
+      return res.status(400).json({ message: 'Không thể xác định chủ sở hữu danh mục. Vui lòng đăng nhập lại.' });
+    }
+    
+    // Check if category with same name, type, and owner already exists for this user
+    // This provides a better error message before the unique index constraint kicks in
+    const query = {
+      name: categoryData.name,
+      type: categoryData.type
+    };
+    
+    // Add owner to query - if owner is null, explicitly check for null
+    if (categoryData.owner === null || categoryData.owner === undefined) {
+      query.owner = null;
+    } else {
+      query.owner = categoryData.owner;
+    }
+    
+    const existingCategory = await Category.findOne(query);
+    
+    if (existingCategory) {
+      // Category with same name, type, and owner already exists
+      if (categoryData.owner === null || categoryData.owner === undefined) {
+        return res.status(400).json({ 
+          message: `Danh mục hệ thống "${categoryData.name}" đã tồn tại` 
+        });
+      } else {
+        return res.status(400).json({ 
+          message: `Danh mục "${categoryData.name}" đã tồn tại trong danh sách của bạn` 
+        });
+      }
+    }
+    
     const newCategory = new Category(categoryData);
     const category = await newCategory.save();
     
     res.status(201).json(category);
   } catch (err) {
-    console.error('Error creating category:', err);
     if (err.code === 11000) {
-      return res.status(400).json({ message: 'Danh mục đã tồn tại' });
+      // More detailed error message for duplicate key
+      const duplicateField = err.keyPattern ? Object.keys(err.keyPattern)[0] : 'unknown';
+      return res.status(400).json({ 
+        message: `Danh mục "${req.body.name}" đã tồn tại. Mỗi người dùng có thể tạo danh mục riêng của mình.` 
+      });
     }
     res.status(500).json({ message: 'Server Error', error: err.message });
+  }
+});
+
+// @route   POST /api/categories/fix-index
+// @desc    Fix category index - drop old index and create new one with owner
+// @access  Public (should be admin only in production)
+router.post('/fix-index', async (req, res) => {
+  try {
+    // Use the ensureIndexes function from the model
+    await Category.ensureIndexes();
+    
+    // Verify the indexes
+    const collection = Category.collection;
+    const indexes = await collection.indexes();
+    
+    res.json({ 
+      message: 'Đã sửa index thành công',
+      indexes: indexes.map(idx => ({
+        name: idx.name,
+        key: idx.key,
+        unique: idx.unique || false
+      }))
+    });
+  } catch (err) {
+    res.status(500).json({ message: 'Lỗi khi sửa index', error: err.message });
   }
 });
 
@@ -239,7 +338,6 @@ router.post('/seed', async (req, res) => {
       totalCategories: expenseCategories.length + incomeCategories.length
     });
   } catch (err) {
-    console.error(err.message);
     res.status(500).json({ message: 'Server Error', error: err.message });
   }
 });
@@ -274,7 +372,6 @@ router.put('/:id', async (req, res) => {
     const updatedCategory = await category.save();
     res.json(updatedCategory);
   } catch (err) {
-    console.error(err.message);
     // Trả lỗi rõ hơn khi duplicate key
     if (err.code === 11000) {
       return res.status(400).json({ message: 'Danh mục đã tồn tại' });
@@ -297,7 +394,6 @@ router.delete('/:id', async (req, res) => {
     await Category.deleteOne({ _id: req.params.id });
     res.json({ message: 'Đã xóa danh mục thành công' });
   } catch (err) {
-    console.error(err.message);
     res.status(500).json({ message: 'Server Error', error: err.message });
   }
 });
