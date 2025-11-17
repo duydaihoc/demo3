@@ -301,7 +301,7 @@
 .sp-map-list {
   flex: 1;
   height: 360px;
-  max-height: none;
+  max-height: 360px;
   overflow: hidden;
   background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(249,252,255,0.95));
   backdrop-filter: blur(14px);
@@ -338,11 +338,15 @@
   padding:0;
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   display:flex;
   flex-direction:column;
   gap:8px;
   scrollbar-width: thin;
   scrollbar-color: #d6e3ec #f9fcff;
+  /* Giới hạn chiều cao để hiển thị đầy đủ khoảng 2-3 items (mỗi item có thể cao hơn nếu có nhiều thông tin) */
+  max-height: calc(3 * 100px + 2 * 8px); /* 3 items đầy đủ + 2 gaps */
+  min-height: 0; /* Quan trọng để flex scroll hoạt động */
 }
 .sp-map-ul::-webkit-scrollbar { width: 7px; }
 .sp-map-ul::-webkit-scrollbar-track { background: #f9fcff; border-radius: 10px; }
@@ -365,7 +369,10 @@
   color:#173a56;
   box-shadow: 0 3px 10px rgba(42,82,152,0.06);
   position: relative;
-  overflow: hidden;
+  overflow: visible; /* Cho phép hiển thị đầy đủ nội dung */
+  flex-shrink: 0; /* Quan trọng: không cho items bị shrink */
+  min-height: auto; /* Cho phép item tự điều chỉnh chiều cao theo nội dung */
+  height: auto; /* Tự động điều chỉnh chiều cao */
 }
 .sp-map-item::before {
   content: '';
@@ -422,12 +429,14 @@
   font-weight:800;
   font-size:.75rem;
   flex:1;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
+  /* Cho phép text wrap nếu cần để hiển thị đầy đủ */
+  white-space: normal;
+  word-wrap: break-word;
+  overflow: visible;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 5px;
+  line-height: 1.4;
 }
 .sp-map-item-title::before {
   content: '📍';
@@ -477,12 +486,14 @@
   font-size:.65rem;
   font-weight:700;
   color:#2a5298;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
+  /* Cho phép text wrap để hiển thị đầy đủ thông tin */
+  white-space: normal;
+  word-wrap: break-word;
+  overflow: visible;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 4px;
+  line-height: 1.4;
 }
 .sp-map-item-place::before {
   content: '🏠';

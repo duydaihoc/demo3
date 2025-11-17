@@ -132,7 +132,7 @@ router.get('/', requireAuth, async (req, res) => {
       ]
     })
     .populate('wallet')
-    .populate('category')
+    .populate('category', 'name icon type') // QUAN TRỌNG: Populate category với các fields cần thiết
     .populate('createdBy', 'name email')
     .populate('payer', 'name email')
     .populate('participants.user', 'name email')
@@ -144,8 +144,55 @@ router.get('/', requireAuth, async (req, res) => {
     const groups = await mongoose.model('Group').find({ _id: { $in: groupIds } }).lean();
     const groupMap = new Map(groups.map(g => [g._id.toString(), g]));
 
+    // Tối ưu: Collect tất cả category IDs và populate một lần
+    const categoryIds = new Set();
+    groupTxs.forEach(gtx => {
+      if (gtx.category) {
+        if (typeof gtx.category === 'object' && gtx.category._id) {
+          categoryIds.add(String(gtx.category._id));
+        } else if (typeof gtx.category === 'string' && mongoose.Types.ObjectId.isValid(gtx.category)) {
+          categoryIds.add(gtx.category);
+        } else if (typeof gtx.category === 'object' && !gtx.category.name) {
+          // Category object nhưng chưa có name, lấy _id
+          const catId = gtx.category._id || gtx.category;
+          if (mongoose.Types.ObjectId.isValid(catId)) {
+            categoryIds.add(String(catId));
+          }
+        }
+      }
+    });
+    
+    // Populate tất cả categories một lần
+    const categories = await Category.find({ _id: { $in: Array.from(categoryIds) } })
+      .select('name icon type _id')
+      .lean();
+    const categoryMap = new Map(categories.map(cat => [String(cat._id), cat]));
+
+    // Helper: Lấy category đã populate từ map
+    const getPopulatedCategory = (category) => {
+      if (!category) return null;
+      // Nếu đã là object có name, return luôn
+      if (typeof category === 'object' && category.name) {
+        return category;
+      }
+      // Tìm trong map
+      let catId = null;
+      if (typeof category === 'string' && mongoose.Types.ObjectId.isValid(category)) {
+        catId = category;
+      } else if (typeof category === 'object' && category._id) {
+        catId = String(category._id);
+      }
+      if (catId) {
+        return categoryMap.get(catId) || null;
+      }
+      return null;
+    };
+
     // Transform group transactions to format compatible with personal transactions
-    const transformedGroupTxs = groupTxs.map(gtx => {
+    const transformedGroupTxs = groupTxs.map((gtx) => {
+      // Lấy category đã populate từ map
+      const populatedCategory = getPopulatedCategory(gtx.category);
+      
       // Determine if this user is the creator/payer
       const isPayer = String(gtx.createdBy?._id || gtx.createdBy) === String(currentUserId);
       
@@ -233,6 +280,7 @@ router.get('/', requireAuth, async (req, res) => {
           amount: actualPaidAmount, // ACTUAL amount paid by creator
           totalAmount: gtx.amount, // Store original per-person amount
           date: gtx.date || gtx.createdAt,
+          category: populatedCategory, // QUAN TRỌNG: Sử dụng category đã được populate đúng cách
           groupTransaction: true,
           groupTransactionType: gtx.transactionType,
           groupId: gtx.groupId,
@@ -280,6 +328,7 @@ router.get('/', requireAuth, async (req, res) => {
                 amount: p.shareAmount || 0, // Amount received from this participant
                 totalAmount: gtx.amount, // Original total transaction amount
                 date: p.settledAt || gtx.date || gtx.createdAt,
+                category: populatedCategory, // QUAN TRỌNG: Sử dụng category đã được populate đúng cách
                 groupTransaction: true,
                 groupTransactionType: gtx.transactionType,
                 groupId: gtx.groupId,
@@ -327,6 +376,7 @@ router.get('/', requireAuth, async (req, res) => {
             amount: userParticipation.shareAmount || 0, // Amount this user paid
             totalAmount: gtx.amount, // Original total transaction amount
             date: userParticipation.settledAt || gtx.date || gtx.createdAt,
+            category: populatedCategory, // QUAN TRỌNG: Sử dụng category đã được populate đúng cách
             wallet: userParticipation.wallet || gtx.wallet, // QUAN TRỌNG: Dùng ví của participant, không phải ví của payer!
             groupTransaction: true,
             groupTransactionType: gtx.transactionType,
@@ -364,6 +414,7 @@ router.get('/', requireAuth, async (req, res) => {
             amount: userParticipation.shareAmount || 0, // Amount this user owes
             totalAmount: gtx.amount, // Original total transaction amount
             date: gtx.date || gtx.createdAt,
+            category: populatedCategory, // QUAN TRỌNG: Sử dụng category đã được populate đúng cách
             wallet: userParticipation.wallet || gtx.wallet, // Dùng ví của participant nếu có
             groupTransaction: true,
             groupTransactionType: gtx.transactionType,

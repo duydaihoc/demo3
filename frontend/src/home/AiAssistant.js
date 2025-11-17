@@ -426,6 +426,64 @@ export default function AiAssistant() {
     }
   };
 
+  // THÊM: Function thông báo AI về việc hủy hành động
+  const notifyAiAboutCancel = async (actionType) => {
+    try {
+      const cancelMessages = {
+        create: 'Tôi đã hủy việc tạo giao dịch này',
+        edit: 'Tôi đã hủy việc sửa giao dịch này',
+        delete: 'Tôi đã hủy việc xóa giao dịch này'
+      };
+      
+      const cancelMessage = cancelMessages[actionType] || 'Tôi đã hủy hành động này';
+      
+      // Thêm message của user vào conversation
+      const userCancelMessage = {
+        id: Date.now(),
+        text: cancelMessage,
+        sender: 'user',
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, userCancelMessage]);
+      
+      // Cập nhật conversation history
+      const newHistory = [
+        ...conversationHistory,
+        { role: 'user', content: cancelMessage }
+      ].slice(-10);
+      
+      setConversationHistory(newHistory);
+      
+      // Gửi đến AI để AI hiểu và phản hồi
+      const response = await fetch(`${API_BASE}/api/ai/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          message: cancelMessage,
+          conversationHistory: newHistory,
+          persona:
+            persona === 'friendly'
+              ? 'friendly'
+              : persona === 'aggressive'
+              ? 'aggressive'
+              : 'neutral'
+        })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        await handleAiResponse(data, cancelMessage);
+      }
+    } catch (error) {
+      console.error('Error notifying AI about cancel:', error);
+      // Không hiển thị lỗi cho user, chỉ log
+    }
+  };
+
   // THÊM: Function để tạo giao dịch từ suggestion với ví đã chọn
   const createTransactionFromSuggestion = async () => {
     if (!suggestedTransaction) return;
@@ -1104,7 +1162,15 @@ export default function AiAssistant() {
 
       {/* THÊM: Edit Transaction Modal */}
       {showEditModal && editSuggestion && (
-        <div className="ai-modal-overlay" onClick={() => setShowEditModal(false)}>
+        <div className="ai-modal-overlay" onClick={async () => {
+          const wasEditing = !!selectedTransactionToEdit;
+          setShowEditModal(false);
+          setSelectedTransactionToEdit(null);
+          // THÊM: Thông báo AI về việc hủy sửa giao dịch (chỉ khi đang sửa)
+          if (wasEditing) {
+            await notifyAiAboutCancel('edit');
+          }
+        }}>
           <div className="ai-modal ai-transaction-modal" onClick={(e) => e.stopPropagation()}>
             <div className="ai-modal-header">
               <div className="ai-header-info">
@@ -1122,7 +1188,15 @@ export default function AiAssistant() {
                   </div>
                 </div>
               </div>
-              <button className="ai-close-btn" onClick={() => setShowEditModal(false)}>
+              <button className="ai-close-btn" onClick={async () => {
+                const wasEditing = !!selectedTransactionToEdit;
+                setShowEditModal(false);
+                setSelectedTransactionToEdit(null);
+                // THÊM: Thông báo AI về việc hủy sửa giao dịch (chỉ khi đang sửa)
+                if (wasEditing) {
+                  await notifyAiAboutCancel('edit');
+                }
+              }}>
                 <i className="fas fa-times"></i>
               </button>
             </div>
@@ -1258,9 +1332,14 @@ export default function AiAssistant() {
               <div className="ai-transaction-actions">
                 <button 
                   className="ai-btn secondary"
-                  onClick={() => {
+                  onClick={async () => {
+                    const wasEditing = !!selectedTransactionToEdit;
                     setShowEditModal(false);
                     setSelectedTransactionToEdit(null);
+                    // THÊM: Thông báo AI về việc hủy sửa giao dịch (chỉ khi đang sửa, không phải đang chọn)
+                    if (wasEditing) {
+                      await notifyAiAboutCancel('edit');
+                    }
                   }}
                   disabled={editingSaving}
                 >
@@ -1294,7 +1373,15 @@ export default function AiAssistant() {
 
       {/* THÊM: Delete Transaction Modal */}
       {showDeleteModal && deleteSuggestion && (
-        <div className="ai-modal-overlay" onClick={() => setShowDeleteModal(false)}>
+        <div className="ai-modal-overlay" onClick={async () => {
+          const wasDeleting = !!selectedTransactionToDelete;
+          setShowDeleteModal(false);
+          setSelectedTransactionToDelete(null);
+          // THÊM: Thông báo AI về việc hủy xóa giao dịch (chỉ khi đã chọn giao dịch)
+          if (wasDeleting) {
+            await notifyAiAboutCancel('delete');
+          }
+        }}>
           <div className="ai-modal ai-transaction-modal" onClick={(e) => e.stopPropagation()}>
             <div className="ai-modal-header">
               <div className="ai-header-info">
@@ -1311,7 +1398,15 @@ export default function AiAssistant() {
                   </div>
                 </div>
               </div>
-              <button className="ai-close-btn" onClick={() => setShowDeleteModal(false)}>
+              <button className="ai-close-btn" onClick={async () => {
+                const wasDeleting = !!selectedTransactionToDelete;
+                setShowDeleteModal(false);
+                setSelectedTransactionToDelete(null);
+                // THÊM: Thông báo AI về việc hủy xóa giao dịch (chỉ khi đã chọn giao dịch)
+                if (wasDeleting) {
+                  await notifyAiAboutCancel('delete');
+                }
+              }}>
                 <i className="fas fa-times"></i>
               </button>
             </div>
@@ -1425,9 +1520,14 @@ export default function AiAssistant() {
               <div className="ai-transaction-actions">
                 <button 
                   className="ai-btn secondary"
-                  onClick={() => {
+                  onClick={async () => {
+                    const wasDeleting = !!selectedTransactionToDelete;
                     setShowDeleteModal(false);
                     setSelectedTransactionToDelete(null);
+                    // THÊM: Thông báo AI về việc hủy xóa giao dịch (chỉ khi đã chọn giao dịch để xóa)
+                    if (wasDeleting) {
+                      await notifyAiAboutCancel('delete');
+                    }
                   }}
                   disabled={deletingSaving}
                 >
@@ -1461,7 +1561,15 @@ export default function AiAssistant() {
 
       {/* THÊM: Edit Transaction Modal */}
       {showEditModal && editSuggestion && (
-        <div className="ai-modal-overlay" onClick={() => setShowEditModal(false)}>
+        <div className="ai-modal-overlay" onClick={async () => {
+          const wasEditing = !!selectedTransactionToEdit;
+          setShowEditModal(false);
+          setSelectedTransactionToEdit(null);
+          // THÊM: Thông báo AI về việc hủy sửa giao dịch (chỉ khi đang sửa)
+          if (wasEditing) {
+            await notifyAiAboutCancel('edit');
+          }
+        }}>
           <div className="ai-modal ai-transaction-modal" onClick={(e) => e.stopPropagation()}>
             <div className="ai-modal-header">
               <div className="ai-header-info">
@@ -1479,7 +1587,15 @@ export default function AiAssistant() {
                   </div>
                 </div>
               </div>
-              <button className="ai-close-btn" onClick={() => setShowEditModal(false)}>
+              <button className="ai-close-btn" onClick={async () => {
+                const wasEditing = !!selectedTransactionToEdit;
+                setShowEditModal(false);
+                setSelectedTransactionToEdit(null);
+                // THÊM: Thông báo AI về việc hủy sửa giao dịch (chỉ khi đang sửa)
+                if (wasEditing) {
+                  await notifyAiAboutCancel('edit');
+                }
+              }}>
                 <i className="fas fa-times"></i>
               </button>
             </div>
@@ -1614,9 +1730,14 @@ export default function AiAssistant() {
               <div className="ai-transaction-actions">
                 <button 
                   className="ai-btn secondary"
-                  onClick={() => {
+                  onClick={async () => {
+                    const wasEditing = !!selectedTransactionToEdit;
                     setShowEditModal(false);
                     setSelectedTransactionToEdit(null);
+                    // THÊM: Thông báo AI về việc hủy sửa giao dịch (chỉ khi đang sửa, không phải đang chọn)
+                    if (wasEditing) {
+                      await notifyAiAboutCancel('edit');
+                    }
                   }}
                   disabled={editingSaving}
                 >
@@ -1650,7 +1771,13 @@ export default function AiAssistant() {
 
       {/* Transaction Confirmation Modal - CẬP NHẬT */}
       {showTransactionModal && suggestedTransaction && (
-        <div className="ai-modal-overlay" onClick={() => setShowTransactionModal(false)}>
+        <div className="ai-modal-overlay" onClick={async () => {
+          setShowTransactionModal(false);
+          setSelectedWalletId('');
+          setWalletCategories([]);
+          // THÊM: Thông báo AI về việc hủy tạo giao dịch
+          await notifyAiAboutCancel('create');
+        }}>
           <div className="ai-modal ai-transaction-modal" onClick={(e) => e.stopPropagation()}>
             <div className="ai-modal-header">
               <div className="ai-header-info">
@@ -1665,7 +1792,13 @@ export default function AiAssistant() {
                   </div>
                 </div>
               </div>
-              <button className="ai-close-btn" onClick={() => setShowTransactionModal(false)}>
+              <button className="ai-close-btn" onClick={async () => {
+                setShowTransactionModal(false);
+                setSelectedWalletId('');
+                setWalletCategories([]);
+                // THÊM: Thông báo AI về việc hủy tạo giao dịch
+                await notifyAiAboutCancel('create');
+              }}>
                 <i className="fas fa-times"></i>
               </button>
             </div>
@@ -1802,10 +1935,12 @@ export default function AiAssistant() {
               <div className="ai-transaction-actions">
                 <button 
                   className="ai-btn secondary"
-                  onClick={() => {
+                  onClick={async () => {
                     setShowTransactionModal(false);
                     setSelectedWalletId('');
                     setWalletCategories([]);
+                    // THÊM: Thông báo AI về việc hủy tạo giao dịch
+                    await notifyAiAboutCancel('create');
                   }}
                   disabled={creatingTransaction}
                 >

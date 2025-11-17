@@ -515,6 +515,18 @@ function detectIncompleteTransaction(message, pendingTransaction = null) {
   try {
     const lowerMessage = message.toLowerCase().trim();
     
+    // LOẠI TRỪ: Kiểm tra xem có phải là "hủy hành động" không (hủy việc tạo/sửa/xóa)
+    const isCancelAction = lowerMessage.includes('hủy việc') || lowerMessage.includes('huy viec') ||
+                           lowerMessage.includes('đã hủy việc') || lowerMessage.includes('da huy viec') ||
+                           lowerMessage.includes('hủy việc tạo') || lowerMessage.includes('hủy việc sửa') ||
+                           lowerMessage.includes('hủy việc xóa') || lowerMessage.includes('hủy hành động') ||
+                           lowerMessage.includes('đã hủy') || lowerMessage.includes('da huy');
+    
+    if (isCancelAction) {
+      // Đây là hủy hành động, không phải tạo giao dịch
+      return { complete: false, missing: null };
+    }
+    
     // Nếu đang có pending transaction, check xem message có cung cấp thông tin còn thiếu không
     if (pendingTransaction) {
       // Kiểm tra có số tiền không
@@ -776,9 +788,18 @@ router.post('/chat', auth, async (req, res) => {
                               lowerMessageEarly.includes('thay đổi') || lowerMessageEarly.includes('cập nhật') || 
                               lowerMessageEarly.includes('đổi');
     
-    // THÊM: Kiểm tra ý định XÓA
-    const isDeleteIntentEarly = lowerMessageEarly.includes('xóa') || lowerMessageEarly.includes('xoá') || 
-                                lowerMessageEarly.includes('hủy') || lowerMessageEarly.includes('bỏ');
+    // THÊM: Kiểm tra ý định XÓA - LOẠI TRỪ các trường hợp "hủy việc tạo/sửa/xóa" (hủy hành động, không phải xóa giao dịch)
+    const isCancelAction = lowerMessageEarly.includes('hủy việc') || lowerMessageEarly.includes('huy viec') ||
+                           lowerMessageEarly.includes('đã hủy việc') || lowerMessageEarly.includes('da huy viec') ||
+                           lowerMessageEarly.includes('hủy việc tạo') || lowerMessageEarly.includes('hủy việc sửa') ||
+                           lowerMessageEarly.includes('hủy việc xóa') || lowerMessageEarly.includes('hủy hành động');
+    
+    // Chỉ coi là xóa giao dịch nếu có từ khóa xóa/hủy NHƯNG KHÔNG phải là hủy hành động
+    const isDeleteIntentEarly = !isCancelAction && (
+      lowerMessageEarly.includes('xóa') || lowerMessageEarly.includes('xoá') || 
+      (lowerMessageEarly.includes('hủy') && !lowerMessageEarly.includes('hủy việc')) ||
+      (lowerMessageEarly.includes('bỏ') && !lowerMessageEarly.includes('bỏ việc'))
+    );
 
     // Chỉ kiểm tra incomplete transaction khi KHÔNG phải sửa/xóa
     const incompleteCheck = !isEditIntentEarly && !isDeleteIntentEarly ? detectIncompleteTransaction(message, pendingTransaction) : { complete: false, missing: null };
@@ -930,10 +951,19 @@ ${categoryName ? `📊 ${categoryName}` : ''}
         // THÊM: Lịch sử hội thoại để giữ mạch trò chuyện
         const transcript = buildConversationTranscript(conversationHistory, 8);
         
-        // THÊM: Kiểm tra ý định XÓA giao dịch TRƯỚC
+        // THÊM: Kiểm tra ý định XÓA giao dịch TRƯỚC - LOẠI TRỪ các trường hợp "hủy việc tạo/sửa/xóa"
         const lowerMessage = message.toLowerCase();
-        if (lowerMessage.includes('xóa') || lowerMessage.includes('xoá') || 
-            lowerMessage.includes('hủy') || lowerMessage.includes('bỏ')) {
+        const isCancelAction = lowerMessage.includes('hủy việc') || lowerMessage.includes('huy viec') ||
+                               lowerMessage.includes('đã hủy việc') || lowerMessage.includes('da huy viec') ||
+                               lowerMessage.includes('hủy việc tạo') || lowerMessage.includes('hủy việc sửa') ||
+                               lowerMessage.includes('hủy việc xóa') || lowerMessage.includes('hủy hành động');
+        
+        // Chỉ kiểm tra delete intent nếu KHÔNG phải là hủy hành động
+        if (!isCancelAction && (
+          lowerMessage.includes('xóa') || lowerMessage.includes('xoá') || 
+          (lowerMessage.includes('hủy') && !lowerMessage.includes('hủy việc')) ||
+          (lowerMessage.includes('bỏ') && !lowerMessage.includes('bỏ việc'))
+        )) {
           
           const deleteAnalysis = await analyzeDeleteTransactionIntent(
             message, 
@@ -1081,10 +1111,15 @@ ${deleteSuggestion ? 'YÊU CẦU XÓA GIAO DỊCH: Có ý định xóa, xử lý
  editSuggestion ? 'YÊU CẦU SỬA GIAO DỊCH: Có ý định cập nhật giao dịch.' :
  transactionSuggestion ? 'Ý ĐỊNH TẠO GIAO DỊCH MỚI: Hỏi xác nhận.' : ''}
 
+**QUAN TRỌNG - PHÂN BIỆT HỦY HÀNH ĐỘNG VÀ TẠO GIAO DỊCH:**
+- Nếu người dùng nói "Tôi đã hủy việc tạo/sửa/xóa giao dịch này" → Đây là HỦY HÀNH ĐỘNG, KHÔNG phải yêu cầu tạo giao dịch mới.
+- Khi người dùng hủy hành động, hãy xác nhận và hỏi xem họ cần gì tiếp theo, KHÔNG hỏi thông tin để tạo giao dịch.
+
 CÂU HỎI: ${message}
 
 Hãy trả lời ngắn gọn, rõ ràng, tận dụng NGỮ CẢNH LIÊN QUAN nếu phù hợp.
 Nếu người dùng yêu cầu lời khuyên, đưa ra 2-4 khuyến nghị thực tế dựa trên số liệu của họ (ưu tiên danh mục chi tiêu cao, chênh lệch thu-chi, số dư ví). Nếu yêu cầu thống kê, hãy tóm tắt số liệu và nêu 1-2 insight chính.
+Nếu người dùng hủy hành động (tạo/sửa/xóa giao dịch), hãy xác nhận và hỏi xem họ cần gì tiếp theo.
 `;
 
         // Gọi Gemini API với timeout
@@ -1111,10 +1146,19 @@ Nếu người dùng yêu cầu lời khuyên, đưa ra 2-4 khuyến nghị th�
     } else {
       console.log('⚠️ Gemini not available, using enhanced fallback');
       fallback = true;
-      // Fallback: nếu là xóa, tạo deleteSuggestion
+      // Fallback: nếu là xóa, tạo deleteSuggestion - LOẠI TRỪ các trường hợp "hủy việc tạo/sửa/xóa"
       const lowerMessage = message.toLowerCase();
-      if (lowerMessage.includes('xóa') || lowerMessage.includes('xoá') || 
-          lowerMessage.includes('hủy') || lowerMessage.includes('bỏ')) {
+      const isCancelAction = lowerMessage.includes('hủy việc') || lowerMessage.includes('huy viec') ||
+                             lowerMessage.includes('đã hủy việc') || lowerMessage.includes('da huy viec') ||
+                             lowerMessage.includes('hủy việc tạo') || lowerMessage.includes('hủy việc sửa') ||
+                             lowerMessage.includes('hủy việc xóa') || lowerMessage.includes('hủy hành động');
+      
+      // Chỉ kiểm tra delete intent nếu KHÔNG phải là hủy hành động
+      if (!isCancelAction && (
+        lowerMessage.includes('xóa') || lowerMessage.includes('xoá') || 
+        (lowerMessage.includes('hủy') && !lowerMessage.includes('hủy việc')) ||
+        (lowerMessage.includes('bỏ') && !lowerMessage.includes('bỏ việc'))
+      )) {
         const fallbackDelete = fallbackAnalyzeDeleteIntent(message, recentTransactions);
         if (fallbackDelete && fallbackDelete.success) {
           deleteSuggestion = fallbackDelete.deleteIntent;
@@ -1346,7 +1390,8 @@ router.post('/create-transaction', auth, async (req, res) => {
       description: null, // SỬA: Để null hoặc có thể thêm note riêng
       category: categoryId || null,
       date: new Date(),
-      createdAt: new Date()
+      createdAt: new Date(),
+      createdBy: userId // QUAN TRỌNG: Lưu người tạo giao dịch
     });
 
     await transaction.save();
@@ -1362,6 +1407,7 @@ router.post('/create-transaction', auth, async (req, res) => {
     // Populate transaction for response
     await transaction.populate('wallet', 'name');
     await transaction.populate('category', 'name icon type');
+    await transaction.populate('createdBy', 'name email _id'); // QUAN TRỌNG: Populate createdBy
 
     console.log('✅ Transaction created from AI suggestion:', transaction._id);
 
@@ -1768,6 +1814,18 @@ router.post('/delete-transaction', auth, async (req, res) => {
 // THÊM: Helper phân tích ý intention xóa giao dịch
 async function analyzeDeleteTransactionIntent(message, userId, wallets, categories, model) {
   try {
+    // LOẠI TRỪ: Kiểm tra xem có phải là "hủy hành động" không (hủy việc tạo/sửa/xóa)
+    const lower = (message || '').toLowerCase();
+    const isCancelAction = lower.includes('hủy việc') || lower.includes('huy viec') ||
+                           lower.includes('đã hủy việc') || lower.includes('da huy viec') ||
+                           lower.includes('hủy việc tạo') || lower.includes('hủy việc sửa') ||
+                           lower.includes('hủy việc xóa') || lower.includes('hủy hành động');
+    
+    if (isCancelAction) {
+      console.log('⚠️ analyzeDeleteTransactionIntent: This is cancel action, not delete transaction');
+      return { success: false, reason: 'Đây là hủy hành động, không phải xóa giao dịch' };
+    }
+    
     // Lấy danh sách giao dịch gần đây
     const recentTransactions = await Transaction.find({ 
       wallet: { $in: wallets.map(w => w._id) } 
@@ -1888,6 +1946,17 @@ function fallbackAnalyzeDeleteIntent(message, recentTransactions) {
     console.log('Total transactions:', recentTransactions.length);
     
     const lower = message.toLowerCase();
+    
+    // LOẠI TRỪ: Kiểm tra xem có phải là "hủy hành động" không (hủy việc tạo/sửa/xóa)
+    const isCancelAction = lower.includes('hủy việc') || lower.includes('huy viec') ||
+                           lower.includes('đã hủy việc') || lower.includes('da huy viec') ||
+                           lower.includes('hủy việc tạo') || lower.includes('hủy việc sửa') ||
+                           lower.includes('hủy việc xóa') || lower.includes('hủy hành động');
+    
+    if (isCancelAction) {
+      console.log('⚠️ This is cancel action, not delete transaction');
+      return null;
+    }
     
     const normalize = (s) => (s || '')
       .toLowerCase()
@@ -2258,7 +2327,14 @@ router.get('/insights', auth, requireAuth, async (req, res) => {
     const payload = aggregateInsights(txs || [], months);
 
     // Dùng Gemini tạo các insight "trợ lý tài chính thông minh" từ thống kê
-    const aiItems = await buildAiSpendingInsights(payload, req.user.name || 'bạn');
+    // Wrap in try-catch để không làm crash endpoint nếu AI insights fail
+    let aiItems = [];
+    try {
+      aiItems = await buildAiSpendingInsights(payload, req.user.name || 'bạn');
+    } catch (aiErr) {
+      console.warn('⚠️ AI insights generation failed, continuing without AI items:', aiErr.message);
+      // Continue without AI items - không crash endpoint
+    }
 
     return res.json({
       ok: true,
@@ -2400,7 +2476,10 @@ function aggregateInsights(transactions, months) {
 // THÊM: Dùng Gemini để tạo insight "trợ lý tài chính thông minh" từ thống kê
 async function buildAiSpendingInsights(statsPayload, userName = 'bạn') {
   try {
-    if (!geminiAvailable || !model) return [];
+    if (!geminiAvailable || !model) {
+      console.log('⚠️ Gemini not available for AI insights');
+      return [];
+    }
 
     const { months, totals, topCategories, nightSpending, suggestions } = statsPayload || {};
     const monthLines = (months || []).map((m, idx) => {
@@ -2461,7 +2540,14 @@ YÊU CẦU:
 - Không nhắc đến từ "AI" hay "mô hình ngôn ngữ".
 `;
 
-    const result = await model.generateContent(prompt);
+    // Add timeout to prevent hanging
+    const result = await Promise.race([
+      model.generateContent(prompt),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Gemini API timeout after 15 seconds')), 15000)
+      )
+    ]);
+    
     const response = await result.response;
     let text = (await response.text()).trim();
     text = text.replace(/```json\n?/g, '').replace(/```/g, '').trim();
@@ -2488,66 +2574,35 @@ YÊU CẦU:
       })
       .filter(Boolean);
   } catch (err) {
-    console.error('❌ buildAiSpendingInsights error:', err);
+    // Log error but don't crash - return empty array gracefully
+    if (err.message && err.message.includes('timeout')) {
+      console.warn('⚠️ buildAiSpendingInsights timeout:', err.message);
+    } else if (err.message && err.message.includes('fetch failed')) {
+      console.warn('⚠️ buildAiSpendingInsights network error:', err.message);
+    } else {
+      console.error('❌ buildAiSpendingInsights error:', err.message || err);
+    }
     return [];
   }
 }
 
-/**
- * GET /api/ai/insights
- * Query:
- * - months: number of months window (1..6), default 3
- * - walletId: optional filter by a specific wallet
- */
-router.get('/insights', auth, requireAuth, async (req, res) => {
-  try {
-    const userId = req.user._id;
-    const monthsParam = Math.max(1, Math.min(6, parseInt(req.query.months || '3', 10)));
-    const months = buildMonthsWindow(monthsParam);
-
-    // Time window bounds (from earliest month start to last month end)
-    const from = months[0].start;
-    const to = months[months.length - 1].end;
-
-    // Wallet filter for current user
-    let walletFilter = {};
-    if (req.query.walletId) {
-      walletFilter = { _id: req.query.walletId };
-    }
-    const wallets = await Wallet.find({ owner: userId, ...walletFilter }).select('_id').lean();
-    const walletIds = wallets.map(w => w._id);
-
-    // Pull transactions within time window for user's wallets, or by user field if available
-    const txQuery = {
-      date: { $gte: from, $lt: to }
-    };
-    if (walletIds.length > 0) {
-      txQuery.wallet = { $in: walletIds };
-    } else {
-      // fallback if wallet ownership not used in your schema
-      txQuery.user = userId;
-    }
-
-    const txs = await Transaction.find(txQuery)
-      .populate('category', 'name icon type')
-      .populate('wallet', 'name currency')
-      .lean();
-
-    const payload = aggregateInsights(txs || [], months);
-    return res.json({
-      ok: true,
-      ...payload
-    });
-  } catch (err) {
-    console.error('AI insights error:', err);
-    res.status(500).json({ ok: false, message: 'Failed to compute insights', error: err.message });
-  }
-});
 
 // ======================== FALLBACK ANALYZE INTENT ========================
 // THÊM: Helper phân tích ý intention xóa giao dịch
 async function analyzeDeleteTransactionIntent(message, userId, wallets, categories, model) {
   try {
+    // LOẠI TRỪ: Kiểm tra xem có phải là "hủy hành động" không (hủy việc tạo/sửa/xóa)
+    const lower = (message || '').toLowerCase();
+    const isCancelAction = lower.includes('hủy việc') || lower.includes('huy viec') ||
+                           lower.includes('đã hủy việc') || lower.includes('da huy viec') ||
+                           lower.includes('hủy việc tạo') || lower.includes('hủy việc sửa') ||
+                           lower.includes('hủy việc xóa') || lower.includes('hủy hành động');
+    
+    if (isCancelAction) {
+      console.log('⚠️ analyzeDeleteTransactionIntent: This is cancel action, not delete transaction');
+      return { success: false, reason: 'Đây là hủy hành động, không phải xóa giao dịch' };
+    }
+    
     // Lấy danh sách giao dịch gần đây
     const recentTransactions = await Transaction.find({ 
       wallet: { $in: wallets.map(w => w._id) } 
@@ -2668,6 +2723,17 @@ function fallbackAnalyzeDeleteIntent(message, recentTransactions) {
     console.log('Total transactions:', recentTransactions.length);
     
     const lower = message.toLowerCase();
+    
+    // LOẠI TRỪ: Kiểm tra xem có phải là "hủy hành động" không (hủy việc tạo/sửa/xóa)
+    const isCancelAction = lower.includes('hủy việc') || lower.includes('huy viec') ||
+                           lower.includes('đã hủy việc') || lower.includes('da huy viec') ||
+                           lower.includes('hủy việc tạo') || lower.includes('hủy việc sửa') ||
+                           lower.includes('hủy việc xóa') || lower.includes('hủy hành động');
+    
+    if (isCancelAction) {
+      console.log('⚠️ This is cancel action, not delete transaction');
+      return null;
+    }
     
     const normalize = (s) => (s || '')
       .toLowerCase()
@@ -2999,52 +3065,6 @@ function fallbackAnalyzeEditIntent(message, recentTransactions) {
   }
 }
 
-// ======================== POST /api/ai/insights ========================
-// Endpoint phân tích và cung cấp thông tin chi tiết về giao dịch
-router.get('/insights', auth, requireAuth, async (req, res) => {
-  try {
-    const userId = req.user._id;
-    const monthsParam = Math.max(1, Math.min(6, parseInt(req.query.months || '3', 10)));
-    const months = buildMonthsWindow(monthsParam);
-
-    // Time window bounds (from earliest month start to last month end)
-    const from = months[0].start;
-    const to = months[months.length - 1].end;
-
-    // Wallet filter for current user
-    let walletFilter = {};
-    if (req.query.walletId) {
-      walletFilter = { _id: req.query.walletId };
-    }
-    const wallets = await Wallet.find({ owner: userId, ...walletFilter }).select('_id').lean();
-    const walletIds = wallets.map(w => w._id);
-
-    // Pull transactions within time window for user's wallets, or by user field if available
-    const txQuery = {
-      date: { $gte: from, $lt: to }
-    };
-    if (walletIds.length > 0) {
-      txQuery.wallet = { $in: walletIds };
-    } else {
-      // fallback if wallet ownership not used in your schema
-      txQuery.user = userId;
-    }
-
-    const txs = await Transaction.find(txQuery)
-      .populate('category', 'name icon type')
-      .populate('wallet', 'name currency')
-      .lean();
-
-    const payload = aggregateInsights(txs || [], months);
-    return res.json({
-      ok: true,
-      ...payload
-    });
-  } catch (err) {
-    console.error('AI insights error:', err);
-    res.status(500).json({ ok: false, message: 'Failed to compute insights', error: err.message });
-  }
-});
 
 // ======================== Helper functions (tiếp theo) ========================
 
