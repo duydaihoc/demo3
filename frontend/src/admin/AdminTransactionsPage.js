@@ -86,8 +86,37 @@ function AdminTransactionsPage() {
     }
   };
 
-  if (loading) return <div style={{ padding: 24 }}>Đang tải giao dịch...</div>;
-  if (error) return <div style={{ padding: 24, color: 'crimson' }}>Lỗi: {error}</div>;
+  if (loading) {
+    return (
+      <div className="admin-tx-root">
+        <AdminSidebar />
+        <main className="admin-transactions-main">
+          <div className="admin-loading-state">
+            <div className="loading-spinner"></div>
+            <p>Đang tải giao dịch...</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+  
+  if (error) {
+    return (
+      <div className="admin-tx-root">
+        <AdminSidebar />
+        <main className="admin-transactions-main">
+          <div className="admin-error-state">
+            <div className="error-icon">⚠️</div>
+            <h3>Lỗi khi tải dữ liệu</h3>
+            <p>{error}</p>
+            <button className="btn-retry" onClick={() => fetchTxs(selectedUser)}>
+              Thử lại
+            </button>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="admin-tx-root">

@@ -133,80 +133,124 @@ function AdminWalletsPage() {
     <div className="admin-layout">
       <AdminSidebar />
       <div className="admin-main-content">
-        <h2 className="admin-title">Quản lý ví (Admin)</h2>
-
-        <div style={{ marginBottom: 12 }}>
-          <strong>Danh sách người dùng:</strong>
+        <div className="admin-page-header">
+          <h2 className="admin-title">Quản lý ví</h2>
+          <div className="admin-header-stats">
+            <span className="stat-badge">
+              <i className="fas fa-wallet"></i> {users.length} người dùng
+            </span>
+          </div>
         </div>
 
-        <table className="admin-users-table" style={{ marginBottom: 18 }}>
-          <thead>
-            <tr>
-              <th>Tên</th>
-              <th>Email</th>
-              <th>Hành động</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map(u => (
-              <tr key={u._id}>
-                <td>{u.name}</td>
-                <td>{u.email}</td>
-                <td>
-                  <button onClick={() => openUserWallets(u)}>Xem ví</button>
-                </td>
+        <div className="admin-table-container">
+          <table className="admin-users-table">
+            <thead>
+              <tr>
+                <th>Tên</th>
+                <th>Email</th>
+                <th>Hành động</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {users.length === 0 ? (
+                <tr>
+                  <td colSpan="3" style={{ textAlign: 'center', padding: '40px', color: '#a0aec0', fontStyle: 'italic' }}>
+                    Không có người dùng nào
+                  </td>
+                </tr>
+              ) : (
+                users.map(u => (
+                  <tr key={u._id}>
+                    <td>
+                      <div className="user-name-cell">
+                        <i className="fas fa-user-circle"></i>
+                        <span>{u.name || 'Chưa có tên'}</span>
+                      </div>
+                    </td>
+                    <td>{u.email}</td>
+                    <td>
+                      <button className="btn-view-wallet" onClick={() => openUserWallets(u)}>
+                        <i className="fas fa-wallet"></i> Xem ví
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
 
         {walletsModal.show && (
           <div className="admin-confirm-modal">
-            <div className="admin-confirm-content wallets-modal" style={{ maxWidth: 900 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ margin: 0 }}>Ví của: {walletsModal.userName}</h3>
-                <button className="confirm-btn" onClick={closeWalletsModal}>Đóng</button>
+            <div className="admin-confirm-content wallets-modal" style={{ maxWidth: 1000, maxHeight: '90vh', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, paddingBottom: 16, borderBottom: '2px solid rgba(0,0,0,0.05)' }}>
+                <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700, color: '#2d3748' }}>
+                  <i className="fas fa-wallet" style={{ marginRight: 8, color: '#667eea' }}></i>
+                  Ví của: {walletsModal.userName}
+                </h3>
+                <button className="btn-close-modal" onClick={closeWalletsModal}>
+                  <i className="fas fa-times"></i> Đóng
+                </button>
               </div>
 
-              <div style={{ marginTop: 14 }}>
+              <div>
                 {userWallets.length === 0 ? (
-                  <div style={{ color: '#666', padding: 14 }}>Không có ví</div>
+                  <div style={{ textAlign: 'center', padding: '60px 20px', color: '#a0aec0', fontStyle: 'italic' }}>
+                    <i className="fas fa-wallet" style={{ fontSize: '3rem', marginBottom: 16, opacity: 0.3 }}></i>
+                    <p style={{ fontSize: '1.1rem', margin: 0 }}>Không có ví nào</p>
+                  </div>
                 ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 12 }}>
+                  <div className="wallets-modal-grid">
                     {userWallets.map(w => (
-                      <div key={w._id} className="wallet-card-admin" style={{ padding: 12 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div style={{ fontWeight: 700 }}>{w.name}</div>
-                          <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontWeight: 700 }}>
+                      <div key={w._id} className="wallet-card-admin">
+                        <div className="wallet-card-admin-header">
+                          <div className="w-name">{w.name}</div>
+                          <div className="w-balance">
+                            <div>
                               {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: w.currency || 'VND' }).format(w.initialBalance || 0)}
                             </div>
-                            <div style={{ fontSize: 12, color: '#6b8798' }}>{w.currency}</div>
+                            <div className="w-currency">{w.currency || 'VND'}</div>
                           </div>
                         </div>
-                        <div style={{ marginTop: 8 }}>
-                          <div style={{ fontSize: 12, fontWeight: 800, color: '#163a5a' }}>Chi tiêu</div>
-                          <div style={{ marginTop: 6, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                            {(w.categories || []).filter(c => c.type === 'expense').map(c => (
-                              <span key={c._id} className="cat-chip">{c.icon} <span className="cat-name">{c.name}</span></span>
-                            ))}
-                            {((w.categories || []).filter(c => c.type === 'expense')).length === 0 && <span style={{ color: '#8a9aa6' }}>—</span>}
+                        <div className="wallet-cats-split">
+                          <div className="cats-col">
+                            <div className="cats-title">Chi tiêu</div>
+                            <div className="cats-list">
+                              {(w.categories || []).filter(c => c.type === 'expense').length > 0 ? (
+                                (w.categories || []).filter(c => c.type === 'expense').map(c => (
+                                  <span key={c._id} className="cat-chip">
+                                    {c.icon || '💰'} <span className="cat-name">{c.name}</span>
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="cat-empty">—</span>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                        <div style={{ marginTop: 10 }}>
-                          <div style={{ fontSize: 12, fontWeight: 800, color: '#163a5a' }}>Thu nhập</div>
-                          <div style={{ marginTop: 6, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                            {(w.categories || []).filter(c => c.type === 'income').map(c => (
-                              <span key={c._id} className="cat-chip">{c.icon} <span className="cat-name">{c.name}</span></span>
-                            ))}
-                            {((w.categories || []).filter(c => c.type === 'income')).length === 0 && <span style={{ color: '#8a9aa6' }}>—</span>}
+                          <div className="cats-col">
+                            <div className="cats-title">Thu nhập</div>
+                            <div className="cats-list">
+                              {(w.categories || []).filter(c => c.type === 'income').length > 0 ? (
+                                (w.categories || []).filter(c => c.type === 'income').map(c => (
+                                  <span key={c._id} className="cat-chip">
+                                    {c.icon || '💰'} <span className="cat-name">{c.name}</span>
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="cat-empty">—</span>
+                              )}
+                            </div>
                           </div>
                         </div>
 
                         {/* Admin actions */}
-                        <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-                          <button onClick={() => openEditWallet(w)} style={{ padding: '8px 10px', background: '#2a5298', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Sửa</button>
-                          <button onClick={() => askDeleteWallet(w)} style={{ padding: '8px 10px', background: '#fff0f0', color: '#b71c1c', border: '1px solid rgba(183,28,28,0.12)', borderRadius: 6, cursor: 'pointer' }}>Xóa</button>
+                        <div style={{ marginTop: 16, display: 'flex', gap: 8, paddingTop: 12, borderTop: '1px solid rgba(0,0,0,0.05)' }}>
+                          <button className="btn-edit-wallet" onClick={() => openEditWallet(w)}>
+                            <i className="fas fa-edit"></i> Sửa
+                          </button>
+                          <button className="btn-delete-wallet" onClick={() => askDeleteWallet(w)}>
+                            <i className="fas fa-trash-alt"></i> Xóa
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -348,3 +392,4 @@ function AdminWalletsPage() {
 }
 
 export default AdminWalletsPage;
+

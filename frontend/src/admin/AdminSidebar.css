@@ -1,142 +1,279 @@
+/* Modern Admin Sidebar Styles */
 .admin-sidebar {
-  width: 220px;
+  width: 260px;
   min-height: 100vh;
-  background: linear-gradient(120deg, #2a5298 0%, #4ecdc4 100%);
+  background: linear-gradient(180deg, #1a202c 0%, #2d3748 100%);
   color: #fff;
-  padding: 32px 0 0 0;
+  padding: 0;
   position: fixed;
   left: 0;
   top: 0;
-  box-shadow: 0 4px 24px rgba(42,82,152,0.13);
+  box-shadow: 
+    4px 0 24px rgba(0, 0, 0, 0.2),
+    inset -1px 0 0 rgba(255, 255, 255, 0.1);
   display: flex;
   flex-direction: column;
-  z-index: 10;
-  animation: fadeInSidebar 0.7s;
+  z-index: 100;
+  animation: slideInLeft 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@keyframes fadeInSidebar {
-  from { opacity: 0; transform: translateX(-40px);}
-  to { opacity: 1; transform: translateX(0);}
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .admin-sidebar-title {
-  font-size: 1.3rem;
-  font-weight: bold;
-  padding: 0 24px 24px 24px;
-  letter-spacing: 1px;
-  background: linear-gradient(90deg, #fff 0%, #e3f6f5 100%);
+  font-size: 1.5rem;
+  font-weight: 800;
+  padding: 32px 24px 24px 24px;
+  letter-spacing: -0.5px;
+  background: linear-gradient(135deg, #fff 0%, #e2e8f0 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  background-clip: text;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 8px;
 }
 
 .admin-sidebar-menu {
   list-style: none;
-  padding: 0 0 0 0;
+  padding: 16px 0;
   margin: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.admin-sidebar-menu::-webkit-scrollbar {
+  width: 6px;
+}
+
+.admin-sidebar-menu::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.admin-sidebar-menu::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.admin-sidebar-menu::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .admin-sidebar-menu li {
-  margin-bottom: 18px;
+  margin-bottom: 4px;
+  padding: 0 12px;
 }
 
 .admin-sidebar-menu a {
-  display: block;
-  padding: 12px 32px;
-  color: #fff;
-  font-size: 1.08rem;
-  border-radius: 8px 0 0 8px;
+  display: flex;
+  align-items: center;
+  padding: 14px 20px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 1rem;
+  border-radius: 12px;
   text-decoration: none;
-  transition: background 0.25s, transform 0.2s;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   font-weight: 500;
   position: relative;
+  overflow: hidden;
+}
+
+.admin-sidebar-menu a::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  transform: scaleY(0);
+  transform-origin: bottom;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .admin-sidebar-menu a.active,
 .admin-sidebar-menu a:hover {
-  background: linear-gradient(90deg, #e3f6f5 0%, #4ecdc4 100%);
-  color: #2a5298;
-  transform: translateX(8px) scale(1.04);
-  box-shadow: 0 2px 12px rgba(76,205,196,0.13);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
-/* New: parent button active style (mimic link) */
+.admin-sidebar-menu a.active::before,
+.admin-sidebar-menu a:hover::before {
+  transform: scaleY(1);
+}
+
+/* Parent button styles */
 .admin-parent-btn {
-  display: block;
-  text-decoration: none;
-  color: #fff;
-  /* larger touch target */
-  padding: 16px 36px !important;
-  font-size: 1.12rem;
-  line-height: 1.2;
-  min-height: 48px;
-  border-radius: 10px 0 0 10px;
-  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 14px 20px !important;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 1rem;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 12px;
+  font-weight: 500;
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+.admin-parent-btn::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  transform: scaleY(0);
+  transform-origin: bottom;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .admin-parent-btn.active,
 .admin-parent-btn:hover {
-  background: linear-gradient(90deg, #e3f6f5 0%, #4ecdc4 100%);
-  color: #2a5298;
-  transform: translateX(8px) scale(1.04);
-  box-shadow: 0 4px 18px rgba(76,205,196,0.16);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.admin-parent-btn.active::before,
+.admin-parent-btn:hover::before {
+  transform: scaleY(1);
 }
 
 /* Submenu styles */
 .admin-submenu {
   list-style: none;
-  padding-left: 18px;
-  margin: 8px 0 0 0;
+  padding: 8px 0 8px 32px;
+  margin: 4px 0 0 0;
   max-height: 0;
   overflow: hidden;
-  transition: max-height 0.28s ease, opacity 0.2s ease;
+  transition: max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.3s ease,
+              padding 0.3s ease;
   opacity: 0;
 }
 
 .admin-submenu.open {
-  max-height: 240px; /* điều chỉnh để chứa 3 items */
+  max-height: 300px;
   opacity: 1;
+  padding: 8px 0 8px 32px;
 }
 
-/* smaller indent links inside submenu */
 .admin-submenu a {
-  display: block;
-  /* increase padding for easier tapping */
-  padding: 12px 24px;
-  color: #fff;
-  font-size: 0.98rem;
-  border-radius: 6px 0 0 6px;
+  display: flex;
+  align-items: center;
+  padding: 12px 20px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.95rem;
+  border-radius: 10px;
   text-decoration: none;
-  transition: background 0.2s, transform 0.15s;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   font-weight: 500;
+  position: relative;
+  margin-bottom: 4px;
+}
+
+.admin-submenu a::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  opacity: 0;
+  transition: all 0.3s ease;
 }
 
 .admin-submenu a.active,
 .admin-submenu a:hover {
-  background: rgba(255,255,255,0.95);
-  color: #2a5298;
-  transform: translateX(6px);
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  transform: translateX(8px);
+  padding-left: 28px;
 }
 
-/* chevron indicator - slightly larger for visibility */
+.admin-submenu a.active::before,
+.admin-submenu a:hover::before {
+  opacity: 1;
+  left: 12px;
+}
+
+/* Chevron indicator */
 .chev {
-  /* larger hit area and visible size for easier tapping */
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 8px;        /* increases clickable area */
+  width: 24px;
+  height: 24px;
   border-radius: 6px;
-  transition: transform 0.22s ease, background 0.15s;
-  opacity: 0.98;
-  margin-right: 6px;
-  font-size: 1.35rem;  /* increased size */
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  font-size: 1.2rem;
   line-height: 1;
+  margin-left: auto;
+  opacity: 0.8;
+}
+
+.chev:hover {
+  background: rgba(255, 255, 255, 0.1);
+  opacity: 1;
 }
 
 .chev.open {
   transform: rotate(180deg);
 }
 
-/* subtle hover feedback */
-.admin-parent-btn .chev:hover {
-  background: rgba(255,255,255,0.06);
+/* Logout button */
+.admin-logout-btn {
+  width: 100%;
+  padding: 14px 20px !important;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 1rem;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 12px;
+  font-weight: 500;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  margin-top: 16px;
+}
+
+.admin-logout-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #fff;
+  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .admin-sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+  }
+  
+  .admin-sidebar.open {
+    transform: translateX(0);
+  }
 }

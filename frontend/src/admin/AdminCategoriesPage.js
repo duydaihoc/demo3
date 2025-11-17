@@ -54,9 +54,41 @@ function AdminCategoriesPage() {
     const role = localStorage.getItem('role');
     if (!token || role !== 'admin') {
       navigate('/login');
-    } else {
-      fetchCategories();
+      return;
     }
+    
+    fetchCategories();
+    
+    // Enable scrolling for admin pages
+    const body = document.body;
+    const html = document.documentElement;
+    
+    // Store original styles
+    const originalBodyOverflow = body.style.overflow;
+    const originalHtmlOverflow = html.style.overflow;
+    const originalBodyHeight = body.style.height;
+    const originalHtmlHeight = html.style.height;
+    
+    body.classList.add('admin-page-active');
+    html.classList.add('admin-page-active');
+    
+    // Force override with inline styles (highest priority)
+    body.style.setProperty('overflow-y', 'auto', 'important');
+    body.style.setProperty('overflow-x', 'hidden', 'important');
+    body.style.setProperty('height', 'auto', 'important');
+    html.style.setProperty('overflow-y', 'auto', 'important');
+    html.style.setProperty('overflow-x', 'hidden', 'important');
+    html.style.setProperty('height', 'auto', 'important');
+    
+    return () => {
+      // Cleanup on unmount - restore original styles
+      body.classList.remove('admin-page-active');
+      html.classList.remove('admin-page-active');
+      body.style.overflow = originalBodyOverflow;
+      html.style.overflow = originalHtmlOverflow;
+      body.style.height = originalBodyHeight;
+      html.style.height = originalHtmlHeight;
+    };
   }, [navigate, fetchCategories, token]);
 
   const handleAddCategory = async (e) => {
@@ -213,7 +245,7 @@ function AdminCategoriesPage() {
           <div className="admin-section">
             <div className="admin-section-header">
               <div className="header-left">
-                <div className="icon-wrapper">
+                <div className="icon-wrapper" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: '#fff' }}>
                   <i className="fas fa-filter"></i>
                 </div>
                 <h2 className="section-title">Bộ lọc</h2>
@@ -223,17 +255,13 @@ function AdminCategoriesPage() {
               </button>
             </div>
 
-            <div style={{ display: 'flex', gap: '20px', marginTop: '20px' }}>
-              <div>
-                <label style={{ marginRight: '10px', fontWeight: '500' }}>Loại:</label>
+            <div style={{ display: 'flex', gap: '20px', marginTop: '20px', flexWrap: 'wrap' }}>
+              <div className="form-group" style={{ marginBottom: 0, minWidth: '200px' }}>
+                <label style={{ marginBottom: '8px', fontWeight: '600', color: '#2d3748' }}>Loại:</label>
                 <select 
+                  className="admin-select"
                   value={typeFilter} 
                   onChange={(e) => setTypeFilter(e.target.value)}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: '4px',
-                    border: '1px solid #ddd'
-                  }}
                 >
                   <option value="all">Tất cả</option>
                   <option value="expense">Chi tiêu</option>
@@ -241,16 +269,12 @@ function AdminCategoriesPage() {
                 </select>
               </div>
               
-              <div>
-                <label style={{ marginRight: '10px', fontWeight: '500' }}>Người tạo:</label>
+              <div className="form-group" style={{ marginBottom: 0, minWidth: '200px' }}>
+                <label style={{ marginBottom: '8px', fontWeight: '600', color: '#2d3748' }}>Người tạo:</label>
                 <select 
+                  className="admin-select"
                   value={creatorFilter} 
                   onChange={(e) => setCreatorFilter(e.target.value)}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: '4px',
-                    border: '1px solid #ddd'
-                  }}
                 >
                   <option value="all">Tất cả</option>
                   <option value="system">Hệ thống</option>

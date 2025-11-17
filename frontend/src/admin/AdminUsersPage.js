@@ -83,68 +83,106 @@ function AdminUsersPage() {
     <div className="admin-layout">
       <AdminSidebar />
       <div className="admin-main-content">
-        <h2 className="admin-title">Quản lý người dùng</h2>
+        <div className="admin-page-header">
+          <h2 className="admin-title">Quản lý người dùng</h2>
+          <div className="admin-header-stats">
+            <span className="stat-badge">
+              <i className="fas fa-users"></i> {users.filter(u => u.role === 'user').length} người dùng
+            </span>
+          </div>
+        </div>
+        
         {message && (
           <div className="admin-success-message">{message}</div>
         )}
-        <table className="admin-users-table">
-          <thead>
-            <tr>
-              <th>Tên</th>
-              <th>Email</th>
-              <th>Role</th>
-              <th>Thao tác</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users
-              .filter(user => user.role === 'user')
-              .map(user =>
-                editId === user._id ? (
-                  <tr key={user._id}>
-                    <td>
-                      <input
-                        name="name"
-                        value={editData.name}
-                        onChange={handleEditChange}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        name="email"
-                        value={editData.email}
-                        onChange={handleEditChange}
-                      />
-                    </td>
-                    <td>
-                      <select
-                        name="role"
-                        value={editData.role}
-                        onChange={handleEditChange}
-                      >
-                        <option value="user">user</option>
-                        <option value="admin">admin</option>
-                      </select>
-                    </td>
-                    <td>
-                      <button onClick={handleEditSave}>Lưu</button>
-                      <button onClick={() => setEditId(null)}>Hủy</button>
-                    </td>
-                  </tr>
-                ) : (
-                  <tr key={user._id}>
-                    <td>{user.name}</td>
-                    <td>{user.email}</td>
-                    <td>{user.role}</td>
-                    <td>
-                      <button onClick={() => handleEdit(user)}>Sửa</button>
-                      <button onClick={() => handleDelete(user._id)}>Xóa</button>
-                    </td>
-                  </tr>
-                )
-              )}
-          </tbody>
-        </table>
+        
+        <div className="admin-table-container">
+          <table className="admin-users-table">
+            <thead>
+              <tr>
+                <th>Tên</th>
+                <th>Email</th>
+                <th>Vai trò</th>
+                <th>Thao tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users
+                .filter(user => user.role === 'user')
+                .map(user =>
+                  editId === user._id ? (
+                    <tr key={user._id} className="edit-row">
+                      <td>
+                        <input
+                          className="admin-input"
+                          name="name"
+                          value={editData.name}
+                          onChange={handleEditChange}
+                          placeholder="Tên người dùng"
+                        />
+                      </td>
+                      <td>
+                        <input
+                          className="admin-input"
+                          name="email"
+                          type="email"
+                          value={editData.email}
+                          onChange={handleEditChange}
+                          placeholder="Email"
+                        />
+                      </td>
+                      <td>
+                        <select
+                          className="admin-select"
+                          name="role"
+                          value={editData.role}
+                          onChange={handleEditChange}
+                        >
+                          <option value="user">Người dùng</option>
+                          <option value="admin">Quản trị viên</option>
+                        </select>
+                      </td>
+                      <td>
+                        <div className="action-buttons-group">
+                          <button className="btn-save" onClick={handleEditSave}>
+                            <i className="fas fa-check"></i> Lưu
+                          </button>
+                          <button className="btn-cancel" onClick={() => setEditId(null)}>
+                            <i className="fas fa-times"></i> Hủy
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    <tr key={user._id}>
+                      <td>
+                        <div className="user-name-cell">
+                          <i className="fas fa-user-circle"></i>
+                          <span>{user.name || 'Chưa có tên'}</span>
+                        </div>
+                      </td>
+                      <td>{user.email}</td>
+                      <td>
+                        <span className={`role-badge ${user.role}`}>
+                          {user.role === 'admin' ? 'Quản trị viên' : 'Người dùng'}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="action-buttons-group">
+                          <button className="btn-edit" onClick={() => handleEdit(user)}>
+                            <i className="fas fa-edit"></i> Sửa
+                          </button>
+                          <button className="btn-delete" onClick={() => handleDelete(user._id)}>
+                            <i className="fas fa-trash-alt"></i> Xóa
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                )}
+            </tbody>
+          </table>
+        </div>
 
         {/* existing confirm delete modal */}
         {showConfirm && (
