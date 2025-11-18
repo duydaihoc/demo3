@@ -200,6 +200,7 @@
   -webkit-backdrop-filter: blur(10px);
   color: #ffffff;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  overflow: hidden;
 }
 
 .persona-balanced .ai-modal-header {
@@ -236,6 +237,8 @@
   justify-content: center;
   color: white;
   font-size: 18px;
+  overflow: hidden;
+  flex-shrink: 0;
 }
 
 .ai-header-text h3 {
@@ -342,20 +345,30 @@
   font-size: 20px;
   color: #ffffff;
   cursor: pointer;
-  padding: 8px;
-  border-radius: 50%;
+  padding: 0 12px;
+  border-radius: 20px;
   transition: all 0.2s ease;
-  width: 36px;
+  width: auto;
+  min-width: 36px;
   height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
 }
 
 .ai-close-btn:hover {
   background: rgba(255, 255, 255, 0.4);
   color: #ffffff;
-  transform: scale(1.1);
+  transform: scale(1.05);
+}
+
+.ai-close-text {
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .ai-chat-container {
@@ -429,6 +442,24 @@
   flex-shrink: 0;
 }
 
+
+.ai-message-image {
+  margin-bottom: 8px;
+}
+
+.ai-message-image img {
+  max-width: 200px;
+  max-height: 200px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+  border: 1px solid #e5e7eb;
+}
+
+.ai-message-image img:hover {
+  transform: scale(1.02);
+}
+
 .ai-message-content {
   max-width: 75%;
 }
@@ -475,8 +506,10 @@
 
 /* Đảm bảo message user có ảnh không còn ô xanh cho phần text */
 .ai-message.user .ai-message-bubble.has-image {
-  background: transparent;
+  background: transparent !important;
   color: #111827;
+  border: none !important;
+  box-shadow: none !important;
 }
 
 /* THÊM: Ảnh trong bong bóng chat (ví dụ ảnh hóa đơn) */
@@ -1549,6 +1582,15 @@
     height: 100%;
     max-height: 100%;
     border-radius: 0;
+  }
+
+  .ai-close-btn {
+    padding: 0 8px;
+    gap: 4px;
+  }
+
+  .ai-close-text {
+    display: none; /* Ẩn text trên mobile để tiết kiệm không gian */
   }
   
   .ai-button {

@@ -757,13 +757,25 @@ export default function AiAssistant() {
     setUploadingReceipt(true);
     setIsTyping(true);
 
+    // Text cho message
+    const userMessageText = `📷 Đã tải lên ảnh hóa đơn`;
+
+    // Tạo data URL để hiển thị preview ảnh
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const imageDataUrl = e.target.result;
+
     const tempUserMessage = {
       id: Date.now(),
-      text: `📷 Đã tải lên ảnh hóa đơn: ${file.name}`,
+        text: userMessageText,
+        image: imageDataUrl,
+        imageName: file.name,
       sender: 'user',
       timestamp: new Date()
     };
     setMessages(prev => [...prev, tempUserMessage]);
+    };
+    reader.readAsDataURL(file);
 
     try {
       const formData = new FormData();
@@ -792,7 +804,7 @@ export default function AiAssistant() {
       console.log('✅ Receipt AI Response:', data);
 
       // Dùng helper chung
-      await handleAiResponse(data, tempUserMessage.text);
+      await handleAiResponse(data, userMessageText);
     } catch (error) {
       console.error('❌ Receipt AI Error:', error);
       showNotification(error.message || 'Không thể phân tích ảnh hóa đơn', 'error');
@@ -1029,8 +1041,9 @@ export default function AiAssistant() {
                   Hung dữ
                 </button>
               </div>
-              <button className="ai-close-btn" onClick={toggleModal} aria-label="Đóng">
+              <button className="ai-close-btn" onClick={toggleModal} aria-label="Đóng" title="Đóng chatbot">
                 <i className="fas fa-times"></i>
+                <span className="ai-close-text">Đóng</span>
               </button>
             </div>
 
@@ -1045,7 +1058,28 @@ export default function AiAssistant() {
                         </div>
                       )}
                       <div className="ai-message-content">
-                        <div className={`ai-message-bubble ${msg.error ? 'error' : ''} ${msg.success ? 'success' : ''}`}>
+                        <div className={`ai-message-bubble ${msg.image ? 'has-image' : ''} ${msg.error ? 'error' : ''} ${msg.success ? 'success' : ''}`}>
+                          {/* Hiển thị ảnh nếu có */}
+                          {msg.image && (
+                            <div className="ai-message-image">
+                              <img
+                                src={msg.image}
+                                alt={msg.imageName || "Ảnh hóa đơn"}
+                                onClick={() => {
+                                  // Mở ảnh trong tab mới khi click
+                                  const newWindow = window.open();
+                                  newWindow.document.write(`
+                                    <html>
+                                      <head><title>${msg.imageName || "Ảnh hóa đơn"}</title></head>
+                                      <body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f5f5f5;">
+                                        <img src="${msg.image}" style="max-width:90%;max-height:90%;border-radius:8px;"/>
+                                      </body>
+                                    </html>
+                                  `);
+                                }}
+                              />
+                            </div>
+                          )}
                           {/* SỬA: Hiển thị text với line breaks */}
                           {msg.text.split('\n').map((line, i) => (
                             <React.Fragment key={i}>
@@ -1333,12 +1367,18 @@ export default function AiAssistant() {
                 <button 
                   className="ai-btn secondary"
                   onClick={async () => {
+                    if (selectedTransactionToEdit && editSuggestion.multipleMatches) {
+                      // Chỉ chọn lại, không hủy
+                      setSelectedTransactionToEdit(null);
+                    } else {
+                      // Hủy modal
                     const wasEditing = !!selectedTransactionToEdit;
                     setShowEditModal(false);
                     setSelectedTransactionToEdit(null);
-                    // THÊM: Thông báo AI về việc hủy sửa giao dịch (chỉ khi đang sửa, không phải đang chọn)
+                      // THÊM: Thông báo AI về việc hủy sửa giao dịch (chỉ khi đang sửa)
                     if (wasEditing) {
                       await notifyAiAboutCancel('edit');
+                      }
                     }
                   }}
                   disabled={editingSaving}
@@ -1521,12 +1561,18 @@ export default function AiAssistant() {
                 <button 
                   className="ai-btn secondary"
                   onClick={async () => {
+                    if (selectedTransactionToDelete && deleteSuggestion.multipleMatches) {
+                      // Chỉ chọn lại, không hủy
+                      setSelectedTransactionToDelete(null);
+                    } else {
+                      // Hủy modal
                     const wasDeleting = !!selectedTransactionToDelete;
                     setShowDeleteModal(false);
                     setSelectedTransactionToDelete(null);
                     // THÊM: Thông báo AI về việc hủy xóa giao dịch (chỉ khi đã chọn giao dịch để xóa)
                     if (wasDeleting) {
                       await notifyAiAboutCancel('delete');
+                      }
                     }
                   }}
                   disabled={deletingSaving}
@@ -1731,12 +1777,18 @@ export default function AiAssistant() {
                 <button 
                   className="ai-btn secondary"
                   onClick={async () => {
+                    if (selectedTransactionToEdit && editSuggestion.multipleMatches) {
+                      // Chỉ chọn lại, không hủy
+                      setSelectedTransactionToEdit(null);
+                    } else {
+                      // Hủy modal
                     const wasEditing = !!selectedTransactionToEdit;
                     setShowEditModal(false);
                     setSelectedTransactionToEdit(null);
-                    // THÊM: Thông báo AI về việc hủy sửa giao dịch (chỉ khi đang sửa, không phải đang chọn)
+                      // THÊM: Thông báo AI về việc hủy sửa giao dịch (chỉ khi đang sửa)
                     if (wasEditing) {
                       await notifyAiAboutCancel('edit');
+                      }
                     }
                   }}
                   disabled={editingSaving}

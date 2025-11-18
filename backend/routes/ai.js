@@ -1113,13 +1113,14 @@ ${deleteSuggestion ? 'YÊU CẦU XÓA GIAO DỊCH: Có ý định xóa, xử lý
 
 **QUAN TRỌNG - PHÂN BIỆT HỦY HÀNH ĐỘNG VÀ TẠO GIAO DỊCH:**
 - Nếu người dùng nói "Tôi đã hủy việc tạo/sửa/xóa giao dịch này" → Đây là HỦY HÀNH ĐỘNG, KHÔNG phải yêu cầu tạo giao dịch mới.
-- Khi người dùng hủy hành động, hãy xác nhận và hỏi xem họ cần gì tiếp theo, KHÔNG hỏi thông tin để tạo giao dịch.
+- Khi người dùng hủy hành động, hãy xác nhận chính xác loại hành động đã hủy (tạo/sửa/xóa) và hỏi xem họ cần gì tiếp theo, KHÔNG hỏi thông tin để tạo giao dịch.
+- Ví dụ: Nếu họ nói "Tôi đã hủy việc sửa giao dịch này" thì trả lời "Tôi hiểu bạn đã hủy việc sửa giao dịch..." chứ KHÔNG phải "Tôi hiểu bạn đã hủy việc tạo giao dịch..."
 
 CÂU HỎI: ${message}
 
 Hãy trả lời ngắn gọn, rõ ràng, tận dụng NGỮ CẢNH LIÊN QUAN nếu phù hợp.
 Nếu người dùng yêu cầu lời khuyên, đưa ra 2-4 khuyến nghị thực tế dựa trên số liệu của họ (ưu tiên danh mục chi tiêu cao, chênh lệch thu-chi, số dư ví). Nếu yêu cầu thống kê, hãy tóm tắt số liệu và nêu 1-2 insight chính.
-Nếu người dùng hủy hành động (tạo/sửa/xóa giao dịch), hãy xác nhận và hỏi xem họ cần gì tiếp theo.
+Nếu người dùng hủy hành động (tạo/sửa/xóa giao dịch), hãy xác nhận chính xác loại hành động đã hủy và hỏi xem họ cần gì tiếp theo. Đừng nhầm lẫn loại hành động đã hủy.
 `;
 
         // Gọi Gemini API với timeout
@@ -1296,6 +1297,30 @@ Bạn có thể bắt đầu tiết kiệm 10-15% tổng thu nhập.${quotaMessa
 • Vàng (bảo toàn giá trị)
 
 ⚠️ **Lưu ý:** Đây chỉ là thông tin tham khảo. Hãy tự nghiên cứu hoặc tham khảo chuyên gia tài chính.${quotaMessage}`;
+    return styleResponseByPersona(personaKey, base);
+  }
+
+  // THÊM: Handle cancel actions (hủy việc tạo/sửa/xóa)
+  const isCancelAction = lowerMessage.includes('hủy việc') || lowerMessage.includes('huy viec') ||
+                         lowerMessage.includes('đã hủy việc') || lowerMessage.includes('da huy viec') ||
+                         lowerMessage.includes('hủy việc tạo') || lowerMessage.includes('hủy việc sửa') ||
+                         lowerMessage.includes('hủy việc xóa') || lowerMessage.includes('hủy hành động') ||
+                         lowerMessage.includes('đã hủy') || lowerMessage.includes('da huy');
+
+  if (isCancelAction) {
+    let actionType = 'hành động';
+    if (lowerMessage.includes('tạo')) actionType = 'tạo giao dịch';
+    else if (lowerMessage.includes('sửa')) actionType = 'sửa giao dịch';
+    else if (lowerMessage.includes('xóa')) actionType = 'xóa giao dịch';
+
+    const base = `✅ **Đã hiểu!** Tôi thấy bạn đã hủy việc ${actionType}.
+
+💬 Bạn có cần tôi hỗ trợ gì khác không? Ví dụ:
+• 📝 Tạo giao dịch mới
+• 📊 Phân tích tình hình tài chính
+• 💰 Tư vấn tiết kiệm
+• 📈 Xem thống kê chi tiêu${quotaMessage}`;
+
     return styleResponseByPersona(personaKey, base);
   }
   
