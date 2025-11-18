@@ -603,7 +603,7 @@ router.get('/families', auth, async (req, res) => {
   }
 });
 
-// GET /api/admin/families/:familyId - Admin endpoint to get single family by ID
+// GET /api/admin/families/:familyId - Admin endpoint to get family by ID
 router.get('/families/:familyId', auth, async (req, res) => {
   try {
     // Verify admin role
@@ -612,26 +612,28 @@ router.get('/families/:familyId', auth, async (req, res) => {
     }
 
     const { familyId } = req.params;
-    if (!familyId) return res.status(400).json({ message: 'Family ID required' });
-    
-    const Family = require('../models/family');
+    if (!familyId) {
+      return res.status(400).json({ message: 'Family ID required' });
+    }
+
+    // Fetch family with populated information
     const family = await Family.findById(familyId)
       .populate('owner', 'name email')
       .populate('members.user', 'name email');
-      
-    if (!family) return res.status(404).json({ message: 'Family not found' });
+
+    if (!family) {
+      return res.status(404).json({ message: 'Family not found' });
+    }
 
     // Transform and enhance the data for admin view
     const f = family.toObject();
     
     // Add calculated fields for admin display
-    const activeMembers = f.members ? f.members.filter(m => !m.invited).length : 0;
-    const pendingMembers = f.members ? f.members.filter(m => m.invited).length : 0;
-    
     const enhancedFamily = {
       ...f,
-      activeMembers,
-      pendingMembers,
+      memberCount: f.members ? f.members.length : 0,
+      activeMembers: f.members ? f.members.filter(m => !m.invited).length : 0,
+      pendingMembers: f.members ? f.members.filter(m => m.invited).length : 0,
       ownerName: f.owner ? (f.owner.name || f.owner.email) : 'Unknown',
       ownerEmail: f.owner ? f.owner.email : ''
     };
@@ -740,8 +742,8 @@ router.get('/family-transactions', auth, async (req, res) => {
   }
 });
 
-// GET /api/admin/families/:familyId/budgets - Admin endpoint to get family budgets
-router.get('/families/:familyId/budgets', auth, async (req, res) => {
+// GET /api/admin/families/:familyId/transfer-activities - Admin endpoint to get family fund deposit/withdrawal activities
+router.get('/families/:familyId/transfer-activities', auth, async (req, res) => {
   try {
     // Verify admin role
     if (!req.user || req.user.role !== 'admin') {
@@ -749,232 +751,98 @@ router.get('/families/:familyId/budgets', auth, async (req, res) => {
     }
 
     const { familyId } = req.params;
-    if (!familyId) return res.status(400).json({ message: 'Family ID required' });
+    if (!familyId) {
+      return res.status(400).json({ message: 'Family ID required' });
+    }
 
-    const family = await Family.findById(familyId)
-      .populate('budgets.category', 'name icon type');
+    const {
+      page = 1,
+      limit = 50,
+      startDate,
+      endDate,
+      sort = '-date'
+    } = req.query;
+
+    const pg = Math.max(1, parseInt(page, 10) || 1);
+    const lim = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
+
+    // Filter for transfer activities only (tags contains 'transfer')
+    const filter = {
+      familyId: familyId,
+      tags: { $in: ['transfer'] } // Match documents where tags array contains 'transfer'
+    };
     
-    if (!family) return res.status(404).json({ message: 'Family not found' });
-
-    // Attach related family transactions to each budget
-    const FamilyTransaction = require('../models/FamilyTransaction');
-    const budgetsWithTx = await Promise.all((family.budgets || []).map(async (b) => {
-      const budgetObj = (b.toObject && typeof b.toObject === 'function') ? b.toObject() : { ...b };
-      const categoryId = budgetObj.category?._id || budgetObj.category;
-      let start = new Date();
-      let end = new Date();
-      if (budgetObj.date) {
-        const d = new Date(budgetObj.date);
-        start = new Date(d.getFullYear(), d.getMonth(), 1);
-        end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
-      } else {
-        const now = new Date();
-        start = new Date(now.getFullYear(), now.getMonth(), 1);
-        end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-      }
-
-      const txFilter = {
-        familyId,
-        transactionScope: 'family',
-        type: 'expense',
-        tags: { $ne: 'transfer' },
-        date: { $gte: start, $lte: end }
-      };
-      if (categoryId) txFilter.category = categoryId;
-
-      const relatedTxs = await FamilyTransaction.find(txFilter)
-        .populate('createdBy', 'name email')
-        .populate('category', 'name icon type')
-        .sort({ date: -1 })
-        .lean();
-
-      budgetObj.transactions = relatedTxs || [];
-      return budgetObj;
-    }));
-
-    res.json(budgetsWithTx);
-  } catch (err) {
-    console.error('Admin family budgets fetch error:', err);
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-// GET /api/admin/families/:familyId/receipt-images - Admin endpoint to get family receipt images
-router.get('/families/:familyId/receipt-images', auth, async (req, res) => {
-  try {
-    // Verify admin role
-    if (!req.user || req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Admin access required' });
-    }
-
-    const { familyId } = req.params;
-    const { limit = 50, page = 1, isVerified, category, startDate, endDate } = req.query;
-
-    if (!familyId) return res.status(400).json({ message: 'Family ID required' });
-
-    const family = await Family.findById(familyId)
-      .populate('receiptImages.uploadedBy', 'name email')
-      .populate('receiptImages.verifiedBy', 'name email')
-      .populate('receiptImages.category', 'name icon type')
-      .populate('receiptImages.linkedTransaction', 'description amount type date');
-
-    if (!family) return res.status(404).json({ message: 'Family not found' });
-
-    let receiptImages = family.receiptImages || [];
-
-    // Apply filters
-    if (isVerified !== undefined) {
-      receiptImages = receiptImages.filter(img => img.isVerified === (isVerified === 'true'));
-    }
-
-    if (category) {
-      receiptImages = receiptImages.filter(img => 
-        img.category && String(img.category._id || img.category) === String(category)
-      );
-    }
-
     if (startDate || endDate) {
-      receiptImages = receiptImages.filter(img => {
-        const imgDate = new Date(img.date || img.uploadedAt);
-        if (startDate && imgDate < new Date(startDate)) return false;
-        if (endDate && imgDate > new Date(endDate)) return false;
-        return true;
-      });
+      filter.date = {};
+      if (startDate) {
+        const s = new Date(startDate);
+        if (!isNaN(s)) filter.date.$gte = s;
+      }
+      if (endDate) {
+        const e = new Date(endDate);
+        if (!isNaN(e)) filter.date.$lte = e;
+      }
+      if (Object.keys(filter.date).length === 0) delete filter.date;
     }
 
-    // Sort by upload date (newest first)
-    receiptImages = receiptImages.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+    const totalCount = await FamilyTransaction.countDocuments(filter);
 
-    // Pagination
-    const totalItems = receiptImages.length;
-    const totalPages = Math.ceil(totalItems / parseInt(limit));
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    const paginatedImages = receiptImages.slice(skip, skip + parseInt(limit));
+    const transactions = await FamilyTransaction.find(filter)
+      .populate('familyId', 'name')
+      .populate('createdBy', 'name email')
+      .sort(sort)
+      .skip((pg - 1) * lim)
+      .limit(lim);
 
-    // Add URL to view images
-    const imagesWithUrls = paginatedImages.map(img => ({
-      ...img.toObject(),
-      imageUrl: `http://localhost:5000/uploads/receipts/${img.filename}`,
-      uploaderName: img.uploadedBy?.name || 'Thành viên',
-      verifierName: img.verifiedBy?.name || null,
-      categoryInfo: img.category ? {
-        _id: img.category._id,
-        name: img.category.name,
-        icon: img.category.icon,
-        type: img.category.type
-      } : null
-    }));
+    // Thêm thông tin vai trò và tên cho từng giao dịch
+    const transactionsWithRoles = transactions.map(tx => {
+      const txObj = tx.toObject();
+      
+      // Lấy thông tin người tạo
+      const creatorId = txObj.createdBy?._id || txObj.createdBy;
+      const creatorEmail = txObj.createdBy?.email;
+      const creatorName = txObj.createdBy?.name || '';
+      
+      // Tìm vai trò của người tạo trong gia đình
+      let creatorRole = '';
+      if (txObj.familyId?.members) {
+        const member = txObj.familyId.members.find(m => {
+          if (m.user && creatorId && String(m.user) === String(creatorId)) {
+            return true;
+          }
+          if (m.email && creatorEmail && m.email.toLowerCase() === creatorEmail.toLowerCase()) {
+            return true;
+          }
+          return false;
+        });
+        
+        if (member) {
+          creatorRole = member.familyRole || '';
+        }
+      }
+      
+      // Xác định loại hoạt động (nạp hay rút)
+      const isDeposit = txObj.tags && txObj.tags.includes('to-family');
+      const isWithdrawal = txObj.tags && txObj.tags.includes('from-family');
+      const activityType = isDeposit ? 'deposit' : (isWithdrawal ? 'withdrawal' : 'transfer');
+      
+      // Thêm thông tin vào transaction object
+      txObj.creatorName = creatorName;
+      txObj.creatorRole = creatorRole;
+      txObj.activityType = activityType;
+      
+      return txObj;
+    });
 
     res.json({
-      receiptImages: imagesWithUrls,
-      pagination: {
-        totalItems,
-        totalPages,
-        currentPage: parseInt(page),
-        itemsPerPage: parseInt(limit)
-      }
+      total: totalCount,
+      page: pg,
+      limit: lim,
+      pages: Math.max(1, Math.ceil(totalCount / lim)),
+      data: transactionsWithRoles
     });
   } catch (err) {
-    console.error('Admin family receipt images fetch error:', err);
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-// GET /api/admin/families/:familyId/todo-list - Admin endpoint to get family todo list
-router.get('/families/:familyId/todo-list', auth, async (req, res) => {
-  try {
-    // Verify admin role
-    if (!req.user || req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Admin access required' });
-    }
-
-    const { familyId } = req.params;
-    if (!familyId) return res.status(400).json({ message: 'Family ID required' });
-
-    const family = await Family.findById(familyId)
-      .populate('todoList.createdBy', 'name email')
-      .populate('todoList.completedBy', 'name email')
-      .populate('todoList.assignedTo', 'name email')
-      .populate('todoList.completionStatus.user', 'name email');
-
-    if (!family) return res.status(404).json({ message: 'Family not found' });
-
-    let todoList = family.todoList || [];
-    todoList = todoList.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-    const todoListWithInfo = todoList.map(item => {
-      const itemObj = item.toObject();
-      const totalAssigned = itemObj.assignedTo ? itemObj.assignedTo.length : 0;
-      const completedDetails = itemObj.completionStatus || [];
-      const completedMembers = completedDetails.filter(cs => cs.completed).map(cs => cs.user);
-      const notCompletedMembers = completedDetails.filter(cs => !cs.completed).map(cs => cs.user);
-
-      const assignedToObjs = itemObj.assignedTo || [];
-      const assignedToNames = assignedToObjs.map(assignee => assignee.name || 'Thành viên');
-      const completedNames = completedDetails.filter(cs => cs.completed && cs.user)
-        .map(cs => cs.user.name || 'Thành viên');
-      const notCompletedNames = completedDetails.filter(cs => !cs.completed && cs.user)
-        .map(cs => cs.user.name || 'Thành viên');
-
-      return {
-        ...itemObj,
-        creatorName: itemObj.createdBy?.name || 'Thành viên',
-        completedByName: itemObj.completedBy?.name || null,
-        assignedToNames,
-        completedNames,
-        notCompletedNames,
-        totalAssigned,
-        completedCount: completedNames.length,
-        completionPercentage: totalAssigned > 0 ? Math.round((completedNames.length / totalAssigned) * 100) : 0,
-        allCompleted: totalAssigned > 0 && completedNames.length === totalAssigned,
-        completionDetails: completedDetails
-      };
-    });
-
-    res.json(todoListWithInfo);
-  } catch (err) {
-    console.error('Admin family todo list fetch error:', err);
-    res.status(500).json({ message: 'Server error', error: err.message });
-  }
-});
-
-// GET /api/admin/families/:familyId/shopping-list - Admin endpoint to get family shopping list
-router.get('/families/:familyId/shopping-list', auth, async (req, res) => {
-  try {
-    // Verify admin role
-    if (!req.user || req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Admin access required' });
-    }
-
-    const { familyId } = req.params;
-    if (!familyId) return res.status(400).json({ message: 'Family ID required' });
-
-    const family = await Family.findById(familyId)
-      .populate('shoppingList.createdBy', 'name email')
-      .populate('shoppingList.category', 'name icon type');
-
-    if (!family) return res.status(404).json({ message: 'Family not found' });
-
-    // Sort by creation date (newest first)
-    const shoppingList = (family.shoppingList || []).sort((a, b) => 
-      new Date(b.createdAt) - new Date(a.createdAt)
-    );
-
-    // Add creator name and category info to each item
-    const shoppingListWithCreator = shoppingList.map(item => ({
-      ...item.toObject(),
-      creatorName: item.createdBy?.name || 'Thành viên',
-      categoryInfo: item.category ? {
-        _id: item.category._id,
-        name: item.category.name,
-        icon: item.category.icon,
-        type: item.category.type
-      } : null
-    }));
-
-    res.json(shoppingListWithCreator);
-  } catch (err) {
-    console.error('Admin family shopping list fetch error:', err);
+    console.error('Admin family transfer activities error:', err);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });

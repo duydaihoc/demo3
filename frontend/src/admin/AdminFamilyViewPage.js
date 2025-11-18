@@ -9,6 +9,7 @@ function AdminFamilyViewPage() {
   const navigate = useNavigate();
   const [family, setFamily] = useState(null);
   const [transactions, setTransactions] = useState([]);
+  const [transferActivities, setTransferActivities] = useState([]);
   const [budgets, setBudgets] = useState([]);
   const [receiptImages, setReceiptImages] = useState([]);
   const [todoList, setTodoList] = useState([]);
@@ -80,6 +81,24 @@ function AdminFamilyViewPage() {
       }
     } catch (err) {
       console.error('Error fetching transactions:', err);
+    }
+  }, [familyId, token]);
+
+  // Fetch transfer activities (deposit/withdrawal)
+  const fetchTransferActivities = useCallback(async () => {
+    if (!familyId) return;
+    
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/families/${familyId}/transfer-activities?limit=1000`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        setTransferActivities(Array.isArray(data.data) ? data.data : []);
+      }
+    } catch (err) {
+      console.error('Error fetching transfer activities:', err);
     }
   }, [familyId, token]);
 
@@ -202,16 +221,20 @@ function AdminFamilyViewPage() {
       fetchReceiptImages();
       fetchTodoList();
       fetchShoppingList();
+      fetchTransferActivities();
     }
-  }, [family, fetchBudgets, fetchReceiptImages, fetchTodoList, fetchShoppingList]);
+  }, [family, fetchBudgets, fetchReceiptImages, fetchTodoList, fetchShoppingList, fetchTransferActivities]);
 
   useEffect(() => {
     if (family && activeTab === 'transactions') {
       fetchTransactions();
     }
+    if (family && activeTab === 'transfers') {
+      fetchTransferActivities();
+    }
     // Reset to page 1 when switching tabs
     setCurrentPage(1);
-  }, [family, activeTab, fetchTransactions]);
+  }, [family, activeTab, fetchTransactions, fetchTransferActivities]);
 
   // Reset to page 1 if current page is out of bounds
   useEffect(() => {
@@ -368,6 +391,12 @@ function AdminFamilyViewPage() {
             💸 Giao dịch ({transactions.length})
           </button>
           <button 
+            className={`admin-tab ${activeTab === 'transfers' ? 'active' : ''}`}
+            onClick={() => setActiveTab('transfers')}
+          >
+            💳 Nạp/Rút quỹ ({transferActivities.length})
+          </button>
+          <button 
             className={`admin-tab ${activeTab === 'budgets' ? 'active' : ''}`}
             onClick={() => setActiveTab('budgets')}
           >
@@ -392,6 +421,71 @@ function AdminFamilyViewPage() {
             🛍️ Shopping ({shoppingList.length})
           </button>
         </div>
+
+        {/* Transfer Activities Tab */}
+        {activeTab === 'transfers' && (
+          <div className="admin-card">
+            <div className="admin-card-header">
+              <h3>Hoạt động nạp/rút quỹ gia đình</h3>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.9rem', color: '#718096' }}>
+                  Tổng: {transferActivities.length} hoạt động
+                </span>
+                <button onClick={fetchTransferActivities} className="admin-refresh-btn">
+                  🔄 Làm mới
+                </button>
+              </div>
+            </div>
+            <div className="admin-table-container">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Loại</th>
+                    <th>Mô tả</th>
+                    <th>Số tiền</th>
+                    <th>Người thực hiện</th>
+                    <th>Ngày</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transferActivities.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="admin-empty-row">
+                        Không có hoạt động nạp/rút nào
+                      </td>
+                    </tr>
+                  ) : (
+                    transferActivities.map(activity => {
+                      const isDeposit = activity.activityType === 'deposit';
+                      return (
+                        <tr key={activity._id}>
+                          <td>
+                            <span className={`admin-transaction-type ${isDeposit ? 'income' : 'expense'}`}>
+                              {isDeposit ? '💰 Nạp vào' : '💸 Rút ra'}
+                            </span>
+                          </td>
+                          <td>{activity.description || 'Không có mô tả'}</td>
+                          <td className={`admin-amount ${isDeposit ? 'income' : 'expense'}`}>
+                            {isDeposit ? '+' : '-'}{formatCurrency(activity.amount)}
+                          </td>
+                          <td>
+                            <div className="admin-creator-info">
+                              <div>{activity.creatorName || 'N/A'}</div>
+                              {activity.creatorRole && (
+                                <div className="admin-creator-role">({activity.creatorRole})</div>
+                              )}
+                            </div>
+                          </td>
+                          <td>{formatDate(activity.date || activity.createdAt)}</td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Transactions Tab */}
         {activeTab === 'transactions' && (

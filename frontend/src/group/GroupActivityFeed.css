@@ -1,81 +1,121 @@
-/* Instagram-style Activity Feed - Giống như .gm-activity-list */
+/* Modern Activity Feed - Enhanced Design */
 .gaf-container {
   background: transparent;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
   max-width: 100%;
   width: 100%;
-  /* Giới hạn chiều cao để có thể cuộn, hiển thị đầy đủ các bài viết */
-  max-height: 700px; /* Chiều cao tối đa để có thể cuộn */
-  overflow-y: auto; /* Tự động hiển thị scrollbar khi cần, giống gm-activity-list */
+  max-height: 700px;
+  overflow-y: auto;
   overflow-x: hidden;
-  padding: 8px 8px 8px 0; /* Tạo khoảng trống cho scrollbar */
+  padding: 12px 12px 12px 0;
   position: relative;
-  /* Scrollbar styling giống gm-activity-list */
   scrollbar-width: thin;
-  scrollbar-color: #c1c1c1 #f1f1f1;
-  /* Đảm bảo container có thể scroll được */
+  scrollbar-color: rgba(131, 58, 180, 0.3) rgba(248, 250, 252, 0.8);
   box-sizing: border-box;
 }
 
-/* Custom scrollbar cho container - Giống như gm-activity-list */
+/* Modern Custom Scrollbar */
 .gaf-container::-webkit-scrollbar {
-  width: 8px; /* Giống gm-activity-list */
+  width: 6px;
 }
 
 .gaf-container::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 4px; /* Giống gm-activity-list */
+  background: rgba(248, 250, 252, 0.8);
+  border-radius: 10px;
 }
 
 .gaf-container::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 4px; /* Giống gm-activity-list */
+  background: linear-gradient(135deg, rgba(131, 58, 180, 0.4), rgba(253, 29, 29, 0.4), rgba(252, 176, 69, 0.4));
+  border-radius: 10px;
+  transition: all 0.3s ease;
 }
 
 .gaf-container::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8; /* Giống gm-activity-list */
+  background: linear-gradient(135deg, rgba(131, 58, 180, 0.6), rgba(253, 29, 29, 0.6), rgba(252, 176, 69, 0.6));
+  transform: scaleY(1.2);
 }
 
 
-/* Create Post Section - Instagram Style - Cải thiện */
+/* Modern Create Post Section - Glassmorphism Design */
 .gaf-create-post {
-  padding: 18px 20px;
-  background: #ffffff;
-  border: 1px solid #e8e8e8;
-  border-radius: 16px;
+  padding: 20px 24px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
   display: flex;
-  gap: 14px;
+  gap: 16px;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
   cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.08),
+    0 2px 8px rgba(131, 58, 180, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  position: relative;
+  overflow: hidden;
+}
+
+.gaf-create-post::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(131, 58, 180, 0.1), transparent);
+  transition: left 0.6s ease;
 }
 
 .gaf-create-post:hover {
-  border-color: #d0d0d0;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  transform: translateY(-1px);
+  border-color: rgba(131, 58, 180, 0.3);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.12),
+    0 4px 12px rgba(131, 58, 180, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  transform: translateY(-2px) scale(1.01);
+}
+
+.gaf-create-post:hover::before {
+  left: 100%;
 }
 
 .gaf-create-avatar {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #833ab4 0%, #fd1d1d 50%, #fcb045 100%);
+  background: linear-gradient(135deg,
+    #667eea 0%,
+    #764ba2 25%,
+    #f093fb 50%,
+    #f5576c 75%,
+    #4facfe 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-weight: 600;
-  font-size: 16px;
+  font-weight: 700;
+  font-size: 17px;
   flex-shrink: 0;
-  border: 2px solid white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 4px 16px rgba(102, 126, 234, 0.3),
+    0 2px 8px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
   position: relative;
   overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.gaf-create-avatar:hover {
+  transform: scale(1.1) rotate(5deg);
+  box-shadow:
+    0 6px 20px rgba(102, 126, 234, 0.4),
+    0 4px 12px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
 .gaf-create-avatar::before {
@@ -85,9 +125,14 @@
   left: -50%;
   width: 200%;
   height: 200%;
-  background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  background: linear-gradient(45deg,
+    transparent,
+    rgba(255, 255, 255, 0.4),
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent);
   transform: rotate(45deg);
-  animation: shimmer 3s infinite;
+  animation: shimmer 4s infinite;
 }
 
 @keyframes shimmer {
@@ -102,257 +147,459 @@
 
 .gaf-create-input {
   width: 100%;
-  padding: 10px 16px;
-  border: 1px solid #dbdbdb;
-  border-radius: 24px;
-  background: #fafafa;
-  font-size: 14px;
-  color: #262626;
+  padding: 12px 18px;
+  border: 2px solid rgba(102, 126, 234, 0.2);
+  border-radius: 28px;
+  background: rgba(248, 250, 252, 0.8);
+  backdrop-filter: blur(10px);
+  font-size: 15px;
+  color: #1a1a1a;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  font-weight: 500;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .gaf-create-input:hover {
-  background: #f0f0f0;
-  border-color: #b2b2b2;
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(102, 126, 234, 0.4);
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.1),
+    0 2px 8px rgba(102, 126, 234, 0.15);
+  transform: translateY(-1px);
 }
 
 .gaf-create-input:focus {
   outline: none;
-  background: white;
-  border-color: #8e8e8e;
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(102, 126, 234, 0.6);
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.1),
+    0 0 0 3px rgba(102, 126, 234, 0.1),
+    0 4px 12px rgba(102, 126, 234, 0.2);
+  transform: translateY(-1px);
 }
 
 .gaf-create-expanded {
-  padding: 20px;
-  background: #ffffff;
-  border: 1px solid #e8e8e8;
-  border-radius: 16px;
-  margin-bottom: 20px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(25px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 24px;
+  margin-bottom: 24px;
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.1),
+    0 4px 16px rgba(102, 126, 234, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  position: relative;
+  overflow: hidden;
+}
+
+.gaf-create-expanded::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg,
+    #667eea,
+    #764ba2,
+    #f093fb,
+    #f5576c,
+    #4facfe);
+  border-radius: 24px 24px 0 0;
 }
 
 .gaf-create-textarea {
   width: 100%;
-  min-height: 130px;
-  padding: 14px 16px;
-  border: 1px solid #e0e0e0;
-  border-radius: 12px;
-  background: #fafafa;
-  font-size: 15px;
+  min-height: 140px;
+  padding: 16px 20px;
+  border: 2px solid rgba(102, 126, 234, 0.2);
+  border-radius: 16px;
+  background: rgba(248, 250, 252, 0.9);
+  backdrop-filter: blur(10px);
+  font-size: 16px;
   color: #1a1a1a;
   resize: vertical;
   font-family: inherit;
-  margin-bottom: 16px;
-  line-height: 1.6;
-  transition: all 0.2s ease;
+  margin-bottom: 20px;
+  line-height: 1.7;
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  font-weight: 400;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .gaf-create-textarea:focus {
   outline: none;
-  border-color: #c1c1c1;
-  background: white;
-  box-shadow: 0 0 0 3px rgba(131, 58, 180, 0.08);
+  border-color: rgba(102, 126, 234, 0.5);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.05),
+    0 0 0 3px rgba(102, 126, 234, 0.1),
+    0 4px 16px rgba(102, 126, 234, 0.15);
+  transform: translateY(-1px);
 }
 
 .gaf-create-textarea::placeholder {
-  color: #8e8e8e;
+  color: #94a3b8;
+  font-weight: 400;
 }
 
-/* Image Upload Section - Instagram Style */
+/* Modern Image Upload Section */
 .gaf-image-upload-section {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .gaf-image-upload-btn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
-  background: linear-gradient(135deg, #833ab4 0%, #fd1d1d 50%, #fcb045 100%);
+  gap: 10px;
+  padding: 12px 24px;
+  background: linear-gradient(135deg,
+    #667eea 0%,
+    #764ba2 25%,
+    #f093fb 50%,
+    #f5576c 75%,
+    #4facfe 100%);
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
-  transition: all 0.2s;
-  box-shadow: 0 2px 4px rgba(131, 58, 180, 0.3);
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  box-shadow:
+    0 4px 16px rgba(102, 126, 234, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.gaf-image-upload-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.5s ease;
 }
 
 .gaf-image-upload-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(131, 58, 180, 0.4);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow:
+    0 6px 20px rgba(102, 126, 234, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.gaf-image-upload-btn:hover::before {
+  left: 100%;
 }
 
 .gaf-image-upload-btn:active {
-  transform: translateY(0);
+  transform: translateY(-1px) scale(0.98);
 }
 
 .gaf-image-upload-btn i {
-  font-size: 16px;
+  font-size: 18px;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
 }
 
 .gaf-image-preview {
   position: relative;
-  margin-top: 16px;
+  margin-top: 20px;
   display: inline-block;
   max-width: 100%;
-  background: #fafafa;
-  border: 1px solid #dbdbdb;
-  border-radius: 12px;
+  background: rgba(248, 250, 252, 0.9);
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(102, 126, 234, 0.2);
+  border-radius: 16px;
   overflow: hidden;
-  padding: 8px;
+  padding: 12px;
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  transition: all 0.3s ease;
+}
+
+.gaf-image-preview:hover {
+  border-color: rgba(102, 126, 234, 0.4);
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  transform: translateY(-2px);
 }
 
 .gaf-image-preview img {
   max-width: 100%;
-  max-height: 250px;
+  max-height: 280px;
   width: auto;
   height: auto;
-  border-radius: 8px;
+  border-radius: 12px;
   object-fit: contain;
   display: block;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.gaf-image-preview img:hover {
+  transform: scale(1.02);
 }
 
 .gaf-image-remove-btn {
   position: absolute;
-  top: 16px;
-  right: 16px;
-  width: 32px;
-  height: 32px;
+  top: 20px;
+  right: 20px;
+  width: 36px;
+  height: 36px;
   border: none;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(239, 68, 68, 0.9);
+  backdrop-filter: blur(10px);
   color: white;
   border-radius: 50%;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
-  font-size: 14px;
-  backdrop-filter: blur(4px);
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  font-size: 16px;
+  box-shadow:
+    0 4px 12px rgba(239, 68, 68, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .gaf-image-remove-btn:hover {
-  background: rgba(0, 0, 0, 0.9);
-  transform: scale(1.1);
+  background: rgba(220, 38, 38, 0.95);
+  transform: scale(1.1) rotate(90deg);
+  box-shadow:
+    0 6px 16px rgba(239, 68, 68, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.gaf-image-remove-btn:active {
+  transform: scale(0.95) rotate(90deg);
 }
 
 .gaf-image-remove-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  transform: none;
 }
 
 .gaf-create-actions {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-top: 12px;
-  border-top: 1px solid #efefef;
+  padding-top: 16px;
+  border-top: 2px solid rgba(102, 126, 234, 0.1);
+  margin-top: 20px;
 }
 
 .gaf-create-buttons {
   display: flex;
-  gap: 8px;
+  gap: 12px;
 }
 
 .gaf-create-btn {
-  padding: 8px 20px;
+  padding: 12px 24px;
   border: none;
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: 12px;
+  font-size: 15px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
+  text-transform: none;
+  letter-spacing: 0.025em;
+}
+
+.gaf-create-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.5s ease;
 }
 
 .gaf-create-btn-primary {
-  background: linear-gradient(135deg, #833ab4 0%, #fd1d1d 50%, #fcb045 100%);
+  background: linear-gradient(135deg,
+    #667eea 0%,
+    #764ba2 25%,
+    #f093fb 50%,
+    #f5576c 75%,
+    #4facfe 100%);
   color: white;
-  box-shadow: 0 2px 4px rgba(131, 58, 180, 0.3);
+  box-shadow:
+    0 4px 16px rgba(102, 126, 234, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .gaf-create-btn-primary:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(131, 58, 180, 0.4);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow:
+    0 6px 20px rgba(102, 126, 234, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.gaf-create-btn-primary:hover:not(:disabled)::before {
+  left: 100%;
+}
+
+.gaf-create-btn-primary:active:not(:disabled) {
+  transform: translateY(-1px) scale(0.98);
 }
 
 .gaf-create-btn-primary:disabled {
   opacity: 0.6;
   cursor: not-allowed;
   transform: none;
+  box-shadow: none;
 }
 
 .gaf-create-btn-secondary {
-  background: #fafafa;
-  color: #262626;
-  border: 1px solid #dbdbdb;
+  background: rgba(248, 250, 252, 0.9);
+  backdrop-filter: blur(10px);
+  color: #475569;
+  border: 2px solid rgba(148, 163, 184, 0.3);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .gaf-create-btn-secondary:hover {
-  background: #f0f0f0;
+  background: rgba(241, 245, 249, 0.95);
+  border-color: rgba(148, 163, 184, 0.5);
+  transform: translateY(-1px);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
-/* Post Card - Instagram Style - Cải thiện */
+/* Modern Post Card - Glassmorphism Design */
 .gaf-post {
   padding: 0;
-  background: #ffffff;
-  border: 1px solid #e0e0e0;
-  border-radius: 16px;
-  margin-bottom: 20px;
-  overflow: visible; /* Đổi từ hidden sang visible để hiển thị đầy đủ comment input và menu */
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-  transition: all 0.3s ease;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  margin-bottom: 24px;
+  overflow: visible;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.08),
+    0 2px 8px rgba(102, 126, 234, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   position: relative;
+}
+
+.gaf-post::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg,
+    #667eea,
+    #764ba2,
+    #f093fb,
+    #f5576c,
+    #4facfe);
+  border-radius: 20px 20px 0 0;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.gaf-post:hover::before {
+  opacity: 1;
 }
 
 /* Wrapper bên trong để giữ border-radius cho các phần tử chính */
 .gaf-post-inner {
   overflow: hidden;
-  border-radius: 16px 16px 0 0; /* Bo góc trên */
+  border-radius: 20px 20px 0 0;
 }
 
 .gaf-post:hover {
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
-  border-color: #d0d0d0;
-  transform: translateY(-2px);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.12),
+    0 4px 16px rgba(102, 126, 234, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  border-color: rgba(102, 126, 234, 0.3);
+  transform: translateY(-3px) scale(1.01);
 }
 
 .gaf-post-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 18px;
-  border-bottom: 1px solid #f0f0f0;
+  gap: 16px;
+  padding: 18px 24px;
+  border-bottom: 2px solid rgba(102, 126, 234, 0.08);
   position: relative;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
 }
 
 .gaf-post-avatar {
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #833ab4 0%, #fd1d1d 50%, #fcb045 100%);
+  background: linear-gradient(135deg,
+    #667eea 0%,
+    #764ba2 25%,
+    #f093fb 50%,
+    #f5576c 75%,
+    #4facfe 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
   font-weight: 700;
-  font-size: 16px;
+  font-size: 18px;
   flex-shrink: 0;
-  border: 3px solid white;
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 4px 16px rgba(102, 126, 234, 0.3),
+    0 2px 8px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  position: relative;
+  overflow: hidden;
 }
 
 .gaf-post-avatar:hover {
-  transform: scale(1.08);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transform: scale(1.1) rotate(5deg);
+  box-shadow:
+    0 6px 20px rgba(102, 126, 234, 0.4),
+    0 4px 12px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.gaf-post-avatar::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(45deg,
+    transparent,
+    rgba(255, 255, 255, 0.4),
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent);
+  transform: rotate(45deg);
+  animation: shimmer 5s infinite;
 }
 
 .gaf-post-info {
@@ -362,16 +609,20 @@
 
 .gaf-post-author {
   font-weight: 700;
-  font-size: 15px;
-  color: #1a1a1a;
-  margin-bottom: 3px;
-  letter-spacing: -0.2px;
+  font-size: 16px;
+  color: #1e293b;
+  margin-bottom: 4px;
+  letter-spacing: -0.3px;
+  line-height: 1.3;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .gaf-post-time {
   font-size: 13px;
-  color: #8e8e8e;
-  font-weight: 400;
+  color: #64748b;
+  font-weight: 500;
+  opacity: 0.8;
+  transition: opacity 0.2s ease;
 }
 
 .gaf-post-menu {
@@ -536,46 +787,68 @@
   border-top: 1px solid #efefef;
 }
 
-/* Post Actions - Instagram Style */
+/* Modern Post Actions */
 .gaf-post-actions {
   display: flex;
   align-items: center;
-  padding: 10px 18px;
-  border-top: 1px solid #f0f0f0;
-  gap: 20px;
-  background: #ffffff;
+  padding: 16px 24px;
+  border-top: 2px solid rgba(102, 126, 234, 0.08);
+  gap: 24px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
 }
 
 .gaf-action-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 10px 24px;
+  padding: 12px 28px;
   border: none;
-  background: #fee;
-  color: #ed4956;
-  font-size: 15px;
+  background: rgba(239, 68, 68, 0.1);
+  backdrop-filter: blur(10px);
+  color: #dc2626;
+  font-size: 16px;
   font-weight: 600;
   cursor: pointer;
-  border-radius: 10px;
-  transition: all 0.2s ease;
+  border-radius: 12px;
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   position: relative;
   text-align: center;
   width: auto;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.15);
+  overflow: hidden;
+}
+
+.gaf-action-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(239, 68, 68, 0.2), transparent);
+  transition: left 0.5s ease;
 }
 
 .gaf-action-btn:hover {
-  background: #fdd;
-  transform: scale(1.05);
+  background: rgba(239, 68, 68, 0.15);
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.25);
+}
+
+.gaf-action-btn:hover::before {
+  left: 100%;
 }
 
 .gaf-action-btn.liked {
-  color: #ed4956;
-  background: #fee;
+  color: #dc2626;
+  background: rgba(239, 68, 68, 0.15);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.2);
 }
 
 .gaf-action-btn.liked:hover {
-  background: #fcc;
+  background: rgba(239, 68, 68, 0.2);
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.3);
 }
 
 .gaf-action-btn i {
@@ -896,106 +1169,174 @@
   cursor: not-allowed;
 }
 
-/* Comment Input - Instagram Style */
+/* Modern Comment Input */
 .gaf-comment-input-wrapper {
   display: flex;
-  gap: 12px;
-  padding: 14px 18px;
-  border-top: 1px solid #f0f0f0;
+  gap: 16px;
+  padding: 18px 24px;
+  border-top: 2px solid rgba(102, 126, 234, 0.08);
   align-items: center;
-  background: #ffffff;
-  border-radius: 0 0 16px 16px; /* Bo góc dưới để khớp với card */
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 0 0 20px 20px;
 }
 
 .gaf-comment-input-avatar {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #833ab4 0%, #fd1d1d 50%, #fcb045 100%);
+  background: linear-gradient(135deg,
+    #667eea 0%,
+    #764ba2 25%,
+    #f093fb 50%,
+    #f5576c 75%,
+    #4facfe 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
   font-weight: 700;
-  font-size: 13px;
+  font-size: 14px;
   flex-shrink: 0;
-  border: 2px solid white;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 3px 12px rgba(102, 126, 234, 0.2),
+    0 2px 6px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  position: relative;
+  overflow: hidden;
 }
 
 .gaf-comment-input-avatar:hover {
-  transform: scale(1.08);
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
+  transform: scale(1.1) rotate(5deg);
+  box-shadow:
+    0 4px 16px rgba(102, 126, 234, 0.3),
+    0 3px 10px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.gaf-comment-input-avatar::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(45deg,
+    transparent,
+    rgba(255, 255, 255, 0.4),
+    transparent);
+  transform: rotate(45deg);
+  animation: shimmer 4s infinite;
 }
 
 .gaf-comment-input {
   flex: 1;
-  padding: 10px 16px;
-  border: 1px solid #e8e8e8;
-  border-radius: 24px;
-  background: #f8f8f8;
-  font-size: 14px;
-  color: #1a1a1a;
+  padding: 12px 20px;
+  border: 2px solid rgba(102, 126, 234, 0.2);
+  border-radius: 28px;
+  background: rgba(248, 250, 252, 0.9);
+  backdrop-filter: blur(10px);
+  font-size: 15px;
+  color: #1e293b;
   font-family: inherit;
   outline: none;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  font-weight: 400;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .gaf-comment-input:focus {
-  background: white;
-  border-color: #c1c1c1;
-  box-shadow: 0 0 0 2px rgba(131, 58, 180, 0.1);
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(102, 126, 234, 0.5);
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.05),
+    0 0 0 3px rgba(102, 126, 234, 0.1),
+    0 4px 16px rgba(102, 126, 234, 0.15);
+  transform: translateY(-1px);
 }
 
 .gaf-comment-input::placeholder {
-  color: #8e8e8e;
+  color: #94a3b8;
+  font-weight: 400;
 }
 
-/* Nút Gửi bình luận */
+/* Modern Send Comment Button */
 .gaf-comment-send-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 8px 16px;
+  gap: 8px;
+  padding: 10px 20px;
   border: none;
-  background: #0095f6;
+  background: linear-gradient(135deg,
+    #667eea 0%,
+    #764ba2 25%,
+    #f093fb 50%,
+    #f5576c 75%,
+    #4facfe 100%);
   color: white;
-  border-radius: 20px;
+  border-radius: 24px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   white-space: nowrap;
   flex-shrink: 0;
   opacity: 1;
   visibility: visible;
+  box-shadow:
+    0 4px 16px rgba(102, 126, 234, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.gaf-comment-send-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.5s ease;
 }
 
 .gaf-comment-send-btn:hover:not(:disabled) {
-  background: #0084d4;
-  transform: scale(1.05);
+  transform: translateY(-2px) scale(1.05);
+  box-shadow:
+    0 6px 20px rgba(102, 126, 234, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.gaf-comment-send-btn:hover:not(:disabled)::before {
+  left: 100%;
 }
 
 .gaf-comment-send-btn:active:not(:disabled) {
-  transform: scale(0.95);
+  transform: translateY(-1px) scale(0.98);
 }
 
 .gaf-comment-send-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  background: #c1c1c1;
+  background: #cbd5e1;
+  box-shadow: none;
+  transform: none;
 }
 
 .gaf-comment-send-btn i {
-  font-size: 12px;
+  font-size: 14px;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
 }
 
 .gaf-comment-send-btn span {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
+  letter-spacing: 0.025em;
 }
 
 /* Edit Comment - Instagram Style */

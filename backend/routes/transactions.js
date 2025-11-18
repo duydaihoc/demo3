@@ -107,42 +107,69 @@ router.get('/', requireAuth, async (req, res) => {
     }
 
     // Fetch regular (personal) transactions
-    const txs = await Transaction.find(filter)
+    // For admin: only get pure wallet transactions (exclude family and group related transactions)
+    let txs = await Transaction.find(filter)
       .sort({ date: -1 })
       .populate('wallet')
       .populate('category')
       .populate('createdBy', 'name email _id')
       .lean();
 
+    // Filter out family-related transactions for admin
+    if (req.user && req.user.role === 'admin') {
+      txs = txs.filter(tx => {
+        // Exclude transactions with family metadata
+        if (tx.metadata) {
+          const source = tx.metadata.source;
+          if (source === 'family_transfer' || source === 'family_personal') {
+            return false;
+          }
+          if (tx.metadata.familyId || tx.metadata.familyTransactionId) {
+            return false;
+          }
+        }
+        return true;
+      });
+    }
+
     // Fetch group transactions where the current user is involved
+    // Skip group transactions for admin (admin only wants pure wallet transactions)
     const currentUserId = req.user._id;
     const currentUserEmail = req.user.email;
+    const isAdmin = req.user && req.user.role === 'admin';
     
     // Query phải bao gồm TẤT CẢ các trường hợp:
     // 1. User tạo giao dịch (createdBy)
     // 2. User là payer
     // 3. User là participant với user ID
     // 4. User là participant với email (chưa có account)
-    const groupTxs = await GroupTransaction.find({
-      $or: [
-        { createdBy: currentUserId },  // User created the transaction
-        { payer: currentUserId }, // User is the payer
-        { 'participants.user': currentUserId }, // User is a participant (by ID)
-        { 'participants.email': currentUserEmail } // User is a participant (by email)
-      ]
-    })
-    .populate('wallet')
-    .populate('category', 'name icon type') // QUAN TRỌNG: Populate category với các fields cần thiết
-    .populate('createdBy', 'name email')
-    .populate('payer', 'name email')
-    .populate('participants.user', 'name email')
-    .populate('participants.wallet') // QUAN TRỌNG: Populate ví của participants
-    .lean();
+    // Skip group transactions for admin
+    let groupTxs = [];
+    if (!isAdmin) {
+      groupTxs = await GroupTransaction.find({
+        $or: [
+          { createdBy: currentUserId },  // User created the transaction
+          { payer: currentUserId }, // User is the payer
+          { 'participants.user': currentUserId }, // User is a participant (by ID)
+          { 'participants.email': currentUserEmail } // User is a participant (by email)
+        ]
+      })
+      .populate('wallet')
+      .populate('category', 'name icon type') // QUAN TRỌNG: Populate category với các fields cần thiết
+      .populate('createdBy', 'name email')
+      .populate('payer', 'name email')
+      .populate('participants.user', 'name email')
+      .populate('participants.wallet') // QUAN TRỌNG: Populate ví của participants
+      .lean();
+    }
 
     // Fetch group information for these transactions
-    const groupIds = [...new Set(groupTxs.map(tx => tx.groupId ? tx.groupId.toString() : null).filter(Boolean))];
-    const groups = await mongoose.model('Group').find({ _id: { $in: groupIds } }).lean();
-    const groupMap = new Map(groups.map(g => [g._id.toString(), g]));
+    let groupMap = new Map();
+    if (groupTxs.length > 0) {
+      const groupIds = [...new Set(groupTxs.map(tx => tx.groupId ? tx.groupId.toString() : null).filter(Boolean))];
+      const groups = await mongoose.model('Group').find({ _id: { $in: groupIds } }).lean();
+      groupMap = new Map(groups.map(g => [g._id.toString(), g]));
+    }
 
     // Tối ưu: Collect tất cả category IDs và populate một lần
     const categoryIds = new Set();
@@ -189,7 +216,8 @@ router.get('/', requireAuth, async (req, res) => {
     };
 
     // Transform group transactions to format compatible with personal transactions
-    const transformedGroupTxs = groupTxs.map((gtx) => {
+    // Skip transformation if no group transactions (e.g., for admin)
+    const transformedGroupTxs = groupTxs.length > 0 ? groupTxs.map((gtx) => {
       // Lấy category đã populate từ map
       const populatedCategory = getPopulatedCategory(gtx.category);
       
@@ -431,17 +459,26 @@ router.get('/', requireAuth, async (req, res) => {
       }
       
       return entries;
-    }).flat(); // Flatten the array of arrays
+    }).flat() : []; // Flatten the array of arrays, or empty array if no group transactions
 
     // Combine transactions and sort by most reliable timestamp:
     // prefer createdAt (when the DB record was created), fallback to date field
-    const allTransactions = [...txs, ...transformedGroupTxs].sort((a, b) => {
-      const aStamp = a && (a.createdAt || a.date) ? (a.createdAt || a.date) : 0;
-      const bStamp = b && (b.createdAt || b.date) ? (b.createdAt || b.date) : 0;
-      const aTs = Date.parse(aStamp) || 0;
-      const bTs = Date.parse(bStamp) || 0;
-      return bTs - aTs;
-    });
+    // For admin: only return pure wallet transactions (no group transactions)
+    const allTransactions = isAdmin 
+      ? txs.sort((a, b) => {
+          const aStamp = a && (a.createdAt || a.date) ? (a.createdAt || a.date) : 0;
+          const bStamp = b && (b.createdAt || b.date) ? (b.createdAt || b.date) : 0;
+          const aTs = Date.parse(aStamp) || 0;
+          const bTs = Date.parse(bStamp) || 0;
+          return bTs - aTs;
+        })
+      : [...txs, ...transformedGroupTxs].sort((a, b) => {
+          const aStamp = a && (a.createdAt || a.date) ? (a.createdAt || a.date) : 0;
+          const bStamp = b && (b.createdAt || b.date) ? (b.createdAt || b.date) : 0;
+          const aTs = Date.parse(aStamp) || 0;
+          const bTs = Date.parse(bStamp) || 0;
+          return bTs - aTs;
+        });
  
      res.json(allTransactions);
   } catch (err) {
