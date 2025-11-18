@@ -1,6 +1,4 @@
 const express = require('express');
-const session = require('express-session');
-const passport = require('passport');
 const connectDB = require('./database/connect');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -47,17 +45,7 @@ app.use(cors());
 // Parse JSON request bodies
 app.use(express.json());
 
-// Session middleware for passport
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'your-session-secret',
-  resave: false,
-  saveUninitialized: false,
-  cookie: { secure: false } // Set to true in production with HTTPS
-}));
 
-// Initialize passport
-app.use(passport.initialize());
-app.use(passport.session());
 
 // Kiểm tra nếu MONGO_URI không được cấu hình
 if (!process.env.MONGO_URI) {
