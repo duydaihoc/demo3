@@ -357,9 +357,17 @@ function Wallets() {
       });
       
       if (!res.ok) {
-        const errData = await res.json();
-        console.error('Category creation error:', errData);
-        throw new Error(errData.message || 'Failed to create category');
+        const errText = await res.text().catch(() => 'Tạo danh mục thất bại');
+        // Try to parse as JSON, if fails use text directly
+        let errorMessage = errText;
+        try {
+          const errData = JSON.parse(errText);
+          errorMessage = errData.message || errText;
+        } catch {
+          // Not JSON, use text directly
+          errorMessage = errText || 'Tạo danh mục thất bại';
+        }
+        throw new Error(errorMessage);
       }
       
       const created = await res.json();

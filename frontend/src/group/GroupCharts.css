@@ -41,22 +41,22 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #2a5298 0%, #4ecdc4 100%);
   opacity: 0;
   transition: opacity 0.3s;
   z-index: -1;
 }
 
 .gc-tab-btn:hover {
-  color: #667eea;
+  color: #2a5298;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+  box-shadow: 0 4px 12px rgba(42, 82, 152, 0.2);
 }
 
 .gc-tab-btn.active {
   color: white;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+  background: linear-gradient(135deg, #2a5298 0%, #4ecdc4 100%);
+  box-shadow: 0 6px 20px rgba(42, 82, 152, 0.4);
 }
 
 .gc-tab-btn.active::before {
@@ -76,16 +76,25 @@
   align-items: stretch;
 }
 
+/* Ensure chart legend is fully visible */
+.gc-chart canvas + div {
+  overflow: visible !important;
+}
+
+.gc-chart > div > div {
+  overflow: visible !important;
+}
+
 /* Modern Card with Glassmorphism & Gradient Border */
 .gc-card {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.98) 100%);
   backdrop-filter: blur(20px);
   border-radius: 20px;
-  padding: 24px;
+  padding: 28px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
   display: flex;
   flex-direction: column;
-  min-height: 380px;
+  min-height: 450px;
   border: 1px solid rgba(255, 255, 255, 0.9);
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
@@ -93,9 +102,9 @@
 }
 
 .gc-card:hover {
-  box-shadow: 0 12px 40px rgba(102, 126, 234, 0.15);
+  box-shadow: 0 12px 40px rgba(42, 82, 152, 0.15);
   transform: translateY(-4px) scale(1.01);
-  border-color: rgba(102, 126, 234, 0.3);
+  border-color: rgba(42, 82, 152, 0.3);
 }
 
 .gc-card::before {
@@ -105,7 +114,7 @@
   left: 0;
   right: 0;
   height: 4px;
-  background: linear-gradient(90deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background: linear-gradient(90deg, #2a5298 0%, #4ecdc4 50%, #06b6d4 100%);
   border-radius: 20px 20px 0 0;
 }
 
@@ -116,7 +125,7 @@
   right: -50%;
   width: 200%;
   height: 200%;
-  background: radial-gradient(circle, rgba(102, 126, 234, 0.03) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(42, 82, 152, 0.03) 0%, transparent 70%);
   pointer-events: none;
 }
 
@@ -126,13 +135,13 @@
   align-items: center;
   margin-bottom: 20px;
   padding-bottom: 16px;
-  border-bottom: 2px solid rgba(102, 126, 234, 0.1);
+  border-bottom: 2px solid rgba(42, 82, 152, 0.1);
 }
 
 .gc-card-header h3 {
   margin: 0;
-  font-size: 1.15rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  font-size: 1.2rem;
+  background: linear-gradient(135deg, #2a5298 0%, #4ecdc4 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -143,16 +152,16 @@
 }
 
 .gc-card-header h3 i {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #2a5298 0%, #4ecdc4 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  font-size: 1.2rem;
+  font-size: 1.3rem;
 }
 
 .gc-card-badge {
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
-  color: #667eea;
+  background: linear-gradient(135deg, rgba(42, 82, 152, 0.1) 0%, rgba(78, 205, 196, 0.1) 100%);
+  color: #2a5298;
   font-size: 12px;
   font-weight: 600;
   padding: 6px 14px;
@@ -160,7 +169,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid rgba(102, 126, 234, 0.2);
+  border: 1px solid rgba(42, 82, 152, 0.2);
 }
 
 .gc-card-badge i {
@@ -170,21 +179,37 @@
 /* Chart containers */
 .gc-chart {
   flex: 1;
-  min-height: 240px;
+  min-height: 320px;
   position: relative;
-  padding: 6px 0;
+  padding: 12px 8px;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: visible;
 }
 
 .gc-line canvas, 
 .gc-bar canvas, 
 .gc-debt-bar canvas,
-.gc-network canvas,
-.gc-doughnut canvas {
-  max-height: 340px !important;
+.gc-network canvas {
+  max-height: 400px !important;
   width: 100% !important;
+}
+
+.gc-doughnut canvas {
+  max-height: 380px !important;
+  width: 100% !important;
+}
+
+/* Ensure chart tooltips are visible */
+.gc-chart > div {
+  position: relative;
+  overflow: visible !important;
+}
+
+.gc-chart canvas {
+  position: relative;
+  z-index: 1;
 }
 
 /* Empty state styling */
@@ -242,16 +267,16 @@
   left: 0;
   width: 4px;
   height: 100%;
-  background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(180deg, #2a5298 0%, #4ecdc4 100%);
   opacity: 0;
   transition: opacity 0.3s;
 }
 
 .gc-member-summary-card:hover {
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(255, 255, 255, 0.95) 100%);
+  background: linear-gradient(135deg, rgba(42, 82, 152, 0.05) 0%, rgba(255, 255, 255, 0.95) 100%);
   transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.15);
-  border-color: rgba(102, 126, 234, 0.3);
+  box-shadow: 0 8px 24px rgba(42, 82, 152, 0.15);
+  border-color: rgba(42, 82, 152, 0.3);
 }
 
 .gc-member-summary-card:hover::before {
@@ -349,8 +374,8 @@
 .gc-net-balance {
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 2px solid rgba(102, 126, 234, 0.15);
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.03) 0%, transparent 100%);
+  border-top: 2px solid rgba(42, 82, 152, 0.15);
+  background: linear-gradient(135deg, rgba(42, 82, 152, 0.03) 0%, transparent 100%);
   border-radius: 8px;
   padding: 8px;
   margin: 8px -8px -8px;
@@ -600,9 +625,13 @@
   padding: 12px 16px;
   border-radius: 12px;
   font-size: 13px;
-  z-index: 10;
+  z-index: 1000;
   pointer-events: none;
-  max-width: 240px;
+  max-width: 280px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+  line-height: 1.5;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.1);
   animation: tooltipIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -620,7 +649,27 @@
 }
 
 .gc-tooltip strong {
-  color: #60a5fa;
+  color: #4ecdc4;
   font-weight: 700;
+}
+
+/* Enhanced chart readability */
+.gc-chart canvas {
+  cursor: pointer;
+}
+
+/* Better spacing for summary cards */
+.gc-summary-cards {
+  margin-bottom: 32px;
+}
+
+/* Improved card header spacing */
+.gc-card-header {
+  margin-bottom: 24px;
+}
+
+/* Better empty state */
+.gc-empty-state {
+  min-height: 280px;
 }
 

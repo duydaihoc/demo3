@@ -12,6 +12,7 @@ import {
 	Legend,
 	TimeScale
 } from 'chart.js';
+import zoomPlugin from 'chartjs-plugin-zoom';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import * as d3 from 'd3';
 
@@ -24,7 +25,8 @@ ChartJS.register(
 	BarElement,
 	Tooltip,
 	Legend,
-	TimeScale
+	TimeScale,
+	zoomPlugin
 );
 
 export default function GroupCharts({ txs = [], members = [] }) {
@@ -32,6 +34,7 @@ export default function GroupCharts({ txs = [], members = [] }) {
 	const [activeTab, setActiveTab] = useState('transactions');
 	const [isLoading, setIsLoading] = useState(false);
 	const networkChartRef = useRef(null);
+	const lineChartRef = useRef(null);
 	
 	// build a lookup map: id/email -> displayName (prefer name)
 	const memberNameMap = useMemo(() => {
@@ -55,19 +58,19 @@ export default function GroupCharts({ txs = [], members = [] }) {
 		return map;
 	}, [members]);
 
-	// Generate modern gradient colors for each member
+	// Generate modern gradient colors for each member - Updated to blue/teal theme
 	const memberColors = useMemo(() => {
 		const colors = [
-			'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-			'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-			'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-			'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
-			'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-			'linear-gradient(135deg, #30cfd0 0%, #330867 100%)',
-			'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
-			'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)',
-			'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
-			'linear-gradient(135deg, #ff6e7f 0%, #bfe9ff 100%)',
+			'linear-gradient(135deg, #2a5298 0%, #4ecdc4 100%)',
+			'linear-gradient(135deg, #1e40af 0%, #06b6d4 100%)',
+			'linear-gradient(135deg, #3b82f6 0%, #14b8a6 100%)',
+			'linear-gradient(135deg, #2563eb 0%, #10b981 100%)',
+			'linear-gradient(135deg, #1d4ed8 0%, #059669 100%)',
+			'linear-gradient(135deg, #0ea5e9 0%, #22d3ee 100%)',
+			'linear-gradient(135deg, #0284c7 0%, #38bdf8 100%)',
+			'linear-gradient(135deg, #0369a1 0%, #5eead4 100%)',
+			'linear-gradient(135deg, #075985 0%, #67e8f9 100%)',
+			'linear-gradient(135deg, #0c4a6e 0%, #99f6e4 100%)',
 		];
 		
 		const memberIds = Object.keys(memberNameMap);
@@ -125,7 +128,13 @@ export default function GroupCharts({ txs = [], members = [] }) {
 			return `${d.getDate()}/${d.getMonth() + 1}`;
 		});
 		
-		return { keys: displayDates, values, cumulative };
+		// Return full data - we'll use zoom to show only last 5 days initially
+		return { 
+			keys: displayDates, 
+			values, 
+			cumulative,
+			totalLength: displayDates.length
+		};
 	}, [txs]);
 
 	// Calculate debt balances between members with enhanced details
@@ -259,37 +268,43 @@ export default function GroupCharts({ txs = [], members = [] }) {
 		};
 	}, [debtBalances]);
 
-	// Transaction trends line chart with improved styling
+	// Transaction trends line chart with improved styling - Updated colors
+	// Use full data but we'll limit visible range with zoom
 	const lineData = {
-		labels: byDate.keys,
+		labels: byDate.keys, // Full data for zoom capability
 		datasets: [
 			{
-			label: 'Giao dịch hàng ngày',
-			data: byDate.values,
-			backgroundColor: 'rgba(102, 126, 234, 0.15)',
-			borderColor: 'rgb(102, 126, 234)',
+			label: '💰 Giao dịch hàng ngày',
+			data: byDate.values, // Full data
+			backgroundColor: 'rgba(42, 82, 152, 0.15)',
+			borderColor: '#2a5298',
 			borderWidth: 3,
 			tension: 0.4,
-			pointRadius: 4,
-			pointHoverRadius: 7,
-			pointBackgroundColor: 'rgb(102, 126, 234)',
+			pointRadius: 5,
+			pointHoverRadius: 8,
+			pointBackgroundColor: '#2a5298',
 			pointBorderColor: '#fff',
-			pointBorderWidth: 2,
+			pointBorderWidth: 3,
 			yAxisID: 'y',
-			fill: true
+			fill: true,
+			pointHoverBackgroundColor: '#4ecdc4',
+			pointHoverBorderColor: '#fff',
+			pointHoverBorderWidth: 3
 		},
 		{
-			label: 'Tổng cộng dồn',
-			data: byDate.cumulative,
-			backgroundColor: 'rgba(118, 75, 162, 0.1)',
-			borderColor: 'rgb(118, 75, 162)',
+			label: '📈 Tổng cộng dồn',
+			data: byDate.cumulative, // Full data
+			backgroundColor: 'rgba(78, 205, 196, 0.1)',
+			borderColor: '#4ecdc4',
 			borderWidth: 3,
 			tension: 0.4,
 			pointRadius: 0,
-			pointHoverRadius: 5,
-			pointBackgroundColor: 'rgb(118, 75, 162)',
+			pointHoverRadius: 6,
+			pointBackgroundColor: '#4ecdc4',
 			yAxisID: 'y1',
-			borderDash: [5, 5]
+			borderDash: [8, 4],
+			pointHoverBackgroundColor: '#2a5298',
+			pointHoverBorderColor: '#fff'
 		}
 		]
 	};
@@ -303,33 +318,114 @@ export default function GroupCharts({ txs = [], members = [] }) {
 		plugins: {
 			legend: {
 				position: 'top',
+				align: 'start',
+				fullSize: false,
 				labels: {
 					usePointStyle: true,
-					boxWidth: 8,
-					padding: 20
+					boxWidth: 14,
+					padding: 16,
+					font: {
+						size: 12,
+						weight: 600
+					},
+					color: '#1e293b',
+					textAlign: 'left',
+					maxWidth: 200
 				}
 			},
 			tooltip: {
-				backgroundColor: 'rgba(15, 23, 42, 0.9)',
+				backgroundColor: 'rgba(15, 23, 42, 0.98)',
 				titleFont: {
-					size: 13
+					size: 14,
+					weight: 700
 				},
 				bodyFont: {
-					size: 12
+					size: 13,
+					weight: 500
 				},
-				padding: 12,
-				cornerRadius: 6,
+				padding: 14,
+				cornerRadius: 12,
 				boxPadding: 6,
+				displayColors: true,
+				titleColor: '#fff',
+				bodyColor: '#e2e8f0',
+				borderColor: 'rgba(42, 82, 152, 0.3)',
+				borderWidth: 1,
+				titleMarginBottom: 8,
+				bodySpacing: 4,
+				maxWidth: 280,
 				callbacks: {
+					title: (items) => {
+						return `📅 ${items[0].label}`;
+					},
 					label: (context) => {
 						let label = context.dataset.label || '';
+						// Remove emoji for cleaner display
+						label = label.replace(/[💰📈]/g, '').trim();
 						if (label) {
 							label += ': ';
 						}
 						if (context.parsed.y !== null) {
-							label += new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(context.parsed.y);
+							const value = context.parsed.y;
+							const formatted = new Intl.NumberFormat('vi-VN', { 
+								style: 'currency', 
+								currency: 'VND',
+								maximumFractionDigits: 0
+							}).format(value);
+							label += formatted;
+							
+							// Add percentage for cumulative if it's the second dataset
+							if (context.datasetIndex === 1 && byDate.cumulative.length > 0) {
+								const total = byDate.cumulative[byDate.cumulative.length - 1];
+								if (total > 0) {
+									const percentage = ((value / total) * 100).toFixed(1);
+									label += ` (${percentage}% tổng)`;
+								}
+							}
 						}
 						return label;
+					},
+					footer: (items) => {
+						if (items.length > 1) {
+							const daily = items[0].parsed.y;
+							const cumulative = items[1].parsed.y;
+							if (byDate.keys.length > 0) {
+								const avg = cumulative > 0 ? (cumulative / byDate.keys.length).toFixed(0) : 0;
+								return `Trung bình: ${new Intl.NumberFormat('vi-VN', { 
+									style: 'currency', 
+									currency: 'VND',
+									maximumFractionDigits: 0
+								}).format(avg)}`;
+							}
+						}
+						return '';
+					}
+				}
+			},
+			zoom: {
+				zoom: {
+					wheel: {
+						enabled: true,
+						speed: 0.1
+					},
+					pinch: {
+						enabled: true
+					},
+					mode: 'x',
+					drag: {
+						enabled: false // Disable drag zoom, use pan instead
+					}
+				},
+				pan: {
+					enabled: true,
+					mode: 'x',
+					modifierKey: null, // Pan with mouse drag (no key needed)
+					threshold: 10
+				},
+				limits: {
+					x: {
+						min: 0,
+						max: byDate.keys.length - 1
 					}
 				}
 			}
@@ -337,13 +433,38 @@ export default function GroupCharts({ txs = [], members = [] }) {
 		scales: {
 			x: {
 				grid: {
-					display: false
+					display: true,
+					color: 'rgba(203, 213, 225, 0.2)',
+					drawBorder: false
 				},
 				ticks: {
-					maxRotation: 0,
+					maxRotation: 45,
+					minRotation: 0,
 					autoSkip: true,
-					maxTicksLimit: 10,
-					color: '#64748b'
+					maxTicksLimit: 15,
+					color: '#64748b',
+					font: {
+						size: 11,
+						weight: 500
+					},
+					padding: 10,
+					callback: function(value, index, ticks) {
+						// Show all labels but skip if too close
+						return this.getLabelForValue(value);
+					}
+				},
+				title: {
+					display: true,
+					text: '📅 Thời gian (6 tháng gần đây)',
+					color: '#475569',
+					font: {
+						size: 12,
+						weight: 600
+					},
+					padding: {
+						top: 12,
+						bottom: 4
+					}
 				}
 			},
 			y: {
@@ -352,19 +473,37 @@ export default function GroupCharts({ txs = [], members = [] }) {
 				position: 'left',
 				title: {
 					display: true,
-					text: 'Giao dịch hàng ngày',
-					color: '#0ea5e9',
+					text: '💰 Số tiền giao dịch hàng ngày',
+					color: '#2a5298',
 					font: {
-						weight: 'normal',
-						size: 12
+						weight: 600,
+						size: 13
 					}
 				},
 				ticks: {
-					callback: value => new Intl.NumberFormat('vi-VN').format(value),
-					color: '#64748b'
+					callback: function(value, index, ticks) {
+						// Prevent duplicate labels
+						if (index > 0 && ticks[index - 1].value === value) {
+							return '';
+						}
+						if (value >= 1000000) {
+							return (value / 1000000).toFixed(1) + 'M';
+						} else if (value >= 1000) {
+							return (value / 1000).toFixed(0) + 'K';
+						}
+						return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(value);
+					},
+					color: '#64748b',
+					font: {
+						size: 11
+					},
+					maxTicksLimit: 8,
+					stepSize: undefined,
+					autoSkip: true
 				},
 				grid: {
-					color: 'rgba(203,213,225,0.4)'
+					color: 'rgba(42, 82, 152, 0.1)',
+					drawBorder: false
 				}
 			},
 			y1: {
@@ -373,55 +512,102 @@ export default function GroupCharts({ txs = [], members = [] }) {
 				position: 'right',
 				title: {
 					display: true,
-					text: 'Tổng cộng dồn',
-					color: '#ec4899',
+					text: '📈 Tổng cộng dồn (tích lũy)',
+					color: '#4ecdc4',
 					font: {
-						weight: 'normal',
-						size: 12
+						weight: 600,
+						size: 13
 					}
 				},
 				grid: {
-					drawOnChartArea: false
+					drawOnChartArea: false,
+					drawBorder: false
 				},
 				ticks: {
-					callback: value => new Intl.NumberFormat('vi-VN').format(value),
-					color: '#64748b'
+					callback: function(value, index, ticks) {
+						// Prevent duplicate labels
+						if (index > 0 && ticks[index - 1].value === value) {
+							return '';
+						}
+						if (value >= 1000000) {
+							return (value / 1000000).toFixed(1) + 'M';
+						} else if (value >= 1000) {
+							return (value / 1000).toFixed(0) + 'K';
+						}
+						return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(value);
+					},
+					color: '#64748b',
+					font: {
+						size: 11
+					},
+					maxTicksLimit: 8,
+					stepSize: undefined,
+					autoSkip: true
 				}
 			}
 		},
-		maintainAspectRatio: false
+		maintainAspectRatio: false,
+		animation: {
+			onComplete: () => {
+				// Set initial zoom after chart animation completes
+				if (lineChartRef.current && byDate.keys.length > 5) {
+					const chart = lineChartRef.current;
+					const totalDays = byDate.keys.length;
+					const startIndex = totalDays - 5;
+					const endIndex = totalDays - 1;
+					
+					setTimeout(() => {
+						if (chart && chart.chartInstance) {
+							try {
+								chart.chartInstance.zoomScale('x', {
+									min: startIndex,
+									max: endIndex
+								}, 'default');
+							} catch (e) {
+								// Chart might not be ready yet
+							}
+						}
+					}, 200);
+				}
+			}
+		}
 	};
 
-	// Improved Debt balance chart (bar) with better styling
+	// Improved Debt balance chart (bar) with better styling - Updated colors
 	const debtBarData = {
-		labels: debtBalances.slice(0, 8).map(d => `${d.debtor} nợ ${d.creditor}`),
+		labels: debtBalances.slice(0, 10).map(d => `${d.debtor} → ${d.creditor}`),
 		datasets: [
 			{
-				label: 'Số tiền nợ',
-				data: debtBalances.slice(0, 8).map(d => d.amount),
+				label: '💸 Số tiền nợ',
+				data: debtBalances.slice(0, 10).map(d => d.amount),
 				backgroundColor: [
-					'rgba(239, 68, 68, 0.85)',
-					'rgba(249, 115, 22, 0.85)',
-					'rgba(245, 158, 11, 0.85)',
-					'rgba(234, 179, 8, 0.85)',
-					'rgba(132, 204, 22, 0.85)',
-					'rgba(34, 197, 94, 0.85)',
-					'rgba(20, 184, 166, 0.85)',
-					'rgba(6, 182, 212, 0.85)',
+					'rgba(239, 68, 68, 0.9)',
+					'rgba(249, 115, 22, 0.9)',
+					'rgba(245, 158, 11, 0.9)',
+					'rgba(234, 179, 8, 0.9)',
+					'rgba(42, 82, 152, 0.9)',
+					'rgba(59, 130, 246, 0.9)',
+					'rgba(14, 165, 233, 0.9)',
+					'rgba(78, 205, 196, 0.9)',
+					'rgba(20, 184, 166, 0.9)',
+					'rgba(34, 197, 94, 0.9)',
 				],
 				borderColor: [
 					'rgb(220, 38, 38)',
 					'rgb(234, 88, 12)',
 					'rgb(217, 119, 6)',
 					'rgb(202, 138, 4)',
-					'rgb(101, 163, 13)',
-					'rgb(22, 163, 74)',
+					'rgb(30, 64, 175)',
+					'rgb(37, 99, 235)',
+					'rgb(2, 132, 199)',
+					'rgb(45, 212, 191)',
 					'rgb(15, 118, 110)',
-					'rgb(8, 145, 178)',
+					'rgb(22, 163, 74)',
 				],
-				borderWidth: 2,
-				barPercentage: 0.8,
-				borderRadius: 8
+				borderWidth: 2.5,
+				barPercentage: 0.75,
+				borderRadius: 10,
+				categoryPercentage: 0.8
 			}
 		]
 	};
@@ -434,31 +620,48 @@ export default function GroupCharts({ txs = [], members = [] }) {
 				display: false
 			},
 			tooltip: {
-				backgroundColor: 'rgba(15, 23, 42, 0.9)',
+				backgroundColor: 'rgba(15, 23, 42, 0.95)',
 				titleFont: {
-					size: 13
+					size: 14,
+					weight: 700
 				},
 				bodyFont: {
-					size: 12
+					size: 13,
+					weight: 500
 				},
-				padding: 12,
-				cornerRadius: 6,
+				padding: 16,
+				cornerRadius: 12,
+				titleColor: '#fff',
+				bodyColor: '#e2e8f0',
+				borderColor: 'rgba(239, 68, 68, 0.3)',
+				borderWidth: 1,
 				callbacks: {
 					title: (items) => {
 						const idx = items[0].dataIndex;
 						const debt = debtBalances[idx];
-						return debt ? `${debt.debtor} nợ ${debt.creditor}` : '';
+						if (debt) {
+							return `💸 ${debt.debtor} nợ ${debt.creditor}`;
+						}
+						return '';
 					},
 					label: (context) => {
-						return `Số tiền nợ: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(context.parsed.x)}`;
+						const amount = context.parsed.x;
+						const formatted = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+						return `Số tiền: ${formatted}`;
 					},
 					afterLabel: (context) => {
 						const idx = context.dataIndex;
 						const debt = debtBalances[idx];
 						if (debt) {
-							return `Từ giao dịch nhóm`;
+							// Calculate percentage of total debt
+							const totalDebt = debtBalances.reduce((sum, d) => sum + d.amount, 0);
+							const percentage = totalDebt > 0 ? ((debt.amount / totalDebt) * 100).toFixed(1) : 0;
+							return `📊 ${percentage}% tổng công nợ nhóm`;
 						}
 						return '';
+					},
+					footer: (items) => {
+						return '💡 Từ các giao dịch nhóm chưa thanh toán';
 					}
 				}
 			}
@@ -466,56 +669,88 @@ export default function GroupCharts({ txs = [], members = [] }) {
 		scales: {
 			x: {
 				ticks: {
-					callback: value => new Intl.NumberFormat('vi-VN').format(value),
-					color: '#64748b'
+					callback: value => {
+						if (value >= 1000000) {
+							return (value / 1000000).toFixed(1) + 'M ₫';
+						} else if (value >= 1000) {
+							return (value / 1000).toFixed(0) + 'K ₫';
+						}
+						return new Intl.NumberFormat('vi-VN').format(value) + ' ₫';
+					},
+					color: '#64748b',
+					font: {
+						size: 11,
+						weight: 500
+					}
 				},
 				grid: {
-					color: 'rgba(203,213,225,0.4)'
+					color: 'rgba(203,213,225,0.3)',
+					drawBorder: false
+				},
+				title: {
+					display: true,
+					text: '💸 Số tiền nợ (VND)',
+					color: '#ef4444',
+					font: {
+						size: 12,
+						weight: 600
+					},
+					padding: {
+						top: 10
+					}
 				}
 			},
 			y: {
 				ticks: {
 					autoSkip: false,
 					font: {
-						size: 11
+						size: 12,
+						weight: 500
 					},
-					color: '#334155'
+					color: '#334155',
+					padding: 8
+				},
+				grid: {
+					display: false
 				}
 			}
 		},
 		maintainAspectRatio: false
 	};
 
-	// Member activity chart (stacked bar) with better styling
+	// Member activity chart (stacked bar) with better styling - Updated colors
 	const memberActivityData = {
-		labels: memberActivity.slice(0, 6).map(m => m.name),
+		labels: memberActivity.slice(0, 8).map(m => m.name),
 		datasets: [
 			{
 				label: '💰 Đã trả',
-				data: memberActivity.slice(0, 6).map(m => m.paid),
-				backgroundColor: 'rgba(34, 197, 94, 0.85)',
+				data: memberActivity.slice(0, 8).map(m => m.paid),
+				backgroundColor: 'rgba(34, 197, 94, 0.9)',
 				borderColor: 'rgb(22, 163, 74)',
-				borderWidth: 2,
-				borderRadius: 8,
-				stack: 'Stack 0'
+				borderWidth: 2.5,
+				borderRadius: 10,
+				stack: 'Stack 0',
+				barThickness: 40
 			},
 			{
 				label: '🔴 Đã mượn',
-				data: memberActivity.slice(0, 6).map(m => m.borrowed),
-				backgroundColor: 'rgba(239, 68, 68, 0.85)',
+				data: memberActivity.slice(0, 8).map(m => m.borrowed),
+				backgroundColor: 'rgba(239, 68, 68, 0.9)',
 				borderColor: 'rgb(220, 38, 38)',
-				borderWidth: 2,
-				borderRadius: 8,
-				stack: 'Stack 1'
+				borderWidth: 2.5,
+				borderRadius: 10,
+				stack: 'Stack 1',
+				barThickness: 40
 			},
 			{
 				label: '🔵 Được nợ',
-				data: memberActivity.slice(0, 6).map(m => m.owed),
-				backgroundColor: 'rgba(59, 130, 246, 0.85)',
-				borderColor: 'rgb(37, 99, 235)',
-				borderWidth: 2,
-				borderRadius: 8,
-				stack: 'Stack 1'
+				data: memberActivity.slice(0, 8).map(m => m.owed),
+				backgroundColor: 'rgba(42, 82, 152, 0.9)',
+				borderColor: 'rgb(30, 64, 175)',
+				borderWidth: 2.5,
+				borderRadius: 10,
+				stack: 'Stack 1',
+				barThickness: 40
 			}
 		]
 	};
@@ -527,27 +762,56 @@ export default function GroupCharts({ txs = [], members = [] }) {
 				position: 'top',
 				labels: {
 					usePointStyle: true,
-					boxWidth: 8
+					boxWidth: 12,
+					padding: 20,
+					font: {
+						size: 13,
+						weight: 600
+					},
+					color: '#1e293b'
 				}
 			},
 			tooltip: {
-				backgroundColor: 'rgba(15, 23, 42, 0.9)',
+				backgroundColor: 'rgba(15, 23, 42, 0.95)',
 				titleFont: {
-					size: 13
+					size: 14,
+					weight: 700
 				},
 				bodyFont: {
-					size: 12
+					size: 13,
+					weight: 500
 				},
-				padding: 12,
-				cornerRadius: 6,
+				padding: 16,
+				cornerRadius: 12,
+				titleColor: '#fff',
+				bodyColor: '#e2e8f0',
+				borderColor: 'rgba(42, 82, 152, 0.3)',
+				borderWidth: 1,
 				callbacks: {
+					title: (items) => {
+						const idx = items[0].dataIndex;
+						const member = memberActivity[idx];
+						return member ? `👤 ${member.name}` : '';
+					},
 					label: (context) => {
 						let label = context.dataset.label || '';
+						// Remove emoji for cleaner display
+						label = label.replace(/[💰🔴🔵]/g, '').trim();
 						if (label) {
 							label += ': ';
 						}
 						if (context.parsed.y !== null) {
-							label += new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(context.parsed.y);
+							const value = context.parsed.y;
+							label += new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
+							
+							// Add percentage of total
+							const total = memberActivity[context.dataIndex].paid + 
+							              memberActivity[context.dataIndex].borrowed + 
+							              memberActivity[context.dataIndex].owed;
+							if (total > 0) {
+								const percentage = ((value / total) * 100).toFixed(1);
+								label += ` (${percentage}%)`;
+							}
 						}
 						return label;
 					},
@@ -558,12 +822,26 @@ export default function GroupCharts({ txs = [], members = [] }) {
 							const datasetIdx = context.datasetIndex;
 							// Add additional information based on dataset
 							if (datasetIdx === 0) { // Paid
-								return `${member.transactions} giao dịch`;
+								return `📊 ${member.transactions} giao dịch đã tạo`;
 							} else if (datasetIdx === 1) { // Borrowed
-								return `Từ các khoản vay mượn`;
+								return `💸 Từ các khoản vay mượn`;
 							} else if (datasetIdx === 2) { // Owed
-								return `Từ các khoản cho vay`;
+								return `💵 Từ các khoản cho vay`;
 							}
+						}
+						return '';
+					},
+					footer: (items) => {
+						const idx = items[0].dataIndex;
+						const member = memberActivity[idx];
+						if (member) {
+							const net = member.owed - member.borrowed;
+							const netText = net > 0 
+								? `✅ Cần nhận: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(net)}`
+								: net < 0
+								? `⚠️ Cần trả: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Math.abs(net))}`
+								: `⚖️ Cân bằng`;
+							return netText;
 						}
 						return '';
 					}
@@ -575,21 +853,58 @@ export default function GroupCharts({ txs = [], members = [] }) {
 				ticks: {
 					autoSkip: false,
 					maxRotation: 45,
-					minRotation: 45,
-					color: '#64748b'
+					minRotation: 0,
+					color: '#334155',
+					font: {
+						size: 12,
+						weight: 500
+					},
+					padding: 10
 				},
 				grid: {
 					display: false
+				},
+				title: {
+					display: true,
+					text: '👥 Thành viên',
+					color: '#475569',
+					font: {
+						size: 12,
+						weight: 600
+					},
+					padding: {
+						top: 10
+					}
 				}
 			},
 			y: {
 				stacked: false,
 				ticks: {
-					callback: value => new Intl.NumberFormat('vi-VN').format(value),
-					color: '#64748b'
+					callback: value => {
+						if (value >= 1000000) {
+							return (value / 1000000).toFixed(1) + 'M';
+						} else if (value >= 1000) {
+							return (value / 1000).toFixed(0) + 'K';
+						}
+						return new Intl.NumberFormat('vi-VN').format(value);
+					},
+					color: '#64748b',
+					font: {
+						size: 11
+					}
 				},
 				grid: {
-					color: 'rgba(203,213,225,0.4)'
+					color: 'rgba(42, 82, 152, 0.1)',
+					drawBorder: false
+				},
+				title: {
+					display: true,
+					text: '💰 Số tiền (VND)',
+					color: '#2a5298',
+					font: {
+						size: 12,
+						weight: 600
+					}
 				}
 			}
 		},
@@ -683,28 +998,53 @@ export default function GroupCharts({ txs = [], members = [] }) {
 				position: 'right',
 				labels: {
 					usePointStyle: true,
-					boxWidth: 10
+					boxWidth: 12,
+					padding: 16,
+					font: {
+						size: 12,
+						weight: 500
+					},
+					color: '#1e293b'
 				}
 			},
 			tooltip: {
-				backgroundColor: 'rgba(15, 23, 42, 0.9)',
-				titleFont: { size: 13 },
-				bodyFont: { size: 12 },
-				padding: 12,
-				cornerRadius: 6,
+				backgroundColor: 'rgba(15, 23, 42, 0.95)',
+				titleFont: { 
+					size: 14,
+					weight: 700
+				},
+				bodyFont: { 
+					size: 13,
+					weight: 500
+				},
+				padding: 16,
+				cornerRadius: 12,
+				titleColor: '#fff',
+				bodyColor: '#e2e8f0',
+				borderColor: 'rgba(42, 82, 152, 0.3)',
+				borderWidth: 1,
 				callbacks: {
+					title: (items) => {
+						return `🏷️ ${items[0].label || 'Danh mục'}`;
+					},
 					label: (context) => {
 						const label = context.label || '';
 						const val = context.parsed || 0;
 						const total = (context.dataset?.data || []).reduce((s, v) => s + (Number(v) || 0), 0);
 						const pct = total ? (val / total) * 100 : 0;
 						const money = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val);
-						return `${label}: ${money} (${pct.toFixed(1)}%)`;
+						return `Số tiền: ${money}`;
+					},
+					footer: (items) => {
+						const val = items[0].parsed || 0;
+						const total = (items[0].dataset?.data || []).reduce((s, v) => s + (Number(v) || 0), 0);
+						const pct = total ? ((val / total) * 100).toFixed(1) : 0;
+						return `📊 ${pct}% tổng chi tiêu`;
 					}
 				}
 			}
 		},
-		cutout: '55%',
+		cutout: '60%',
 		maintainAspectRatio: false
 	}), []);
 
@@ -818,12 +1158,12 @@ export default function GroupCharts({ txs = [], members = [] }) {
 				.on("drag", dragged)
 				.on("end", dragended));
 				
-		// Add circles to nodes
+		// Add circles to nodes - Updated colors
 		node.append("circle")
-			.attr("r", d => Math.sqrt(d.total) / 10000 + 10)
-			.attr("fill", d => d.group === 1 ? "#f87171" : "#60a5fa")
+			.attr("r", d => Math.sqrt(d.total) / 8000 + 12)
+			.attr("fill", d => d.group === 1 ? "#ef4444" : "#2a5298")
 			.attr("stroke", "#ffffff")
-			.attr("stroke-width", 1.5);
+			.attr("stroke-width", 2);
 			
 		// Add labels to nodes
 		node.append("text")
@@ -846,11 +1186,11 @@ export default function GroupCharts({ txs = [], members = [] }) {
 				.style("left", (event.offsetX + 10) + "px")
 				.style("top", (event.offsetY - 28) + "px");
 				
-				// Highlight connected links
+				// Highlight connected links - Updated colors
 				link
 					.attr("stroke", function(l) {
 						if (l.source.id === d.id || l.target.id === d.id)
-							return d.group === 1 ? "#f87171" : "#60a5fa";
+							return d.group === 1 ? "#ef4444" : "#2a5298";
 						else
 							return "#94a3b8";
 					})
@@ -917,6 +1257,39 @@ export default function GroupCharts({ txs = [], members = [] }) {
 		};
 	}, [activeTab, debtBalances]);
 
+	// Reset zoom function
+	const resetZoom = () => {
+		if (lineChartRef.current && lineChartRef.current.chartInstance) {
+			lineChartRef.current.chartInstance.resetZoom();
+		}
+	};
+
+	// Set initial zoom to show only last 5 days when chart is ready
+	useEffect(() => {
+		if (lineChartRef.current && byDate.keys.length > 5 && activeTab === 'transactions') {
+			const chart = lineChartRef.current;
+			const totalDays = byDate.keys.length;
+			const startIndex = totalDays - 5;
+			const endIndex = totalDays - 1;
+			
+			// Wait for chart to be fully rendered
+			const timer = setTimeout(() => {
+				if (chart && chart.chartInstance) {
+					try {
+						chart.chartInstance.zoomScale('x', {
+							min: startIndex,
+							max: endIndex
+						}, 'default');
+					} catch (e) {
+						console.log('Zoom not ready yet');
+					}
+				}
+			}, 300);
+			
+			return () => clearTimeout(timer);
+		}
+	}, [byDate.keys.length, activeTab]);
+
 	return (
 		<div className="group-charts">
 			<div className="gc-tabs">
@@ -976,13 +1349,50 @@ export default function GroupCharts({ txs = [], members = [] }) {
 						<div className="gc-card">
 							<div className="gc-card-header">
 								<h3><i className="fas fa-chart-line"></i> Xu hướng giao dịch nhóm</h3>
-								<div className="gc-card-badge">
-									<i className="fas fa-calendar-alt"></i> {txs.length} giao dịch
+								<div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+									<button 
+										onClick={resetZoom}
+										style={{
+											background: 'linear-gradient(135deg, rgba(42, 82, 152, 0.1) 0%, rgba(78, 205, 196, 0.1) 100%)',
+											color: '#2a5298',
+											border: '1px solid rgba(42, 82, 152, 0.2)',
+											borderRadius: '8px',
+											padding: '6px 12px',
+											fontSize: '11px',
+											fontWeight: 600,
+											cursor: 'pointer',
+											display: 'flex',
+											alignItems: 'center',
+											gap: '6px',
+											transition: 'all 0.2s'
+										}}
+										onMouseEnter={(e) => {
+											e.target.style.background = 'linear-gradient(135deg, rgba(42, 82, 152, 0.2) 0%, rgba(78, 205, 196, 0.2) 100%)';
+										}}
+										onMouseLeave={(e) => {
+											e.target.style.background = 'linear-gradient(135deg, rgba(42, 82, 152, 0.1) 0%, rgba(78, 205, 196, 0.1) 100%)';
+										}}
+									>
+										<i className="fas fa-search-minus"></i> Xem tất cả
+									</button>
+									<div className="gc-card-badge" style={{ fontSize: '11px', padding: '4px 10px' }}>
+										<i className="fas fa-mouse"></i> Kéo để xem các ngày cũ
+									</div>
+									<div className="gc-card-badge">
+										<i className="fas fa-calendar-alt"></i> {txs.length} giao dịch
+									</div>
 								</div>
 							</div>
 							<div className="gc-chart gc-line">
 								{txs.length > 0 ? (
-									<Line data={lineData} options={lineOptions} />
+									<Line 
+										ref={lineChartRef}
+										data={lineData} 
+										options={lineOptions}
+										onElementsClick={(elements) => {
+											// Optional: handle click
+										}}
+									/>
 								) : (
 									<div className="gc-empty-state">
 										<i className="fas fa-chart-line"></i>
@@ -1112,12 +1522,12 @@ export default function GroupCharts({ txs = [], members = [] }) {
 										<div ref={networkChartRef}></div>
 										<div className="gc-network-legend">
 											<div className="gc-legend-item">
-												<div className="gc-legend-color" style={{backgroundColor: "#f87171"}}></div>
-												<span>Người đi vay</span>
+												<div className="gc-legend-color" style={{backgroundColor: "#ef4444"}}></div>
+												<span>💸 Người đi vay</span>
 											</div>
 											<div className="gc-legend-item">
-												<div className="gc-legend-color" style={{backgroundColor: "#60a5fa"}}></div>
-												<span>Chủ nợ</span>
+												<div className="gc-legend-color" style={{backgroundColor: "#2a5298"}}></div>
+												<span>💰 Chủ nợ</span>
 											</div>
 										</div>
 									</div>

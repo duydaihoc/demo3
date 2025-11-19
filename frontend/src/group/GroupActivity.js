@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import GroupSidebar from './GroupSidebar';
 import './GroupActivity.css';
 
@@ -11,9 +11,17 @@ export default function GroupActivity() {
   
   // Add state to cache group names by ID
   const [groupNamesCache, setGroupNamesCache] = useState({});
+  // Use ref to track fetching groups to avoid duplicate requests
+  const fetchingGroupsRef = useRef(new Set());
+  const groupNamesCacheRef = useRef({});
 
   const API_BASE = 'http://localhost:5000';
   const getToken = () => localStorage.getItem('token');
+  
+  // Sync ref with state
+  useEffect(() => {
+    groupNamesCacheRef.current = groupNamesCache;
+  }, [groupNamesCache]);
 
   // Sao chép hàm fetchNotifications từ GroupSidebar
   const fetchNotifications = useCallback(async () => {
@@ -47,11 +55,12 @@ export default function GroupActivity() {
     } finally {
       setLoadingNotifs(false);
     }
-  }, [API_BASE]);
+  }, []); // Loại bỏ API_BASE khỏi dependencies vì nó là constant
 
   useEffect(() => {
     fetchNotifications();
-    const iv = setInterval(fetchNotifications, 8000);
+    // Tăng interval lên 30 giây để tránh loading liên tục
+    const iv = setInterval(fetchNotifications, 30000);
     return () => clearInterval(iv);
   }, [fetchNotifications]);
 
@@ -182,31 +191,55 @@ export default function GroupActivity() {
 
   // New function to fetch group details by ID
   const fetchGroupNameById = useCallback(async (groupId) => {
-    // Skip if invalid groupId or if we already have the name cached
-    if (!groupId || groupNamesCache[groupId]) return;
+    if (!groupId) return;
+    
+    // Kiểm tra cache và đang fetch bằng ref (không trigger re-render)
+    if (groupNamesCacheRef.current[groupId] || fetchingGroupsRef.current.has(groupId)) {
+      return;
+    }
+    
+    // Đánh dấu là đang fetch
+    fetchingGroupsRef.current.add(groupId);
     
     const token = getToken();
-    if (!token) return;
+    if (!token) {
+      fetchingGroupsRef.current.delete(groupId);
+      return;
+    }
     
     try {
       const res = await fetch(`${API_BASE}/api/groups/${groupId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      if (!res.ok) return;
+      if (!res.ok) {
+        fetchingGroupsRef.current.delete(groupId);
+        return;
+      }
       
       const data = await res.json().catch(() => null);
       if (data && data.name) {
-        // Update cache with the fetched group name
-        setGroupNamesCache(prev => ({
-          ...prev,
-          [groupId]: data.name
-        }));
+        // Update cache với functional update
+        setGroupNamesCache(prev => {
+          // Kiểm tra lại để tránh overwrite
+          if (prev[groupId]) {
+            fetchingGroupsRef.current.delete(groupId);
+            return prev;
+          }
+          fetchingGroupsRef.current.delete(groupId);
+          return {
+            ...prev,
+            [groupId]: data.name
+          };
+        });
+      } else {
+        fetchingGroupsRef.current.delete(groupId);
       }
     } catch (e) {
       console.warn('Error fetching group name:', e);
+      fetchingGroupsRef.current.delete(groupId);
     }
-  }, [API_BASE, groupNamesCache]);
+  }, []); // Không có dependencies để tránh infinite loop
 
   // Enhance useEffect to fetch missing group names
   useEffect(() => {
@@ -214,11 +247,11 @@ export default function GroupActivity() {
     notifications.forEach(notif => {
       const data = notif.data || {};
       // If notification has groupId but no groupName, fetch the group details
-      if (data.groupId && !data.groupName && !groupNamesCache[data.groupId]) {
+      if (data.groupId && !data.groupName) {
         fetchGroupNameById(data.groupId);
       }
     });
-  }, [notifications, fetchGroupNameById, groupNamesCache]);
+  }, [notifications, fetchGroupNameById]); // Loại bỏ groupNamesCache khỏi dependencies
 
   // Helper to get group name from notification data or cache
   const getGroupName = (notification) => {
@@ -358,29 +391,99 @@ export default function GroupActivity() {
           )}
           
           {/* Add special content for updated transactions */}
-          {isTransactionUpdatedNotification(notification.type) && data.previousAmount && data.newAmount && (
+          {isTransactionUpdatedNotification(notification.type) && (
             <div className="tx-amount-change">
-              <strong>Thay đổi:</strong> 
-              <div className="amount-comparison">
-                <span className="old-amount">{formatCurrency(data.previousAmount)}</span>
-                <span className="arrow">→</span>
-                <span className={`new-amount ${data.difference > 0 ? 'increased' : data.difference < 0 ? 'decreased' : ''}`}>
-                  {formatCurrency(data.newAmount)}
-                </span>
-              </div>
+              <strong>Chi tiết thay đổi:</strong>
               
-              {data.difference && (
-                <div className={`difference ${data.difference > 0 ? 'negative' : 'positive'}`}>
-                  {data.difference > 0 ? (
-                    <><span className="diff-icon">▲</span> Tăng {formatCurrency(data.difference)}</>
-                  ) : (
-                    <><span className="diff-icon">▼</span> Giảm {formatCurrency(Math.abs(data.difference))}</>
-                  )}
+              {/* Hiển thị các thay đổi từ mảng changes nếu có */}
+              {data.changes && Array.isArray(data.changes) && data.changes.length > 0 ? (
+                <div className="changes-list">
+                  {data.changes.map((change, idx) => {
+                    if (change.type === 'amount') {
+                      return (
+                        <div key={idx} className="change-item amount-change">
+                          <div className="change-label">Số tiền:</div>
+                          <div className="amount-comparison">
+                            <span className="old-amount">{formatCurrency(change.old)}</span>
+                            <span className="arrow">→</span>
+                            <span className={`new-amount ${change.difference > 0 ? 'increased' : change.difference < 0 ? 'decreased' : ''}`}>
+                              {formatCurrency(change.new)}
+                            </span>
+                          </div>
+                          {change.difference && (
+                            <div className={`difference ${change.difference > 0 ? 'negative' : 'positive'}`}>
+                              {change.difference > 0 ? (
+                                <><span className="diff-icon">▲</span> Tăng {formatCurrency(change.difference)}</>
+                              ) : (
+                                <><span className="diff-icon">▼</span> Giảm {formatCurrency(Math.abs(change.difference))}</>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    } else if (change.type === 'transactionType') {
+                      return (
+                        <div key={idx} className="change-item type-change">
+                          <div className="change-label">Kiểu giao dịch:</div>
+                          <div className="type-comparison">
+                            <span className="old-type">{change.old}</span>
+                            <span className="arrow">→</span>
+                            <span className="new-type">{change.new}</span>
+                          </div>
+                        </div>
+                      );
+                    } else if (change.type === 'participants') {
+                      return (
+                        <div key={idx} className="change-item participants-change">
+                          <div className="change-label">Danh sách người tham gia:</div>
+                          <div className="participants-comparison">
+                            {change.removed > 0 && (
+                              <span className="removed">Loại bỏ {change.removed} người</span>
+                            )}
+                            {change.removed > 0 && change.added > 0 && <span className="separator">, </span>}
+                            {change.added > 0 && (
+                              <span className="added">Thêm {change.added} người</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    } else if (change.type === 'category') {
+                      return (
+                        <div key={idx} className="change-item category-change">
+                          <div className="change-label">Danh mục:</div>
+                          <div className="category-comparison">
+                            <span className="old-category">{change.old || 'Không có'}</span>
+                            <span className="arrow">→</span>
+                            <span className="new-category">{change.new || 'Không có'}</span>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })}
+                </div>
+              ) : (
+                /* Fallback cho format cũ nếu không có mảng changes */
+                data.previousAmount && data.newAmount && (
+                  <div className="amount-comparison">
+                    <span className="old-amount">{formatCurrency(data.previousAmount)}</span>
+                    <span className="arrow">→</span>
+                    <span className={`new-amount ${data.difference > 0 ? 'increased' : data.difference < 0 ? 'decreased' : ''}`}>
+                      {formatCurrency(data.newAmount)}
+                    </span>
+                  </div>
+                )
+              )}
+              
+              {/* Hiển thị số tiền nợ mới của participant */}
+              {data.shareAmount && (
+                <div className="new-share-amount">
+                  <strong>Số tiền nợ của bạn sau khi sửa:</strong> {formatCurrency(data.shareAmount)}
                 </div>
               )}
               
               <div className="update-info">
-                Cập nhật bởi: {data.userName || 'Người dùng'}
+                Sửa bởi: {data.editedByName || data.userName || 'Người dùng'}
               </div>
             </div>
           )}
@@ -392,12 +495,22 @@ export default function GroupActivity() {
                 <i className="fas fa-trash-alt"></i>
                 <span>Giao dịch đã bị xóa, khoản nợ của bạn đã được hủy</span>
               </div>
-              {data.amount && (
+              {data.shareAmount && (
+                <div className="deleted-amount">
+                  <strong>Số tiền nợ đã hủy:</strong> {formatCurrency(data.shareAmount)}
+                </div>
+              )}
+              {!data.shareAmount && data.amount && (
                 <div className="deleted-amount">
                   <strong>Số tiền nợ đã hủy:</strong> {formatCurrency(data.amount)}
                 </div>
               )}
-              {data.userName && (
+              {data.deletedByName && (
+                <div className="deleted-by">
+                  Xóa bởi: {data.deletedByName}
+                </div>
+              )}
+              {!data.deletedByName && data.userName && (
                 <div className="deleted-by">
                   Xóa bởi: {data.userName}
                 </div>

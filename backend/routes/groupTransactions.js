@@ -865,6 +865,16 @@ router.put('/:groupId/transactions/:txId', auth, async (req, res) => {
       return res.status(400).json({ message: 'Không thể sửa giao dịch vì đã có người thanh toán.' });
     }
 
+    // Lưu lại thông tin cũ để so sánh thay đổi
+    const oldAmount = Number(transaction.amount) || 0;
+    const oldTransactionType = transaction.transactionType || 'equal_split';
+    const oldParticipants = Array.isArray(transaction.participants) ? transaction.participants.map(p => ({
+      user: p.user ? String(p.user) : null,
+      email: p.email || null,
+      shareAmount: Number(p.shareAmount) || 0
+    })) : [];
+    const oldCategory = transaction.category;
+
     // Lưu lại thông tin ví cũ và số tiền cũ
     const oldWalletId = transaction.wallet;
     const oldRefundAmount = getWalletRefundAmount(transaction);
@@ -975,6 +985,200 @@ router.put('/:groupId/transactions/:txId', auth, async (req, res) => {
 
     await transaction.save();
 
+    // Lấy thông tin nhóm cho thông báo
+    let groupName = 'Nhóm không xác định';
+    try {
+      const group = await Group.findById(groupId).select('name').lean();
+      if (group && group.name) {
+        groupName = group.name;
+      }
+    } catch (e) {
+      console.warn('Error fetching group name for notification:', e);
+    }
+
+    // So sánh và gửi thông báo về các thay đổi
+    const newAmount = Number(transaction.amount) || 0;
+    const newTransactionType = transaction.transactionType || 'equal_split';
+    const newParticipants = Array.isArray(transaction.participants) ? transaction.participants.map(p => ({
+      user: p.user ? String(p.user) : null,
+      email: p.email || null,
+      shareAmount: Number(p.shareAmount) || 0
+    })) : [];
+    const newCategory = transaction.category;
+
+    // Tạo set để so sánh participants
+    const oldParticipantSet = new Set(oldParticipants.map(p => p.user || p.email));
+    const newParticipantSet = new Set(newParticipants.map(p => p.user || p.email));
+    
+    // Tìm participants bị loại bỏ
+    const removedParticipants = oldParticipants.filter(p => {
+      const key = p.user || p.email;
+      return key && !newParticipantSet.has(key);
+    });
+    
+    // Tìm participants được thêm vào
+    const addedParticipants = newParticipants.filter(p => {
+      const key = p.user || p.email;
+      return key && !oldParticipantSet.has(key);
+    });
+
+    // Lấy danh sách tất cả participants (cũ và mới) để gửi thông báo
+    const allParticipants = new Set();
+    oldParticipants.forEach(p => {
+      if (p.user) allParticipants.add(p.user);
+    });
+    newParticipants.forEach(p => {
+      if (p.user) allParticipants.add(p.user);
+    });
+    // Thêm creator
+    if (transaction.createdBy) {
+      allParticipants.add(String(transaction.createdBy));
+    }
+
+    const io = req.app.get('io');
+    const editorName = req.user.name || req.user.email || 'Người dùng';
+    const transactionTitle = transaction.title || 'Không tiêu đề';
+
+    // Gửi thông báo cho tất cả participants về các thay đổi
+    for (const participantId of allParticipants) {
+      if (String(participantId) === String(req.user._id)) continue; // Bỏ qua người sửa
+
+      try {
+        let notificationMessage = '';
+        let notificationType = 'group.transaction.updated';
+        const changes = [];
+
+        // Kiểm tra thay đổi số tiền
+        if (Math.abs(oldAmount - newAmount) > 0.01) {
+          const difference = newAmount - oldAmount;
+          changes.push({
+            type: 'amount',
+            old: oldAmount,
+            new: newAmount,
+            difference
+          });
+        }
+
+        // Kiểm tra thay đổi transaction type
+        if (oldTransactionType !== newTransactionType) {
+          const typeNames = {
+            'payer_single': 'Trả đơn',
+            'payer_for_others': 'Trả giúp',
+            'equal_split': 'Chia đều',
+            'percentage_split': 'Chia phần trăm'
+          };
+          changes.push({
+            type: 'transactionType',
+            old: typeNames[oldTransactionType] || oldTransactionType,
+            new: typeNames[newTransactionType] || newTransactionType
+          });
+        }
+
+        // Kiểm tra thay đổi participants
+        if (removedParticipants.length > 0 || addedParticipants.length > 0) {
+          changes.push({
+            type: 'participants',
+            removed: removedParticipants.length,
+            added: addedParticipants.length
+          });
+        }
+
+        // Kiểm tra thay đổi category
+        if (String(oldCategory) !== String(newCategory)) {
+          let oldCategoryName = '';
+          let newCategoryName = '';
+          try {
+            if (oldCategory) {
+              const oldCat = await Category.findById(oldCategory).select('name').lean();
+              oldCategoryName = oldCat ? oldCat.name : '';
+            }
+            if (newCategory) {
+              const newCat = await Category.findById(newCategory).select('name').lean();
+              newCategoryName = newCat ? newCat.name : '';
+            }
+            if (oldCategoryName !== newCategoryName) {
+              changes.push({
+                type: 'category',
+                old: oldCategoryName,
+                new: newCategoryName
+              });
+            }
+          } catch (e) {
+            // Ignore category lookup errors
+          }
+        }
+
+        // Tạo thông báo dựa trên các thay đổi
+        if (changes.length > 0) {
+          const changeDescriptions = changes.map(change => {
+            if (change.type === 'amount') {
+              const diffText = change.difference > 0 
+                ? `tăng ${Math.abs(change.difference).toLocaleString('vi-VN')}đ`
+                : `giảm ${Math.abs(change.difference).toLocaleString('vi-VN')}đ`;
+              return `Số tiền ${diffText} (từ ${change.old.toLocaleString('vi-VN')}đ → ${change.new.toLocaleString('vi-VN')}đ)`;
+            } else if (change.type === 'transactionType') {
+              return `Kiểu giao dịch thay đổi từ "${change.old}" sang "${change.new}"`;
+            } else if (change.type === 'participants') {
+              const parts = [];
+              if (change.removed > 0) parts.push(`loại bỏ ${change.removed} người`);
+              if (change.added > 0) parts.push(`thêm ${change.added} người`);
+              return `Danh sách người tham gia: ${parts.join(', ')}`;
+            } else if (change.type === 'category') {
+              return `Danh mục thay đổi từ "${change.old || 'Không có'}" sang "${change.new || 'Không có'}"`;
+            }
+            return '';
+          }).filter(Boolean);
+
+          notificationMessage = `${editorName} đã sửa giao dịch "${transactionTitle}" trong nhóm "${groupName}". ${changeDescriptions.join('. ')}.`;
+
+          // Tìm shareAmount của participant này trong giao dịch mới
+          const participantShare = newParticipants.find(p => 
+            p.user && String(p.user) === String(participantId)
+          );
+          const shareAmount = participantShare ? participantShare.shareAmount : 0;
+
+          await Notification.create({
+            recipient: participantId,
+            sender: req.user._id,
+            type: notificationType,
+            message: notificationMessage,
+            data: {
+              transactionId: txId,
+              groupId,
+              groupName,
+              title: transactionTitle,
+              amount: newAmount,
+              shareAmount,
+              transactionType: newTransactionType,
+              changes,
+              editedBy: req.user._id,
+              editedByName: editorName
+            }
+          });
+
+          // Emit realtime notification
+          if (io) {
+            io.to(String(participantId)).emit('notification', {
+              recipient: participantId,
+              sender: req.user._id,
+              type: notificationType,
+              message: notificationMessage,
+              data: {
+                transactionId: txId,
+                groupId,
+                groupName,
+                title: transactionTitle,
+                amount: newAmount,
+                shareAmount
+              }
+            });
+          }
+        }
+      } catch (notifErr) {
+        console.warn(`Failed to notify participant ${participantId} about transaction update:`, notifErr);
+      }
+    }
+
     res.json({ message: 'Cập nhật giao dịch thành công', transaction });
   } catch (err) {
     console.error('Update group transaction error:', err);
@@ -1061,6 +1265,87 @@ router.delete('/:groupId/transactions/:txId', auth, async (req, res) => {
             }
           }
         }
+      }
+    }
+
+    // Lấy thông tin nhóm cho thông báo
+    let groupName = 'Nhóm không xác định';
+    try {
+      const group = await Group.findById(groupId).select('name').lean();
+      if (group && group.name) {
+        groupName = group.name;
+      }
+    } catch (e) {
+      console.warn('Error fetching group name for notification:', e);
+    }
+
+    // Lấy danh sách tất cả participants để gửi thông báo
+    const allParticipants = new Set();
+    if (Array.isArray(transaction.participants)) {
+      transaction.participants.forEach(p => {
+        if (p.user) allParticipants.add(String(p.user));
+      });
+    }
+    // Thêm creator
+    if (transaction.createdBy) {
+      allParticipants.add(String(transaction.createdBy));
+    }
+
+    const io = req.app.get('io');
+    const deleterName = req.user.name || req.user.email || 'Người dùng';
+    const transactionTitle = transaction.title || 'Không tiêu đề';
+    const transactionAmount = Number(transaction.amount) || 0;
+
+    // Gửi thông báo cho tất cả participants về việc xóa giao dịch
+    for (const participantId of allParticipants) {
+      if (String(participantId) === String(req.user._id)) continue; // Bỏ qua người xóa
+
+      try {
+        // Tìm shareAmount của participant này trong giao dịch
+        const participant = Array.isArray(transaction.participants) 
+          ? transaction.participants.find(p => p.user && String(p.user) === String(participantId))
+          : null;
+        const shareAmount = participant ? (Number(participant.shareAmount) || 0) : 0;
+
+        const notificationMessage = `${deleterName} đã xóa giao dịch "${transactionTitle}" trong nhóm "${groupName}". Khoản nợ của bạn (${shareAmount.toLocaleString('vi-VN')}đ) đã được hủy.`;
+
+        await Notification.create({
+          recipient: participantId,
+          sender: req.user._id,
+          type: 'group.transaction.deleted',
+          message: notificationMessage,
+          data: {
+            transactionId: txId,
+            groupId,
+            groupName,
+            title: transactionTitle,
+            amount: transactionAmount,
+            shareAmount,
+            transactionType: transaction.transactionType,
+            deletedBy: req.user._id,
+            deletedByName: deleterName
+          }
+        });
+
+        // Emit realtime notification
+        if (io) {
+          io.to(String(participantId)).emit('notification', {
+            recipient: participantId,
+            sender: req.user._id,
+            type: 'group.transaction.deleted',
+            message: notificationMessage,
+            data: {
+              transactionId: txId,
+              groupId,
+              groupName,
+              title: transactionTitle,
+              amount: transactionAmount,
+              shareAmount
+            }
+          });
+        }
+      } catch (notifErr) {
+        console.warn(`Failed to notify participant ${participantId} about transaction deletion:`, notifErr);
       }
     }
 

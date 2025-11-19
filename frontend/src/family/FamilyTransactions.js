@@ -48,7 +48,7 @@ export default function FamilyTransactions() {
 	const [currentPage, setCurrentPage] = useState(1);
 	const [totalPages, setTotalPages] = useState(1);
 	const [totalItems, setTotalItems] = useState(0);
-	const [pageSize] = useState(10);
+	const [pageSize] = useState(5); // Hiển thị 5 giao dịch mới nhất mỗi trang
 	
 	const API_BASE = 'http://localhost:5000';
 	const token = localStorage.getItem('token');
@@ -991,20 +991,6 @@ export default function FamilyTransactions() {
 
 	return (
 		<div className="family-page">
-			{/* Animated background elements */}
-			<div className="ft-bg-shapes">
-				<div className="ft-bg-shape"></div>
-				<div className="ft-bg-shape"></div>
-				<div className="ft-bg-shape"></div>
-			</div>
-			
-			{/* Floating particles */}
-			<div className="ft-particle"></div>
-			<div className="ft-particle"></div>
-			<div className="ft-particle"></div>
-			<div className="ft-particle"></div>
-			<div className="ft-particle"></div>
-			
 			<FamilySidebar active="transactions" collapsed={sidebarCollapsed} />
 			
 			<main className={`family-main ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
@@ -1786,7 +1772,27 @@ export default function FamilyTransactions() {
 										</button>
 									</div>
 								) : (
-									transactions.map(transaction => {
+									<>
+										{currentPage === 1 && totalPages > 1 && (
+											<div style={{
+												padding: '12px 16px',
+												margin: '8px',
+												background: 'linear-gradient(135deg, rgba(42, 82, 152, 0.1) 0%, rgba(78, 205, 196, 0.1) 100%)',
+												borderRadius: '12px',
+												border: '1px solid rgba(42, 82, 152, 0.2)',
+												fontSize: '13px',
+												color: '#2a5298',
+												fontWeight: 600,
+												display: 'flex',
+												alignItems: 'center',
+												gap: '8px',
+												marginBottom: '8px'
+											}}>
+												<i className="fas fa-info-circle"></i>
+												<span>Đang hiển thị 5 giao dịch mới nhất. Sử dụng nút phân trang bên dưới để xem thêm.</span>
+											</div>
+										)}
+										{transactions.map(transaction => {
 										const category = getCategoryInfo(transaction.category);
 										const hasVerifiedReceipts = receiptCounts[transaction._id] > 0;
 										return (
@@ -1863,7 +1869,8 @@ export default function FamilyTransactions() {
 												</div>
 											</div>
 										);
-									})
+									})}
+									</>
 								)}
 							</div>
 							
@@ -1874,29 +1881,46 @@ export default function FamilyTransactions() {
 										className="ft-pagination-btn"
 										onClick={() => handlePageChange(1)}
 										disabled={currentPage === 1}
+										title="Trang đầu"
 									>
 										<i className="fas fa-angle-double-left"></i>
+										<span className="ft-pagination-btn-text">Đầu</span>
+									</button>
+									<button 
+										className="ft-pagination-btn"
+										onClick={() => handlePageChange(currentPage - 1)}
 										disabled={currentPage === 1}
+										title="Trang trước"
 									>
 										<i className="fas fa-angle-left"></i>
+										<span className="ft-pagination-btn-text">Trước</span>
 									</button>
 									
 									<div className="ft-pagination-info">
-										Trang {currentPage} / {totalPages}
+										<span className="ft-page-current">Trang {currentPage}</span>
+										<span className="ft-page-separator">/</span>
+										<span className="ft-page-total">{totalPages}</span>
+										{currentPage === 1 && (
+											<span className="ft-page-note">(5 giao dịch mới nhất)</span>
+										)}
 									</div>
 									
 									<button 
 										className="ft-pagination-btn"
 										onClick={() => handlePageChange(currentPage + 1)}
 										disabled={currentPage === totalPages}
+										title="Trang sau"
 									>
+										<span className="ft-pagination-btn-text">Sau</span>
 										<i className="fas fa-angle-right"></i>
 									</button>
 									<button 
 										className="ft-pagination-btn"
 										onClick={() => handlePageChange(totalPages)}
 										disabled={currentPage === totalPages}
+										title="Trang cuối"
 									>
+										<span className="ft-pagination-btn-text">Cuối</span>
 										<i className="fas fa-angle-double-right"></i>
 									</button>
 								</div>
@@ -1904,7 +1928,20 @@ export default function FamilyTransactions() {
 							
 							{/* Transaction count summary */}
 							<div className="ft-summary">
-								Hiển thị {transactions.length} trong tổng số {totalItems} giao dịch {activeTab === 'expense' ? 'chi tiêu' : 'thu nhập'}
+								{currentPage === 1 ? (
+									<>
+										Hiển thị <strong>5 giao dịch mới nhất</strong> trong tổng số {totalItems} giao dịch {activeTab === 'expense' ? 'chi tiêu' : 'thu nhập'}
+										{totalPages > 1 && (
+											<span style={{ marginLeft: 8, color: '#2a5298', fontWeight: 600 }}>
+												• Sử dụng nút phân trang để xem các giao dịch cũ hơn
+											</span>
+										)}
+									</>
+								) : (
+									<>
+										Hiển thị {transactions.length} giao dịch (trang {currentPage}/{totalPages}) trong tổng số {totalItems} giao dịch {activeTab === 'expense' ? 'chi tiêu' : 'thu nhập'}
+									</>
+								)}
 							</div>
 						</>
 					)}

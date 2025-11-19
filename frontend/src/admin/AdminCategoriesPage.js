@@ -117,8 +117,17 @@ function AdminCategoriesPage() {
       });
       
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.message || `HTTP error ${res.status}`);
+        const errText = await res.text().catch(() => 'Tạo danh mục thất bại');
+        // Try to parse as JSON, if fails use text directly
+        let errorMessage = errText;
+        try {
+          const errData = JSON.parse(errText);
+          errorMessage = errData.message || errText;
+        } catch {
+          // Not JSON, use text directly
+          errorMessage = errText || `HTTP error ${res.status}`;
+        }
+        throw new Error(errorMessage);
       }
       
       await fetchCategories();
@@ -157,8 +166,17 @@ function AdminCategoriesPage() {
       });
       
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.message || `HTTP error ${res.status}`);
+        const errText = await res.text().catch(() => 'Sửa danh mục thất bại');
+        // Try to parse as JSON, if fails use text directly
+        let errorMessage = errText;
+        try {
+          const errData = JSON.parse(errText);
+          errorMessage = errData.message || errText;
+        } catch {
+          // Not JSON, use text directly
+          errorMessage = errText || `HTTP error ${res.status}`;
+        }
+        throw new Error(errorMessage);
       }
       
       await fetchCategories();
@@ -183,8 +201,17 @@ function AdminCategoriesPage() {
       });
       
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.message || `HTTP error ${res.status}`);
+        const errText = await res.text().catch(() => 'Xóa danh mục thất bại');
+        // Try to parse as JSON, if fails use text directly
+        let errorMessage = errText;
+        try {
+          const errData = JSON.parse(errText);
+          errorMessage = errData.message || errText;
+        } catch {
+          // Not JSON, use text directly
+          errorMessage = errText || `HTTP error ${res.status}`;
+        }
+        throw new Error(errorMessage);
       }
       
       await fetchCategories();

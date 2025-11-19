@@ -239,15 +239,7 @@ router.post('/', async (req, res) => {
     
     if (existingCategory) {
       // Category with same name, type, and owner already exists
-      if (categoryData.owner === null || categoryData.owner === undefined) {
-        return res.status(400).json({ 
-          message: `Danh mục hệ thống "${categoryData.name}" đã tồn tại` 
-        });
-      } else {
-        return res.status(400).json({ 
-          message: `Danh mục "${categoryData.name}" đã tồn tại trong danh sách của bạn` 
-        });
-      }
+      return res.status(400).send('Danh mục đã tồn tại');
     }
     
     const newCategory = new Category(categoryData);
@@ -256,11 +248,8 @@ router.post('/', async (req, res) => {
     res.status(201).json(category);
   } catch (err) {
     if (err.code === 11000) {
-      // More detailed error message for duplicate key
-      const duplicateField = err.keyPattern ? Object.keys(err.keyPattern)[0] : 'unknown';
-      return res.status(400).json({ 
-        message: `Danh mục "${req.body.name}" đã tồn tại. Mỗi người dùng có thể tạo danh mục riêng của mình.` 
-      });
+      // Duplicate key error
+      return res.status(400).send('Danh mục đã tồn tại');
     }
     res.status(500).json({ message: 'Server Error', error: err.message });
   }
