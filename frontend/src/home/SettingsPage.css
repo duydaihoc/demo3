@@ -284,61 +284,7 @@
     0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-/* Enhanced notification */
-.settings-notification {
-  position: fixed;
-  top: 32px;
-  right: 32px;
-  padding: 20px 28px;
-  border-radius: 16px;
-  font-size: 1rem;
-  font-weight: 600;
-  box-shadow: 
-    0 8px 32px rgba(0, 0, 0, 0.2),
-    0 2px 8px rgba(0, 0, 0, 0.1);
-  z-index: 2000;
-  animation: slideInRight 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  max-width: 420px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  backdrop-filter: blur(10px);
-  border: 2px solid rgba(255, 255, 255, 0.3);
-}
-
-.settings-notification::before {
-  content: '';
-  font-size: 1.5rem;
-}
-
-.settings-notification.success {
-  background: linear-gradient(135deg, #4ecdc4 0%, #44b3aa 100%);
-  color: #fff;
-}
-
-.settings-notification.success::before {
-  content: '✅';
-}
-
-.settings-notification.error {
-  background: linear-gradient(135deg, #ff6b6b 0%, #e74c3c 100%);
-  color: #fff;
-}
-
-.settings-notification.error::before {
-  content: '⚠️';
-}
-
-@keyframes slideInRight {
-  from {
-    transform: translateX(500px) scale(0.8) rotate(5deg);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0) scale(1) rotate(0deg);
-    opacity: 1;
-  }
-}
+/* Notification removed - using global notification from notify.js only */
 
 /* Loading state */
 .settings-form-group input:disabled,
@@ -578,12 +524,7 @@
     grid-template-columns: 1fr;
   }
 
-  .settings-notification {
-    top: 16px;
-    right: 16px;
-    left: 16px;
-    max-width: none;
-  }
+  /* Notification removed - using global notification from notify.js only */
 }
 
 @media (max-width: 600px) {

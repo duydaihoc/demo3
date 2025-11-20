@@ -570,7 +570,23 @@ function SavingsGoals() {
 
   // NEW: Help modal for levels & badges
   const GamifyHelpModal = ({ open, data, onClose, goals = [] }) => {
-    if (!open || !data) return null;
+    if (!open) return null;
+    // Nếu không có data, vẫn hiển thị modal với thông báo
+    if (!data) {
+      return (
+        <div className="sg-modal-backdrop" onClick={onClose}>
+          <div className="sg-help-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="sg-help-header">
+              <div className="sg-help-title">Giải thích cấp độ & huy hiệu</div>
+              <button className="sg-help-close" onClick={onClose}>×</button>
+            </div>
+            <div className="sg-help-section">
+              <p className="sg-help-text">Đang tải thông tin...</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
     const { thresholds = [], badges = [], level, progressPct, totals } = data;
 
     // NEW: build dynamic details per badge
@@ -729,7 +745,12 @@ function SavingsGoals() {
             type="button"
             className="sg-help-btn"
             aria-label="Giải thích cấp độ & huy hiệu"
-            onClick={() => setShowGamifyHelp(true)}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              console.log('Help button clicked, current showGamifyHelp:', showGamifyHelp, 'gamification:', gamification);
+              setShowGamifyHelp(true);
+            }}
           >?</button>
 
           <div className="sg-level">Cấp độ tài chính: <b>Lv {level}</b></div>
@@ -797,6 +818,12 @@ function SavingsGoals() {
           </div>
         </div>
         <GamificationCard />
+        <GamifyHelpModal
+          open={showGamifyHelp}
+          data={gamification}
+          goals={goals}
+          onClose={() => setShowGamifyHelp(false)}
+        />
         <div className="empty-goals-container">
           <div className="add-goal-card" onClick={openCreateGoalMode}>
             <div className="add-goal-icon">+</div>
@@ -818,6 +845,12 @@ function SavingsGoals() {
           goal={deleteConfirm.goal}
           onCancel={() => setDeleteConfirm({ open: false, goal: null })}
           onConfirm={handleDeleteGoal}
+        />
+        <GamifyHelpModal
+          open={showGamifyHelp}
+          data={gamification}
+          goals={goals}
+          onClose={() => setShowGamifyHelp(false)}
         />
         <div className="savings-header">
           <h2 className="savings-title">Tạo mục tiêu tiết kiệm</h2>
@@ -975,6 +1008,12 @@ function SavingsGoals() {
           goal={deleteConfirm.goal}
           onCancel={() => setDeleteConfirm({ open: false, goal: null })}
           onConfirm={handleDeleteGoal}
+        />
+        <GamifyHelpModal
+          open={showGamifyHelp}
+          data={gamification}
+          goals={goals}
+          onClose={() => setShowGamifyHelp(false)}
         />
         <div className="savings-header">
           <h2 className="savings-title">Chỉnh sửa mục tiêu</h2>
@@ -1134,6 +1173,12 @@ function SavingsGoals() {
           goal={deleteConfirm.goal}
           onCancel={() => setDeleteConfirm({ open: false, goal: null })}
           onConfirm={handleDeleteGoal}
+        />
+        <GamifyHelpModal
+          open={showGamifyHelp}
+          data={gamification}
+          goals={goals}
+          onClose={() => setShowGamifyHelp(false)}
         />
         <div className="savings-header">
           <h2 className="savings-title">Nạp tiền vào mục tiêu</h2>

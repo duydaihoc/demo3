@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import CategorySettings from './CategorySettings';
+import { showNotification } from '../utils/notify';
 import './SettingsPage.css';
 import './CategorySettings.css';
 
@@ -25,8 +26,7 @@ function SettingsPage() {
   });
   const [passwordSaving, setPasswordSaving] = useState(false);
 
-  // Notification state
-  const [notification, setNotification] = useState({ show: false, message: '', type: '' });
+  // Removed local notification state - using global notification from notify.js only
 
   // THÊM: Statistics state
   const [statistics, setStatistics] = useState(null);
@@ -81,21 +81,18 @@ function SettingsPage() {
       setStatistics(data);
     } catch (err) {
       console.error(err);
-      showNotification('Không thể tải thống kê', 'error');
+      showNotification('❌ Không thể tải thống kê', 'error');
     } finally {
       setStatisticsLoading(false);
     }
   };
 
-  const showNotification = (message, type = 'success') => {
-    setNotification({ show: true, message, type });
-    setTimeout(() => setNotification({ show: false, message: '', type: '' }), 4000);
-  };
+  // Using global showNotification from notify.js - no local wrapper needed
 
   const handleProfileSubmit = async (e) => {
     e.preventDefault();
     if (!profile.name.trim() || !profile.email.trim()) {
-      showNotification('Vui lòng điền đầy đủ thông tin', 'error');
+      showNotification('❌ Vui lòng điền đầy đủ thông tin', 'error');
       return;
     }
 
@@ -115,13 +112,13 @@ function SettingsPage() {
 
       // Update localStorage if name changed
       localStorage.setItem('userName', data.name);
-      showNotification('Cập nhật thông tin thành công!', 'success');
+      showNotification('✅ Cập nhật thông tin thành công!', 'success');
       
       // Reload to update sidebar name
       setTimeout(() => window.location.reload(), 1500);
     } catch (err) {
       console.error(err);
-      showNotification(err.message || 'Lỗi khi cập nhật thông tin', 'error');
+      showNotification('❌ ' + (err.message || 'Lỗi khi cập nhật thông tin'), 'error');
     } finally {
       setProfileSaving(false);
     }
@@ -132,12 +129,12 @@ function SettingsPage() {
     const { currentPassword, newPassword, confirmPassword } = passwords;
 
     if (!currentPassword || !newPassword || !confirmPassword) {
-      showNotification('Vui lòng điền đầy đủ thông tin', 'error');
+      showNotification('❌ Vui lòng điền đầy đủ thông tin', 'error');
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      showNotification('Mật khẩu mới không khớp', 'error');
+      showNotification('❌ Mật khẩu mới không khớp', 'error');
       return;
     }
 
@@ -155,11 +152,11 @@ function SettingsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Đổi mật khẩu thất bại');
 
-      showNotification('Đổi mật khẩu thành công!', 'success');
+      showNotification('✅ Đổi mật khẩu thành công!', 'success');
       setPasswords({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (err) {
       console.error(err);
-      showNotification(err.message || 'Lỗi khi đổi mật khẩu', 'error');
+      showNotification('❌ ' + (err.message || 'Lỗi khi đổi mật khẩu'), 'error');
     } finally {
       setPasswordSaving(false);
     }
@@ -169,11 +166,7 @@ function SettingsPage() {
     <div>
       <Sidebar userName={userName} />
       <main className="settings-main" style={{ marginLeft: 220 }}>
-        {notification.show && (
-          <div className={`settings-notification ${notification.type}`}>
-            {notification.message}
-          </div>
-        )}
+        {/* Notification removed - using global notification from notify.js only */}
         
         <div className="settings-header">
           <div className="settings-title-row">

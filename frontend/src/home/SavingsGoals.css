@@ -807,12 +807,18 @@
 /* Modal backdrop for delete confirm */
 .sg-modal-backdrop {
   position: fixed;
-  z-index: 9998;
+  z-index: 99999;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.18);
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
+  animation: sg-modal-backdrop-fadein 0.2s ease-out;
+}
+@keyframes sg-modal-backdrop-fadein {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 .sg-modal {
   background: #fff;
@@ -1143,6 +1149,8 @@
   animation:sg-modal-fadein .25s;
   font-weight:600;
   color:#163a5a;
+  position: relative;
+  z-index: 100000;
 }
 .sg-help-header {
   display:flex;
