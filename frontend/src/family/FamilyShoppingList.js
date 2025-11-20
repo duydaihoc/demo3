@@ -20,6 +20,11 @@ export default function FamilyShoppingList() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState({ name: '', quantity: 1, notes: '', category: '' });
   const [editingSaving, setEditingSaving] = useState(false);
+  
+  // Delete modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   // MỚI: controls & ui state
   const [searchQuery, setSearchQuery] = useState('');
@@ -193,13 +198,20 @@ export default function FamilyShoppingList() {
     }
   };
 
+  // Mở modal xóa
+  const openDeleteModal = (item) => {
+    setItemToDelete(item);
+    setShowDeleteModal(true);
+  };
+
   // Xóa item với API THẬT
-  const deleteItem = async (itemId) => {
-    if (!window.confirm('Bạn có chắc muốn xóa sản phẩm này?')) return;
+  const deleteItem = async () => {
+    if (!itemToDelete) return;
     
+    setDeleting(true);
     try {
-      console.log('Deleting item:', itemId);
-      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/shopping-list/${itemId}`, {
+      console.log('Deleting item:', itemToDelete._id);
+      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/shopping-list/${itemToDelete._id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -211,11 +223,15 @@ export default function FamilyShoppingList() {
       
       showNotification('Đã xóa sản phẩm khỏi danh sách', 'success');
       
-      // Refresh danh sách
+      // Đóng modal và refresh danh sách
+      setShowDeleteModal(false);
+      setItemToDelete(null);
       await fetchShoppingList();
     } catch (err) {
       console.error("Error deleting item:", err);
       showNotification('Không thể xóa sản phẩm', 'error');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -318,34 +334,44 @@ export default function FamilyShoppingList() {
 
   // THÊM: Hàm xuất danh sách mục chưa mua
   const exportShoppingList = () => {
-    // Lọc các mục chưa mua
-    const unpurchasedItems = shoppingItems.filter(item => !item.purchased);
-    
-    if (unpurchasedItems.length === 0) {
-      showNotification('Không có mục nào cần mua để xuất', 'info');
-      return;
-    }
+    try {
+      // Lọc các mục chưa mua
+      const unpurchasedItems = (shoppingItems || []).filter(item => !item.purchased);
+      
+      if (unpurchasedItems.length === 0) {
+        showNotification('Không có mục nào cần mua để xuất', 'info');
+        return;
+      }
 
-    // Tạo nội dung file
-    const content = generateExportContent(unpurchasedItems);
-    
-    // Tạo và tải file
-    downloadFile(content, `danh-sach-mua-sam-${new Date().toISOString().split('T')[0]}.txt`, 'text/plain');
-    
-    showNotification(`Đã xuất ${unpurchasedItems.length} mục cần mua`, 'success');
+      // Tạo nội dung file
+      const content = generateExportContent(unpurchasedItems);
+      
+      // Tạo và tải file
+      downloadFile(content, `danh-sach-mua-sam-${new Date().toISOString().split('T')[0]}.txt`, 'text/plain');
+      
+      showNotification(`Đã xuất ${unpurchasedItems.length} mục cần mua`, 'success');
+    } catch (error) {
+      console.error('Error exporting shopping list:', error);
+      showNotification('Đã xảy ra lỗi khi xuất file: ' + error.message, 'error');
+    }
   };
 
   // THÊM: Hàm tạo nội dung file xuất
   const generateExportContent = (items) => {
-    const familyName = familyInfo?.name || 'Gia đình';
-    const exportDate = new Date().toLocaleDateString('vi-VN', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-    
-    let content = `═══════════════════════════════════════════════════════════════
+    try {
+      if (!items || items.length === 0) {
+        return 'Danh sách mua sắm trống';
+      }
+
+      const familyName = (familyInfo && familyInfo.name) ? familyInfo.name : 'Gia đình';
+      const exportDate = new Date().toLocaleDateString('vi-VN', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+      
+      let content = `═══════════════════════════════════════════════════════════════
                     DANH SÁCH MUA SẮM
                         ${familyName}
 ═══════════════════════════════════════════════════════════════
@@ -357,95 +383,118 @@ export default function FamilyShoppingList() {
 
 `;
 
-    // Nhóm theo danh mục
-    const itemsByCategory = {};
-    items.forEach(item => {
-      const categoryName = item.categoryInfo?.name || 'Không phân loại';
-      if (!itemsByCategory[categoryName]) {
-        itemsByCategory[categoryName] = [];
-      }
-      itemsByCategory[categoryName].push(item);
-    });
+      // Nhóm theo danh mục
+      const itemsByCategory = {};
+      items.forEach(item => {
+        if (!item) return;
+        const categoryName = (item.categoryInfo && item.categoryInfo.name) ? item.categoryInfo.name : 'Không phân loại';
+        if (!itemsByCategory[categoryName]) {
+          itemsByCategory[categoryName] = [];
+        }
+        itemsByCategory[categoryName].push(item);
+      });
 
-    // Xuất từng danh mục
-    Object.keys(itemsByCategory).forEach((categoryName, index) => {
-      const categoryItems = itemsByCategory[categoryName];
-      const categoryIcon = categoryItems[0]?.categoryInfo?.icon || '📝';
-      
-      content += `${categoryIcon} ${categoryName.toUpperCase()}\n`;
-      content += '─'.repeat(50) + '\n';
-      
-      categoryItems.forEach((item, itemIndex) => {
-        content += `${itemIndex + 1}. ${item.name}`;
-        if (item.quantity > 1) {
-          content += ` (x${item.quantity})`;
-        }
-        if (item.notes) {
-          content += `\n   💬 ${item.notes}`;
-        }
+      // Xuất từng danh mục
+      Object.keys(itemsByCategory).forEach((categoryName, index) => {
+        const categoryItems = itemsByCategory[categoryName];
+        if (!categoryItems || categoryItems.length === 0) return;
+        
+        const categoryIcon = (categoryItems[0] && categoryItems[0].categoryInfo && categoryItems[0].categoryInfo.icon) 
+          ? categoryItems[0].categoryInfo.icon 
+          : '📝';
+        
+        content += `${categoryIcon} ${categoryName.toUpperCase()}\n`;
+        content += '─'.repeat(50) + '\n';
+        
+        categoryItems.forEach((item, itemIndex) => {
+          if (!item || !item.name) return;
+          content += `${itemIndex + 1}. ${item.name || 'Không có tên'}`;
+          if (item.quantity && item.quantity > 1) {
+            content += ` (x${item.quantity})`;
+          }
+          if (item.notes) {
+            content += `\n   💬 ${item.notes}`;
+          }
+          content += '\n';
+        });
+        
         content += '\n';
       });
-      
-      content += '\n';
-    });
 
-    content += `═══════════════════════════════════════════════════════════════
+      content += `═══════════════════════════════════════════════════════════════
 
 📋 DANH SÁCH KIỂM TRA
 `;
 
-    // Danh sách checkbox cho người dùng tick
-    items.forEach((item, index) => {
-      content += `\n☐ ${item.name}`;
-      if (item.quantity > 1) {
-        content += ` (x${item.quantity})`;
-      }
-    });
+      // Danh sách checkbox cho người dùng tick
+      items.forEach((item, index) => {
+        if (!item || !item.name) return;
+        content += `\n☐ ${item.name}`;
+        if (item.quantity && item.quantity > 1) {
+          content += ` (x${item.quantity})`;
+        }
+      });
 
-    content += `
+      content += `
 
 ═══════════════════════════════════════════════════════════════
 🏠 Được tạo từ ứng dụng quản lý gia đình
 📱 ${window.location.origin}
 `;
 
-    return content;
+      return content;
+    } catch (error) {
+      console.error('Error generating export content:', error);
+      return `Lỗi khi tạo nội dung xuất file: ${error.message}`;
+    }
   };
 
   // THÊM: Hàm xuất định dạng PDF đơn giản (text format)
   const exportToPDF = () => {
-    const unpurchasedItems = shoppingItems.filter(item => !item.purchased);
-    
-    if (unpurchasedItems.length === 0) {
-      showNotification('Không có mục nào cần mua để xuất', 'info');
-      return;
-    }
+    try {
+      const unpurchasedItems = (shoppingItems || []).filter(item => !item.purchased);
+      
+      if (unpurchasedItems.length === 0) {
+        showNotification('Không có mục nào cần mua để xuất', 'info');
+        return;
+      }
 
-    // Tạo HTML content cho PDF
-    const htmlContent = generatePDFContent(unpurchasedItems);
-    
-    // Tạo file HTML có thể in thành PDF
-    const blob = new Blob([htmlContent], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    
-    // Mở trong tab mới để người dùng có thể in hoặc lưu PDF
-    const newWindow = window.open(url, '_blank');
-    if (newWindow) {
-      newWindow.onload = () => {
-        // Tự động mở hộp thoại in
-        setTimeout(() => {
-          newWindow.print();
-        }, 1000);
-      };
+      // Tạo HTML content cho PDF
+      const htmlContent = generatePDFContent(unpurchasedItems);
+      
+      // Tạo file HTML có thể in thành PDF
+      const blob = new Blob([htmlContent], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      
+      // Mở trong tab mới để người dùng có thể in hoặc lưu PDF
+      const newWindow = window.open(url, '_blank');
+      if (newWindow) {
+        newWindow.onload = () => {
+          // Tự động mở hộp thoại in
+          setTimeout(() => {
+            newWindow.print();
+          }, 1000);
+        };
+      } else {
+        showNotification('Không thể mở cửa sổ mới. Vui lòng cho phép popup.', 'error');
+      }
+      
+      showNotification('Đã mở danh sách để in hoặc lưu PDF', 'success');
+    } catch (error) {
+      console.error('Error exporting to PDF:', error);
+      showNotification('Đã xảy ra lỗi khi xuất PDF: ' + error.message, 'error');
     }
-    
-    showNotification('Đã mở danh sách để in hoặc lưu PDF', 'success');
   };
 
   // THÊM: Hàm tạo HTML content cho PDF
   const generatePDFContent = (items) => {
-    const familyName = familyInfo?.name || 'Gia đình';
-    const exportDate = new Date().toLocaleDateString('vi-VN');
+    try {
+      if (!items || items.length === 0) {
+        return '<html><body><p>Danh sách mua sắm trống</p></body></html>';
+      }
+
+      const familyName = (familyInfo && familyInfo.name) ? familyInfo.name : 'Gia đình';
+      const exportDate = new Date().toLocaleDateString('vi-VN');
     
     let html = `
 <!DOCTYPE html>
@@ -563,49 +612,65 @@ export default function FamilyShoppingList() {
     </div>
 `;
 
-    // Nhóm theo danh mục
-    const itemsByCategory = {};
-    items.forEach(item => {
-      const categoryName = item.categoryInfo?.name || 'Không phân loại';
-      if (!itemsByCategory[categoryName]) {
-        itemsByCategory[categoryName] = [];
-      }
-      itemsByCategory[categoryName].push(item);
-    });
+      // Nhóm theo danh mục
+      const itemsByCategory = {};
+      items.forEach(item => {
+        if (!item) return;
+        const categoryName = (item.categoryInfo && item.categoryInfo.name) 
+          ? item.categoryInfo.name 
+          : 'Không phân loại';
+        if (!itemsByCategory[categoryName]) {
+          itemsByCategory[categoryName] = [];
+        }
+        itemsByCategory[categoryName].push(item);
+      });
 
-    // Tạo HTML cho từng danh mục
-    Object.keys(itemsByCategory).forEach((categoryName) => {
-      const categoryItems = itemsByCategory[categoryName];
-      const categoryIcon = categoryItems[0]?.categoryInfo?.icon || '📝';
-      
-      html += `
-    <div class="category">
-        <h3 class="category-title">${categoryIcon} ${categoryName}</h3>
-        <div class="items">`;
-      
-      categoryItems.forEach((item) => {
+      // Tạo HTML cho từng danh mục
+      Object.keys(itemsByCategory).forEach((categoryName) => {
+        const categoryItems = itemsByCategory[categoryName];
+        if (!categoryItems || categoryItems.length === 0) return;
+        
+        const categoryIcon = (categoryItems[0] && categoryItems[0].categoryInfo && categoryItems[0].categoryInfo.icon)
+          ? categoryItems[0].categoryInfo.icon
+          : '📝';
+        
+        // Escape HTML để tránh XSS
+        const safeCategoryName = categoryName.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        
         html += `
+    <div class="category">
+        <h3 class="category-title">${categoryIcon} ${safeCategoryName}</h3>
+        <div class="items">`;
+        
+        categoryItems.forEach((item) => {
+          if (!item || !item.name) return;
+          
+          // Escape HTML
+          const safeItemName = item.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          
+          html += `
             <div class="item">
                 <div class="checkbox"></div>
-                <div class="item-name">${item.name}</div>`;
+                <div class="item-name">${safeItemName}</div>`;
+          
+          if (item.quantity && item.quantity > 1) {
+            html += `<div class="item-quantity">x${item.quantity}</div>`;
+          }
+          
+          html += `</div>`;
+          
+          if (item.notes) {
+            const safeNotes = item.notes.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            html += `<div class="item-notes">💬 ${safeNotes}</div>`;
+          }
+        });
         
-        if (item.quantity > 1) {
-          html += `<div class="item-quantity">x${item.quantity}</div>`;
-        }
-        
-        html += `</div>`;
-        
-        if (item.notes) {
-          html += `<div class="item-notes">💬 ${item.notes}</div>`;
-        }
-      });
-      
-      html += `
+        html += `
         </div>
     </div>`;
-    });
+      });
 
-    html += `
+      html += `
     <div class="footer">
         <p>🏠 Được tạo từ ứng dụng quản lý gia đình</p>
         <p>📱 ${window.location.origin}</p>
@@ -613,50 +678,75 @@ export default function FamilyShoppingList() {
 </body>
 </html>`;
 
-    return html;
+      return html;
+    } catch (error) {
+      console.error('Error generating PDF content:', error);
+      return `<html><body><p>Lỗi khi tạo nội dung PDF: ${error.message}</p></body></html>`;
+    }
   };
 
   // THÊM: Hàm tải file
   const downloadFile = (content, filename, contentType) => {
-    const blob = new Blob([content], { type: contentType });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    try {
+      if (!content) {
+        throw new Error('Nội dung file trống');
+      }
+      
+      const blob = new Blob([content], { type: contentType });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      
+      // Cleanup sau một chút thời gian
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }, 100);
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      showNotification('Đã xảy ra lỗi khi tải file: ' + error.message, 'error');
+      throw error;
+    }
   };
 
   // THÊM: Hàm xuất CSV
   const exportToCSV = () => {
-    const unpurchasedItems = shoppingItems.filter(item => !item.purchased);
-    
-    if (unpurchasedItems.length === 0) {
-      showNotification('Không có mục nào cần mua để xuất', 'info');
-      return;
-    }
+    try {
+      const unpurchasedItems = (shoppingItems || []).filter(item => !item.purchased);
+      
+      if (unpurchasedItems.length === 0) {
+        showNotification('Không có mục nào cần mua để xuất', 'info');
+        return;
+      }
 
-    // Tạo CSV content
-    let csvContent = '\uFEFF'; // UTF-8 BOM for Excel compatibility
-    csvContent += 'STT,Tên sản phẩm,Số lượng,Danh mục,Ghi chú,Người tạo,Ngày tạo\n';
-    
-    unpurchasedItems.forEach((item, index) => {
-      const row = [
-        index + 1,
-        `"${item.name}"`,
-        item.quantity,
-        `"${item.categoryInfo?.name || 'Không phân loại'}"`,
-        `"${item.notes || ''}"`,
-        `"${item.creatorName || 'Thành viên'}"`,
-        `"${new Date(item.createdAt).toLocaleDateString('vi-VN')}"`
-      ].join(',');
-      csvContent += row + '\n';
-    });
-    
-    downloadFile(csvContent, `danh-sach-mua-sam-${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
-    showNotification(`Đã xuất ${unpurchasedItems.length} mục ra file CSV`, 'success');
+      // Tạo CSV content
+      let csvContent = '\uFEFF'; // UTF-8 BOM for Excel compatibility
+      csvContent += 'STT,Tên sản phẩm,Số lượng,Danh mục,Ghi chú,Người tạo,Ngày tạo\n';
+      
+      unpurchasedItems.forEach((item, index) => {
+        if (!item) return;
+        const row = [
+          index + 1,
+          `"${(item.name || '').replace(/"/g, '""')}"`,
+          item.quantity || 1,
+          `"${((item.categoryInfo && item.categoryInfo.name) ? item.categoryInfo.name : 'Không phân loại').replace(/"/g, '""')}"`,
+          `"${(item.notes || '').replace(/"/g, '""')}"`,
+          `"${(item.creatorName || 'Thành viên').replace(/"/g, '""')}"`,
+          `"${item.createdAt ? new Date(item.createdAt).toLocaleDateString('vi-VN') : ''}"`
+        ].join(',');
+        csvContent += row + '\n';
+      });
+      
+      downloadFile(csvContent, `danh-sach-mua-sam-${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
+      showNotification(`Đã xuất ${unpurchasedItems.length} mục ra file CSV`, 'success');
+    } catch (error) {
+      console.error('Error exporting to CSV:', error);
+      showNotification('Đã xảy ra lỗi khi xuất CSV: ' + error.message, 'error');
+    }
   };
 
   // MỚI: stats và filtered list
@@ -686,6 +776,11 @@ export default function FamilyShoppingList() {
 
     return items;
   }, [shoppingItems, filterStatus, searchQuery, sortBy]);
+
+  // Debug: log state changes
+  useEffect(() => {
+    console.log('showAddModal state:', showAddModal);
+  }, [showAddModal]);
 
   return (
     <div className="family-page">
@@ -750,7 +845,17 @@ export default function FamilyShoppingList() {
                 <i className="fas fa-plus"></i>
               </div>
               <div className="fsl-stat-content">
-                <button className="fsl-add-btn" onClick={() => setShowAddModal(true)} aria-label="Thêm sản phẩm mới">
+                <button 
+                  className="fsl-add-btn" 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Add button clicked, setting showAddModal to true');
+                    setShowAddModal(true);
+                  }} 
+                  aria-label="Thêm sản phẩm mới"
+                  type="button"
+                >
                   <i className="fas fa-plus"></i>
                   <span className="fsl-add-text">Thêm sản phẩm mới</span>
                 </button>
@@ -917,7 +1022,7 @@ export default function FamilyShoppingList() {
                                 <span className="btn-text">{item.purchased ? 'Chưa mua' : 'Đã mua'}</span>
                               </button>
                               {canDeleteItem(item) && (
-                                <button className="fsl-action-btn delete" onClick={() => deleteItem(item._id)}>
+                                <button className="fsl-action-btn delete" onClick={() => openDeleteModal(item)}>
                                   <i className="fas fa-trash"></i> <span className="btn-text">Xóa</span>
                                 </button>
                               )}
@@ -985,7 +1090,7 @@ export default function FamilyShoppingList() {
                           {item.purchased ? 'Chưa mua' : 'Đã mua'}
                         </button>
                         {canDeleteItem(item) && (
-                          <button className="fsl-note-btn delete" onClick={() => deleteItem(item._id)}>
+                          <button className="fsl-note-btn delete" onClick={() => openDeleteModal(item)}>
                             <i className="fas fa-trash"></i>
                             Xóa
                           </button>
@@ -1002,8 +1107,15 @@ export default function FamilyShoppingList() {
 
       {/* Add Item Modal */}
       {showAddModal && (
-        <div className="fsl-modal-overlay">
-          <div className="fsl-modal">
+        <div 
+          className="fsl-modal-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowAddModal(false);
+            }
+          }}
+        >
+          <div className="fsl-modal" onClick={(e) => e.stopPropagation()}>
             <div className="fsl-modal-header">
               <h3>Thêm sản phẩm mới</h3>
               <button 
@@ -1070,7 +1182,7 @@ export default function FamilyShoppingList() {
                   onClick={() => setShowAddModal(false)}
                   disabled={saving}
                 >
-                  Hủy
+                  <i className="fas fa-times"></i> Hủy
                 </button>
                 <button 
                   type="submit" 
@@ -1083,7 +1195,7 @@ export default function FamilyShoppingList() {
                     </>
                   ) : (
                     <>
-                      <i className="fas fa-save"></i> Thêm sản phẩm
+                      <i className="fas fa-plus-circle"></i> Thêm sản phẩm
                     </>
                   )}
                 </button>
@@ -1151,12 +1263,151 @@ export default function FamilyShoppingList() {
               </div>
 
               <div className="fsl-form-actions">
-                <button type="button" className="fsl-btn secondary" onClick={() => { setShowEditModal(false); setEditingItem(null); }} disabled={editingSaving}>Hủy</button>
-                <button type="submit" className="fsl-btn primary" disabled={editingSaving}>
-                  {editingSaving ? <><i className="fas fa-spinner fa-spin"></i> Đang lưu...</> : <><i className="fas fa-save"></i> Lưu</>}
+                <button 
+                  type="button" 
+                  className="fsl-btn secondary" 
+                  onClick={() => { setShowEditModal(false); setEditingItem(null); }} 
+                  disabled={editingSaving}
+                >
+                  <i className="fas fa-times"></i> Hủy
+                </button>
+                <button 
+                  type="submit" 
+                  className="fsl-btn primary" 
+                  disabled={editingSaving}
+                >
+                  {editingSaving ? (
+                    <>
+                      <i className="fas fa-spinner fa-spin"></i> Đang lưu...
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-check-circle"></i> Lưu thay đổi
+                    </>
+                  )}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && itemToDelete && (
+        <div className="fsl-modal-overlay">
+          <div className="fsl-modal fsl-delete-modal">
+            <div className="fsl-modal-header">
+              <h3>
+                <i className="fas fa-exclamation-triangle"></i> Xác nhận xóa sản phẩm
+              </h3>
+              <button 
+                className="fsl-modal-close"
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setItemToDelete(null);
+                }}
+                disabled={deleting}
+              >
+                &times;
+              </button>
+            </div>
+            
+            <div className="fsl-form">
+              <div className="fsl-delete-warning">
+                <div className="fsl-delete-warning-icon">
+                  <i className="fas fa-exclamation-triangle"></i>
+                </div>
+                <h4>Bạn có chắc chắn muốn xóa sản phẩm này?</h4>
+                <p>Hành động này không thể hoàn tác!</p>
+                
+                <div className="fsl-delete-item-preview">
+                  <div className="fsl-delete-item-preview-label">Thông tin sản phẩm:</div>
+                  <div className="fsl-delete-item-preview-title">{itemToDelete.name}</div>
+                  {itemToDelete.notes && (
+                    <div className="fsl-delete-item-preview-desc">{itemToDelete.notes}</div>
+                  )}
+                  <div className="fsl-delete-item-preview-badges">
+                    <span className="fsl-quantity-badge" style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '4px 12px',
+                      background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
+                      color: 'white',
+                      borderRadius: '12px',
+                      fontSize: '12px',
+                      fontWeight: 600
+                    }}>
+                      <i className="fas fa-box"></i>
+                      Số lượng: x{itemToDelete.quantity}
+                    </span>
+                    {itemToDelete.categoryInfo && (
+                      <span className="fsl-category-tag" style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '4px 12px',
+                        background: 'linear-gradient(135deg, rgba(42, 82, 152, 0.1) 0%, rgba(78, 205, 196, 0.1) 100%)',
+                        border: '1px solid rgba(42, 82, 152, 0.2)',
+                        borderRadius: '12px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        color: '#2a5298'
+                      }}>
+                        <i className={itemToDelete.categoryInfo.icon || 'fas fa-tag'}></i>
+                        {itemToDelete.categoryInfo.name}
+                      </span>
+                    )}
+                    {itemToDelete.creatorName && (
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '4px 12px',
+                        background: '#e3f2fd',
+                        color: '#1976d2',
+                        borderRadius: '12px',
+                        fontSize: '12px',
+                        fontWeight: 500
+                      }}>
+                        <i className="fas fa-user"></i>
+                        {itemToDelete.creatorName}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="fsl-form-actions">
+                <button 
+                  type="button" 
+                  className="fsl-btn secondary"
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setItemToDelete(null);
+                  }}
+                  disabled={deleting}
+                >
+                  <i className="fas fa-times"></i> Hủy
+                </button>
+                <button 
+                  type="button" 
+                  className="fsl-btn danger"
+                  onClick={deleteItem}
+                  disabled={deleting}
+                >
+                  {deleting ? (
+                    <>
+                      <i className="fas fa-spinner fa-spin"></i> Đang xóa...
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-trash-alt"></i> Xác nhận xóa
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

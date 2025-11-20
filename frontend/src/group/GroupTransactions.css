@@ -1635,3 +1635,343 @@
 .gt-explanation-text strong {
   font-weight: 700;
 }
+
+/* ===== Repay Modal Styles ===== */
+.gt-repay-modal {
+  background: #ffffff;
+  border-radius: 20px;
+  width: 90%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(148, 163, 184, 0.15);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  animation: slideUpModal 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.gt-repay-modal::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #10b981, #059669, #047857);
+  z-index: 1;
+}
+
+.gt-repay-modal-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 24px 24px 20px;
+  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%);
+  position: relative;
+}
+
+.gt-repay-header-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 24px;
+  flex-shrink: 0;
+  box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
+}
+
+.gt-repay-header-content {
+  flex: 1;
+}
+
+.gt-repay-modal-header h3 {
+  margin: 0 0 4px 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.gt-repay-subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.gt-repay-modal-body {
+  padding: 24px;
+}
+
+.gt-repay-transaction-info {
+  margin-bottom: 24px;
+}
+
+.gt-repay-info-card {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
+}
+
+.gt-repay-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(59, 130, 246, 0.15);
+}
+
+.gt-repay-info-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.gt-repay-info-row:first-child {
+  padding-top: 0;
+}
+
+.gt-repay-info-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #475569;
+  font-weight: 600;
+}
+
+.gt-repay-info-label i {
+  color: #3b82f6;
+  font-size: 16px;
+}
+
+.gt-repay-info-value {
+  font-size: 15px;
+  color: #1e293b;
+  font-weight: 600;
+  text-align: right;
+}
+
+.gt-repay-amount {
+  font-size: 20px;
+  font-weight: 700;
+  color: #059669;
+  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+  padding: 8px 16px;
+  border-radius: 8px;
+  display: inline-block;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);
+}
+
+.gt-repay-wallet-section {
+  margin-top: 24px;
+}
+
+.gt-repay-wallet-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.gt-repay-wallet-label i {
+  color: #3b82f6;
+  font-size: 18px;
+}
+
+.gt-required-badge {
+  color: #ef4444;
+  font-weight: 700;
+  margin-left: 4px;
+}
+
+.gt-repay-wallet-select-wrapper {
+  position: relative;
+  margin-bottom: 16px;
+}
+
+.gt-repay-wallet-select {
+  width: 100%;
+  padding: 14px 16px;
+  padding-right: 48px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 500;
+  background: #ffffff;
+  color: #1e293b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.gt-repay-wallet-select:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+}
+
+.gt-repay-wallet-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+}
+
+.gt-repay-wallet-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: #f8fafc;
+}
+
+.gt-select-arrow {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #64748b;
+  pointer-events: none;
+  font-size: 14px;
+  transition: transform 0.2s ease;
+}
+
+.gt-repay-wallet-select:focus + .gt-select-arrow {
+  transform: translateY(-50%) rotate(180deg);
+}
+
+.gt-repay-wallet-preview {
+  margin-top: 16px;
+  animation: slideDown 0.3s ease-out;
+}
+
+.gt-wallet-preview-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border-radius: 12px;
+  border: 2px solid #86efac;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+}
+
+.gt-wallet-preview-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 20px;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.gt-wallet-preview-info {
+  flex: 1;
+}
+
+.gt-wallet-preview-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #065f46;
+  margin-bottom: 4px;
+}
+
+.gt-wallet-preview-balance {
+  font-size: 14px;
+  color: #047857;
+  font-weight: 600;
+}
+
+.gt-repay-modal-footer {
+  padding: 20px 24px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  background: #f8fafc;
+}
+
+.gt-repay-confirm-btn {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  border: none;
+  border-radius: 999px;
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+}
+
+.gt-repay-confirm-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #059669, #047857);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5);
+}
+
+.gt-repay-confirm-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.gt-repay-confirm-btn i {
+  font-size: 16px;
+}
+
+/* Responsive for repay modal */
+@media (max-width: 640px) {
+  .gt-repay-modal {
+    width: 95%;
+    max-width: none;
+  }
+  
+  .gt-repay-modal-header {
+    padding: 20px;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  
+  .gt-repay-header-content {
+    text-align: center;
+  }
+  
+  .gt-repay-modal-body {
+    padding: 20px;
+  }
+  
+  .gt-repay-amount {
+    font-size: 18px;
+    padding: 6px 12px;
+  }
+  
+  .gt-repay-modal-footer {
+    flex-direction: column-reverse;
+    padding: 16px 20px;
+  }
+  
+  .gt-repay-confirm-btn,
+  .gt-cancel-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

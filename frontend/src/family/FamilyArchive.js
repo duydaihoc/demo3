@@ -71,6 +71,11 @@ export default function FamilyArchive() {
   });
   const [updating, setUpdating] = useState(false);
 
+  // THÊM: State cho modal xóa ảnh hóa đơn
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [receiptToDelete, setReceiptToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
   const API_BASE = 'http://localhost:5000';
   const token = localStorage.getItem('token');
   const selectedFamilyId = localStorage.getItem('selectedFamilyId');
@@ -388,18 +393,32 @@ export default function FamilyArchive() {
     }
   };
 
+  // Mở modal xóa
+  const openDeleteModal = (receipt) => {
+    setReceiptToDelete(receipt);
+    setShowDeleteModal(true);
+  };
+
+  // Đóng modal xóa
+  const closeDeleteModal = () => {
+    setShowDeleteModal(false);
+    setReceiptToDelete(null);
+  };
+
   // Delete receipt image
-  const deleteReceiptImage = async (imageId) => {
-    if (!window.confirm('Bạn có chắc muốn xóa hình ảnh này?')) return;
+  const deleteReceiptImage = async () => {
+    if (!receiptToDelete) return;
     
+    setDeleting(true);
     try {
-      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/receipt-images/${imageId}`, {
+      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/receipt-images/${receiptToDelete._id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
       
       if (res.ok) {
         showNotification('Đã xóa hình ảnh hóa đơn', 'success');
+        closeDeleteModal();
         fetchReceiptImages(); // Refresh list
       } else {
         throw new Error('Không thể xóa hình ảnh');
@@ -407,6 +426,8 @@ export default function FamilyArchive() {
     } catch (err) {
       console.error('Error deleting receipt:', err);
       showNotification('Không thể xóa hình ảnh', 'error');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -935,7 +956,7 @@ export default function FamilyArchive() {
                                     </button>
                                   )}
                                   {canEditReceipt(item) && (
-                                    <button className="fa-action-btn delete" onClick={() => deleteReceiptImage(item._id)} title="Xóa">
+                                    <button className="fa-action-btn delete" onClick={() => openDeleteModal(item)} title="Xóa">
                                       <i className="fas fa-trash"></i> Xóa
                                     </button>
                                   )}
@@ -1172,14 +1193,34 @@ export default function FamilyArchive() {
                     onChange={(e) => handleUploadFormChange('linkedTransactionId', e.target.value)}
                   >
                     <option value="">-- Không liên kết --</option>
-                    {transactions.map(tx => (
-                      <option key={tx._id} value={tx._id}>
-                        {formatDate(tx.date)} - {tx.description || 'Giao dịch'} - {formatCurrency(tx.amount)}
-                        {tx.category && ` (${tx.category.name || tx.category})`}
-                      </option>
-                    ))}
+                    {(() => {
+                      // Lọc ra các giao dịch đã có hóa đơn được liên kết
+                      const linkedTransactionIds = new Set();
+                      receiptImages.forEach(receipt => {
+                        if (receipt.linkedTransaction) {
+                          const txId = typeof receipt.linkedTransaction === 'object' 
+                            ? receipt.linkedTransaction._id 
+                            : receipt.linkedTransaction;
+                          if (txId) linkedTransactionIds.add(String(txId));
+                        } else if (receipt.linkedTransactionId) {
+                          linkedTransactionIds.add(String(receipt.linkedTransactionId));
+                        }
+                      });
+                      
+                      // Chỉ hiển thị các giao dịch chưa được liên kết
+                      const availableTransactions = transactions.filter(tx => 
+                        !linkedTransactionIds.has(String(tx._id))
+                      );
+                      
+                      return availableTransactions.map(tx => (
+                        <option key={tx._id} value={tx._id}>
+                          {formatDate(tx.date)} - {tx.description || 'Giao dịch'} - {formatCurrency(tx.amount)}
+                          {tx.category && ` (${tx.category.name || tx.category})`}
+                        </option>
+                      ));
+                    })()}
                   </select>
-                  <small>Liên kết hóa đơn này với một giao dịch chi tiêu gia đình</small>
+                  <small>Liên kết hóa đơn này với một giao dịch chi tiêu gia đình (chỉ hiển thị giao dịch chưa có hóa đơn)</small>
                 </div>
               </div>
             </div>
@@ -1435,6 +1476,91 @@ export default function FamilyArchive() {
                   <>
                     <i className="fas fa-save"></i>
                     Lưu thay đổi
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* THÊM: Modal xóa ảnh hóa đơn */}
+      {showDeleteModal && receiptToDelete && (
+        <div className="fa-modal-overlay">
+          <div className="fa-modal fa-delete-modal">
+            <div className="fa-modal-header">
+              <h3>
+                <i className="fas fa-exclamation-triangle"></i>
+                Xác nhận xóa ảnh hóa đơn
+              </h3>
+              <button 
+                className="fa-modal-close" 
+                onClick={closeDeleteModal}
+                disabled={deleting}
+              >
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+            
+            <div className="fa-modal-body">
+              <div className="fa-delete-warning">
+                <div className="fa-delete-warning-icon">
+                  <i className="fas fa-exclamation-triangle"></i>
+                </div>
+                <h4>Bạn có chắc chắn muốn xóa ảnh hóa đơn này?</h4>
+                <p>Hành động này không thể hoàn tác!</p>
+                
+                <div className="fa-delete-item-preview">
+                  <div className="fa-delete-item-preview-label">Thông tin ảnh hóa đơn:</div>
+                  <div className="fa-delete-item-preview-image">
+                    <img 
+                      src={receiptToDelete.imageUrl} 
+                      alt={receiptToDelete.description || receiptToDelete.originalName}
+                      style={{ maxWidth: '200px', maxHeight: '150px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                    />
+                  </div>
+                  <div className="fa-delete-item-preview-title">{receiptToDelete.description || receiptToDelete.originalName}</div>
+                  {receiptToDelete.amount && (
+                    <div className="fa-delete-item-preview-amount">
+                      <strong>Số tiền:</strong> {formatCurrency(receiptToDelete.amount)}
+                    </div>
+                  )}
+                  {receiptToDelete.date && (
+                    <div className="fa-delete-item-preview-date">
+                      <strong>Ngày:</strong> {formatDate(receiptToDelete.date)}
+                    </div>
+                  )}
+                  {receiptToDelete.categoryInfo && (
+                    <div className="fa-delete-item-preview-category">
+                      <strong>Danh mục:</strong> {receiptToDelete.categoryInfo.icon || '📝'} {receiptToDelete.categoryInfo.name || 'Không có'}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            <div className="fa-modal-footer">
+              <button 
+                className="fa-btn secondary" 
+                onClick={closeDeleteModal}
+                disabled={deleting}
+              >
+                Hủy
+              </button>
+              <button 
+                className="fa-btn danger" 
+                onClick={deleteReceiptImage}
+                disabled={deleting}
+              >
+                {deleting ? (
+                  <>
+                    <i className="fas fa-spinner fa-spin"></i>
+                    Đang xóa...
+                  </>
+                ) : (
+                  <>
+                    <i className="fas fa-trash"></i>
+                    Xác nhận xóa
                   </>
                 )}
               </button>

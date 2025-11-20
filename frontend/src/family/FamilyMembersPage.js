@@ -16,7 +16,6 @@ export default function FamilyMembersPage() {
   const [selectedFriends, setSelectedFriends] = useState([]);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviting, setInviting] = useState(false);
-  const [removingMemberId, setRemovingMemberId] = useState(null);
   // Thêm state cho kiểm tra email
   const [emailExists, setEmailExists] = useState(null); // null: chưa kiểm tra, true: tồn tại, false: không tồn tại
   const [checkingEmail, setCheckingEmail] = useState(false);
@@ -26,6 +25,10 @@ export default function FamilyMembersPage() {
   const [cancellingInvitationId, setCancellingInvitationId] = useState(null);
   // Thêm state cho người dùng hiện tại
   const [currentUser, setCurrentUser] = useState(null);
+  // State cho modal xóa thành viên
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [memberToDelete, setMemberToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const API_BASE = 'http://localhost:5000';
   const token = localStorage.getItem('token');
@@ -346,11 +349,31 @@ export default function FamilyMembersPage() {
     }
   };
 
+  // Mở modal xóa thành viên
+  const openDeleteModal = (member) => {
+    if (!member) {
+      console.error('Member is null or undefined');
+      return;
+    }
+    console.log('Opening delete modal for member:', member);
+    setMemberToDelete(member);
+    setShowDeleteModal(true);
+  };
+
+  // Đóng modal xóa thành viên
+  const closeDeleteModal = () => {
+    setShowDeleteModal(false);
+    setMemberToDelete(null);
+  };
+
   // Xóa thành viên
-  const handleRemoveMember = async (memberId) => {
+  const handleRemoveMember = async () => {
+    if (!memberToDelete) return;
+    
+    const memberId = memberToDelete.user && (memberToDelete.user._id || memberToDelete.user);
     if (!token || !selectedFamilyId || !memberId) return;
 
-    setRemovingMemberId(memberId);
+    setDeleting(true);
 
     try {
       const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/remove-member`, {
@@ -370,18 +393,23 @@ export default function FamilyMembersPage() {
 
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        alert(err?.message || 'Không thể xóa thành viên');
+        setError(err?.message || 'Không thể xóa thành viên');
+        setTimeout(() => setError(''), 5000);
         return;
       }
 
       // Thành công
+      setSuccessMessage('Đã xóa thành viên thành công');
+      setTimeout(() => setSuccessMessage(''), 5000);
+      closeDeleteModal();
       fetchFamilyData(); // Refresh danh sách thành viên
       
     } catch (err) {
       console.error('Error removing member:', err);
-      alert('Lỗi khi xóa thành viên');
+      setError('Lỗi khi xóa thành viên');
+      setTimeout(() => setError(''), 5000);
     } finally {
-      setRemovingMemberId(null);
+      setDeleting(false);
     }
   };
 
@@ -463,20 +491,6 @@ export default function FamilyMembersPage() {
 
   return (
     <div className="family-members-page">
-      {/* Animated background elements */}
-      <div className="fm-bg-shapes">
-        <div className="fm-bg-shape"></div>
-        <div className="fm-bg-shape"></div>
-        <div className="fm-bg-shape"></div>
-      </div>
-      
-      {/* Floating particles */}
-      <div className="fm-particle"></div>
-      <div className="fm-particle"></div>
-      <div className="fm-particle"></div>
-      <div className="fm-particle"></div>
-      <div className="fm-particle"></div>
-      
       <FamilySidebar />
       
       <main className="fm-main">
@@ -562,14 +576,15 @@ export default function FamilyMembersPage() {
                         <div className="fm-member-actions">
                           <button
                             className="fm-btn danger sm"
-                            onClick={() => handleRemoveMember(memberUserId)}
-                            disabled={removingMemberId === memberUserId}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              console.log('Delete button clicked for member:', member);
+                              openDeleteModal(member);
+                            }}
+                            type="button"
                           >
-                            {removingMemberId === memberUserId ? (
-                              <><i className="fas fa-spinner fa-spin"></i> Đang xóa</>
-                            ) : (
-                              <><i className="fas fa-user-minus"></i> Xóa</>
-                            )}
+                            <i className="fas fa-user-minus"></i> Xóa
                           </button>
                         </div>
                       )}
@@ -866,6 +881,97 @@ export default function FamilyMembersPage() {
                   )}
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal xóa thành viên */}
+      {showDeleteModal && memberToDelete && (
+        <div 
+          className="fm-modal-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              closeDeleteModal();
+            }
+          }}
+        >
+          <div 
+            className="fm-invite-modal fm-delete-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="fm-modal-header">
+              <h3>
+                <i className="fas fa-exclamation-triangle"></i>
+                Xác nhận xóa thành viên
+              </h3>
+              <button 
+                className="fm-modal-close" 
+                onClick={closeDeleteModal}
+                disabled={deleting}
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="fm-modal-body">
+              <div className="fm-delete-warning">
+                <div className="fm-delete-warning-icon">
+                  <i className="fas fa-exclamation-triangle"></i>
+                </div>
+                <h4>Bạn có chắc chắn muốn xóa thành viên này?</h4>
+                <p>Hành động này không thể hoàn tác!</p>
+                
+                <div className="fm-delete-member-preview">
+                  <div className="fm-delete-member-preview-label">Thông tin thành viên:</div>
+                  <div className="fm-delete-member-preview-avatar">
+                    <div className="fm-member-avatar" style={{ width: '80px', height: '80px', fontSize: '32px' }}>
+                      {memberToDelete.name ? memberToDelete.name.charAt(0).toUpperCase() : 
+                       memberToDelete.email ? memberToDelete.email.charAt(0).toUpperCase() : 'U'}
+                    </div>
+                  </div>
+                  <div className="fm-delete-member-preview-name">
+                    {memberToDelete.name || memberToDelete.email || 'Thành viên'}
+                  </div>
+                  {memberToDelete.email && (
+                    <div className="fm-delete-member-preview-email">
+                      <strong>Email:</strong> {memberToDelete.email}
+                    </div>
+                  )}
+                  {memberToDelete.role && (
+                    <div className="fm-delete-member-preview-role">
+                      <strong>Vai trò:</strong> {memberToDelete.role === 'owner' ? 'Quản trị viên' : 'Thành viên'}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            <div className="fm-modal-footer">
+              <button 
+                className="fm-btn secondary" 
+                onClick={closeDeleteModal}
+                disabled={deleting}
+              >
+                Hủy
+              </button>
+              <button 
+                className="fm-btn danger" 
+                onClick={handleRemoveMember}
+                disabled={deleting}
+              >
+                {deleting ? (
+                  <>
+                    <i className="fas fa-spinner fa-spin"></i>
+                    Đang xóa...
+                  </>
+                ) : (
+                  <>
+                    <i className="fas fa-user-minus"></i>
+                    Xác nhận xóa
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

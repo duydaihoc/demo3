@@ -2253,36 +2253,102 @@ export default function GroupTransactions() {
         {showRepayModal && repayTransaction && (
           <div className="gt-modal-overlay">
             <div className="gt-repay-modal">
-              <div className="gt-modal-header">
-                <h3>Trả nợ</h3>
+              <div className="gt-repay-modal-header">
+                <div className="gt-repay-header-icon">
+                  <i className="fas fa-hand-holding-usd"></i>
+                </div>
+                <div className="gt-repay-header-content">
+                  <h3>Trả nợ</h3>
+                  <p className="gt-repay-subtitle">Chọn ví để thanh toán khoản nợ này</p>
+                </div>
                 <button className="gt-modal-close" onClick={() => setShowRepayModal(false)}>×</button>
               </div>
-              <div className="gt-modal-body">
-                <p>Bạn đang trả nợ cho giao dịch: <strong>{repayTransaction.title || 'Không tiêu đề'}</strong></p>
-                <p>Số tiền cần trả: <strong>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(repayTransaction.participants.find(p => p.user && String(p.user._id || p.user) === String(currentUser.id))?.shareAmount || 0)}</strong></p>
-                <div className="gt-form-group">
-                  <select
-                    value={repayWallet}
-                    onChange={(e) => setRepayWallet(e.target.value)}
-                    required
-                  >
-                    <option value="">-- Chọn ví --</option>
-                    {wallets.map(wallet => (
-                      <option key={wallet._id} value={wallet._id}>
-                        {wallet.name} ({new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(wallet.initialBalance || 0)})
-                      </option>
-                    ))}
-                  </select>
+              <div className="gt-repay-modal-body">
+                <div className="gt-repay-transaction-info">
+                  <div className="gt-repay-info-card">
+                    <div className="gt-repay-info-row">
+                      <div className="gt-repay-info-label">
+                        <i className="fas fa-file-invoice-dollar"></i>
+                        <span>Giao dịch</span>
+                      </div>
+                      <div className="gt-repay-info-value">
+                        {repayTransaction.title || 'Không tiêu đề'}
+                      </div>
+                    </div>
+                    <div className="gt-repay-info-row">
+                      <div className="gt-repay-info-label">
+                        <i className="fas fa-coins"></i>
+                        <span>Số tiền cần trả</span>
+                      </div>
+                      <div className="gt-repay-info-value gt-repay-amount">
+                        {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(repayTransaction.participants.find(p => p.user && String(p.user._id || p.user) === String(currentUser.id))?.shareAmount || 0)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="gt-repay-wallet-section">
+                  <label className="gt-repay-wallet-label">
+                    <i className="fas fa-wallet"></i>
+                    <span>Chọn ví thanh toán</span>
+                    <span className="gt-required-badge">*</span>
+                  </label>
+                  <div className="gt-repay-wallet-select-wrapper">
+                    <select
+                      className="gt-repay-wallet-select"
+                      value={repayWallet}
+                      onChange={(e) => setRepayWallet(e.target.value)}
+                      required
+                    >
+                      <option value="">-- Chọn ví để trả nợ --</option>
+                      {wallets.map(wallet => (
+                        <option key={wallet._id} value={wallet._id}>
+                          {wallet.name} - {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(wallet.balance || wallet.initialBalance || 0)}
+                        </option>
+                      ))}
+                    </select>
+                    <i className="fas fa-chevron-down gt-select-arrow"></i>
+                  </div>
+                  {repayWallet && (
+                    <div className="gt-repay-wallet-preview">
+                      <div className="gt-wallet-preview-card">
+                        <div className="gt-wallet-preview-icon">
+                          <i className="fas fa-wallet"></i>
+                        </div>
+                        <div className="gt-wallet-preview-info">
+                          <div className="gt-wallet-preview-name">
+                            {wallets.find(w => w._id === repayWallet)?.name || 'Ví'}
+                          </div>
+                          <div className="gt-wallet-preview-balance">
+                            Số dư: {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(wallets.find(w => w._id === repayWallet)?.balance || wallets.find(w => w._id === repayWallet)?.initialBalance || 0)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="gt-modal-footer">
-                <button className="gt-cancel-btn" onClick={() => setShowRepayModal(false)}>Hủy</button>
+              <div className="gt-repay-modal-footer">
+                <button className="gt-cancel-btn" onClick={() => setShowRepayModal(false)}>
+                  <i className="fas fa-times"></i>
+                  Hủy
+                </button>
                 <button
-                  className="gt-confirm-btn"
+                  className="gt-repay-confirm-btn"
                   onClick={handleConfirmRepay}
-                  disabled={repaying}
+                  disabled={repaying || !repayWallet}
                 >
-                  {repaying ? 'Đang xử lý...' : 'Xác nhận trả tiền'}
+                  {repaying ? (
+                    <>
+                      <i className="fas fa-spinner fa-spin"></i>
+                      Đang xử lý...
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-check-circle"></i>
+                      Xác nhận trả tiền
+                    </>
+                  )}
                 </button>
               </div>
             </div>

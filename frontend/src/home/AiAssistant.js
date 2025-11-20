@@ -546,7 +546,7 @@ export default function AiAssistant() {
       setSelectedWalletId('');
       
       // Show notification
-      alert('✅ Đã tạo giao dịch thành công!');
+      showNotification('✅ Đã tạo giao dịch thành công!', 'success');
       
     } catch (error) {
       console.error('Error creating transaction:', error);
@@ -581,7 +581,7 @@ export default function AiAssistant() {
         const cleanedAmount = editForm.amount.toString();
         const amountValue = parseFloat(cleanedAmount);
         if (isNaN(amountValue) || amountValue < 0) {
-          alert('❌ Số tiền không hợp lệ');
+          showNotification('❌ Số tiền không hợp lệ', 'error');
           setEditingSaving(false);
           return;
         }
@@ -655,11 +655,11 @@ export default function AiAssistant() {
       setEditSuggestion(null);
       setSelectedTransactionToEdit(null);
       
-      alert('✅ Đã cập nhật giao dịch thành công!');
+      showNotification('✅ Đã cập nhật giao dịch thành công!', 'success');
       
     } catch (error) {
       console.error('Error editing transaction:', error);
-      alert('❌ Không thể cập nhật giao dịch: ' + error.message);
+      showNotification('❌ Không thể cập nhật giao dịch: ' + error.message, 'error');
     } finally {
       setEditingSaving(false);
     }
@@ -718,11 +718,11 @@ export default function AiAssistant() {
       setDeleteSuggestion(null);
       setSelectedTransactionToDelete(null);
       
-      alert('✅ Đã xóa giao dịch và hoàn tiền thành công!');
+      showNotification('✅ Đã xóa giao dịch và hoàn tiền thành công!', 'success');
       
     } catch (error) {
       console.error('Error deleting transaction:', error);
-      alert('❌ Không thể xóa giao dịch: ' + error.message);
+      showNotification('❌ Không thể xóa giao dịch: ' + error.message, 'error');
     } finally {
       setDeletingSaving(false);
     }

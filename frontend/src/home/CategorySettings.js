@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import './CategorySettings.css';
+import { showNotification as showGlobalNotification } from '../utils/notify';
 
 export default function CategorySettings({ token }) {
   const [categories, setCategories] = useState([]);
@@ -8,10 +9,11 @@ export default function CategorySettings({ token }) {
   const [type, setType] = useState('expense');
   const [icon, setIcon] = useState('');
 
-  // notification state
+  // notification state (giữ lại cho local notification, nhưng cũng dùng global)
   const [notif, setNotif] = useState(null); // { message, type }
   const notifTimeoutRef = useRef(null);
   const showNotification = (message, type = 'success', timeout = 3500) => {
+    // Hiển thị cả local và global notification
     if (notifTimeoutRef.current) {
       clearTimeout(notifTimeoutRef.current);
       notifTimeoutRef.current = null;
@@ -21,6 +23,8 @@ export default function CategorySettings({ token }) {
       setNotif(null);
       notifTimeoutRef.current = null;
     }, timeout);
+    // Cũng gọi global notification
+    showGlobalNotification(message, type, timeout);
   };
 
   // confirmation dialog state for delete action

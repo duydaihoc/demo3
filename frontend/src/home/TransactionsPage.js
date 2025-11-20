@@ -3,6 +3,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import './TransactionsPage.css';
+import { showNotification } from '../utils/notify';
 
 // NEW: Leaflet dynamic loader (reuse pattern)
 const loadLeaflet = async () => {
@@ -55,7 +56,7 @@ function TransactionsPage() {
   const [saving, setSaving] = useState(false);
   const [txMessage, setTxMessage] = useState(null);
   const [walletFilter, setWalletFilter] = useState(''); // '' = all wallets
-  const [toast, setToast] = useState({ show: false, message: '', type: 'success' }); // new
+  // Removed local toast state - using global notification only
   const [incomeByCurrency, setIncomeByCurrency] = useState({});
   const [expenseByCurrency, setExpenseByCurrency] = useState({});
   // confirm delete state for transactions
@@ -102,10 +103,9 @@ function TransactionsPage() {
     }
   };
 
-  // show toast helper
+  // show toast helper - chỉ dùng global notification
   const showToast = (message, type = 'success', duration = 3000) => {
-    setToast({ show: true, message, type });
-    setTimeout(() => setToast({ show: false, message: '', type: 'success' }), duration);
+    showNotification(message, type, duration);
   };
 
   // fetch transactions for current user (admin can request all)
@@ -333,7 +333,7 @@ function TransactionsPage() {
       }
       const created = await res.json();
       // show success toast when transaction added
-      showToast('Đã thêm giao dịch', 'success');
+      showToast('✅ Đã thêm giao dịch thành công', 'success');
       // prepend to transactions list so UI cập nhật ngay
       setTransactions(prev => [created, ...prev]);
       try { window.dispatchEvent(new CustomEvent('transactionsUpdated', { detail: created })); } catch(_) {}
@@ -375,7 +375,7 @@ function TransactionsPage() {
       console.error('Create transaction failed', err);
       const msg = err.message || 'Lỗi khi thêm giao dịch';
       setTxMessage({ type: 'error', text: msg });
-      showToast(msg, 'error'); // toast on error
+      showToast('❌ ' + msg, 'error'); // toast on error
     } finally {
       setSaving(false);
     }
@@ -542,12 +542,12 @@ function TransactionsPage() {
       }
       const updated = await res.json();
       setTransactions(prev => prev.map(t => t._id === updated._id ? updated : t));
-      showToast('Đã cập nhật giao dịch', 'success');
+      showToast('✅ Đã cập nhật giao dịch thành công', 'success');
       refreshWallets();
       setEditModal({ show: false, tx: null, saving: false });
     } catch (err) {
       console.error('Update transaction failed', err);
-      showToast(err.message || 'Lỗi khi cập nhật giao dịch', 'error');
+      showToast('❌ ' + (err.message || 'Lỗi khi cập nhật giao dịch'), 'error');
       setEditModal(prev => ({ ...prev, saving: false }));
     }
   };
@@ -574,12 +574,12 @@ function TransactionsPage() {
       }
       // remove from list and refresh wallets/totals (backend reverts money)
       setTransactions(prev => prev.filter(t => t._id !== txId));
-      showToast('Đã xóa giao dịch', 'success');
+      showToast('✅ Đã xóa giao dịch thành công', 'success');
       // refresh wallets/totals
       await refreshWallets();
     } catch (err) {
       console.error('Delete transaction failed', err);
-      showToast(err.message || 'Lỗi khi xóa giao dịch', 'error');
+      showToast('❌ ' + (err.message || 'Lỗi khi xóa giao dịch'), 'error');
     } finally {
       cancelDelete();
     }
@@ -1205,13 +1205,7 @@ function TransactionsPage() {
         </div>
       </main>
 
-      {/* Toast notification */}
-      {toast.show && (
-        <div className={`tx-toast ${toast.type}`}>
-          <div className="tx-toast-message">{toast.message}</div>
-          <button className="tx-toast-close" onClick={() => setToast({ show: false, message: '', type: 'success' })} aria-label="Đóng">✕</button>
-        </div>
-      )}
+      {/* Toast notification removed - using global notification from notify.js only */}
 
       {/* Edit Transaction Modal with Location section */}
       {editModal.show && (

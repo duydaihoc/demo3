@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './Wallets.css';
+import { showNotification } from '../utils/notify';
 
 function Wallets() {
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -155,7 +156,7 @@ function Wallets() {
       try { window.dispatchEvent(new CustomEvent('walletsUpdated', { detail: data })); } catch(_) {}
     } catch (error) {
       console.error('Error fetching wallets:', error);
-      alert('Không thể tải danh sách ví. Vui lòng đăng nhập lại.');
+      showNotification('Không thể tải danh sách ví. Vui lòng đăng nhập lại.', 'error');
     }
   };
 
@@ -235,7 +236,7 @@ function Wallets() {
         fetchCategories(ownerToUse);
         setSelectedCategories([]);
         // dùng notification thay vì alert
-        showNotification('Tạo ví thành công! Hãy chọn danh mục cho ví.', 'success');
+        showNotification('✅ Tạo ví thành công! Hãy chọn danh mục cho ví.', 'success');
         try { window.dispatchEvent(new CustomEvent('walletCreated',{detail:{walletId:newWallet._id}})); } catch(_) {}
       } else {
         const error = await response.json();
@@ -296,7 +297,7 @@ function Wallets() {
       setSelectedCategories([]);
       fetchWallets();
       // dùng notification
-      showNotification('Đã lưu danh mục cho ví!', 'success');
+      showNotification('✅ Đã lưu danh mục cho ví!', 'success');
       try { window.dispatchEvent(new CustomEvent('walletCategoriesSaved')); } catch(_) {}
     } catch (error) {
       console.error(error);
@@ -376,7 +377,7 @@ function Wallets() {
       setSelectedCategories(prev => [...prev, created._id]);
       setNewCategoryName('');
       setNewCategoryIcon('🎯');
-      showNotification('Tạo danh mục thành công!', 'success');
+      showNotification('✅ Tạo danh mục thành công!', 'success');
 
       // if ownerOverride was provided, optionally refresh filtered categories for that owner
       if (overrideOwnerId) {
@@ -415,7 +416,7 @@ function Wallets() {
       setShowDetailModal(true);
     } catch (err) {
       console.error(err);
-      alert('Không thể tải thông tin ví.');
+      showNotification('Không thể tải thông tin ví.', 'error');
     }
   };
 
@@ -444,7 +445,7 @@ function Wallets() {
       await fetchCategories(ownerIdForFilter);
     } catch (err) {
       console.error(err);
-      alert('Không thể tải thông tin ví để sửa.');
+      showNotification('Không thể tải thông tin ví để sửa.', 'error');
     }
   };
 
@@ -478,7 +479,7 @@ function Wallets() {
       setShowEditModal(false);
       setDetailWallet(null);
       setSelectedCategories([]);
-      showNotification('Cập nhật ví thành công!', 'success');
+      showNotification('✅ Cập nhật ví thành công!', 'success');
     } catch (err) {
       console.error(err);
       showNotification('Lỗi khi cập nhật ví', 'error');
@@ -512,10 +513,10 @@ function Wallets() {
         clearTimeout(undoTimerRef.current);
         undoTimerRef.current = null;
       }
-      alert('Đã khôi phục ví');
+      showNotification('Đã khôi phục ví thành công', 'success');
     } catch (err) {
       console.error(err);
-      alert('Không thể khôi phục ví');
+      showNotification('Không thể khôi phục ví', 'error');
     }
   };
 
@@ -534,12 +535,14 @@ function Wallets() {
     }));
   };
 
-  // Hiển thị thông báo với hiệu ứng
-  const showNotification = (message, type = 'success') => {
+  // Hiển thị thông báo với hiệu ứng (giữ lại cho toast local, nhưng cũng dùng global notification)
+  const showLocalNotification = (message, type = 'success') => {
     setNotification({ show: true, message, type });
     setTimeout(() => {
       setNotification({ show: false, message: '', type: '' });
     }, 2500);
+    // Cũng gọi global notification
+    showNotification(message, type);
   };
 
   // Hiển thị hộp xác nhận xóa dạng toast
@@ -571,7 +574,7 @@ function Wallets() {
       await fetchWallets();
       setShowDetailModal(false);
       setDetailWallet(null);
-      showNotification(`Đã xóa ví "${walletName}"`, 'success');
+      showNotification(`✅ Đã xóa ví "${walletName}"`, 'success');
     } catch (err) {
       console.error(err);
       showNotification('Lỗi khi xóa ví', 'error');

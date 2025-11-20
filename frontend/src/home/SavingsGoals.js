@@ -3,6 +3,7 @@ import './SavingsGoals.css';
 import { HexColorPicker } from 'react-colorful';
 import { useTour } from '@reactour/tour';
 import { savingsGoalSteps } from './savingsTourConfig';
+import { showNotification as showGlobalNotification } from '../utils/notify';
 
 function SavingsGoals() {
   const [goals, setGoals] = useState([]);
@@ -30,7 +31,7 @@ function SavingsGoals() {
     note: ''
   });
   
-  const [notification, setNotification] = useState({ message: '', type: '' }); // type: 'success' | 'error'
+  // Removed local notification state - using global notification only
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, goal: null });
 
   // NEW: gamification state
@@ -120,16 +121,16 @@ function SavingsGoals() {
     
     // Validation
     if (!goalData.name || !goalData.name.trim()) {
-      return alert('Vui lòng nhập tên mục tiêu');
+      return showNotification('Vui lòng nhập tên mục tiêu', 'error');
     }
     
     const amount = Number(goalData.targetAmount);
     if (isNaN(amount) || amount <= 0) {
-      return alert('Vui lòng nhập số tiền mục tiêu hợp lệ');
+      return showNotification('Vui lòng nhập số tiền mục tiêu hợp lệ', 'error');
     }
     
     if (!goalData.targetDate) {
-      return alert('Vui lòng chọn ngày đạt mục tiêu');
+      return showNotification('Vui lòng chọn ngày đạt mục tiêu', 'error');
     }
     
     try {
@@ -173,7 +174,7 @@ function SavingsGoals() {
       
       setUiMode('list');
       await fetchGoals();
-      showNotification('Đã tạo mục tiêu thành công!', 'success');
+      showNotification('✅ Đã tạo mục tiêu thành công!', 'success');
       fetchGamification();
       // Thông báo cho tour: đã tạo xong mục tiêu
       try {
@@ -184,7 +185,7 @@ function SavingsGoals() {
        
     } catch (error) {
       console.error('Error creating goal:', error);
-      showNotification(error.message || 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.', 'error');
+      showNotification('❌ ' + (error.message || 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.'), 'error');
     } finally {
       setLoading(prev => ({ ...prev, goals: false }));
     }
@@ -271,11 +272,11 @@ function SavingsGoals() {
 
   const handleEditSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedGoal) return alert('Không có mục tiêu để sửa');
-    if (!goalData.name || !goalData.name.trim()) return alert('Vui lòng nhập tên mục tiêu');
+    if (!selectedGoal) return showNotification('Không có mục tiêu để sửa', 'error');
+    if (!goalData.name || !goalData.name.trim()) return showNotification('Vui lòng nhập tên mục tiêu', 'error');
     const amount = Number(goalData.targetAmount);
-    if (isNaN(amount) || amount <= 0) return alert('Vui lòng nhập số tiền mục tiêu hợp lệ');
-    if (!goalData.targetDate) return alert('Vui lòng chọn ngày đạt mục tiêu');
+    if (isNaN(amount) || amount <= 0) return showNotification('Vui lòng nhập số tiền mục tiêu hợp lệ', 'error');
+    if (!goalData.targetDate) return showNotification('Vui lòng chọn ngày đạt mục tiêu', 'error');
 
     try {
       setLoading(prev => ({ ...prev, goals: true }));
@@ -300,14 +301,14 @@ function SavingsGoals() {
       if (!res.ok) {
         throw new Error(body.message || 'Lỗi khi cập nhật mục tiêu');
       }
-      showNotification('Cập nhật mục tiêu thành công', 'success');
+      showNotification('✅ Cập nhật mục tiêu thành công', 'success');
       setUiMode('list');
       setSelectedGoal(null);
       await fetchGoals();
       fetchGamification();
     } catch (err) {
       console.error('Update error:', err);
-      showNotification(err.message || 'Lỗi khi cập nhật mục tiêu', 'error');
+      showNotification('❌ ' + (err.message || 'Lỗi khi cập nhật mục tiêu'), 'error');
     } finally {
       setLoading(prev => ({ ...prev, goals: false }));
     }
@@ -364,7 +365,7 @@ function SavingsGoals() {
       }
 
       // Thông báo thành công bằng toast
-      showNotification('Nạp tiền thành công!', 'success');
+      showNotification('✅ Nạp tiền thành công!', 'success');
       setDepositData({ amount: '', walletId: '', note: '' });
       setUiMode('list');
       setSelectedGoal(null);
@@ -376,7 +377,7 @@ function SavingsGoals() {
 
     } catch (error) {
       console.error('Deposit error:', error);
-      showNotification(error.message || 'Có lỗi xảy ra khi nạp tiền', 'error');
+      showNotification('❌ ' + (error.message || 'Có lỗi xảy ra khi nạp tiền'), 'error');
     }
   };
 
@@ -421,10 +422,10 @@ function SavingsGoals() {
     { value: '#16a085', label: 'Xanh rêu' }
   ];
 
-  // Helper to show notification
+  // Helper to show notification - chỉ dùng global notification từ notify.js
+  // Wrapper function để giữ tương thích với code hiện tại
   const showNotification = (message, type = 'success') => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification({ message: '', type: '' }), 2500);
+    showGlobalNotification(message, type, 3000);
   };
 
   const handleDeleteGoal = async () => {
@@ -441,11 +442,11 @@ function SavingsGoals() {
       });
       const body = await res.json().catch(()=> ({}));
       if (!res.ok) throw new Error(body.message || 'Xóa thất bại');
-      showNotification('Đã xóa mục tiêu', 'success');
+      showNotification('✅ Đã xóa mục tiêu thành công', 'success');
       await fetchGoals();
       fetchGamification();
     } catch (err) {
-      showNotification(err.message || 'Lỗi khi xóa mục tiêu', 'error');
+      showNotification('❌ ' + (err.message || 'Lỗi khi xóa mục tiêu'), 'error');
     }
   };
 
@@ -466,7 +467,7 @@ function SavingsGoals() {
         throw new Error(errorData.message || 'Không thể báo cáo mục tiêu');
       }
 
-      showNotification('Đã báo cáo hoàn thành mục tiêu!', 'success');
+      showNotification('✅ Đã báo cáo hoàn thành mục tiêu!', 'success');
       fetchGoals(); // Refresh danh sách
       fetchGamification();
       // Tải PDF báo cáo
@@ -488,14 +489,14 @@ function SavingsGoals() {
           window.URL.revokeObjectURL(url);
           document.body.removeChild(a);
         } else {
-          showNotification('Không thể tải PDF báo cáo - file rỗng', 'error');
+          showNotification('❌ Không thể tải PDF báo cáo - file rỗng', 'error');
         }
       } else {
-        showNotification('Không thể tải PDF báo cáo', 'error');
+        showNotification('❌ Không thể tải PDF báo cáo', 'error');
       }
     } catch (error) {
       console.error('Error reporting goal:', error);
-      showNotification(error.message || 'Có lỗi xảy ra khi báo cáo mục tiêu', 'error');
+      showNotification('❌ ' + (error.message || 'Có lỗi xảy ra khi báo cáo mục tiêu'), 'error');
     }
   };
 
@@ -541,18 +542,13 @@ function SavingsGoals() {
       a.click();
       window.URL.revokeObjectURL(url);
       a.remove();
-      showNotification('Đã tải PDF', 'success');
+      showNotification('✅ Đã tải PDF thành công', 'success');
     } catch (e) {
-      showNotification(e.message || 'Lỗi xuất PDF', 'error');
+      showNotification('❌ ' + (e.message || 'Lỗi xuất PDF'), 'error');
     }
   };
 
-  // UI notification component
-  const Notification = ({ message, type }) => (
-    message ? (
-      <div className={`sg-toast ${type}`}>{message}</div>
-    ) : null
-  );
+  // UI notification component removed - using global notification from notify.js only
 
   // Delete confirmation modal
   const DeleteConfirmModal = ({ open, goal, onCancel, onConfirm }) => (
@@ -780,7 +776,7 @@ function SavingsGoals() {
   if (uiMode === 'list' && goals.length === 0) {
     return (
       <div className="savings-container tour-goals-component">
-        <Notification {...notification} />
+        {/* Notification removed - using global notification from notify.js only */}
         <DeleteConfirmModal
           open={deleteConfirm.open}
           goal={deleteConfirm.goal}
@@ -816,7 +812,7 @@ function SavingsGoals() {
   if (uiMode === 'create') {
     return (
       <div className="savings-container">
-        <Notification {...notification} />
+        {/* Notification removed - using global notification from notify.js only */}
         <DeleteConfirmModal
           open={deleteConfirm.open}
           goal={deleteConfirm.goal}
@@ -973,7 +969,7 @@ function SavingsGoals() {
   if (uiMode === 'edit' && selectedGoal) {
     return (
       <div className="savings-container">
-        <Notification {...notification} />
+        {/* Notification removed - using global notification from notify.js only */}
         <DeleteConfirmModal
           open={deleteConfirm.open}
           goal={deleteConfirm.goal}
@@ -1132,7 +1128,7 @@ function SavingsGoals() {
     const remainingAmount = Math.max(0, (selectedGoal.targetAmount || 0) - (selectedGoal.currentAmount || 0));
     return (
       <div className="savings-container">
-        <Notification {...notification} />
+        {/* Notification removed - using global notification from notify.js only */}
         <DeleteConfirmModal
           open={deleteConfirm.open}
           goal={deleteConfirm.goal}
@@ -1250,9 +1246,9 @@ function SavingsGoals() {
 
   // Display the goals list (default view)
   return (
-    <div className="savings-container tour-goals-component">
-      <Notification {...notification} />
-      <DeleteConfirmModal
+      <div className="savings-container tour-goals-component">
+        {/* Notification removed - using global notification from notify.js only */}
+        <DeleteConfirmModal
         open={deleteConfirm.open}
         goal={deleteConfirm.goal}
         onCancel={() => setDeleteConfirm({ open: false, goal: null })}

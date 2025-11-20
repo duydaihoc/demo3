@@ -30,6 +30,11 @@ export default function FamilyTodoList() {
     assignedTo: []
   });
   const [editingSaving, setEditingSaving] = useState(false);
+  
+  // Delete modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   // New: dashboard controls
   const [searchQuery, setSearchQuery] = useState('');
@@ -186,13 +191,20 @@ export default function FamilyTodoList() {
     }
   };
 
+  // Mở modal xóa
+  const openDeleteModal = (item) => {
+    setItemToDelete(item);
+    setShowDeleteModal(true);
+  };
+
   // Xóa item với API
-  const deleteItem = async (itemId) => {
-    if (!window.confirm('Bạn có chắc muốn xóa công việc này?')) return;
+  const deleteItem = async () => {
+    if (!itemToDelete) return;
     
+    setDeleting(true);
     try {
-      console.log('Deleting todo item:', itemId);
-      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/todo-list/${itemId}`, {
+      console.log('Deleting todo item:', itemToDelete._id);
+      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/todo-list/${itemToDelete._id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -204,11 +216,15 @@ export default function FamilyTodoList() {
       
       showNotification('Đã xóa công việc khỏi danh sách', 'success');
       
-      // Refresh danh sách
+      // Đóng modal và refresh danh sách
+      setShowDeleteModal(false);
+      setItemToDelete(null);
       await fetchTodoList();
     } catch (err) {
       console.error("Error deleting todo item:", err);
       showNotification('Không thể xóa công việc', 'error');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -731,7 +747,7 @@ export default function FamilyTodoList() {
                                 </button>
                               )}
                               {canEditItem(item) && (
-                                <button className="ftl-action-btn delete" onClick={() => deleteItem(item._id)}>
+                                <button className="ftl-action-btn delete" onClick={() => openDeleteModal(item)}>
                                   <i className="fas fa-trash"></i> Xóa
                                 </button>
                               )}
@@ -878,7 +894,7 @@ export default function FamilyTodoList() {
                           </button>
                         )}
                         {canEditItem(item) && (
-                          <button className="ftl-note-btn delete" onClick={() => deleteItem(item._id)}>
+                          <button className="ftl-note-btn delete" onClick={() => openDeleteModal(item)}>
                             <i className="fas fa-trash"></i>
                             Xóa
                           </button>
@@ -1087,6 +1103,101 @@ export default function FamilyTodoList() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && itemToDelete && (
+        <div className="ftl-modal-overlay">
+          <div className="ftl-modal ftl-delete-modal">
+            <div className="ftl-modal-header">
+              <h3>
+                <i className="fas fa-exclamation-triangle"></i> Xác nhận xóa công việc
+              </h3>
+              <button 
+                className="ftl-modal-close"
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setItemToDelete(null);
+                }}
+                disabled={deleting}
+              >
+                &times;
+              </button>
+            </div>
+            
+            <div className="ftl-form">
+              <div className="ftl-delete-warning">
+                <div className="ftl-delete-warning-icon">
+                  <i className="fas fa-exclamation-triangle"></i>
+                </div>
+                <h4>Bạn có chắc chắn muốn xóa công việc này?</h4>
+                <p>Hành động này không thể hoàn tác!</p>
+                
+                <div className="ftl-delete-item-preview">
+                  <div className="ftl-delete-item-preview-label">Thông tin công việc:</div>
+                  <div className="ftl-delete-item-preview-title">{itemToDelete.title}</div>
+                  {itemToDelete.description && (
+                    <div className="ftl-delete-item-preview-desc">{itemToDelete.description}</div>
+                  )}
+                  <div className="ftl-delete-item-preview-badges">
+                    <span className="ftl-priority-badge" style={{ 
+                      backgroundColor: getPriorityColor(itemToDelete.priority),
+                      color: 'white',
+                      padding: '4px 12px',
+                      borderRadius: '12px',
+                      fontSize: '12px',
+                      fontWeight: 600
+                    }}>
+                      {getPriorityLabel(itemToDelete.priority)}
+                    </span>
+                    {itemToDelete.dueDate && (
+                      <span className="ftl-due-badge">
+                        <i className="fas fa-calendar-alt"></i>
+                        {new Date(itemToDelete.dueDate).toLocaleDateString('vi-VN')}
+                      </span>
+                    )}
+                    {itemToDelete.assignedToNames && itemToDelete.assignedToNames.length > 0 && (
+                      <span className="ftl-note-assigned">
+                        <i className="fas fa-user-tag"></i>
+                        {itemToDelete.assignedToNames.join(', ')}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="ftl-form-actions">
+                <button 
+                  type="button" 
+                  className="ftl-btn secondary"
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setItemToDelete(null);
+                  }}
+                  disabled={deleting}
+                >
+                  Hủy
+                </button>
+                <button 
+                  type="button" 
+                  className="ftl-btn danger"
+                  onClick={deleteItem}
+                  disabled={deleting}
+                >
+                  {deleting ? (
+                    <>
+                      <i className="fas fa-spinner fa-spin"></i> Đang xóa...
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-trash"></i> Xác nhận xóa
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

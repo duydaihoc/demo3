@@ -602,10 +602,16 @@ export default function FamilyTransactions() {
 	const [transferFromDescription, setTransferFromDescription] = useState('');
 	const [isTransferringFrom, setIsTransferringFrom] = useState(false);
 
-	// Load auto-link settings from localStorage
+	// Load auto-link settings from localStorage - FIX: Lưu theo cả userId để mỗi người có ví riêng
 	useEffect(() => {
-		const savedWallet = localStorage.getItem(`family_${selectedFamilyId}_defaultWallet`);
-		const savedEnabled = localStorage.getItem(`family_${selectedFamilyId}_autoLink`);
+		if (!selectedFamilyId || !currentUser?.id) return;
+		
+		// Lưu theo cả familyId và userId để mỗi người có ví riêng
+		const walletKey = `family_${selectedFamilyId}_user_${currentUser.id}_defaultWallet`;
+		const enabledKey = `family_${selectedFamilyId}_user_${currentUser.id}_autoLink`;
+		
+		const savedWallet = localStorage.getItem(walletKey);
+		const savedEnabled = localStorage.getItem(enabledKey);
 		
 		if (savedWallet) {
 			try {
@@ -618,17 +624,23 @@ export default function FamilyTransactions() {
 		if (savedEnabled) {
 			setAutoLinkEnabled(savedEnabled === 'true');
 		}
-	}, [selectedFamilyId]);
+	}, [selectedFamilyId, currentUser?.id]);
 
-	// Save auto-link settings
+	// Save auto-link settings - FIX: Lưu theo cả userId để mỗi người có ví riêng
 	const saveAutoLinkSettings = (wallet, enabled) => {
+		if (!selectedFamilyId || !currentUser?.id) return;
+		
+		// Lưu theo cả familyId và userId để mỗi người có ví riêng
+		const walletKey = `family_${selectedFamilyId}_user_${currentUser.id}_defaultWallet`;
+		const enabledKey = `family_${selectedFamilyId}_user_${currentUser.id}_autoLink`;
+		
 		if (wallet) {
-			localStorage.setItem(`family_${selectedFamilyId}_defaultWallet`, JSON.stringify(wallet));
+			localStorage.setItem(walletKey, JSON.stringify(wallet));
 		} else {
-			localStorage.removeItem(`family_${selectedFamilyId}_defaultWallet`);
+			localStorage.removeItem(walletKey);
 		}
 		
-		localStorage.setItem(`family_${selectedFamilyId}_autoLink`, String(enabled));
+		localStorage.setItem(enabledKey, String(enabled));
 		setDefaultWallet(wallet);
 		setAutoLinkEnabled(enabled);
 	};
@@ -740,13 +752,14 @@ export default function FamilyTransactions() {
 			const data = await res.json();
 			setUserWallets(data);
 			
-			// Cập nhật defaultWallet nếu nó có trong danh sách
-			if (defaultWallet) {
+			// Cập nhật defaultWallet nếu nó có trong danh sách - FIX: Lưu theo userId
+			if (defaultWallet && currentUser?.id) {
 				const updatedWallet = data.find(w => w._id === defaultWallet._id);
 				if (updatedWallet) {
 					setDefaultWallet(updatedWallet);
-					// Cập nhật localStorage
-					localStorage.setItem(`family_${selectedFamilyId}_defaultWallet`, JSON.stringify(updatedWallet));
+					// Cập nhật localStorage với key bao gồm userId
+					const walletKey = `family_${selectedFamilyId}_user_${currentUser.id}_defaultWallet`;
+					localStorage.setItem(walletKey, JSON.stringify(updatedWallet));
 				}
 			}
 		} catch (err) {
