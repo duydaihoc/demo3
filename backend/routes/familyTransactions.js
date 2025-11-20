@@ -357,13 +357,15 @@ router.post('/transactions', authenticateToken, async (req, res) => {
           type: type,
           amount: amount,
           category: category,
+          title: description || '',
           description: description || '',
           date: date || new Date(),
+          createdBy: userId,
           tags: tags,
           metadata: {
             source: 'family_personal',
             familyId,
-            familyName: req.family?.name || '',
+            familyName: family.name || '',  // Sửa: dùng biến family đã query thay vì req.family
             familyTransactionId: transaction._id
           }
         });

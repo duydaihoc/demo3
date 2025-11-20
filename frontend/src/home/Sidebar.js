@@ -85,6 +85,9 @@ function Sidebar({ userName = "Tên người dùng" }) {
               <li role="menuitem">
                 <Link to="/settings?tab=categories" onClick={() => setShowSettingsMenu(false)}>Cài đặt danh mục</Link>
               </li>
+              <li role="menuitem">
+                <Link to="/settings/general" onClick={() => setShowSettingsMenu(false)}>Cài đặt chung</Link>
+              </li>
             </ul>
           )}
         </li>

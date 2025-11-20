@@ -6,6 +6,7 @@ import Register from './auth/Register';
 import HomePage from './home/HomePage';
 import TransactionsPage from './home/TransactionsPage';
 import SettingsPage from './home/SettingsPage';
+import SettingsGeneral from './home/SettingsGeneral';
 import AdminPage from './admin/AdminPage';
 import AdminUsersPage from './admin/AdminUsersPage';
 import AdminGroupsPage from './admin/AdminGroupsPage';
@@ -89,6 +90,7 @@ function AppRoutes() {
 				<Route path="/home" element={<HomePage />} />
 				<Route path="/transactions" element={<TransactionsPage />} />
 				<Route path="/settings" element={<SettingsPage />} />
+				<Route path="/settings/general" element={<SettingsGeneral />} />
 				<Route path="/admin" element={<AdminPage />} />
 				<Route path="/admin/users" element={<AdminUsersPage />} />
 				<Route path="/admin/wallets" element={<AdminWalletsPage />} />

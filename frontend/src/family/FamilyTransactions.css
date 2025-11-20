@@ -285,12 +285,12 @@
 .ft-tabs {
   display: flex;
   gap: 12px;
-  margin-bottom: 32px;
   background: white;
   padding: 6px;
   border-radius: 16px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
   border: 1px solid rgba(226, 232, 240, 0.8);
+  margin-bottom: 0; /* FIX: Không có margin-bottom vì đã có gap trong wrapper */
 }
 
 .ft-tab {
@@ -326,6 +326,54 @@
   font-size: 16px;
 }
 
+/* Main Layout - 2 columns for owner, 1 column for members */
+.ft-main-layout {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  flex-direction: row; /* FIX: Đảm bảo luôn hiển thị ngang */
+}
+
+.ft-main-layout.has-sidebar {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 24px;
+  align-items: start; /* FIX: Align items ở đầu để không bị đẩy xuống */
+}
+
+/* Members Sidebar (Owner only) */
+.ft-members-sidebar {
+  position: sticky;
+  top: 20px;
+  height: fit-content;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(42, 82, 152, 0.3) rgba(255, 255, 255, 0.1);
+}
+
+.ft-members-sidebar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.ft-members-sidebar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 10px;
+}
+
+.ft-members-sidebar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #2a5298 0%, #4ecdc4 100%);
+  border-radius: 10px;
+}
+
+/* Content Wrapper - Contains tabs and transaction list */
+.ft-content-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
 /* Transaction List - Card Design */
 .ft-content {
   background: white;
@@ -334,6 +382,88 @@
   border: 1px solid rgba(226, 232, 240, 0.8);
   overflow: hidden;
   position: relative;
+  flex: 1;
+}
+
+/* Transactions Section - Separated by scope */
+.ft-transactions-section {
+  margin-bottom: 32px;
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.ft-transactions-section:hover {
+  box-shadow: 0 4px 20px rgba(42, 82, 152, 0.1);
+  border-color: rgba(42, 82, 152, 0.2);
+}
+
+.ft-transactions-section:last-child {
+  margin-bottom: 0;
+}
+
+.ft-section-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 24px;
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+  border-bottom: 2px solid #e2e8f0;
+  margin-bottom: 0;
+  position: relative;
+}
+
+.ft-section-title::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, #2a5298 0%, #4ecdc4 100%);
+}
+
+.ft-section-title i {
+  font-size: 22px;
+  color: white;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #2a5298 0%, #4ecdc4 100%);
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(42, 82, 152, 0.25);
+  transition: all 0.3s ease;
+}
+
+.ft-transactions-section:hover .ft-section-title i {
+  transform: scale(1.1) rotate(5deg);
+  box-shadow: 0 6px 16px rgba(42, 82, 152, 0.35);
+}
+
+.ft-section-title h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
+  flex: 1;
+  letter-spacing: -0.3px;
+}
+
+.ft-section-count {
+  background: linear-gradient(135deg, #2a5298 0%, #4ecdc4 100%);
+  color: white;
+  padding: 6px 14px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 700;
+  min-width: 50px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(42, 82, 152, 0.2);
 }
 
 .ft-transactions-list {
@@ -890,12 +1020,11 @@
   color: #94a3b8;
 }
 
-/* Members Balance Section */
+/* Members Balance Section - Sidebar Version */
 .ft-members-balance-section {
-  margin-top: 40px;
-  padding: 32px;
+  padding: 24px;
   background: white;
-  border-radius: 24px;
+  border-radius: 20px;
   border: 1px solid rgba(226, 232, 240, 0.8);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   position: relative;
@@ -903,30 +1032,37 @@
 }
 
 .ft-section-header {
-  text-align: center;
-  margin-bottom: 32px;
+  text-align: left;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #e2e8f0;
 }
 
 .ft-section-header h2 {
-  margin: 0 0 8px 0;
-  font-size: 26px;
+  margin: 0 0 6px 0;
+  font-size: 20px;
   color: #1e293b;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
+  gap: 10px;
   font-weight: 700;
 }
 
 .ft-section-header h2 i {
   color: #2a5298;
-  font-size: 28px;
+  font-size: 22px;
 }
 
 .ft-section-header p {
   margin: 0;
   color: #64748b;
-  font-size: 15px;
+  font-size: 13px;
+}
+
+.ft-members-balance-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .ft-members-balance-grid {
@@ -937,21 +1073,21 @@
 
 .ft-member-balance-card {
   background: #f8fafc;
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   border: 1px solid #e2e8f0;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  gap: 12px;
   transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
 }
 
 .ft-member-balance-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(42, 82, 152, 0.12);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(42, 82, 152, 0.12);
   border-color: rgba(42, 82, 152, 0.3);
   background: white;
 }
@@ -959,26 +1095,27 @@
 .ft-member-info {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .ft-member-avatar {
-  width: 52px;
-  height: 52px;
-  border-radius: 12px;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
   background: linear-gradient(135deg, #2a5298 0%, #4ecdc4 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   color: white;
   box-shadow: 0 4px 12px rgba(42, 82, 152, 0.25);
   transition: all 0.3s ease;
+  flex-shrink: 0;
 }
 
 .ft-member-balance-card:hover .ft-member-avatar {
-  transform: scale(1.1) rotate(5deg);
+  transform: scale(1.05) rotate(3deg);
 }
 
 .ft-member-details {
@@ -986,37 +1123,40 @@
 }
 
 .ft-member-name {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
   color: #1e293b;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .ft-member-role {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   background: rgba(42, 82, 152, 0.1);
   color: #2a5298;
-  padding: 3px 8px;
-  border-radius: 8px;
+  padding: 2px 6px;
+  border-radius: 6px;
   border: 1px solid rgba(42, 82, 152, 0.2);
 }
 
 .ft-member-email {
-  font-size: 13px;
+  font-size: 12px;
   color: #94a3b8;
+  word-break: break-word;
 }
 
 .ft-member-balance {
-  text-align: right;
-  min-width: 140px;
+  text-align: left;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
 }
 
 .ft-balance-label {
-  font-size: 12px;
+  font-size: 11px;
   color: #64748b;
   margin-bottom: 6px;
   font-weight: 600;
@@ -1025,9 +1165,9 @@
 }
 
 .ft-balance-amount {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 800;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .ft-balance-amount.positive {
@@ -1042,20 +1182,25 @@
   background: white;
   color: #2a5298;
   border: 2px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 8px 16px;
-  font-size: 12px;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 11px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
 .ft-view-member-btn:hover {
   background: #2a5298;
   color: white;
   border-color: #2a5298;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(42, 82, 152, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(42, 82, 152, 0.2);
 }
 
 /* Member Detail Modal */
@@ -1730,6 +1875,51 @@
 }
 
 /* Responsive */
+@media (max-width: 1200px) {
+  .ft-main-layout.has-sidebar {
+    grid-template-columns: 320px 1fr;
+  }
+}
+
+@media (max-width: 968px) {
+  .ft-main-layout.has-sidebar {
+    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column; /* FIX: Chỉ khi mobile mới stack dọc */
+  }
+  
+  .ft-members-sidebar {
+    position: static;
+    max-height: none;
+    margin-bottom: 24px;
+    order: -1; /* FIX: Hiển thị trước danh sách giao dịch */
+    width: 100%;
+  }
+  
+  .ft-members-balance-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  
+  .ft-member-balance-card {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .ft-member-balance {
+    text-align: right;
+    border-top: none;
+    padding-top: 0;
+    min-width: 140px;
+  }
+  
+  .ft-view-member-btn {
+    width: auto;
+  }
+}
+
 @media (max-width: 768px) {
   .family-main {
     margin-left: 0;
@@ -1780,14 +1970,14 @@
     justify-content: flex-start;
   }
   
-  .ft-members-balance-grid {
+  .ft-members-balance-list {
     grid-template-columns: 1fr;
   }
   
   .ft-member-balance-card {
     flex-direction: column;
     text-align: center;
-    gap: 20px;
+    gap: 16px;
   }
   
   .ft-member-info {
@@ -1796,6 +1986,13 @@
   
   .ft-member-balance {
     text-align: center;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 12px;
+    width: 100%;
+  }
+  
+  .ft-view-member-btn {
+    width: 100%;
   }
   
   .ft-wallets-grid {

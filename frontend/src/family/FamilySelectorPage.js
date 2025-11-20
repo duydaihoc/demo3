@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { showNotification } from '../utils/notify';
 import './FamilySelectorPage.css';
 
 export default function FamilySelectorPage() {
@@ -7,7 +8,6 @@ export default function FamilySelectorPage() {
   const [loading, setLoading] = useState(true);
   const [families, setFamilies] = useState({ owned: [], joined: [] });
   const [invitations, setInvitations] = useState([]); // THÊM: state cho lời mời
-  const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false); // THÊM: state cho joining
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -66,7 +66,7 @@ export default function FamilySelectorPage() {
 
     } catch (err) {
       console.error('Error fetching families:', err);
-      setError('Không thể tải danh sách gia đình');
+      showNotification('❌ Không thể tải danh sách gia đình', 'error');
     } finally {
       setLoading(false);
     }
@@ -82,7 +82,6 @@ export default function FamilySelectorPage() {
     setFamilyName('');
     setFamilyDescription('');
     setFamilyColor('#10b981');
-    setError('');
   };
 
   // Đóng modal tạo gia đình
@@ -91,25 +90,23 @@ export default function FamilySelectorPage() {
     setFamilyName('');
     setFamilyDescription('');
     setFamilyColor('#10b981');
-    setError('');
   };
 
   // Tạo gia đình mới với thông tin chi tiết
   const handleCreateFamily = async () => {
     if (!familyName.trim()) {
-      setError('Vui lòng nhập tên gia đình');
+      showNotification('❌ Vui lòng nhập tên gia đình', 'error');
       return;
     }
 
     if (!token) {
-      setError('Chưa đăng nhập');
+      showNotification('❌ Chưa đăng nhập', 'error');
       localStorage.removeItem('token');
       navigate('/login');
       return;
     }
 
     setCreating(true);
-    setError('');
 
     try {
       const res = await fetch(`${API_BASE}/api/family/create`, {
@@ -134,11 +131,17 @@ export default function FamilySelectorPage() {
 
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        throw new Error(err?.message || 'Không thể tạo gia đình');
+        const errorMessage = err?.message || 'Không thể tạo gia đình';
+        showNotification('❌ ' + errorMessage, 'error');
+        throw new Error(errorMessage);
       }
 
       // Tạo gia đình thành công, đóng modal và refresh danh sách
+      showNotification('✅ Tạo gia đình thành công!', 'success');
       setShowCreateModal(false);
+      setFamilyName('');
+      setFamilyDescription('');
+      setFamilyColor('#10b981');
       await fetchFamilies(); // Refresh danh sách gia đình
       
     } catch (err) {
@@ -148,7 +151,7 @@ export default function FamilySelectorPage() {
         navigate('/login');
         return;
       }
-      setError(err.message || 'Lỗi khi tạo gia đình');
+      // Error đã được xử lý ở trên
     } finally {
       setCreating(false);
     }
@@ -171,7 +174,6 @@ export default function FamilySelectorPage() {
     }
 
     setJoining(true);
-    setError('');
 
     try {
       const res = await fetch(`${API_BASE}/api/family/join/${invitationId}`, {
@@ -187,15 +189,18 @@ export default function FamilySelectorPage() {
 
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        throw new Error(err?.message || 'Không thể tham gia gia đình');
+        const errorMessage = err?.message || 'Không thể tham gia gia đình';
+        showNotification('❌ ' + errorMessage, 'error');
+        throw new Error(errorMessage);
       }
 
       // Tham gia thành công, refresh danh sách
+      showNotification('✅ Tham gia gia đình thành công!', 'success');
       await fetchFamilies();
       
     } catch (err) {
       console.error('Error joining family:', err);
-      setError(err.message || 'Lỗi khi tham gia gia đình');
+      // Error đã được xử lý ở trên
     } finally {
       setJoining(false);
     }
@@ -215,11 +220,19 @@ export default function FamilySelectorPage() {
         return;
       }
       
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        showNotification('❌ ' + (err?.message || 'Không thể từ chối lời mời'), 'error');
+        return;
+      }
+      
       // Cập nhật danh sách lời mời
       setInvitations(prev => prev.filter(inv => inv._id !== invitationId));
+      showNotification('✅ Đã từ chối lời mời', 'success');
       
     } catch (err) {
       console.error('Error declining invitation:', err);
+      showNotification('❌ Lỗi khi từ chối lời mời', 'error');
     }
   };
 
@@ -234,17 +247,8 @@ export default function FamilySelectorPage() {
     );
   }
 
-  if (error) {
-    return (
-      <div className="family-selector-page">
-        <div className="fs-error">
-          <i className="fas fa-exclamation-circle"></i>
-          <p>{error}</p>
-          <button onClick={() => window.location.reload()}>Thử lại</button>
-        </div>
-      </div>
-    );
-  }
+  // Removed full-page error display - using global notification instead
+  // Error state is now only used for modal display
 
   return (
     <div className="family-selector-page">
@@ -428,12 +432,7 @@ export default function FamilySelectorPage() {
             </div>
             
             <div className="fs-modal-body">
-              {error && (
-                <div className="fs-error">
-                  <i className="fas fa-exclamation-circle"></i>
-                  <p>{error}</p>
-                </div>
-              )}
+              {/* Error display removed - using global notification only */}
               
               <div className="fs-form-group">
                 <label htmlFor="family-name">Tên gia đình *</label>

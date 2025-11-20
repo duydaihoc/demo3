@@ -1067,8 +1067,9 @@ function TransactionsPage() {
                         {isFamilyTx && <span className="tx-badge family">GIA ĐÌNH</span>}
                         {isPending && <span className="tx-badge" style={{ background:'#ffe2d3', color:'#c05621' }}>PENDING</span>}
                       </div>
-                      {/* Hiển thị chú thích khi đây là giao dịch gia đình nhưng linked vào ví cá nhân (personal) */}
-                      {isFamilyPersonal && (
+                      {/* Hiển thị chú thích khi đây là giao dịch gia đình nhưng linked vào ví cá nhân (personal)
+                          CHỈ hiển thị khi KHÔNG phải đang lọc theo scope "personal" */}
+                      {isFamilyPersonal && scopeFilter !== 'personal' && (
                         <div style={{ fontSize: 12, color: '#6b7280', fontWeight: 700, marginBottom: 4 }}>
                           Giao dịch gia đình (Cá nhân): {familyName || tx.metadata.familyId || ''}
                         </div>

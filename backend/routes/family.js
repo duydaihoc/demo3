@@ -86,7 +86,7 @@ router.get('/my-families', authenticateToken, async (req, res) => {
   }
 });
 
-// Tạo gia đình mới - bỏ kiểm tra đã có gia đình
+// Tạo gia đình mới - mỗi owner chỉ có thể tạo một gia đình với tên đó
 router.post('/create', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id || req.user._id;
@@ -94,6 +94,16 @@ router.post('/create', authenticateToken, async (req, res) => {
 
     if (!name || !name.trim()) {
       return res.status(400).json({ message: 'Tên gia đình là bắt buộc' });
+    }
+
+    // Kiểm tra xem owner đã có gia đình với tên này chưa
+    const existingFamily = await Family.findOne({
+      name: name.trim(),
+      owner: userId
+    });
+
+    if (existingFamily) {
+      return res.status(400).json({ message: 'Bạn đã có gia đình với tên này rồi' });
     }
 
     // Tạo gia đình mới
@@ -127,11 +137,14 @@ router.post('/create', authenticateToken, async (req, res) => {
     res.status(201).json(newFamily);
   } catch (error) {
     console.error('Error creating family:', error);
+    // Xử lý lỗi duplicate key từ compound index
     if (error.code === 11000) {
-      res.status(400).json({ message: 'Tên gia đình đã tồn tại' });
-    } else {
-      res.status(500).json({ message: 'Lỗi máy chủ' });
+      const keyPattern = error.keyPattern || {};
+      if (keyPattern.name && keyPattern.owner) {
+        return res.status(400).json({ message: 'Bạn đã có gia đình với tên này rồi' });
+      }
     }
+    res.status(500).json({ message: 'Lỗi máy chủ' });
   }
 });
 

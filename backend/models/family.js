@@ -4,8 +4,8 @@ const familySchema = new mongoose.Schema({
   name: {
     type: String,
     required: true,
-    trim: true,
-    unique: true // Đảm bảo tên gia đình là duy nhất
+    trim: true
+    // Removed unique: true to allow multiple families with the same name
   },
   owner: {
     type: mongoose.Schema.Types.ObjectId,
@@ -158,6 +158,10 @@ familySchema.index({ 'members.user': 1 });
 familySchema.index({ 'members.email': 1 });
 familySchema.index({ owner: 1 });
 
+// Compound unique index: mỗi owner chỉ có thể tạo một gia đình với tên đó
+// Nhưng các owner khác vẫn có thể tạo gia đình cùng tên
+familySchema.index({ name: 1, owner: 1 }, { unique: true });
+
 // Middleware để cập nhật updatedAt
 familySchema.pre('save', function(next) {
   this.updatedAt = new Date();
@@ -169,5 +173,36 @@ familySchema.index({ 'members.user': 1, 'members.role': 1 });
 
 // Export the Family model, checking if it already exists to avoid OverwriteModelError
 const Family = mongoose.models.Family || mongoose.model('Family', familySchema);
+
+// Migration: Drop old name_1 index and ensure compound index exists
+const migrateIndexes = async () => {
+  try {
+    if (mongoose.connection.readyState === 1) {
+      const indexes = await Family.collection.getIndexes();
+      
+      // Drop old name_1 unique index if exists
+      if (indexes.name_1) {
+        await Family.collection.dropIndex('name_1');
+        // Index migration completed silently
+      }
+      
+      // Ensure compound index exists (will be created automatically by schema)
+      // No logging needed
+    } else {
+      mongoose.connection.once('connected', migrateIndexes);
+    }
+  } catch (err) {
+    if (err.code !== 27) { // 27 = IndexNotFound
+      // Silent error handling
+    }
+  }
+};
+
+// Run migration when connection is ready
+if (mongoose.connection.readyState === 1) {
+  migrateIndexes();
+} else {
+  mongoose.connection.once('connected', migrateIndexes);
+}
 
 module.exports = Family;

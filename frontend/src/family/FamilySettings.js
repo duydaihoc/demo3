@@ -33,6 +33,9 @@ export default function FamilySettings() {
 	// removing member state
 	const [removingMemberId, setRemovingMemberId] = useState(null);
 	const [removingMemberLoading, setRemovingMemberLoading] = useState(false);
+	// State cho delete member modal
+	const [showDeleteMemberModal, setShowDeleteMemberModal] = useState(false);
+	const [memberToDelete, setMemberToDelete] = useState(null);
 	
 	const API_BASE = 'http://localhost:5000';
 	const token = localStorage.getItem('token');
@@ -129,7 +132,7 @@ export default function FamilySettings() {
 			
 			const updatedFamily = await res.json();
 			setFamilyData(updatedFamily);
-			showNotification('Đã cập nhật thông tin gia đình thành công', 'success');
+			showNotification('✅ Đã cập nhật thông tin gia đình thành công', 'success');
 		} catch (err) {
 			console.error("Error updating family name:", err);
 			setEditError(err.message || 'Đã xảy ra lỗi khi cập nhật');
@@ -141,7 +144,7 @@ export default function FamilySettings() {
 	// Xóa gia đình (cho owner)
 	const handleDeleteFamily = async () => {
 		if (deleteConfirmText !== familyData.name) {
-			showNotification('Vui lòng nhập đúng tên gia đình để xác nhận', 'error');
+			showNotification('❌ Vui lòng nhập đúng tên gia đình để xác nhận', 'error');
 			return;
 		}
 		
@@ -158,7 +161,7 @@ export default function FamilySettings() {
 				throw new Error(errData.message || 'Không thể xóa gia đình');
 			}
 			
-			showNotification('Đã xóa gia đình thành công', 'success');
+			showNotification('✅ Đã xóa gia đình thành công', 'success');
 			localStorage.removeItem('selectedFamilyId');
 			navigate('/family-selector');
 		} catch (err) {
@@ -173,7 +176,7 @@ export default function FamilySettings() {
 	// Rời khỏi gia đình (cho member)
 	const handleLeaveFamily = async () => {
 		if (deleteConfirmText !== 'XÁC NHẬN') {
-			showNotification('Vui lòng nhập "XÁC NHẬN" để tiếp tục', 'error');
+			showNotification('❌ Vui lòng nhập "XÁC NHẬN" để tiếp tục', 'error');
 			return;
 		}
 		
@@ -190,7 +193,7 @@ export default function FamilySettings() {
 				throw new Error(errData.message || 'Không thể rời gia đình');
 			}
 			
-			showNotification('Đã rời gia đình thành công', 'success');
+			showNotification('✅ Đã rời gia đình thành công', 'success');
 			localStorage.removeItem('selectedFamilyId');
 			navigate('/family-selector');
 		} catch (err) {
@@ -236,7 +239,7 @@ export default function FamilySettings() {
 			
 			const updatedFamily = await res.json();
 			setFamilyData(updatedFamily);
-			showNotification('Đã cập nhật vai trò thành công', 'success');
+			showNotification('✅ Đã cập nhật vai trò thành công', 'success');
 			setShowRoleModal(false);
 		} catch (err) {
 			console.error("Error updating member role:", err);
@@ -246,15 +249,26 @@ export default function FamilySettings() {
 		}
 	};
 
+	// Open delete member modal
+	const handleOpenDeleteMemberModal = (member) => {
+		setMemberToDelete(member);
+		setShowDeleteMemberModal(true);
+	};
+
+	// Close delete member modal
+	const handleCloseDeleteMemberModal = () => {
+		setShowDeleteMemberModal(false);
+		setMemberToDelete(null);
+	};
+
 	// Remove member handler
-	const handleRemoveMember = async (member) => {
-		if (!member) return;
-		const memberUserId = member.user && (member.user._id || member.user);
+	const handleRemoveMember = async () => {
+		if (!memberToDelete) return;
+		const memberUserId = memberToDelete.user && (memberToDelete.user._id || memberToDelete.user);
 		if (!memberUserId) {
-			showNotification('Không tìm thấy ID thành viên', 'error');
+			showNotification('❌ Không tìm thấy ID thành viên', 'error');
 			return;
 		}
-		if (!window.confirm('Bạn có chắc muốn xóa thành viên này khỏi gia đình?')) return;
 
 		setRemovingMemberId(memberUserId);
 		setRemovingMemberLoading(true);
@@ -271,11 +285,12 @@ export default function FamilySettings() {
 				const errData = await res.json().catch(() => ({}));
 				throw new Error(errData.message || 'Không thể xóa thành viên');
 			}
-			showNotification('Đã xóa thành viên thành công', 'success');
+			showNotification('✅ Đã xóa thành viên thành công', 'success');
 			await fetchFamilyData(); // reload family list
+			handleCloseDeleteMemberModal();
 		} catch (err) {
 			console.error('Error removing member:', err);
-			showNotification(err.message || 'Lỗi khi xóa thành viên', 'error');
+			showNotification('❌ ' + (err.message || 'Lỗi khi xóa thành viên'), 'error');
 		} finally {
 			setRemovingMemberId(null);
 			setRemovingMemberLoading(false);
@@ -476,7 +491,7 @@ export default function FamilySettings() {
 													{isOwner() && !isOwnerMember && !isCurrentUser && (
 														<button 
 															className="fs-btn sm danger"
-															onClick={() => handleRemoveMember(member)}
+															onClick={() => handleOpenDeleteMemberModal(member)}
 															disabled={removingMemberLoading && String(removingMemberId) === String(memberUserId)}
 														>
 															{removingMemberLoading && String(removingMemberId) === String(memberUserId) ? (
@@ -631,6 +646,49 @@ export default function FamilySettings() {
 									<><i className="fas fa-trash-alt"></i> Xóa vĩnh viễn</>
 								) : (
 									<><i className="fas fa-sign-out-alt"></i> Rời gia đình</>
+								)}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+			
+			{/* Delete Member Modal */}
+			{showDeleteMemberModal && memberToDelete && (
+				<div className="fs-modal-overlay" onClick={handleCloseDeleteMemberModal}>
+					<div className="fs-modal" onClick={(e) => e.stopPropagation()}>
+						<div className="fs-modal-header">
+							<h3>
+								<i className="fas fa-user-minus"></i> Xóa thành viên
+							</h3>
+							<button className="fs-modal-close" onClick={handleCloseDeleteMemberModal}>
+								&times;
+							</button>
+						</div>
+						<div className="fs-modal-body">
+							<p>Bạn có chắc muốn xóa thành viên <strong>{memberToDelete.name || memberToDelete.email || 'này'}</strong> khỏi gia đình?</p>
+							<div className="fs-warning-text">
+								<i className="fas fa-exclamation-triangle"></i>
+								Thành viên này sẽ mất quyền truy cập vào tất cả dữ liệu của gia đình.
+							</div>
+						</div>
+						<div className="fs-modal-footer">
+							<button 
+								className="fs-btn secondary" 
+								onClick={handleCloseDeleteMemberModal}
+								disabled={removingMemberLoading}
+							>
+								Hủy
+							</button>
+							<button 
+								className="fs-btn danger" 
+								onClick={handleRemoveMember}
+								disabled={removingMemberLoading}
+							>
+								{removingMemberLoading ? (
+									<><i className="fas fa-spinner fa-spin"></i> Đang xóa...</>
+								) : (
+									<><i className="fas fa-user-minus"></i> Xóa thành viên</>
 								)}
 							</button>
 						</div>

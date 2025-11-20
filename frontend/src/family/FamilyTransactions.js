@@ -454,6 +454,81 @@ export default function FamilyTransactions() {
 		return cat || { name: 'Không có', icon: '📝' };
 	};
 
+	// Render transaction item component
+	const renderTransactionItem = (transaction) => {
+		const category = getCategoryInfo(transaction.category);
+		const hasVerifiedReceipts = receiptCounts[transaction._id] > 0;
+		return (
+			<div key={transaction._id} className="ft-transaction-item">
+				<div className="ft-transaction-icon">
+					<i className={`fas ${transaction.type === 'expense' ? 'fa-arrow-up' : 'fa-arrow-down'}`}></i>
+				</div>
+				
+				<div className="ft-transaction-content">
+					<div className="ft-transaction-header">
+						<div className="ft-transaction-title">
+							{transaction.description || 'Giao dịch'}
+						</div>
+						<div className={`ft-transaction-amount ${transaction.type === 'expense' ? 'expense' : 'income'}`}>
+							{transaction.type === 'expense' ? '-' : '+'}{formatCurrency(transaction.amount)}
+						</div>
+					</div>
+					
+					<div className="ft-transaction-meta">
+						<span className="ft-category-badge">
+							{category.icon} {category.name}
+						</span>
+						<span className="ft-date">
+							<i className="fas fa-calendar-alt"></i> {formatDate(transaction.date || transaction.createdAt)}
+						</span>
+						{transaction.creatorName && (
+							<span className="ft-creator">
+								<i className="fas fa-user"></i> {transaction.creatorName}
+								{transaction.creatorRole && (
+									<span className="ft-creator-role">({transaction.creatorRole})</span>
+								)}
+							</span>
+						)}
+					</div>
+				</div>
+				
+				<div className="ft-transaction-actions">
+					{/* Chỉ hiện nút Ảnh hóa đơn nếu có ảnh liên kết đã xác minh */}
+					{transaction.type === 'expense' && hasVerifiedReceipts && (
+						<button
+							className="ft-action-btn link"
+							title="Xem ảnh hóa đơn"
+							onClick={() => fetchLinkedReceipts(transaction)}
+							style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+						>
+							<i className="fas fa-image"></i> Ảnh hóa đơn
+						</button>
+					)}
+					{/* Chỉ hiện nút sửa/xóa nếu người dùng hiện tại là người tạo */}
+					{currentUser && transaction.createdBy &&
+					 (transaction.createdBy._id || transaction.createdBy.id || transaction.createdBy) === currentUser.id && (
+						<>
+							<button 
+								className="ft-action-btn edit"
+								onClick={() => handleOpenEditModal(transaction)}
+								title="Chỉnh sửa giao dịch"
+							>
+								<i className="fas fa-edit"></i> Sửa
+							</button>
+							<button 
+								className="ft-action-btn delete"
+								onClick={() => handleOpenDeleteModal(transaction)}
+								title="Xóa giao dịch"
+							>
+								<i className="fas fa-trash"></i> Xóa
+							</button>
+						</>
+					)}
+				</div>
+			</div>
+		);
+	};
+
 	// Get filtered categories based on transaction type
 	const getFilteredCategories = (type = activeTab) => {
 		// Lọc danh mục theo loại giao dịch và chỉ lấy danh mục của system và admin
@@ -1114,20 +1189,248 @@ export default function FamilyTransactions() {
 					</div>
 				</div>
 
-				{/* Transaction Type Tabs */}
-				<div className="ft-tabs">
-					<button 
-						className={`ft-tab ${activeTab === 'expense' ? 'active' : ''}`}
-						onClick={() => handleTabChange('expense')}
-					>
-						<i className="fas fa-arrow-up"></i> Chi tiêu
-					</button>
-					<button 
-						className={`ft-tab ${activeTab === 'income' ? 'active' : ''}`}
-						onClick={() => handleTabChange('income')}
-					>
-						<i className="fas fa-arrow-down"></i> Thu nhập
-					</button>
+				{/* Main Content Layout - 2 columns for owner, 1 column for members */}
+				<div className={`ft-main-layout ${isOwner() ? 'has-sidebar' : ''}`}>
+					{/* Left Sidebar - Members Balance (Owner only) */}
+					{isOwner() && (
+						<div className="ft-members-sidebar">
+							<div className="ft-members-balance-section">
+								<div className="ft-section-header">
+									<h2><i className="fas fa-users-cog"></i> Quản lý số dư</h2>
+									<p>Xem số dư của thành viên</p>
+								</div>
+								
+								<div className="ft-members-balance-list">
+									{loadingBalance ? (
+										<div className="ft-loading">
+											<div className="ft-loading-spinner"></div>
+											<p>Đang tải...</p>
+										</div>
+									) : membersBalance.filter(member => String(member.userId) !== String(currentUser.id)).length === 0 ? (
+										<div className="ft-empty-state-small">
+											<i className="fas fa-users-slash"></i>
+											<p>Chưa có thành viên</p>
+										</div>
+									) : (
+										membersBalance.filter(member => String(member.userId) !== String(currentUser.id)).map(member => (
+											<div key={member.userId || member.userEmail} className="ft-member-balance-card">
+												<div className="ft-member-info">
+													<div className="ft-member-avatar">
+														{member.userName ? member.userName.charAt(0).toUpperCase() : 'U'}
+													</div>
+													<div className="ft-member-details">
+														<div className="ft-member-name">
+															{member.userName || 'Thành viên'}
+															<span className="ft-member-role">{getMemberRole(member.userId, member.userEmail)}</span>
+														</div>
+														<div className="ft-member-email">{member.userEmail || ''}</div>
+													</div>
+												</div>
+												<div className="ft-member-balance">
+													<div className="ft-balance-label">Số dư</div>
+													<div className={`ft-balance-amount ${member.balance >= 0 ? 'positive' : 'negative'}`}>
+														{formatCurrency(member.balance)}
+													</div>
+													<button 
+														className="ft-view-member-btn"
+														onClick={() => handleViewMemberDetail(member)}
+													>
+														<i className="fas fa-eye"></i> Chi tiết
+													</button>
+												</div>
+											</div>
+										))
+									)}
+								</div>
+							</div>
+						</div>
+					)}
+
+					{/* Right Content - Transaction List */}
+					<div className="ft-content-wrapper">
+						{/* Transaction Type Tabs */}
+						<div className="ft-tabs">
+							<button 
+								className={`ft-tab ${activeTab === 'expense' ? 'active' : ''}`}
+								onClick={() => handleTabChange('expense')}
+							>
+								<i className="fas fa-arrow-up"></i> Chi tiêu
+							</button>
+							<button 
+								className={`ft-tab ${activeTab === 'income' ? 'active' : ''}`}
+								onClick={() => handleTabChange('income')}
+							>
+								<i className="fas fa-arrow-down"></i> Thu nhập
+							</button>
+						</div>
+
+						<div className="ft-content">
+						{loading ? (
+							<div className="ft-loading">
+								<div className="ft-loading-spinner"></div>
+								<p>Đang tải giao dịch...</p>
+							</div>
+						) : error ? (
+							<div className="ft-error">
+								<i className="fas fa-exclamation-triangle"></i>
+								<p>{error}</p>
+								<button onClick={fetchTransactions} className="ft-retry-btn">
+									Thử lại
+								</button>
+							</div>
+						) : (
+							<>
+								{transactions.length === 0 ? (
+									<div className="ft-empty-state">
+										<i className={`fas ${activeTab === 'expense' ? 'fa-receipt' : 'fa-money-bill-wave'}`}></i>
+										<h3>Chưa có giao dịch {activeTab === 'expense' ? 'chi tiêu' : 'thu nhập'}</h3>
+										<p>Bắt đầu thêm giao dịch đầu tiên của bạn</p>
+										<button 
+											className="ft-btn primary"
+											onClick={() => setShowForm(true)}
+										>
+											<i className="fas fa-plus"></i> Thêm giao dịch
+										</button>
+									</div>
+								) : (
+									<>
+										{currentPage === 1 && totalPages > 1 && (
+											<div style={{
+												padding: '12px 16px',
+												margin: '8px',
+												background: 'linear-gradient(135deg, rgba(42, 82, 152, 0.1) 0%, rgba(78, 205, 196, 0.1) 100%)',
+												borderRadius: '12px',
+												border: '1px solid rgba(42, 82, 152, 0.2)',
+												fontSize: '13px',
+												color: '#2a5298',
+												fontWeight: 600,
+												display: 'flex',
+												alignItems: 'center',
+												gap: '8px',
+												marginBottom: '8px'
+											}}>
+												<i className="fas fa-info-circle"></i>
+												<span>Đang hiển thị 5 giao dịch mới nhất. Sử dụng nút phân trang bên dưới để xem thêm.</span>
+											</div>
+										)}
+										
+										{/* Tách giao dịch thành 2 nhóm */}
+										{(() => {
+											const personalTransactions = transactions.filter(tx => tx.transactionScope === 'personal');
+											const familyTransactions = transactions.filter(tx => tx.transactionScope === 'family');
+											
+											return (
+												<>
+													{/* Bảng giao dịch cá nhân */}
+													{personalTransactions.length > 0 && (
+														<div className="ft-transactions-section">
+															<div className="ft-section-title">
+																<i className="fas fa-user"></i>
+																<h3>Giao dịch cá nhân</h3>
+																<span className="ft-section-count">({personalTransactions.length})</span>
+															</div>
+															<div className="ft-transactions-list">
+																{personalTransactions.map(transaction => {
+																	return renderTransactionItem(transaction);
+																})}
+															</div>
+														</div>
+													)}
+													
+													{/* Bảng giao dịch gia đình */}
+													{familyTransactions.length > 0 && (
+														<div className="ft-transactions-section">
+															<div className="ft-section-title">
+																<i className="fas fa-home"></i>
+																<h3>Giao dịch gia đình</h3>
+																<span className="ft-section-count">({familyTransactions.length})</span>
+															</div>
+															<div className="ft-transactions-list">
+																{familyTransactions.map(transaction => {
+																	return renderTransactionItem(transaction);
+																})}
+															</div>
+														</div>
+													)}
+												</>
+											);
+										})()}
+									</>
+								)}
+								
+								{/* Pagination */}
+								{totalPages > 1 && (
+									<div className="ft-pagination">
+										<button 
+											className="ft-pagination-btn"
+											onClick={() => handlePageChange(1)}
+											disabled={currentPage === 1}
+											title="Trang đầu"
+										>
+											<i className="fas fa-angle-double-left"></i>
+											<span className="ft-pagination-btn-text">Đầu</span>
+										</button>
+										<button 
+											className="ft-pagination-btn"
+											onClick={() => handlePageChange(currentPage - 1)}
+											disabled={currentPage === 1}
+											title="Trang trước"
+										>
+											<i className="fas fa-angle-left"></i>
+											<span className="ft-pagination-btn-text">Trước</span>
+										</button>
+										
+										<div className="ft-pagination-info">
+											<span className="ft-page-current">Trang {currentPage}</span>
+											<span className="ft-page-separator">/</span>
+											<span className="ft-page-total">{totalPages}</span>
+											{currentPage === 1 && (
+												<span className="ft-page-note">(5 giao dịch mới nhất)</span>
+											)}
+										</div>
+										
+										<button 
+											className="ft-pagination-btn"
+											onClick={() => handlePageChange(currentPage + 1)}
+											disabled={currentPage === totalPages}
+											title="Trang sau"
+										>
+											<span className="ft-pagination-btn-text">Sau</span>
+											<i className="fas fa-angle-right"></i>
+										</button>
+										<button 
+											className="ft-pagination-btn"
+											onClick={() => handlePageChange(totalPages)}
+											disabled={currentPage === totalPages}
+											title="Trang cuối"
+										>
+											<span className="ft-pagination-btn-text">Cuối</span>
+											<i className="fas fa-angle-double-right"></i>
+										</button>
+									</div>
+								)}
+								
+								{/* Transaction count summary */}
+								<div className="ft-summary">
+									{currentPage === 1 ? (
+										<>
+											Hiển thị <strong>5 giao dịch mới nhất</strong> trong tổng số {totalItems} giao dịch {activeTab === 'expense' ? 'chi tiêu' : 'thu nhập'}
+											{totalPages > 1 && (
+												<span style={{ marginLeft: 8, color: '#2a5298', fontWeight: 600 }}>
+													• Sử dụng nút phân trang để xem các giao dịch cũ hơn
+												</span>
+											)}
+										</>
+									) : (
+										<>
+											Hiển thị {transactions.length} giao dịch (trang {currentPage}/{totalPages}) trong tổng số {totalItems} giao dịch {activeTab === 'expense' ? 'chi tiêu' : 'thu nhập'}
+										</>
+									)}
+								</div>
+							</>
+						)}
+						</div>
+					</div>
 				</div>
 
 				{/* Transaction Form Modal */}
@@ -1750,266 +2053,6 @@ export default function FamilyTransactions() {
 									</button>
 								</div>
 							</form>
-						</div>
-					</div>
-				)}
-
-				{/* Transaction List */}
-				<div className="ft-content">
-					{loading ? (
-						<div className="ft-loading">
-							<div className="ft-loading-spinner"></div>
-							<p>Đang tải giao dịch...</p>
-						</div>
-					) : error ? (
-						<div className="ft-error">
-							<i className="fas fa-exclamation-triangle"></i>
-							<p>{error}</p>
-							<button onClick={fetchTransactions} className="ft-retry-btn">
-								Thử lại
-							</button>
-						</div>
-					) : (
-						<>
-							<div className="ft-transactions-list">
-								{transactions.length === 0 ? (
-									<div className="ft-empty-state">
-										<i className={`fas ${activeTab === 'expense' ? 'fa-receipt' : 'fa-money-bill-wave'}`}></i>
-										<h3>Chưa có giao dịch {activeTab === 'expense' ? 'chi tiêu' : 'thu nhập'}</h3>
-										<p>Bắt đầu thêm giao dịch đầu tiên của bạn</p>
-										<button 
-											className="ft-btn primary"
-											onClick={() => setShowForm(true)}
-										>
-											<i className="fas fa-plus"></i> Thêm giao dịch
-										</button>
-									</div>
-								) : (
-									<>
-										{currentPage === 1 && totalPages > 1 && (
-											<div style={{
-												padding: '12px 16px',
-												margin: '8px',
-												background: 'linear-gradient(135deg, rgba(42, 82, 152, 0.1) 0%, rgba(78, 205, 196, 0.1) 100%)',
-												borderRadius: '12px',
-												border: '1px solid rgba(42, 82, 152, 0.2)',
-												fontSize: '13px',
-												color: '#2a5298',
-												fontWeight: 600,
-												display: 'flex',
-												alignItems: 'center',
-												gap: '8px',
-												marginBottom: '8px'
-											}}>
-												<i className="fas fa-info-circle"></i>
-												<span>Đang hiển thị 5 giao dịch mới nhất. Sử dụng nút phân trang bên dưới để xem thêm.</span>
-											</div>
-										)}
-										{transactions.map(transaction => {
-										const category = getCategoryInfo(transaction.category);
-										const hasVerifiedReceipts = receiptCounts[transaction._id] > 0;
-										return (
-											<div key={transaction._id} className="ft-transaction-item">
-												<div className="ft-transaction-icon">
-													<i className={`fas ${transaction.type === 'expense' ? 'fa-arrow-up' : 'fa-arrow-down'}`}></i>
-												</div>
-												
-												<div className="ft-transaction-content">
-													<div className="ft-transaction-header">
-														<div className="ft-transaction-title">
-															{transaction.description || 'Giao dịch'}
-														</div>
-														<div className={`ft-transaction-amount ${transaction.type === 'expense' ? 'expense' : 'income'}`}>
-															{transaction.type === 'expense' ? '-' : '+'}{formatCurrency(transaction.amount)}
-														</div>
-													</div>
-													
-													<div className="ft-transaction-meta">
-														<span className="ft-category-badge">
-															{category.icon} {category.name}
-														</span>
-														<span className="ft-scope-badge">
-															{transaction.transactionScope === 'family' ? '🏠 Gia đình' : '👤 Cá nhân'}
-														</span>
-														<span className="ft-date">
-															<i className="fas fa-calendar-alt"></i> {formatDate(transaction.date || transaction.createdAt)}
-														</span>
-														{transaction.creatorName && (
-															<span className="ft-creator">
-																<i className="fas fa-user"></i> {transaction.creatorName}
-																{transaction.creatorRole && (
-																	<span className="ft-creator-role">({transaction.creatorRole})</span>
-																)}
-															</span>
-														)}
-														{/* Wallet Link Badge */}
-														
-													</div>
-												</div>
-												
-												<div className="ft-transaction-actions">
-													{/* Chỉ hiện nút Ảnh hóa đơn nếu có ảnh liên kết đã xác minh */}
-													{transaction.type === 'expense' && hasVerifiedReceipts && (
-														<button
-															className="ft-action-btn link"
-															title="Xem ảnh hóa đơn"
-															onClick={() => fetchLinkedReceipts(transaction)}
-															style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-														>
-															<i className="fas fa-image"></i> Ảnh hóa đơn
-														</button>
-													)}
-													{/* Chỉ hiện nút sửa/xóa nếu người dùng hiện tại là người tạo */}
-													{currentUser && transaction.createdBy &&
-													 (transaction.createdBy._id || transaction.createdBy.id || transaction.createdBy) === currentUser.id && (
-														<>
-															<button 
-																className="ft-action-btn edit"
-																onClick={() => handleOpenEditModal(transaction)}
-																title="Chỉnh sửa giao dịch"
-															>
-																<i className="fas fa-edit"></i> Sửa
-															</button>
-															<button 
-																className="ft-action-btn delete"
-																onClick={() => handleOpenDeleteModal(transaction)}
-																title="Xóa giao dịch"
-															>
-																<i className="fas fa-trash"></i> Xóa
-															</button>
-														</>
-													)}
-												</div>
-											</div>
-										);
-									})}
-									</>
-								)}
-							</div>
-							
-							{/* Pagination */}
-							{totalPages > 1 && (
-								<div className="ft-pagination">
-									<button 
-										className="ft-pagination-btn"
-										onClick={() => handlePageChange(1)}
-										disabled={currentPage === 1}
-										title="Trang đầu"
-									>
-										<i className="fas fa-angle-double-left"></i>
-										<span className="ft-pagination-btn-text">Đầu</span>
-									</button>
-									<button 
-										className="ft-pagination-btn"
-										onClick={() => handlePageChange(currentPage - 1)}
-										disabled={currentPage === 1}
-										title="Trang trước"
-									>
-										<i className="fas fa-angle-left"></i>
-										<span className="ft-pagination-btn-text">Trước</span>
-									</button>
-									
-									<div className="ft-pagination-info">
-										<span className="ft-page-current">Trang {currentPage}</span>
-										<span className="ft-page-separator">/</span>
-										<span className="ft-page-total">{totalPages}</span>
-										{currentPage === 1 && (
-											<span className="ft-page-note">(5 giao dịch mới nhất)</span>
-										)}
-									</div>
-									
-									<button 
-										className="ft-pagination-btn"
-										onClick={() => handlePageChange(currentPage + 1)}
-										disabled={currentPage === totalPages}
-										title="Trang sau"
-									>
-										<span className="ft-pagination-btn-text">Sau</span>
-										<i className="fas fa-angle-right"></i>
-									</button>
-									<button 
-										className="ft-pagination-btn"
-										onClick={() => handlePageChange(totalPages)}
-										disabled={currentPage === totalPages}
-										title="Trang cuối"
-									>
-										<span className="ft-pagination-btn-text">Cuối</span>
-										<i className="fas fa-angle-double-right"></i>
-									</button>
-								</div>
-							)}
-							
-							{/* Transaction count summary */}
-							<div className="ft-summary">
-								{currentPage === 1 ? (
-									<>
-										Hiển thị <strong>5 giao dịch mới nhất</strong> trong tổng số {totalItems} giao dịch {activeTab === 'expense' ? 'chi tiêu' : 'thu nhập'}
-										{totalPages > 1 && (
-											<span style={{ marginLeft: 8, color: '#2a5298', fontWeight: 600 }}>
-												• Sử dụng nút phân trang để xem các giao dịch cũ hơn
-											</span>
-										)}
-									</>
-								) : (
-									<>
-										Hiển thị {transactions.length} giao dịch (trang {currentPage}/{totalPages}) trong tổng số {totalItems} giao dịch {activeTab === 'expense' ? 'chi tiêu' : 'thu nhập'}
-									</>
-								)}
-							</div>
-						</>
-					)}
-				</div>
-				
-				{/* Thêm section hiển thị số dư thành viên cho owner */}
-				{isOwner() && (
-					<div className="ft-members-balance-section">
-						<div className="ft-section-header">
-							<h2><i className="fas fa-users-cog"></i> Quản lý số dư thành viên</h2>
-							<p>Xem và quản lý số dư của tất cả thành viên trong gia đình</p>
-						</div>
-						
-						<div className="ft-members-balance-grid">
-							{loadingBalance ? (
-								<div className="ft-loading">
-									<div className="ft-loading-spinner"></div>
-									<p>Đang tải số dư thành viên...</p>
-								</div>
-							) : membersBalance.filter(member => String(member.userId) !== String(currentUser.id)).length === 0 ? (
-								<div className="ft-empty-state">
-									<i className="fas fa-users-slash"></i>
-									<h3>Chưa có thành viên nào</h3>
-									<p>Gia đình chưa có thành viên nào có số dư</p>
-								</div>
-							) : (
-								membersBalance.filter(member => String(member.userId) !== String(currentUser.id)).map(member => (
-									<div key={member.userId || member.userEmail} className="ft-member-balance-card">
-										<div className="ft-member-info">
-											<div className="ft-member-avatar">
-												{member.userName ? member.userName.charAt(0).toUpperCase() : 'U'}
-											</div>
-											<div className="ft-member-details">
-												<div className="ft-member-name">
-													{member.userName || 'Thành viên'}
-													<span className="ft-member-role">{getMemberRole(member.userId, member.userEmail)}</span>
-												</div>
-												<div className="ft-member-email">{member.userEmail || ''}</div>
-											</div>
-										</div>
-										<div className="ft-member-balance">
-											<div className="ft-balance-label">Số dư cá nhân</div>
-											<div className={`ft-balance-amount ${member.balance >= 0 ? 'positive' : 'negative'}`}>
-												{formatCurrency(member.balance)}
-											</div>
-											<button 
-												className="ft-view-member-btn"
-												onClick={() => handleViewMemberDetail(member)}
-											>
-												<i className="fas fa-eye"></i> Xem chi tiết
-											</button>
-										</div>
-									</div>
-								))
-							)}
 						</div>
 					</div>
 				)}
