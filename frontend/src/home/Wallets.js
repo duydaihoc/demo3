@@ -666,75 +666,112 @@ function Wallets() {
       </div>
       {showCreateModal && (
         <div className="wallet-modal-overlay">
-          <div className="wallet-modal">
-            <div className="wallet-modal-header">
-              <div className="wallet-modal-icon">💼</div>
-              <div className="wallet-modal-title">Tạo ví mới</div>
-              <div className="wallet-modal-subtitle">Thiết lập ví để quản lý tài chính của bạn</div>
+          <div className="wallet-modal create-modal-enhanced">
+            <div className="create-modal-close-btn" onClick={handleCloseModal} title="Đóng" disabled={loading}>
+              ✕
             </div>
             <form className="wallet-modal-form" onSubmit={handleSubmit}>
-              <div className="wallet-modal-field">
-                <label>
-                  <span className="field-icon">📝</span>
-                  <span>Tên ví</span>
-                  <span className="field-hint">(Bắt buộc)</span>
-                </label>
-                <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  placeholder="Ví dụ: Ví tiền mặt, VCB lương, Tiết kiệm..."
-                  required
-                />
-                <div className="field-help">Đặt tên rõ ràng để dễ nhận biết khi xem báo cáo</div>
+              <div className="wallet-modal-header">
+                <div className="wallet-modal-icon-wrapper">
+                  <div className="wallet-modal-icon">💼</div>
+                </div>
+                <div className="wallet-modal-title">Tạo ví mới</div>
+                <div className="wallet-modal-subtitle">Thiết lập ví để quản lý tài chính của bạn một cách hiệu quả</div>
               </div>
-              <div className="wallet-modal-field">
-                <label>
-                  <span className="field-icon">💱</span>
-                  <span>Loại tiền tệ</span>
-                </label>
-                <select
-                  name="currency"
-                  value={formData.currency}
-                  onChange={handleInputChange}
-                >
-                  <option value="VND">🇻🇳 VND - Đồng Việt Nam</option>
-                  <option value="USD">🇺🇸 USD - Đô la Mỹ</option>
-                  <option value="EUR">🇪🇺 EUR - Euro</option>
-                </select>
-                <div className="field-help">Chọn loại tiền tệ bạn sẽ sử dụng cho ví này</div>
+
+              <div className="create-form-content">
+                <div className="create-form-section">
+                  <div className="section-divider">
+                    <span className="section-divider-icon">📋</span>
+                    <span className="section-divider-text">Thông tin cơ bản</span>
+                  </div>
+
+                  <div className="wallet-modal-field">
+                    <label>
+                      <span className="field-icon">📝</span>
+                      <span>Tên ví</span>
+                      <span className="field-hint">(Bắt buộc)</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleInputChange}
+                      placeholder="Ví dụ: Ví tiền mặt, VCB lương, Tiết kiệm..."
+                      required
+                    />
+                    <div className="field-help">Đặt tên rõ ràng để dễ nhận biết khi xem báo cáo</div>
+                  </div>
+
+                  <div className="wallet-modal-field-row">
+                    <div className="wallet-modal-field half-width">
+                      <label>
+                        <span className="field-icon">💱</span>
+                        <span>Loại tiền tệ</span>
+                      </label>
+                      <select
+                        name="currency"
+                        value={formData.currency}
+                        onChange={handleInputChange}
+                      >
+                        <option value="VND">🇻🇳 VND - Đồng Việt Nam</option>
+                        <option value="USD">🇺🇸 USD - Đô la Mỹ</option>
+                        <option value="EUR">🇪🇺 EUR - Euro</option>
+                      </select>
+                      <div className="field-help">Loại tiền tệ</div>
+                    </div>
+
+                    <div className="wallet-modal-field half-width">
+                      <label>
+                        <span className="field-icon">💰</span>
+                        <span>Số dư ban đầu</span>
+                      </label>
+                      <input
+                        type="number"
+                        name="initialBalance"
+                        value={formData.initialBalance}
+                        onChange={handleInputChange}
+                        placeholder="0"
+                        min="0"
+                      />
+                      <div className="field-help">Số dư hiện tại</div>
+                    </div>
+                  </div>
+
+                  <div className="create-tip-box">
+                    <div className="tip-icon-small">💡</div>
+                    <div className="tip-text-small">
+                      <strong>Mẹo:</strong> Bạn có thể để số dư là 0 nếu mới bắt đầu. Sau đó có thể cập nhật số dư khi cần.
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="wallet-modal-field">
-                <label>
-                  <span className="field-icon">💰</span>
-                  <span>Số dư ban đầu</span>
-                </label>
-                <input
-                  type="number"
-                  name="initialBalance"
-                  value={formData.initialBalance}
-                  onChange={handleInputChange}
-                  placeholder="0"
-                  min="0"
-                />
-                <div className="field-help">Nhập số dư hiện tại. Để 0 nếu bạn mới bắt đầu</div>
-              </div>
-              <div className="wallet-modal-actions">
-                <button
-                  type="submit"
-                  className="wallet-modal-submit-btn"
-                  disabled={loading}
-                >
-                  {loading ? 'Đang tạo...' : 'Tạo'}
-                </button>
+
+              <div className="wallet-modal-actions create-modal-actions">
                 <button
                   type="button"
                   className="wallet-modal-close-btn"
                   onClick={handleCloseModal}
                   disabled={loading}
                 >
-                  Đóng
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="wallet-modal-submit-btn"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <span className="btn-icon">⏳</span>
+                      <span>Đang tạo...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="btn-icon">✨</span>
+                      <span>Tạo ví</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>

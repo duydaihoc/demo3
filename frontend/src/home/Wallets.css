@@ -470,7 +470,8 @@
   position: relative;
 }
 
-.edit-modal-enhanced {
+.edit-modal-enhanced,
+.create-modal-enhanced {
   width: 720px;
   max-width: 95vw;
   max-height: 90vh;
@@ -480,9 +481,15 @@
   padding: 0;
   border-radius: 20px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  position: relative;
 }
 
-.edit-modal-close-btn {
+.create-modal-enhanced {
+  width: 600px;
+}
+
+.edit-modal-close-btn,
+.create-modal-close-btn {
   position: absolute;
   top: 20px;
   right: 20px;
@@ -501,9 +508,15 @@
   z-index: 10;
 }
 
-.edit-modal-close-btn:hover {
+.edit-modal-close-btn:hover,
+.create-modal-close-btn:hover {
   background: rgba(22, 58, 90, 0.15);
   transform: rotate(90deg) scale(1.1);
+}
+
+.create-modal-close-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .wallet-modal-header {
@@ -515,7 +528,8 @@
   color: #fff;
 }
 
-.edit-modal-enhanced .wallet-modal-header {
+.edit-modal-enhanced .wallet-modal-header,
+.create-modal-enhanced .wallet-modal-header {
   margin-bottom: 0;
   padding: 40px 32px 28px;
 }
@@ -546,7 +560,8 @@
   letter-spacing: 1px;
 }
 
-.edit-modal-enhanced .wallet-modal-title {
+.edit-modal-enhanced .wallet-modal-title,
+.create-modal-enhanced .wallet-modal-title {
   color: #fff;
 }
 
@@ -557,7 +572,8 @@
   font-weight: 500;
 }
 
-.edit-modal-enhanced .wallet-modal-subtitle {
+.edit-modal-enhanced .wallet-modal-subtitle,
+.create-modal-enhanced .wallet-modal-subtitle {
   color: rgba(255, 255, 255, 0.9);
 }
 
@@ -567,14 +583,16 @@
   gap: 0;
 }
 
-.edit-form-sections {
+.edit-form-sections,
+.create-form-content {
   padding: 24px 32px;
   display: flex;
   flex-direction: column;
   gap: 24px;
 }
 
-.edit-form-section {
+.edit-form-section,
+.create-form-section {
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -609,6 +627,37 @@
   flex: 1;
 }
 
+/* Create Tip Box */
+.create-tip-box {
+  margin-top: 8px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.08), rgba(255, 152, 0, 0.04));
+  border: 1px solid rgba(255, 193, 7, 0.15);
+  border-radius: 12px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.tip-icon-small {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.tip-text-small {
+  color: #5d4037;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  font-weight: 500;
+  flex: 1;
+}
+
+.tip-text-small strong {
+  color: #3e2723;
+  font-weight: 700;
+}
+
 .wallet-modal-field {
   margin-bottom: 20px;
   display: flex;
@@ -639,7 +688,8 @@
   gap: 6px;
 }
 
-.edit-modal-enhanced .wallet-modal-field label {
+.edit-modal-enhanced .wallet-modal-field label,
+.create-modal-enhanced .wallet-modal-field label {
   color: #163a5a;
   font-size: 0.95rem;
   margin-bottom: 6px;
@@ -655,7 +705,8 @@
   font-weight: 500;
 }
 
-.edit-modal-enhanced .field-hint {
+.edit-modal-enhanced .field-hint,
+.create-modal-enhanced .field-hint {
   color: #e53935;
   opacity: 1;
 }
@@ -670,7 +721,8 @@
   line-height: 1.4;
 }
 
-.edit-modal-enhanced .field-help {
+.edit-modal-enhanced .field-help,
+.create-modal-enhanced .field-help {
   color: #6b879a;
   font-size: 0.8rem;
   margin-top: 4px;
@@ -696,7 +748,9 @@
 }
 
 .edit-modal-enhanced .wallet-modal-field input,
-.edit-modal-enhanced .wallet-modal-field select {
+.edit-modal-enhanced .wallet-modal-field select,
+.create-modal-enhanced .wallet-modal-field input,
+.create-modal-enhanced .wallet-modal-field select {
   background: #ffffff;
   border: 2px solid rgba(22, 58, 90, 0.1);
   color: #163a5a;
@@ -704,7 +758,9 @@
 }
 
 .edit-modal-enhanced .wallet-modal-field input:focus,
-.edit-modal-enhanced .wallet-modal-field select:focus {
+.edit-modal-enhanced .wallet-modal-field select:focus,
+.create-modal-enhanced .wallet-modal-field input:focus,
+.create-modal-enhanced .wallet-modal-field select:focus {
   border-color: #2a5298;
   box-shadow: 0 0 0 3px rgba(42, 82, 152, 0.1), 0 4px 12px rgba(0, 0, 0, 0.1);
   background: #ffffff;
@@ -750,7 +806,8 @@
   margin-top: 20px;
 }
 
-.edit-modal-actions {
+.edit-modal-actions,
+.create-modal-actions {
   padding: 20px 32px 32px;
   background: rgba(22, 58, 90, 0.02);
   border-top: 1px solid rgba(22, 58, 90, 0.08);
@@ -773,19 +830,30 @@
   gap: 8px;
 }
 
-.edit-modal-actions .wallet-modal-submit-btn {
+.edit-modal-actions .wallet-modal-submit-btn,
+.create-modal-actions .wallet-modal-submit-btn {
   background: linear-gradient(90deg, #2a5298, #4ecdc4);
   padding: 14px 24px;
   border-radius: 12px;
   font-weight: 700;
   box-shadow: 0 4px 12px rgba(42, 82, 152, 0.3);
   transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.edit-modal-actions .wallet-modal-submit-btn:hover {
+.edit-modal-actions .wallet-modal-submit-btn:hover,
+.create-modal-actions .wallet-modal-submit-btn:hover {
   background: linear-gradient(90deg, #1e3c72, #3db5a8);
   transform: translateY(-2px);
   box-shadow: 0 6px 16px rgba(42, 82, 152, 0.4);
+}
+
+.create-modal-actions .wallet-modal-submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .btn-icon {
@@ -807,7 +875,8 @@
   transition: background 0.3s;
 }
 
-.edit-modal-actions .wallet-modal-close-btn {
+.edit-modal-actions .wallet-modal-close-btn,
+.create-modal-actions .wallet-modal-close-btn {
   background: rgba(22, 58, 90, 0.08);
   color: #163a5a;
   padding: 14px 24px;
@@ -817,10 +886,17 @@
   transition: all 0.2s ease;
 }
 
-.edit-modal-actions .wallet-modal-close-btn:hover {
+.edit-modal-actions .wallet-modal-close-btn:hover,
+.create-modal-actions .wallet-modal-close-btn:hover {
   background: rgba(22, 58, 90, 0.15);
   border-color: rgba(22, 58, 90, 0.25);
   transform: translateY(-1px);
+}
+
+.create-modal-actions .wallet-modal-close-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .wallet-modal-close-btn:hover {
