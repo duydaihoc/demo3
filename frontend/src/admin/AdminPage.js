@@ -79,6 +79,15 @@ function AdminPage() {
             </div>
             <div className="admin-card-arrow">→</div>
           </Link>
+          
+          <Link to="/admin/supports" className="admin-card admin-card-supports" style={{ textDecoration: 'none' }}>
+            <div className="admin-card-icon">🤝</div>
+            <div className="admin-card-content">
+              <h3>Hỗ trợ</h3>
+              <p>Xem và quản lý hỗ trợ từ người dùng</p>
+            </div>
+            <div className="admin-card-arrow">→</div>
+          </Link>
         </div>
       </div>
     </div>

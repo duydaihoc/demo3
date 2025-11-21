@@ -14,6 +14,7 @@ import AdminFamiliesPage from './admin/AdminFamiliesPage';
 import AdminCategoriesPage from './admin/AdminCategoriesPage'; // Import new component
 import AdminWalletsPage from './admin/AdminWalletsPage';
 import AdminTransactionsPage from './admin/AdminTransactionsPage'; // <-- new import
+import AdminSupportsPage from './admin/AdminSupportsPage';
 import AdminGroupTransactionsPage from './admin/AdminGroupTransactionsPage';
 import GroupHome from './group/GroupHome';
 import GroupsPage from './group/GroupsPage';
@@ -100,6 +101,7 @@ function AppRoutes() {
 				<Route path="/admin/families" element={<AdminFamiliesPage />} />
 				<Route path="/admin/categories" element={<AdminCategoriesPage />} /> {/* Add new route */}
 				<Route path="/admin/transactions" element={<AdminTransactionsPage />} /> {/* Add new route */}
+				<Route path="/admin/supports" element={<AdminSupportsPage />} />
 				<Route path="/group" element={<GroupHome />} /> {/* Route for GroupHome */}
 				<Route path="/groups" element={<GroupsPage />} /> {/* Route cho trang Nhóm */}
 				<Route path="/friends" element={<GroupFriends />} /> {/* Route cho trang Bạn bè */}

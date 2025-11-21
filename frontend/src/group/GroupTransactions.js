@@ -2258,7 +2258,7 @@ export default function GroupTransactions() {
                   <i className="fas fa-hand-holding-usd"></i>
                 </div>
                 <div className="gt-repay-header-content">
-                  <h3>Trả nợ</h3>
+                <h3>Trả nợ</h3>
                   <p className="gt-repay-subtitle">Chọn ví để thanh toán khoản nợ này</p>
                 </div>
                 <button className="gt-modal-close" onClick={() => setShowRepayModal(false)}>×</button>
@@ -2294,27 +2294,27 @@ export default function GroupTransactions() {
                     <span className="gt-required-badge">*</span>
                   </label>
                   <div className="gt-repay-wallet-select-wrapper">
-                    <select
+                  <select
                       className="gt-repay-wallet-select"
-                      value={repayWallet}
-                      onChange={(e) => setRepayWallet(e.target.value)}
-                      required
-                    >
+                    value={repayWallet}
+                    onChange={(e) => setRepayWallet(e.target.value)}
+                    required
+                  >
                       <option value="">-- Chọn ví để trả nợ --</option>
-                      {wallets.map(wallet => (
-                        <option key={wallet._id} value={wallet._id}>
+                    {wallets.map(wallet => (
+                      <option key={wallet._id} value={wallet._id}>
                           {wallet.name} - {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(wallet.balance || wallet.initialBalance || 0)}
-                        </option>
-                      ))}
-                    </select>
+                      </option>
+                    ))}
+                  </select>
                     <i className="fas fa-chevron-down gt-select-arrow"></i>
-                  </div>
+                </div>
                   {repayWallet && (
                     <div className="gt-repay-wallet-preview">
                       <div className="gt-wallet-preview-card">
                         <div className="gt-wallet-preview-icon">
                           <i className="fas fa-wallet"></i>
-                        </div>
+              </div>
                         <div className="gt-wallet-preview-info">
                           <div className="gt-wallet-preview-name">
                             {wallets.find(w => w._id === repayWallet)?.name || 'Ví'}

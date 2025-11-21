@@ -1291,9 +1291,9 @@ function SavingsGoals() {
 
   // Display the goals list (default view)
   return (
-      <div className="savings-container tour-goals-component">
+    <div className="savings-container tour-goals-component">
         {/* Notification removed - using global notification from notify.js only */}
-        <DeleteConfirmModal
+      <DeleteConfirmModal
         open={deleteConfirm.open}
         goal={deleteConfirm.goal}
         onCancel={() => setDeleteConfirm({ open: false, goal: null })}

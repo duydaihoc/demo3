@@ -110,6 +110,8 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/friends', require('./routes/friends'));
 // Mount backup routes (admin only)
 app.use('/api/backup', require('./routes/backup'));
+// Mount support routes
+app.use('/api/support', require('./routes/support'));
 
 // Tạo thư mục uploads nếu chưa tồn tại
 const uploadsDir = path.join(__dirname, 'uploads');

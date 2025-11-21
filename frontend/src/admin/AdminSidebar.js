@@ -156,6 +156,14 @@ function AdminSidebar() {
           </Link>
         </li>
         <li>
+          <Link
+            to="/admin/supports"
+            className={location.pathname === '/admin/supports' ? 'active' : ''}
+          >
+            🤝 Hỗ trợ
+          </Link>
+        </li>
+        <li>
           <button
             className="admin-logout-btn"
             onClick={handleLogout}
