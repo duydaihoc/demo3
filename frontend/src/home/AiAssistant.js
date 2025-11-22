@@ -7,7 +7,7 @@ export default function AiAssistant() {
   const [messages, setMessages] = useState([
     { 
       id: 1, 
-      text: '👋 Xin chào! Tôi là trợ lý tài chính AI.\n\n🤖 Tôi có thể giúp bạn:\n• 💰 Tạo giao dịch thu/chi\n• ✏️ Sửa giao dịch đã có\n• 🗑️ Xóa giao dịch\n• 📊 Phân tích chi tiêu\n• 💡 Tư vấn tài chính\n\nHãy thử hỏi tôi nhé!', 
+      text: 'Xin chào! Tôi là trợ lý tài chính AI.\n\nTôi có thể giúp bạn:\n• Tạo giao dịch thu/chi\n• Sửa giao dịch đã có\n• Xóa giao dịch\n• Phân tích chi tiêu\n• Tư vấn tài chính\n\nHãy thử hỏi tôi nhé!', 
       sender: 'ai',
       timestamp: new Date(),
       geminiAvailable: true
@@ -215,7 +215,7 @@ export default function AiAssistant() {
         ]);
       }
 
-      return `⚠️ [Chế độ mẹ nghiêm]\n${base}${extraLine ? `\n\n${extraLine}` : ''}`;
+      return `[Chế độ mẹ nghiêm]\n${base}${extraLine ? `\n\n${extraLine}` : ''}`;
     }
 
     // Cân bằng: giữ nguyên nội dung cơ bản
@@ -392,24 +392,24 @@ export default function AiAssistant() {
       }
 
       const data = await response.json();
-      console.log('✅ AI Response:', data);
+      console.log('AI Response:', data);
       
       await handleAiResponse(data, userMessage.text);
 
     } catch (error) {
-      console.error('❌ AI Error:', error);
+      console.error('AI Error:', error);
       
       let errorMessage = '😅 Xin lỗi, tôi đang gặp sự cố.\n\n';
       
       if (error.name === 'AbortError') {
-        errorMessage += '⏱️ Phản hồi quá lâu, vui lòng thử lại.';
+        errorMessage += 'Phản hồi quá lâu, vui lòng thử lại.';
       } else if (error.message.includes('HTTP')) {
         errorMessage += '🌐 Không thể kết nối server.';
       } else {
-        errorMessage += '⚠️ Lỗi hệ thống tạm thời.';
+        errorMessage += 'Lỗi hệ thống tạm thời.';
       }
       
-      errorMessage += '\n\n💡 Hãy thử lại hoặc dùng tính năng khác!';
+      errorMessage += '\n\nHãy thử lại hoặc dùng tính năng khác!';
       
       const fallbackMessage = {
         id: Date.now() + 1,
@@ -524,7 +524,7 @@ export default function AiAssistant() {
       const successMessage = {
         id: Date.now() + 2,
         text: formatByPersona(
-          `✅ **Đã tạo giao dịch thành công!**\n\n📝 ${result.transaction.title}\n💰 ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(result.transaction.amount)}\n📊 ${suggestedTransaction.categoryName || 'Không có danh mục'}\n💼 ${selectedWallet?.name || 'Ví'}\n\n${suggestedTransaction.type === 'expense' ? '💸 Chi tiêu' : '💰 Thu nhập'} đã được ghi nhận.`,
+          `**Đã tạo giao dịch thành công!**\n\n${result.transaction.title}\n${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(result.transaction.amount)}\n${suggestedTransaction.categoryName || 'Không có danh mục'}\n${selectedWallet?.name || 'Ví'}\n\n${suggestedTransaction.type === 'expense' ? 'Chi tiêu' : 'Thu nhập'} đã được ghi nhận.`,
           {
             action: 'create',
             transaction: result.transaction,
@@ -546,7 +546,7 @@ export default function AiAssistant() {
       setSelectedWalletId('');
       
       // Show notification
-      showNotification('✅ Đã tạo giao dịch thành công!', 'success');
+      showNotification('Đã tạo giao dịch thành công!', 'success');
       
     } catch (error) {
       console.error('Error creating transaction:', error);
@@ -581,13 +581,13 @@ export default function AiAssistant() {
         const cleanedAmount = editForm.amount.toString();
         const amountValue = parseFloat(cleanedAmount);
         if (isNaN(amountValue) || amountValue < 0) {
-          showNotification('❌ Số tiền không hợp lệ', 'error');
+          showNotification('Số tiền không hợp lệ', 'error');
           setEditingSaving(false);
           return;
         }
         // Làm tròn về số nguyên
         updates.amount = Math.round(amountValue);
-        console.log('💰 Frontend amount processing:', {
+        console.log('Frontend amount processing:', {
           input: editForm.amount,
           cleaned: cleanedAmount,
           parsed: amountValue,
@@ -627,13 +627,13 @@ export default function AiAssistant() {
 
       const result = await response.json();
       
-      console.log('✅ Edit result:', result);
+      console.log('Edit result:', result);
       
       // SỬA: Hiển thị title + áp dụng tính cách với context giao dịch
       const successMessage = {
         id: Date.now() + 2,
         text: formatByPersona(
-          `✅ **Đã cập nhật giao dịch thành công!**\n\n📝 ${result.transaction.title}\n💰 ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(result.transaction.amount)}\n📊 ${result.transaction.category?.name || 'Không có danh mục'}\n💼 ${result.transaction.wallet?.name}\n\n✏️ Giao dịch đã được cập nhật.`,
+          `**Đã cập nhật giao dịch thành công!**\n\n${result.transaction.title}\n${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(result.transaction.amount)}\n${result.transaction.category?.name || 'Không có danh mục'}\n${result.transaction.wallet?.name}\n\nGiao dịch đã được cập nhật.`,
           {
             action: 'edit',
             transaction: result.transaction,
@@ -655,11 +655,11 @@ export default function AiAssistant() {
       setEditSuggestion(null);
       setSelectedTransactionToEdit(null);
       
-      showNotification('✅ Đã cập nhật giao dịch thành công!', 'success');
+      showNotification('Đã cập nhật giao dịch thành công!', 'success');
       
     } catch (error) {
       console.error('Error editing transaction:', error);
-      showNotification('❌ Không thể cập nhật giao dịch: ' + error.message, 'error');
+      showNotification('Không thể cập nhật giao dịch: ' + error.message, 'error');
     } finally {
       setEditingSaving(false);
     }
@@ -697,7 +697,7 @@ export default function AiAssistant() {
       const successMessage = {
         id: Date.now() + 2,
         text: formatByPersona(
-          `✅ **Đã xóa giao dịch thành công!**\n\n📝 ${result.deletedTransaction.title || result.deletedTransaction.description}\n💰 ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(result.deletedTransaction.amount)}\n💼 ${result.deletedTransaction.walletName}\n\n🔄 **Đã hoàn tiền vào ví**\n💳 Số dư mới: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(result.newWalletBalance)}`,
+          `**Đã xóa giao dịch thành công!**\n\n${result.deletedTransaction.title || result.deletedTransaction.description}\n${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(result.deletedTransaction.amount)}\n${result.deletedTransaction.walletName}\n\n**Đã hoàn tiền vào ví**\nSố dư mới: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(result.newWalletBalance)}`,
           {
             action: 'delete',
             transaction: result.deletedTransaction,
@@ -718,11 +718,11 @@ export default function AiAssistant() {
       setDeleteSuggestion(null);
       setSelectedTransactionToDelete(null);
       
-      showNotification('✅ Đã xóa giao dịch và hoàn tiền thành công!', 'success');
+      showNotification('Đã xóa giao dịch và hoàn tiền thành công!', 'success');
       
     } catch (error) {
       console.error('Error deleting transaction:', error);
-      showNotification('❌ Không thể xóa giao dịch: ' + error.message, 'error');
+      showNotification('Không thể xóa giao dịch: ' + error.message, 'error');
     } finally {
       setDeletingSaving(false);
     }
@@ -801,17 +801,17 @@ export default function AiAssistant() {
       }
 
       const data = await response.json();
-      console.log('✅ Receipt AI Response:', data);
+      console.log('Receipt AI Response:', data);
 
       // Dùng helper chung
       await handleAiResponse(data, userMessageText);
     } catch (error) {
-      console.error('❌ Receipt AI Error:', error);
+      console.error('Receipt AI Error:', error);
       showNotification(error.message || 'Không thể phân tích ảnh hóa đơn', 'error');
 
       const fallbackMessage = {
         id: Date.now() + 1,
-        text: '😅 Xin lỗi, tôi không thể đọc được hóa đơn này. Hãy thử lại với ảnh rõ nét hơn hoặc nhập bằng tay nhé.',
+        text: 'Xin lỗi, tôi không thể đọc được hóa đơn này. Hãy thử lại với ảnh rõ nét hơn hoặc nhập bằng tay nhé.',
         sender: 'ai',
         timestamp: new Date(),
         error: true
@@ -825,10 +825,10 @@ export default function AiAssistant() {
 
   // SỬA: Quick actions ngắn gọn hơn
   const quickActions = [
-    { text: 'Tạo giao dịch chi tiêu', icon: '💸' },
-    { text: 'Phân tích chi tiêu tháng này', icon: '📊' },
-    { text: 'Tư vấn tiết kiệm', icon: '💰' },
-    { text: 'Xem tổng quan tài chính', icon: '📈' }
+    { text: 'Tạo giao dịch chi tiêu', icon: '' },
+    { text: 'Phân tích chi tiêu tháng này', icon: '' },
+    { text: 'Tư vấn tiết kiệm', icon: '' },
+    { text: 'Xem tổng quan tài chính', icon: '' }
   ];
 
   const handleQuickAction = (action) => {
@@ -940,7 +940,7 @@ export default function AiAssistant() {
 
       if (response.ok) {
         const result = await response.json();
-        console.log('📊 Category analysis result:', result);
+        console.log('Category analysis result:', result);
         
         // Cập nhật suggested transaction với category được phân tích
         setSuggestedTransaction(prev => ({
@@ -1121,7 +1121,7 @@ export default function AiAssistant() {
               {/* Quick Actions - SỬA title */}
               {messages.length <= 1 && (
                 <div className="ai-quick-actions">
-                  <div className="ai-quick-title">💡 Gợi ý câu hỏi:</div>
+                  <div className="ai-quick-title">Gợi ý câu hỏi:</div>
                   <div className="ai-quick-buttons">
                     {quickActions.map((action, index) => (
                       <button
@@ -1496,7 +1496,7 @@ export default function AiAssistant() {
                 <div className="ai-delete-confirm">
                   <div className="ai-warning-box">
                     <i className="fas fa-exclamation-triangle"></i>
-                    <h4>⚠️ Cảnh báo: Bạn sắp xóa giao dịch này</h4>
+                    <h4>Cảnh báo: Bạn sắp xóa giao dịch này</h4>
                   </div>
 
                   <div className="ai-delete-info">
@@ -1875,7 +1875,7 @@ export default function AiAssistant() {
                       <i className="fas fa-exchange-alt"></i> Loại giao dịch
                     </span>
                     <span className={`ai-detail-value ${suggestedTransaction.type}`}>
-                      {suggestedTransaction.type === 'expense' ? '💸 Chi tiêu' : '💰 Thu nhập'}
+                      {suggestedTransaction.type === 'expense' ? 'Chi tiêu' : 'Thu nhập'}
                     </span>
                   </div>
 
@@ -1945,7 +1945,7 @@ export default function AiAssistant() {
                             );
                             
                             if (suggestedCat) {
-                              return `${suggestedCat.icon || '📝'} ${suggestedCat.name}`;
+                              return `${suggestedCat.name}`;
                             } else if (suggestedTransaction.categoryName) {
                               // AI suggest danh mục nhưng không có trong ví này
                               return (

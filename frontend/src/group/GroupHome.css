@@ -675,6 +675,13 @@ body.group-sidebar-collapsed .groups-main {
   gap: 4px;
 }
 
+.gh-category-icon {
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .gh-transaction-separator {
   font-size: 8px;
   opacity: 0.5;

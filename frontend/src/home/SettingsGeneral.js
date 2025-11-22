@@ -41,13 +41,13 @@ function SettingsGeneral() {
   const [isSubmittingFeature, setIsSubmittingFeature] = useState(false);
   
   const featureCategories = [
-    { id: 'wallet', label: 'Ví', icon: '💼' },
-    { id: 'transaction', label: 'Giao dịch', icon: '💸' },
-    { id: 'category', label: 'Danh mục', icon: '🗂️' },
-    { id: 'family', label: 'Gia đình', icon: '🏠' },
-    { id: 'group', label: 'Nhóm', icon: '👥' },
-    { id: 'goal', label: 'Mục tiêu', icon: '🎯' },
-    { id: 'integration', label: 'Khả năng liên kết', icon: '🔗' }
+    { id: 'wallet', label: 'Ví', icon: '' },
+    { id: 'transaction', label: 'Giao dịch', icon: '' },
+    { id: 'category', label: 'Danh mục', icon: '' },
+    { id: 'family', label: 'Gia đình', icon: '' },
+    { id: 'group', label: 'Nhóm', icon: '' },
+    { id: 'goal', label: 'Mục tiêu', icon: '' },
+    { id: 'integration', label: 'Khả năng liên kết', icon: '' }
   ];
   const appVersion = '1.0.0';
   const userName = localStorage.getItem('userName') || 'Tên người dùng';
@@ -58,10 +58,10 @@ function SettingsGeneral() {
   const handleCopy = (text, label) => {
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
-      showNotification(`✅ Đã sao chép ${label}`, 'success');
+      showNotification(`Đã sao chép ${label}`, 'success');
       setTimeout(() => setCopied(false), 2000);
     }).catch(() => {
-      showNotification('❌ Không thể sao chép', 'error');
+      showNotification('Không thể sao chép', 'error');
     });
   };
 
@@ -120,12 +120,12 @@ function SettingsGeneral() {
     e.preventDefault();
     
     if (!supportForm.email || !supportForm.email.trim()) {
-      showNotification('❌ Vui lòng nhập email', 'error');
+      showNotification('Vui lòng nhập email', 'error');
       return;
     }
 
     if (!supportForm.name || !supportForm.name.trim()) {
-      showNotification('❌ Vui lòng nhập tên người dùng', 'error');
+      showNotification('Vui lòng nhập tên người dùng', 'error');
       return;
     }
 
@@ -150,14 +150,14 @@ function SettingsGeneral() {
       const data = await response.json();
 
       if (response.ok && data.success) {
-        showNotification('✅ ' + data.message, 'success');
+        showNotification(data.message, 'success');
         handleCloseSupportModal();
       } else {
-        showNotification('❌ ' + (data.message || 'Đã xảy ra lỗi'), 'error');
+        showNotification(data.message || 'Đã xảy ra lỗi', 'error');
       }
     } catch (error) {
       console.error('Error submitting support:', error);
-      showNotification('❌ Không thể gửi hỗ trợ. Vui lòng thử lại sau.', 'error');
+      showNotification('Không thể gửi hỗ trợ. Vui lòng thử lại sau.', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -208,17 +208,17 @@ function SettingsGeneral() {
     e.preventDefault();
     
     if (!featureForm.email || !featureForm.email.trim()) {
-      showNotification('❌ Vui lòng nhập email', 'error');
+      showNotification('Vui lòng nhập email', 'error');
       return;
     }
 
     if (!featureForm.name || !featureForm.name.trim()) {
-      showNotification('❌ Vui lòng nhập tên người dùng', 'error');
+      showNotification('Vui lòng nhập tên người dùng', 'error');
       return;
     }
 
     if (featureForm.featureCategories.length === 0) {
-      showNotification('❌ Vui lòng chọn ít nhất một mục', 'error');
+      showNotification('Vui lòng chọn ít nhất một mục', 'error');
       return;
     }
 
@@ -244,14 +244,14 @@ function SettingsGeneral() {
       const data = await response.json();
 
       if (response.ok && data.success) {
-        showNotification('✅ ' + data.message, 'success');
+        showNotification(data.message, 'success');
         handleCloseFeatureModal();
       } else {
-        showNotification('❌ ' + (data.message || 'Đã xảy ra lỗi'), 'error');
+        showNotification(data.message || 'Đã xảy ra lỗi', 'error');
       }
     } catch (error) {
       console.error('Error submitting feature request:', error);
-      showNotification('❌ Không thể gửi yêu cầu tính năng. Vui lòng thử lại sau.', 'error');
+      showNotification('Không thể gửi yêu cầu tính năng. Vui lòng thử lại sau.', 'error');
     } finally {
       setIsSubmittingFeature(false);
     }
@@ -528,7 +528,7 @@ function SettingsGeneral() {
                 </div>
 
                 <div className="sg-support-form-group">
-                  <label htmlFor="support-purpose">🎯 Sử dụng web của chúng tôi cho mục đích gì?</label>
+                  <label htmlFor="support-purpose">Sử dụng web của chúng tôi cho mục đích gì?</label>
                   <textarea
                     id="support-purpose"
                     name="personalInfo.purpose"

@@ -191,7 +191,7 @@ export default function SpendingMap() {
           const amtText = Number(p.amount || 0).toLocaleString('vi-VN');
           const cntText = (p.count != null ? p.count : 0);
           const label = `<div style="font-size:.7rem;font-weight:700">
-            <div style="color:#2a5298">📍 ${p.placeName || 'Điểm'}</div>
+            <div style="color:#2a5298">${p.placeName || 'Điểm'}</div>
             <div style="color:#e74c3c">${amtText}₫</div>
             <div style="color:#607d8b">${cntText} lần</div>
           </div>`;
@@ -207,19 +207,20 @@ export default function SpendingMap() {
           const amountText = Number(tx.amount || 0).toLocaleString('vi-VN') + '₫';
           const dateText = tx.date ? new Date(tx.date).toLocaleDateString('vi-VN') : '';
           const category = tx.category && (tx.category.name || '');
+          const categoryIcon = tx.category && (tx.category.icon || '');
           const place = tx.location?.placeName || '';
           // ENHANCED: Add copy coords action button in popup
           const html = `
             <div style="min-width:200px;font-size:.78rem;line-height:1.5">
-              <div style="font-weight:900;color:#2a5298;margin-bottom:5px">📌 ${title}</div>
-              <div style="color:#e74c3c;font-weight:800;margin-bottom:5px">💰 ${amountText}</div>
-              <div style="color:#607d8b;font-size:.72rem;margin-bottom:3px">📅 ${dateText}</div>
-              ${category ? `<div style="color:#4ecdc4;font-size:.72rem;margin-bottom:3px">🏷️ ${category}</div>` : ''}
-              ${place ? `<div style="color:#2a5298;font-size:.72rem;margin-bottom:5px">🏠 ${place}</div>` : ''}
+              <div style="font-weight:900;color:#2a5298;margin-bottom:5px">${title}</div>
+              <div style="color:#e74c3c;font-weight:800;margin-bottom:5px">${amountText}</div>
+              <div style="color:#607d8b;font-size:.72rem;margin-bottom:3px">${dateText}</div>
+              ${category ? `<div style="color:#4ecdc4;font-size:.72rem;margin-bottom:3px;display:flex;align-items:center;gap:4px"><span>${categoryIcon || ''}</span><span>${category}</span></div>` : ''}
+              ${place ? `<div style="color:#2a5298;font-size:.72rem;margin-bottom:5px">${place}</div>` : ''}
               <button
                 onclick="navigator.clipboard.writeText('${lat}, ${lng}');alert('Đã sao chép tọa độ!');"
                 style="margin-top:5px;padding:4px 8px;background:linear-gradient(90deg,#2a5298,#4ecdc4);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:.7rem;font-weight:700"
-              >📋 Copy tọa độ</button>
+              >Copy tọa độ</button>
             </div>
           `;
           const m = L.marker([lat, lng], {
@@ -339,7 +340,7 @@ export default function SpendingMap() {
   return (
     <div className="sp-map-card sp-glow">
       <div className="sp-map-header">
-        <div className="sp-map-title">🗺️ Bản đồ chi tiêu</div>
+        <div className="sp-map-title">Bản đồ chi tiêu</div>
         <div className="sp-map-controls">
           <div className="sp-view-toggle" role="tablist" aria-label="Chế độ hiển thị bản đồ">
             <button
@@ -362,7 +363,7 @@ export default function SpendingMap() {
             >PINS</button>
           </div>
           <button type="button" className="sp-map-reset-btn" onClick={resetView} disabled={!txPoints.length && !items.length}>
-            🎯 TẤT CẢ
+            TẤT CẢ
           </button>
         </div>
       </div>
@@ -370,19 +371,15 @@ export default function SpendingMap() {
       {/* Stats row — clickable to filter by range */}
       <div className="sp-stats-row">
         <div className="sp-stat-badge" onClick={() => setFilterRange(null)} title="Xem tất cả">
-          <span className="sp-stat-icon">💵</span>
           <span>Tổng: <span className="sp-stat-value">{stats.total.toLocaleString('vi-VN')}₫</span></span>
         </div>
         <div className="sp-stat-badge" onClick={() => setFilterRange('low')} title="Lọc chi tiêu thấp (<100k)">
-          <span className="sp-stat-icon">📊</span>
           <span>TB: <span className="sp-stat-value">{Math.round(stats.avg).toLocaleString('vi-VN')}₫</span></span>
         </div>
         <div className="sp-stat-badge" onClick={() => setFilterRange('high')} title="Lọc chi tiêu cao (≥500k)">
-          <span className="sp-stat-icon">📈</span>
           <span>Max: <span className="sp-stat-value">{stats.max.toLocaleString('vi-VN')}₫</span></span>
         </div>
         <div className="sp-stat-badge">
-          <span className="sp-stat-icon">📍</span>
           <span>Điểm: <span className="sp-stat-value">{stats.count}</span></span>
         </div>
       </div>
@@ -420,23 +417,23 @@ export default function SpendingMap() {
         </div>
         <aside className="sp-map-list">
           <div className="sp-map-list-header">
-            <span>📍 Giao dịch có vị trí ({filteredAndSorted.length}/{txPoints.length})</span>
-            <span className="sp-map-subtle">{viewMode === 'heat' ? '🔥 Heat' : viewMode === 'pins' ? '📌 Pins' : '🗺️ Kết hợp'}</span>
+            <span>Giao dịch có vị trí ({filteredAndSorted.length}/{txPoints.length})</span>
+            <span className="sp-map-subtle">{viewMode === 'heat' ? 'Heat' : viewMode === 'pins' ? 'Pins' : 'Kết hợp'}</span>
           </div>
 
           {/* NEW: search + sort controls */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
             <input
               type="text"
-              placeholder="🔍 Tìm kiếm..."
+              placeholder="Tìm kiếm..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               style={{ flex: 1, padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(214,227,236,0.8)', fontSize: '.72rem', background: 'rgba(255,255,255,0.9)' }}
             />
             <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid rgba(214,227,236,0.8)', fontSize: '.72rem', background: 'rgba(255,255,255,0.9)', cursor: 'pointer' }}>
-              <option value="date">📅 Ngày</option>
-              <option value="amount">💰 Số tiền</option>
-              <option value="name">🔤 Tên</option>
+              <option value="date">Ngày</option>
+              <option value="amount">Số tiền</option>
+              <option value="name">Tên</option>
             </select>
           </div>
 
@@ -451,6 +448,7 @@ export default function SpendingMap() {
               const amtText = amt.toLocaleString('vi-VN') + '₫';
               const date = tx.date ? new Date(tx.date).toLocaleDateString('vi-VN') : '';
               const cat = tx.category && (tx.category.name || '');
+              const catIcon = tx.category && (tx.category.icon || '');
               const place = tx.location?.placeName || '';
               return (
                 <li
@@ -466,8 +464,8 @@ export default function SpendingMap() {
                     <span className={`sp-map-item-amt ${amountClass(amt)}`}>{amtText}</span>
                   </div>
                   <div className="sp-map-item-meta">
-                    {date && <span>📅 {date}</span>}
-                    {cat && <span>🏷️ {cat}</span>}
+                    {date && <span>{date}</span>}
+                    {cat && <span className="sp-map-item-category"><span className="sp-cat-icon">{catIcon || ''}</span><span>{cat}</span></span>}
                   </div>
                   {place && <div className="sp-map-item-place">{place}</div>}
                 </li>

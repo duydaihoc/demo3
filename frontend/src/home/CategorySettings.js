@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import './CategorySettings.css';
 import { showNotification as showGlobalNotification } from '../utils/notify';
 
@@ -9,21 +9,8 @@ export default function CategorySettings({ token }) {
   const [type, setType] = useState('expense');
   const [icon, setIcon] = useState('');
 
-  // notification state (giữ lại cho local notification, nhưng cũng dùng global)
-  const [notif, setNotif] = useState(null); // { message, type }
-  const notifTimeoutRef = useRef(null);
+  // Use global notification only
   const showNotification = (message, type = 'success', timeout = 3500) => {
-    // Hiển thị cả local và global notification
-    if (notifTimeoutRef.current) {
-      clearTimeout(notifTimeoutRef.current);
-      notifTimeoutRef.current = null;
-    }
-    setNotif({ message, type });
-    notifTimeoutRef.current = setTimeout(() => {
-      setNotif(null);
-      notifTimeoutRef.current = null;
-    }, timeout);
-    // Cũng gọi global notification
     showGlobalNotification(message, type, timeout);
   };
 
@@ -178,31 +165,9 @@ export default function CategorySettings({ token }) {
     }
   };
 
-  // cleanup notification timer on unmount
-  useEffect(() => {
-    return () => {
-      if (notifTimeoutRef.current) {
-        clearTimeout(notifTimeoutRef.current);
-        notifTimeoutRef.current = null;
-      }
-    };
-  }, []);
 
   return (
     <div className="cat-settings bank-style">
-      {/* Enhanced notification with icon */}
-      {notif && (
-        <div className={`cat-notif ${notif.type === 'error' ? 'error' : 'success'} slide-down`} role="status">
-          <div className="cat-notif-content">
-            <span className="cat-notif-icon">
-              {notif.type === 'error' ? '⚠️' : '✅'}
-            </span>
-            {notif.message}
-          </div>
-          <button className="cat-notif-close" onClick={() => setNotif(null)}>×</button>
-        </div>
-      )}
-
       {/* Enhanced confirmation modal */}
       {confirm.open && (
         <div className="confirm-overlay fade-in" role="dialog" aria-modal="true">
@@ -360,7 +325,18 @@ export default function CategorySettings({ token }) {
             </div>
 
             <div className="form-group">
-              <label>Biểu tượng</label>
+              <label>
+                Biểu tượng
+                <a 
+                  href="https://getemoji.com/" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="emoji-link"
+                  title="Mở trang web để tìm và copy emoji"
+                >
+                  Tìm Icon thêm để phù hợp với danh mục
+                </a>
+              </label>
               <div className="icon-input-wrapper">
                 <input 
                   value={icon} 

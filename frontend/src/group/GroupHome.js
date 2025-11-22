@@ -354,7 +354,7 @@ export default function GroupHome() {
                   const groupInfo = tx.groupInfo;
                   const payerName = tx.payer?.name || tx.payer?.email || 'Người tạo';
                   const categoryName = tx.category?.name || 'Chưa phân loại';
-                  const categoryIcon = tx.category?.icon || 'fas fa-tag';
+                  const categoryIcon = tx.category?.icon || '';
 
                   return (
                     <div key={tx._id} className="gh-transaction-item">
@@ -374,7 +374,8 @@ export default function GroupHome() {
                           </span>
                           <span className="gh-transaction-separator">•</span>
                           <span className="gh-transaction-category">
-                            <i className={categoryIcon}></i> {categoryName}
+                            {categoryIcon && <span className="gh-category-icon">{categoryIcon}</span>}
+                            <span>{categoryName}</span>
                           </span>
                           <span className="gh-transaction-separator">•</span>
                           <span className="gh-transaction-payer">{payerName}</span>

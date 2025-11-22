@@ -141,7 +141,7 @@ export default function FinanceDashboard() {
       
       const catId = category._id || category;
       const catName = category.name || 'Khác';
-      const catIcon = category.icon || '📊';
+      const catIcon = category.icon || '';
       const amount = Number(tx.amount) || 0;
       
       if (tx.type === 'expense') {
@@ -950,7 +950,7 @@ export default function FinanceDashboard() {
                   return (
                     <li key={c.id} className="fd-comp-item">
                       <span className="fd-comp-icon"> {/* if icon available show it (clients may provide icons) */}
-                        { (c.icon) ? c.icon : '📌' }
+                        { (c.icon) ? c.icon : '' }
                       </span>
                       <span className="fd-comp-name">{c.name}</span>
                       <span className="fd-comp-amt">{formatCurrency(c.total, primaryCurrency)} <small className="fd-comp-pct">({pct}%)</small></span>

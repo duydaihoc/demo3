@@ -333,7 +333,7 @@ function TransactionsPage() {
       }
       const created = await res.json();
       // show success toast when transaction added
-      showToast('✅ Đã thêm giao dịch thành công', 'success');
+      showToast('Đã thêm giao dịch thành công', 'success');
       // prepend to transactions list so UI cập nhật ngay
       setTransactions(prev => [created, ...prev]);
       try { window.dispatchEvent(new CustomEvent('transactionsUpdated', { detail: created })); } catch(_) {}
@@ -375,7 +375,7 @@ function TransactionsPage() {
       console.error('Create transaction failed', err);
       const msg = err.message || 'Lỗi khi thêm giao dịch';
       setTxMessage({ type: 'error', text: msg });
-      showToast('❌ ' + msg, 'error'); // toast on error
+      showToast(msg, 'error'); // toast on error
     } finally {
       setSaving(false);
     }
@@ -542,12 +542,12 @@ function TransactionsPage() {
       }
       const updated = await res.json();
       setTransactions(prev => prev.map(t => t._id === updated._id ? updated : t));
-      showToast('✅ Đã cập nhật giao dịch thành công', 'success');
+      showToast('Đã cập nhật giao dịch thành công', 'success');
       refreshWallets();
       setEditModal({ show: false, tx: null, saving: false });
     } catch (err) {
       console.error('Update transaction failed', err);
-      showToast('❌ ' + (err.message || 'Lỗi khi cập nhật giao dịch'), 'error');
+      showToast(err.message || 'Lỗi khi cập nhật giao dịch', 'error');
       setEditModal(prev => ({ ...prev, saving: false }));
     }
   };
@@ -574,12 +574,12 @@ function TransactionsPage() {
       }
       // remove from list and refresh wallets/totals (backend reverts money)
       setTransactions(prev => prev.filter(t => t._id !== txId));
-      showToast('✅ Đã xóa giao dịch thành công', 'success');
+      showToast('Đã xóa giao dịch thành công', 'success');
       // refresh wallets/totals
       await refreshWallets();
     } catch (err) {
       console.error('Delete transaction failed', err);
-      showToast('❌ ' + (err.message || 'Lỗi khi xóa giao dịch'), 'error');
+      showToast(err.message || 'Lỗi khi xóa giao dịch', 'error');
     } finally {
       cancelDelete();
     }
@@ -911,7 +911,7 @@ function TransactionsPage() {
               onClick={() => setShowMapModal(true)}
               style={{ padding: '10px 14px', borderRadius: 8, background: 'linear-gradient(90deg,#2a5298,#4ecdc4)', color: '#fff', fontWeight: 700, cursor: 'pointer', border: 'none' }}
             >
-              📍 Bản đồ
+              Bản đồ
             </button>
 
             {/* Show current location if set */}
@@ -1012,7 +1012,11 @@ function TransactionsPage() {
                 <tr><td colSpan={showWalletColumn ? 7 : 6} style={{ textAlign: 'center', color: '#888' }}>(Chưa có giao dịch)</td></tr>
               ) : sortedTransactions.map(tx => {
                 const titleText = tx.title || tx.description || '—';
-                const categoryLabel = tx.category ? (tx.category.name || tx.category) : '';
+                const categoryInfo = tx.category && typeof tx.category === 'object' 
+                  ? { name: tx.category.name || '', icon: tx.category.icon || '' }
+                  : { name: tx.category || '', icon: '' };
+                const categoryLabel = categoryInfo.name;
+                const categoryIcon = categoryInfo.icon;
                 const walletObj = tx.wallet && (typeof tx.wallet === 'string' ? null : tx.wallet);
                 const currency = walletObj && walletObj.currency ? walletObj.currency : 'VND';
                 let walletName = '';
@@ -1040,16 +1044,16 @@ function TransactionsPage() {
                   // Style cho các loại giao dịch nhóm khác nhau
                   if (tx.groupRole === 'payer' && tx.groupActionType === 'paid') {
                     rowStyle = { backgroundColor: '#fff8e1' }; // Màu vàng nhạt cho người trả tiền
-                    actionIcon = '💰 ';
+                    actionIcon = '';
                   } else if (tx.groupRole === 'receiver') {
                     rowStyle = { backgroundColor: '#e8f5e9' }; // Màu xanh nhạt cho người nhận
-                    actionIcon = '💸 ';
+                    actionIcon = '';
                   } else if (tx.groupRole === 'participant' && tx.groupActionType === 'paid') {
                     rowStyle = { backgroundColor: '#ffebee' }; // Màu đỏ nhạt cho người đã trả
-                    actionIcon = '✅ ';
+                    actionIcon = '';
                   } else if (isPending) {
                     rowStyle = { backgroundColor: '#f5f5f5', color: '#757575' }; // Màu xám cho giao dịch chưa thanh toán
-                    actionIcon = '⏱️ ';
+                    actionIcon = '';
                   }
                 }
 
@@ -1103,21 +1107,26 @@ function TransactionsPage() {
                       </span>
                       {isGroupTx && (
                         <div style={{ fontSize: '11px', color: '#999', marginTop: '2px' }}>
-                          {tx.groupRole === 'payer' ? '👤 Người tạo' : 
-                           tx.groupRole === 'receiver' ? '💰 Người nhận' : 
-                           tx.groupRole === 'participant' ? '📝 Người nợ' : ''}
+                          {tx.groupRole === 'payer' ? 'Người tạo' : 
+                           tx.groupRole === 'receiver' ? 'Người nhận' : 
+                           tx.groupRole === 'participant' ? 'Người nợ' : ''}
                         </div>
                       )}
                     </td>
-                    <td>{categoryLabel}</td>
+                    <td>
+                      <span className="tx-category-cell">
+                        {categoryIcon && <span className="tx-category-icon">{categoryIcon}</span>}
+                        <span>{categoryLabel}</span>
+                      </span>
+                    </td>
                     <td style={isPending ? { color: '#757575', fontStyle: 'italic' } : { fontWeight: '500' }}>
                       {amountFormatted}
                       {isGroupTx && tx.groupTransactionType && (
                         <div style={{ fontSize: '11px', color: '#999', marginTop: '2px' }}>
-                          {tx.groupTransactionType === 'payer_for_others' ? '🤝 Trả giúp' :
-                           tx.groupTransactionType === 'equal_split' ? '➗ Chia đều' :
-                           tx.groupTransactionType === 'percentage_split' ? '📊 Chia %' :
-                           tx.groupTransactionType === 'payer_single' ? '💳 Trả đơn' : ''}
+                          {tx.groupTransactionType === 'payer_for_others' ? 'Trả giúp' :
+                           tx.groupTransactionType === 'equal_split' ? 'Chia đều' :
+                           tx.groupTransactionType === 'percentage_split' ? 'Chia %' :
+                           tx.groupTransactionType === 'payer_single' ? 'Trả đơn' : ''}
                         </div>
                       )}
                     </td>
@@ -1195,7 +1204,7 @@ function TransactionsPage() {
                           className="tx-row-map-btn"
                           onClick={() => openTxMap(tx)}
                           title="Xem vị trí giao dịch"
-                        >📍</button>
+                        >vị trí</button>
                       )}
                     </td>
                   </tr>

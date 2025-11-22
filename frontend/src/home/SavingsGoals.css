@@ -949,7 +949,7 @@
 }
 
 .goal-card.completed .goal-card-header h3::after {
-  content: ' ✓';
+  content: '';
   color: #4caf50;
   font-weight: bold;
 }
@@ -960,7 +960,7 @@
 }
 
 .goal-card.overdue .goal-card-header h3::after {
-  content: ' ⚠️';
+  content: '';
   color: #ff9800;
 }
 

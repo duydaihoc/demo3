@@ -439,7 +439,7 @@
   line-height: 1.4;
 }
 .sp-map-item-title::before {
-  content: '📍';
+  content: '';
   font-size: .85rem;
   transition: transform .25s ease;
 }
@@ -482,6 +482,17 @@
   color:#607d8b;
 }
 .sp-map-item.active .sp-map-item-meta { color:rgba(255,255,255,0.92); }
+.sp-map-item-category {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.sp-cat-icon {
+  font-size: .8rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 .sp-map-item-place {
   font-size:.65rem;
   font-weight:700;
@@ -496,7 +507,7 @@
   line-height: 1.4;
 }
 .sp-map-item-place::before {
-  content: '🏠';
+  content: '';
   font-size: .72rem;
 }
 .sp-map-item.active .sp-map-item-place { color:#fff; }

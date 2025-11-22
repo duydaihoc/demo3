@@ -115,15 +115,8 @@ export function showNotification(message, type = 'success', timeout = 4000) {
   // Set animation duration for progress bar
   el.style.setProperty('--progress-duration', `${timeout}ms`);
   
-  // icon - chỉ thêm nếu message chưa có emoji
-  let icon = '';
-  const hasEmoji = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|✅|❌|ℹ️|✨|🗑️/u.test(message);
-  if (!hasEmoji) {
-    if (type === 'success') icon = '<span class="notify-icon">✅</span>';
-    else if (type === 'error') icon = '<span class="notify-icon">❌</span>';
-    else icon = '<span class="notify-icon">ℹ️</span>';
-  }
-  el.innerHTML = `${icon}<span>${message || ''}</span>`;
+  // Display message without icon
+  el.innerHTML = `<span>${message || ''}</span>`;
   container.appendChild(el);
 
   // animate in

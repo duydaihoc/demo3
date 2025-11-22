@@ -772,3 +772,17 @@ body.sidebar-collapsed .transactions-main {
   gap:6px;
   line-height:1.2;
 }
+
+.tx-category-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tx-category-icon {
+  font-size: 1.1em;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}

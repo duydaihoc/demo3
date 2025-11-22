@@ -335,7 +335,7 @@ function SpendingTimeline() {
                   title={`${h.title || h.description || ''}`}
                 >
                   <span className="st-hl-type">
-                    {h.type==='expense'?'💸':'💰'}
+                    {h.type==='expense'?'Chi tiêu':'Thu nhập'}
                   </span>
                   <span className="st-hl-amt">{formatMoney(h.amount, (h.wallet && h.wallet.currency) || 'VND')}</span>
                   <span className="st-hl-cat">{h.category?.name || '—'}</span>

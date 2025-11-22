@@ -147,7 +147,7 @@ const HomePageContent = () => {
         // Cập nhật localStorage
         localStorage.setItem('hasSeenTour', 'true');
         localStorage.setItem('isNewUser', 'false');
-        console.log('✅ Tour marked as seen');
+        console.log('Tour marked as seen');
       }
     } catch (error) {
       console.error('Error marking tour as seen:', error);
@@ -406,7 +406,7 @@ const HomePageContent = () => {
               <div className="home-reminder-title">Ghi chú / Nhắc nhở</div>
               <ul className="home-reminder-list">
                 <li>💡 Quản lý nhiều ví để tách rõ loại chi tiêu.</li>
-                <li>🎯 Đặt mục tiêu tiết kiệm cho từng ví.</li>
+                <li>Đặt mục tiêu tiết kiệm cho từng ví.</li>
                 <li>📝 Cập nhật danh mục cho chính xác hơn.</li>
               </ul>
             </div>
@@ -436,7 +436,7 @@ function HomePage() {
       if (response.ok) {
         localStorage.setItem('hasSeenTour', 'true');
         localStorage.setItem('isNewUser', 'false');
-        console.log('✅ Tour marked as seen');
+        console.log('Tour marked as seen');
       }
     } catch (error) {
       console.error('Error marking tour as seen:', error);

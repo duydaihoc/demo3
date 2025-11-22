@@ -17,7 +17,7 @@ function Wallets() {
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [categoryFilter, setCategoryFilter] = useState('expense'); // 'expense' | 'income'
   const [newCategoryName, setNewCategoryName] = useState('');
-  const [newCategoryIcon, setNewCategoryIcon] = useState('🎯');
+  const [newCategoryIcon, setNewCategoryIcon] = useState('');
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [detailWallet, setDetailWallet] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -236,7 +236,7 @@ function Wallets() {
         fetchCategories(ownerToUse);
         setSelectedCategories([]);
         // dùng notification thay vì alert
-        showNotification('✅ Tạo ví thành công! Hãy chọn danh mục cho ví.', 'success');
+        showNotification('Tạo ví thành công! Hãy chọn danh mục cho ví.', 'success');
         try { window.dispatchEvent(new CustomEvent('walletCreated',{detail:{walletId:newWallet._id}})); } catch(_) {}
       } else {
         const error = await response.json();
@@ -297,7 +297,7 @@ function Wallets() {
       setSelectedCategories([]);
       fetchWallets();
       // dùng notification
-      showNotification('✅ Đã lưu danh mục cho ví!', 'success');
+      showNotification('Đã lưu danh mục cho ví!', 'success');
       try { window.dispatchEvent(new CustomEvent('walletCategoriesSaved')); } catch(_) {}
     } catch (error) {
       console.error(error);
@@ -376,8 +376,8 @@ function Wallets() {
       setCategories(prev => [created, ...prev]);
       setSelectedCategories(prev => [...prev, created._id]);
       setNewCategoryName('');
-      setNewCategoryIcon('🎯');
-      showNotification('✅ Tạo danh mục thành công!', 'success');
+      setNewCategoryIcon('');
+      showNotification('Tạo danh mục thành công!', 'success');
 
       // if ownerOverride was provided, optionally refresh filtered categories for that owner
       if (overrideOwnerId) {
@@ -479,7 +479,7 @@ function Wallets() {
       setShowEditModal(false);
       setDetailWallet(null);
       setSelectedCategories([]);
-      showNotification('✅ Cập nhật ví thành công!', 'success');
+      showNotification('Cập nhật ví thành công!', 'success');
     } catch (err) {
       console.error(err);
       showNotification('Lỗi khi cập nhật ví', 'error');
@@ -574,7 +574,7 @@ function Wallets() {
       await fetchWallets();
       setShowDetailModal(false);
       setDetailWallet(null);
-      showNotification(`✅ Đã xóa ví "${walletName}"`, 'success');
+      showNotification(`Đã xóa ví "${walletName}"`, 'success');
     } catch (err) {
       console.error(err);
       showNotification('Lỗi khi xóa ví', 'error');
@@ -673,22 +673,22 @@ function Wallets() {
             <form className="wallet-modal-form" onSubmit={handleSubmit}>
               <div className="wallet-modal-header">
                 <div className="wallet-modal-icon-wrapper">
-                  <div className="wallet-modal-icon">💼</div>
+                  <div className="wallet-modal-icon"></div>
                 </div>
                 <div className="wallet-modal-title">Tạo ví mới</div>
                 <div className="wallet-modal-subtitle">Thiết lập ví để quản lý tài chính của bạn một cách hiệu quả</div>
               </div>
 
               <div className="create-form-content">
-                <div className="create-form-section">
+                  <div className="create-form-section">
                   <div className="section-divider">
-                    <span className="section-divider-icon">📋</span>
+                    <span className="section-divider-icon"></span>
                     <span className="section-divider-text">Thông tin cơ bản</span>
                   </div>
 
                   <div className="wallet-modal-field">
                     <label>
-                      <span className="field-icon">📝</span>
+                      <span className="field-icon"></span>
                       <span>Tên ví</span>
                       <span className="field-hint">(Bắt buộc)</span>
                     </label>
@@ -706,7 +706,7 @@ function Wallets() {
                   <div className="wallet-modal-field-row">
                     <div className="wallet-modal-field half-width">
                       <label>
-                        <span className="field-icon">💱</span>
+                        <span className="field-icon"></span>
                         <span>Loại tiền tệ</span>
                       </label>
                       <select
@@ -714,16 +714,16 @@ function Wallets() {
                         value={formData.currency}
                         onChange={handleInputChange}
                       >
-                        <option value="VND">🇻🇳 VND - Đồng Việt Nam</option>
-                        <option value="USD">🇺🇸 USD - Đô la Mỹ</option>
-                        <option value="EUR">🇪🇺 EUR - Euro</option>
+                        <option value="VND">VND - Đồng Việt Nam</option>
+                        <option value="USD">USD - Đô la Mỹ</option>
+                        <option value="EUR">EUR - Euro</option>
                       </select>
                       <div className="field-help">Loại tiền tệ</div>
                     </div>
 
                     <div className="wallet-modal-field half-width">
                       <label>
-                        <span className="field-icon">💰</span>
+                        <span className="field-icon"></span>
                         <span>Số dư ban đầu</span>
                       </label>
                       <input
@@ -739,7 +739,7 @@ function Wallets() {
                   </div>
 
                   <div className="create-tip-box">
-                    <div className="tip-icon-small">💡</div>
+                    <div className="tip-icon-small"></div>
                     <div className="tip-text-small">
                       <strong>Mẹo:</strong> Bạn có thể để số dư là 0 nếu mới bắt đầu. Sau đó có thể cập nhật số dư khi cần.
                     </div>
@@ -763,12 +763,12 @@ function Wallets() {
                 >
                   {loading ? (
                     <>
-                      <span className="btn-icon">⏳</span>
+                      <span className="btn-icon"></span>
                       <span>Đang tạo...</span>
                     </>
                   ) : (
                     <>
-                      <span className="btn-icon">✨</span>
+                      <span className="btn-icon"></span>
                       <span>Tạo ví</span>
                     </>
                   )}
@@ -834,7 +834,7 @@ function Wallets() {
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div className="category-name">{cat.name}</div>
                           <div className="category-creator" title={creatorLabel ? `Tạo bởi ${creatorLabel}` : ''}>
-                            {creatorLabel ? `👤 ${creatorLabel}` : ''}
+                            {creatorLabel ? creatorLabel : ''}
                           </div>
                         </div>
                         {isSelected && <div className="category-check">✓</div>}
@@ -853,7 +853,7 @@ function Wallets() {
                   />
                   <input
                     className="new-cat-input icon-input"
-                    placeholder="Icon (emoji) ví dụ: 🎁"
+                    placeholder="Icon (emoji)"
                     value={newCategoryIcon}
                     onChange={(e) => setNewCategoryIcon(e.target.value)}
                   />
@@ -898,7 +898,7 @@ function Wallets() {
               <div className="detail-header-content">
                 <div className="detail-header-left">
                   <div className="detail-wallet-icon-wrapper">
-                    <div className="detail-wallet-icon">💼</div>
+                    <div className="detail-wallet-icon"></div>
                   </div>
                   <div className="detail-header-text">
                     <h2 className="detail-wallet-name">{detailWallet.name}</h2>
@@ -923,7 +923,7 @@ function Wallets() {
                   <div className="detail-section">
                     <div className="detail-section-header">
                       <div className="section-title-wrapper">
-                        <span className="section-icon-badge expense-icon">💸</span>
+                        <span className="section-icon-badge expense-icon"></span>
                         <div>
                           <h3 className="section-title">Chi tiêu</h3>
                           <p className="section-subtitle">{(detailWallet.categories || []).filter(c => c.type === 'expense').length} danh mục</p>
@@ -944,7 +944,7 @@ function Wallets() {
                       ))}
                       {(detailWallet.categories || []).filter(c => c.type === 'expense').length === 0 && (
                         <div className="empty-placeholder">
-                          <span className="empty-icon">📭</span>
+                          <span className="empty-icon"></span>
                           <span>Chưa có danh mục chi tiêu</span>
                         </div>
                       )}
@@ -955,7 +955,7 @@ function Wallets() {
                   <div className="detail-section income-section">
                     <div className="detail-section-header">
                       <div className="section-title-wrapper">
-                        <span className="section-icon-badge income-icon">💵</span>
+                        <span className="section-icon-badge income-icon"></span>
                         <div>
                           <h3 className="section-title">Thu nhập</h3>
                           <p className="section-subtitle">{(detailWallet.categories || []).filter(c => c.type === 'income').length} danh mục</p>
@@ -976,7 +976,7 @@ function Wallets() {
                       ))}
                       {(detailWallet.categories || []).filter(c => c.type === 'income').length === 0 && (
                         <div className="empty-placeholder">
-                          <span className="empty-icon">📭</span>
+                          <span className="empty-icon"></span>
                           <span>Chưa có danh mục thu nhập</span>
                         </div>
                       )}
@@ -989,13 +989,13 @@ function Wallets() {
                   {/* Info Card */}
                   <div className="info-card">
                     <div className="info-card-header-section">
-                      <div className="info-card-icon">📋</div>
+                      <div className="info-card-icon"></div>
                       <h3 className="info-card-title">Thông tin ví</h3>
                     </div>
                     <div className="info-card-content">
                       <div className="info-item">
                         <div className="info-item-label">
-                          <span className="info-icon">🆔</span>
+                          <span className="info-icon"></span>
                           <span>Mã ví</span>
                         </div>
                         <div className="info-item-value" title={detailWallet._id}>
@@ -1004,7 +1004,7 @@ function Wallets() {
                       </div>
                       <div className="info-item highlight-item">
                         <div className="info-item-label">
-                          <span className="info-icon">📂</span>
+                          <span className="info-icon"></span>
                           <span>Tổng danh mục</span>
                         </div>
                         <div className="info-item-value highlight-value">
@@ -1013,11 +1013,11 @@ function Wallets() {
                       </div>
                       <div className="info-item">
                         <div className="info-item-label">
-                          <span className="info-icon">💱</span>
+                          <span className="info-icon"></span>
                           <span>Loại tiền</span>
                         </div>
                         <div className="info-item-value">
-                          {detailWallet.currency === 'VND' ? '🇻🇳 VND' : detailWallet.currency === 'USD' ? '🇺🇸 USD' : '🇪🇺 EUR'}
+                          {detailWallet.currency === 'VND' ? 'VND' : detailWallet.currency === 'USD' ? 'USD' : 'EUR'}
                         </div>
                       </div>
                     </div>
@@ -1026,16 +1026,16 @@ function Wallets() {
                   {/* Actions Card */}
                   <div className="actions-card">
                     <div className="actions-card-header">
-                      <div className="actions-card-icon">⚙️</div>
+                      <div className="actions-card-icon"></div>
                       <h3 className="actions-card-title">Thao tác</h3>
                     </div>
                     <div className="actions-card-content">
                       <button className="action-btn primary-btn" onClick={() => handleOpenEdit(detailWallet)} title="Sửa thông tin ví">
-                        <span className="btn-icon">✏️</span>
+                        <span className="btn-icon"></span>
                         <span>Sửa ví</span>
                       </button>
                       <button className="action-btn danger-btn" onClick={() => showConfirmDelete(detailWallet._id, detailWallet.name)} title="Xóa ví này">
-                        <span className="btn-icon">🗑️</span>
+                        <span className="btn-icon"></span>
                         <span>Xóa ví</span>
                       </button>
                       <button className="action-btn secondary-btn" onClick={handleCloseDetails} title="Đóng cửa sổ">
@@ -1047,7 +1047,7 @@ function Wallets() {
 
                   {/* Tip Card */}
                   <div className="tip-card">
-                    <div className="tip-icon">💡</div>
+                    <div className="tip-icon"></div>
                     <div className="tip-text">
                       <strong>Mẹo:</strong> Các danh mục được phân loại theo màu để bạn dễ nhận biết.
                     </div>
@@ -1069,7 +1069,7 @@ function Wallets() {
             <form className="wallet-modal-form" onSubmit={handleEditSubmit}>
               <div className="wallet-modal-header">
                 <div className="wallet-modal-icon-wrapper">
-                  <div className="wallet-modal-icon">✏️</div>
+                  <div className="wallet-modal-icon"></div>
                 </div>
                 <div className="wallet-modal-title">Sửa thông tin ví</div>
                 <div className="wallet-modal-subtitle">Cập nhật thông tin và danh mục cho ví của bạn</div>
@@ -1079,13 +1079,13 @@ function Wallets() {
                 {/* Basic Info Section */}
                 <div className="edit-form-section">
                   <div className="section-divider">
-                    <span className="section-divider-icon">📋</span>
+                    <span className="section-divider-icon"></span>
                     <span className="section-divider-text">Thông tin cơ bản</span>
                   </div>
                   
                   <div className="wallet-modal-field">
                     <label>
-                      <span className="field-icon">📝</span>
+                      <span className="field-icon"></span>
                       <span>Tên ví</span>
                       <span className="field-hint">(Bắt buộc)</span>
                     </label>
@@ -1096,20 +1096,20 @@ function Wallets() {
                   <div className="wallet-modal-field-row">
                     <div className="wallet-modal-field half-width">
                       <label>
-                        <span className="field-icon">💱</span>
+                        <span className="field-icon"></span>
                         <span>Loại tiền tệ</span>
                       </label>
                       <select name="currency" value={editForm.currency} onChange={handleEditChange}>
-                        <option value="VND">🇻🇳 VND - Đồng Việt Nam</option>
-                        <option value="USD">🇺🇸 USD - Đô la Mỹ</option>
-                        <option value="EUR">🇪🇺 EUR - Euro</option>
+                        <option value="VND">VND - Đồng Việt Nam</option>
+                        <option value="USD">USD - Đô la Mỹ</option>
+                        <option value="EUR">EUR - Euro</option>
                       </select>
                       <div className="field-help">Loại tiền tệ</div>
                     </div>
                     
                     <div className="wallet-modal-field half-width">
                       <label>
-                        <span className="field-icon">💰</span>
+                        <span className="field-icon"></span>
                         <span>Số dư hiện tại</span>
                       </label>
                       <input name="initialBalance" type="number" value={editForm.initialBalance} onChange={handleEditChange} min="0" placeholder="0" />
@@ -1121,7 +1121,7 @@ function Wallets() {
                 {/* Category Section */}
                 <div className="edit-form-section">
                   <div className="section-divider">
-                    <span className="section-divider-icon">📂</span>
+                    <span className="section-divider-icon"></span>
                     <span className="section-divider-text">Danh mục</span>
                   </div>
                   
@@ -1133,7 +1133,7 @@ function Wallets() {
                         setCategoryFilter('expense');
                         try { window.dispatchEvent(new CustomEvent('walletCategoryFilterChanged',{detail:{filter:'expense'}})); } catch(_) {}
                       }}>
-                        <span className="filter-icon">💸</span>
+                        <span className="filter-icon"></span>
                         <span>Chi tiêu</span>
                       </button>
                       <button type="button" className={`filter-btn ${categoryFilter === 'income' ? 'active' : ''}`} onClick={() => {
@@ -1141,7 +1141,7 @@ function Wallets() {
                         try { window.dispatchEvent(new CustomEvent('walletIncomeTabSelected')); } catch(_) {}
                         try { window.dispatchEvent(new CustomEvent('walletCategoryFilterChanged',{detail:{filter:'income'}})); } catch(_) {}
                       }}>
-                        <span className="filter-icon">💵</span>
+                        <span className="filter-icon"></span>
                         <span>Thu nhập</span>
                       </button>
                     </div>
@@ -1169,7 +1169,7 @@ function Wallets() {
                             <div className="category-name">{cat.name}</div>
                             {creatorLabel && (
                               <div className="category-creator" title={`Tạo bởi ${creatorLabel}`}>
-                                👤 {creatorLabel}
+                                {creatorLabel}
                               </div>
                             )}
                           </div>
@@ -1182,7 +1182,7 @@ function Wallets() {
                   {/* New category form */}
                   <div className="new-category-form edit-new-category">
                     <div className="new-category-header">
-                      <span className="new-category-icon">➕</span>
+                      <span className="new-category-icon"></span>
                       <span>Tạo danh mục mới</span>
                     </div>
                     <div className="new-category-inputs">
@@ -1217,7 +1217,7 @@ function Wallets() {
                   Hủy
                 </button>
                 <button type="submit" className="wallet-modal-submit-btn">
-                  <span className="btn-icon">💾</span>
+                  <span className="btn-icon"></span>
                   <span>Lưu thay đổi</span>
                 </button>
               </div>

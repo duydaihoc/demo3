@@ -5,7 +5,7 @@ export const steps = [
     selector: '.home-title',
     content: () => (
       <div style={{ lineHeight: 1.5 }}>
-        <h3 style={{ marginBottom: 6 }}>🚀 Bắt đầu quản lý chi tiêu thông minh</h3>
+        <h3 style={{ marginBottom: 6 }}>Bắt đầu quản lý chi tiêu thông minh</h3>
         <p style={{ margin: 0 }}>
           Tour này sẽ dẫn bạn đi một vòng qua những phần quan trọng nhất của màn hình tổng quan.
         </p>
@@ -20,7 +20,7 @@ export const steps = [
     selector: '.home-actions',
     content: () => (
       <div style={{ lineHeight: 1.5 }}>
-        <h3 style={{ marginBottom: 6 }}>✍️ Ghi chép thật nhanh</h3>
+        <h3 style={{ marginBottom: 6 }}>Ghi chép thật nhanh</h3>
         <p style={{ margin: 0 }}>
           Nhấn <b>+ Ghi chép</b> ngay khi phát sinh giao dịch để số liệu luôn chính xác.
         </p>
@@ -35,7 +35,7 @@ export const steps = [
     selector: '.fd-root',
     content: () => (
       <div style={{ lineHeight: 1.5 }}>
-        <h3 style={{ marginBottom: 6 }}>📊 Trung tâm phân tích tài chính</h3>
+        <h3 style={{ marginBottom: 6 }}>Trung tâm phân tích tài chính</h3>
         <p style={{ margin: 0 }}>
           Khu vực này tổng hợp mọi thứ: cơ cấu chi tiêu, thu – chi theo tháng và biến động số dư.
         </p>
@@ -55,7 +55,7 @@ export const steps = [
     selector: '.wallets-container',
     content: () => (
       <div style={{ lineHeight: 1.5 }}>
-        <h3 style={{ marginBottom: 6 }}>💼 Ví & dòng tiền</h3>
+        <h3 style={{ marginBottom: 6 }}>Ví & dòng tiền</h3>
         <p style={{ margin: 0 }}>
           Tách ví theo mục đích (Sinh hoạt / Tiết kiệm / Đầu tư…) để không lẫn lộn tiền.
         </p>
@@ -70,7 +70,7 @@ export const steps = [
     selector: '.savings-container',
     content: () => (
       <div style={{ lineHeight: 1.5 }}>
-        <h3 style={{ marginBottom: 6 }}>🎯 Mục tiêu tiết kiệm</h3>
+        <h3 style={{ marginBottom: 6 }}>Mục tiêu tiết kiệm</h3>
         <p style={{ margin: 0 }}>
           Đặt mục tiêu rõ ràng (ví dụ: Quỹ khẩn cấp, Mua nhà, Du lịch…) và nạp tiền định kỳ.
         </p>
@@ -85,7 +85,7 @@ export const steps = [
     selector: '.home-reminder',
     content: () => (
       <div style={{ lineHeight: 1.5 }}>
-        <h3 style={{ marginBottom: 6 }}>📝 Ghi chú & nguyên tắc</h3>
+        <h3 style={{ marginBottom: 6 }}>Ghi chú & nguyên tắc</h3>
         <p style={{ margin: 0 }}>
           Khu vực này dùng để lưu các “luật chơi” tài chính riêng của bạn, hoặc những điều cần nhớ.
         </p>
@@ -100,7 +100,7 @@ export const steps = [
     selector: '.ai-button',
     content: () => (
       <div style={{ lineHeight: 1.5 }}>
-        <h3 style={{ marginBottom: 6 }}>🤖 Trợ lý AI tài chính</h3>
+        <h3 style={{ marginBottom: 6 }}>Trợ lý AI tài chính</h3>
         <p style={{ margin: 0 }}>
           Hãy thử hỏi: <b>“Phân tích chi tiêu tuần này?”</b> hoặc <b>“Gợi ý tối ưu ví tiết kiệm?”</b>.
         </p>

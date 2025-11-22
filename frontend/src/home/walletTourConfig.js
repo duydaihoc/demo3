@@ -5,7 +5,7 @@ export const walletCreationSteps = [
     selector: '.wallet-add-card-v2',
     content: () => (
       <div style={{ lineHeight: 1.5 }}>
-        <h3 style={{ marginBottom: 6 }}>🧱 Bước 1/10 – Thêm ví mới</h3>
+        <h3 style={{ marginBottom: 6 }}>Bước 1/10 – Thêm ví mới</h3>
         <p style={{ margin: 0 }}>
           Nhấn vào thẻ <strong>“Thêm ví mới”</strong> để mở form tạo ví riêng cho bạn.
         </p>
@@ -20,7 +20,7 @@ export const walletCreationSteps = [
     selector: '.wallet-modal-field input[name="name"]',
     content: () => (
       <div style={{ lineHeight: 1.5 }}>
-        <h3 style={{ marginBottom: 6 }}>✍️ Bước 2/10 – Đặt tên ví</h3>
+        <h3 style={{ marginBottom: 6 }}>Bước 2/10 – Đặt tên ví</h3>
         <p style={{ margin: 0 }}>
           Gợi ý: <strong>“Ví tiền mặt”</strong>, <strong>“VCB lương”</strong>, <strong>“Tiết kiệm 6 tháng”</strong>.
         </p>
@@ -39,7 +39,7 @@ export const walletCreationSteps = [
     selector: '.wallet-modal-field select[name="currency"]',
     content: () => (
       <div style={{ lineHeight: 1.5 }}>
-        <h3 style={{ marginBottom: 6 }}>💱 Bước 3/10 – Chọn loại tiền</h3>
+        <h3 style={{ marginBottom: 6 }}>Bước 3/10 – Chọn loại tiền</h3>
         <ul style={{ paddingLeft: 18, margin: '6px 0' }}>
           <li><strong>VND</strong> – dùng cho chi tiêu hàng ngày (mặc định).</li>
           <li><strong>USD / EUR</strong> – dùng cho khoản ngoại tệ nếu có.</li>
@@ -55,7 +55,7 @@ export const walletCreationSteps = [
     selector: '.wallet-modal-field input[name="initialBalance"]',
     content: () => (
       <div style={{ lineHeight: 1.5 }}>
-        <h3 style={{ marginBottom: 6 }}>💰 Bước 4/10 – Số dư ban đầu</h3>
+        <h3 style={{ marginBottom: 6 }}>Bước 4/10 – Số dư ban đầu</h3>
         <p style={{ margin: 0 }}>
           Nhập số dư hiện tại của ví. Nếu mới bắt đầu, bạn có thể để <strong>0</strong>.
         </p>
@@ -70,7 +70,7 @@ export const walletCreationSteps = [
     selector: '.wallet-modal-submit-btn',
     content: () => (
       <div style={{ lineHeight: 1.5 }}>
-        <h3 style={{ marginBottom: 6 }}>🚀 Bước 5/10 – Tạo ví</h3>
+        <h3 style={{ marginBottom: 6 }}>Bước 5/10 – Tạo ví</h3>
         <p style={{ margin: 0 }}>
           Kiểm tra lại tên, loại tiền và số dư, sau đó bấm <strong>Tạo</strong>.
         </p>
@@ -85,7 +85,7 @@ export const walletCreationSteps = [
     selector: '.category-modal',
     content: () => (
       <div style={{ lineHeight: 1.5 }}>
-        <h3 style={{ marginBottom: 6 }}>🗂️ Bước 6/10 – Chọn danh mục Chi tiêu</h3>
+        <h3 style={{ marginBottom: 6 }}>Bước 6/10 – Chọn danh mục Chi tiêu</h3>
         <p style={{ margin: 0 }}>
           Tab <strong>Chi tiêu</strong> đang mở. Hãy chọn các danh mục bạn thường dùng nhất.
         </p>
@@ -100,7 +100,7 @@ export const walletCreationSteps = [
     selector: '.category-modal',
     content: () => (
       <div style={{ lineHeight: 1.5 }}>
-        <h3 style={{ marginBottom: 6 }}>✅ Bước 7/10 – Hoàn tất Chi tiêu</h3>
+        <h3 style={{ marginBottom: 6 }}>Bước 7/10 – Hoàn tất Chi tiêu</h3>
         <p style={{ margin: 0 }}>
           Khi đã chọn xong, hãy chuyển sang tab <strong>Thu nhập</strong> ở phía trên.
         </p>
@@ -115,7 +115,7 @@ export const walletCreationSteps = [
     selector: '.category-modal',
     content: () => (
       <div style={{ lineHeight: 1.5 }}>
-        <h3 style={{ marginBottom: 6 }}>📥 Bước 8/10 – Chọn danh mục Thu nhập</h3>
+        <h3 style={{ marginBottom: 6 }}>Bước 8/10 – Chọn danh mục Thu nhập</h3>
         <p style={{ margin: 0 }}>
           Chọn các nguồn thu như: <strong>Lương</strong>, <strong>Thưởng</strong>, <strong>Lãi tiết kiệm</strong>, v.v.
         </p>
@@ -130,7 +130,7 @@ export const walletCreationSteps = [
     selector: '.category-modal',
     content: () => (
       <div style={{ lineHeight: 1.5 }}>
-        <h3 style={{ marginBottom: 6 }}>👍 Bước 9/10 – Kiểm tra lần cuối</h3>
+        <h3 style={{ marginBottom: 6 }}>Bước 9/10 – Kiểm tra lần cuối</h3>
         <p style={{ margin: 0 }}>
           Nhìn nhanh lại số lượng danh mục Chi tiêu và Thu nhập bạn đã tick.
         </p>
@@ -145,7 +145,7 @@ export const walletCreationSteps = [
     selector: '.category-modal .wallet-modal-submit-btn',
     content: () => (
       <div style={{ lineHeight: 1.5 }}>
-        <h3 style={{ marginBottom: 6 }}>🎉 Bước 10/10 – Lưu & hoàn tất</h3>
+        <h3 style={{ marginBottom: 6 }}>Bước 10/10 – Lưu & hoàn tất</h3>
         <p style={{ margin: 0 }}>
           Bấm <strong>Lưu danh mục</strong> để hoàn thành việc tạo ví và cấu hình danh mục ban đầu.
         </p>

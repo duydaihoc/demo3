@@ -174,7 +174,7 @@ function SavingsGoals() {
       
       setUiMode('list');
       await fetchGoals();
-      showNotification('✅ Đã tạo mục tiêu thành công!', 'success');
+      showNotification('Đã tạo mục tiêu thành công!', 'success');
       fetchGamification();
       // Thông báo cho tour: đã tạo xong mục tiêu
       try {
@@ -185,7 +185,7 @@ function SavingsGoals() {
        
     } catch (error) {
       console.error('Error creating goal:', error);
-      showNotification('❌ ' + (error.message || 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.'), 'error');
+      showNotification(error.message || 'Không thể kết nối đến máy chủ. Vui lòng thử lại sau.', 'error');
     } finally {
       setLoading(prev => ({ ...prev, goals: false }));
     }
@@ -301,14 +301,14 @@ function SavingsGoals() {
       if (!res.ok) {
         throw new Error(body.message || 'Lỗi khi cập nhật mục tiêu');
       }
-      showNotification('✅ Cập nhật mục tiêu thành công', 'success');
+      showNotification('Cập nhật mục tiêu thành công', 'success');
       setUiMode('list');
       setSelectedGoal(null);
       await fetchGoals();
       fetchGamification();
     } catch (err) {
       console.error('Update error:', err);
-      showNotification('❌ ' + (err.message || 'Lỗi khi cập nhật mục tiêu'), 'error');
+      showNotification(err.message || 'Lỗi khi cập nhật mục tiêu', 'error');
     } finally {
       setLoading(prev => ({ ...prev, goals: false }));
     }
@@ -365,7 +365,7 @@ function SavingsGoals() {
       }
 
       // Thông báo thành công bằng toast
-      showNotification('✅ Nạp tiền thành công!', 'success');
+      showNotification('Nạp tiền thành công!', 'success');
       setDepositData({ amount: '', walletId: '', note: '' });
       setUiMode('list');
       setSelectedGoal(null);
@@ -377,7 +377,7 @@ function SavingsGoals() {
 
     } catch (error) {
       console.error('Deposit error:', error);
-      showNotification('❌ ' + (error.message || 'Có lỗi xảy ra khi nạp tiền'), 'error');
+      showNotification(error.message || 'Có lỗi xảy ra khi nạp tiền', 'error');
     }
   };
 
@@ -442,11 +442,11 @@ function SavingsGoals() {
       });
       const body = await res.json().catch(()=> ({}));
       if (!res.ok) throw new Error(body.message || 'Xóa thất bại');
-      showNotification('✅ Đã xóa mục tiêu thành công', 'success');
+      showNotification('Đã xóa mục tiêu thành công', 'success');
       await fetchGoals();
       fetchGamification();
     } catch (err) {
-      showNotification('❌ ' + (err.message || 'Lỗi khi xóa mục tiêu'), 'error');
+      showNotification(err.message || 'Lỗi khi xóa mục tiêu', 'error');
     }
   };
 
@@ -467,7 +467,7 @@ function SavingsGoals() {
         throw new Error(errorData.message || 'Không thể báo cáo mục tiêu');
       }
 
-      showNotification('✅ Đã báo cáo hoàn thành mục tiêu!', 'success');
+      showNotification('Đã báo cáo hoàn thành mục tiêu!', 'success');
       fetchGoals(); // Refresh danh sách
       fetchGamification();
       // Tải PDF báo cáo
@@ -489,14 +489,14 @@ function SavingsGoals() {
           window.URL.revokeObjectURL(url);
           document.body.removeChild(a);
         } else {
-          showNotification('❌ Không thể tải PDF báo cáo - file rỗng', 'error');
+          showNotification('Không thể tải PDF báo cáo - file rỗng', 'error');
         }
       } else {
-        showNotification('❌ Không thể tải PDF báo cáo', 'error');
+        showNotification('Không thể tải PDF báo cáo', 'error');
       }
     } catch (error) {
       console.error('Error reporting goal:', error);
-      showNotification('❌ ' + (error.message || 'Có lỗi xảy ra khi báo cáo mục tiêu'), 'error');
+      showNotification(error.message || 'Có lỗi xảy ra khi báo cáo mục tiêu', 'error');
     }
   };
 
@@ -542,9 +542,9 @@ function SavingsGoals() {
       a.click();
       window.URL.revokeObjectURL(url);
       a.remove();
-      showNotification('✅ Đã tải PDF thành công', 'success');
+      showNotification('Đã tải PDF thành công', 'success');
     } catch (e) {
-      showNotification('❌ ' + (e.message || 'Lỗi xuất PDF'), 'error');
+      showNotification(e.message || 'Lỗi xuất PDF', 'error');
     }
   };
 
@@ -783,7 +783,7 @@ function SavingsGoals() {
           <div className="sg-badges">
             {badges.map(b => (
               <div key={b.key} className={`sg-badge ${b.unlocked ? 'unlocked' : 'locked'}`} title={b.description}>
-                <div className="sg-badge-icon">{b.unlocked ? '🏅' : '🔒'}</div>
+                <div className="sg-badge-icon"></div>
                 <div className="sg-badge-name">{b.name}</div>
               </div>
             ))}
@@ -1311,7 +1311,7 @@ function SavingsGoals() {
             <i className="fas fa-question-circle" />
           </button>
         </div>
-        <button className="add-goal-btn" onClick={openCreateGoalMode}>+ Thêm mục tiêu</button>
+        <button className="add-goal-btn" onClick={openCreateGoalMode}>Thêm mục tiêu</button>
       </div>
 
       <GamificationCard />
@@ -1369,7 +1369,6 @@ function SavingsGoals() {
               {goal.notification && (
                 <div className={`goal-notification ${goal.notification.type}`}>
                   <div className="notification-icon">
-                    {goal.notification.type === 'completed' ? '🎉' : '⚠️'}
                   </div>
                   <div className="notification-content">
                     <div className="notification-message">{goal.notification.message}</div>

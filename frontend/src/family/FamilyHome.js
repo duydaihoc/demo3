@@ -717,7 +717,7 @@ export default function FamilyHome() {
                           className={`fh-budget-item ${isExpired ? 'expired' : ''} ${isCurrentMonth ? 'current-month' : 'future-month'}`}
                         >
                           <div className="fh-budget-icon">
-                            <i className={budget.category?.icon || 'fas fa-tag'}></i>
+                            {budget.category?.icon || ''}
                           </div>
                           
                           <div className="fh-budget-content">
@@ -811,8 +811,8 @@ export default function FamilyHome() {
                   <div className="fh-transactions-list">
                     {familyTransactionsAll.slice(0, 5).map(tx => {
                       const categoryInfo = tx.category && typeof tx.category === 'object' 
-                        ? { name: tx.category.name, icon: tx.category.icon }
-                        : { name: 'Không có', icon: 'fa-receipt' };
+                        ? { name: tx.category.name, icon: tx.category.icon || '' }
+                        : { name: 'Không có', icon: '' };
                       const creatorName = tx.creatorName || (tx.createdBy && tx.createdBy.name) || 'Thành viên';
                       return (
                         <div key={tx._id} className="fh-transaction-item">
@@ -822,7 +822,10 @@ export default function FamilyHome() {
                           <div className="fh-transaction-content">
                             <div className="fh-transaction-title">{tx.description || 'Giao dịch gia đình'}</div>
                             <div className="fh-transaction-meta">
-                              <span className="fh-transaction-category">{categoryInfo.name}</span>
+                              <span className="fh-transaction-category">
+                                {categoryInfo.icon && <span className="fh-category-icon">{categoryInfo.icon}</span>}
+                                <span>{categoryInfo.name}</span>
+                              </span>
                               <span className="fh-transaction-separator">•</span>
                               <span className="fh-transaction-member">{creatorName}</span>
                               <span className="fh-transaction-separator">•</span>
