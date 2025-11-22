@@ -1,23 +1,16 @@
+/* Note: .groups-page and .groups-main layout is managed by GroupSidebar.css */
+/* Only add page-specific styles here */
+
 .groups-page {
-	display: flex;
-	min-height: 100vh;
 	/* Nền tổng thể dùng tông sáng từ gradient chủ đạo */
 	background:
 		radial-gradient(circle at top left, rgba(42,82,152,0.08), transparent 55%),
 		radial-gradient(circle at bottom right, rgba(78,205,196,0.12), #f5fbff);
-	align-items: flex-start;
 }
 
-/* Main content */
+/* Main content - override padding for this specific page */
 .groups-main {
-	flex: 1;
 	padding: 24px 32px 32px;
-	box-sizing: border-box;
-	min-width: 0;
-	z-index: 0;
-	margin-left: 0;
-	min-height: 100vh;
-	overflow: auto;
 }
 
 /* Header */

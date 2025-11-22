@@ -20,12 +20,14 @@
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: rgba(42, 82, 152, 0.3) rgba(255, 255, 255, 0.1);
-  transition: margin-left 0.3s ease;
+  transition: margin-left 0.3s ease, width 0.3s ease;
   background: transparent;
 }
 
-.family-main.sidebar-collapsed {
-  margin-left: 60px;
+/* Adjust margin when sidebar is collapsed */
+body.family-sidebar-collapsed .family-main {
+  margin-left: 0;
+  width: 100%;
 }
 
 /* Custom scrollbar */

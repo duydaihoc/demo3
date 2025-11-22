@@ -15,6 +15,70 @@
   bottom: 0; /* đảm bảo sidebar kéo dài đến cuối trang */
   z-index: 10;
   overflow-y: auto; /* cho phép cuộn nếu nội dung quá dài */
+  transition: transform 0.3s ease, width 0.3s ease;
+}
+
+/* Collapsed state */
+.sidebar.collapsed {
+  transform: translateX(-100%);
+}
+
+/* Toggle button - tách ra ngoài sidebar */
+.sidebar-toggle {
+  position: fixed;
+  top: 20px;
+  width: 35px;
+  height: 35px;
+  background: linear-gradient(135deg, #2a5298 0%, #4ecdc4 100%);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  color: #fff;
+  font-size: 22px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Khi sidebar mở - nút ở cạnh phải sidebar */
+.sidebar-toggle:not(.collapsed) {
+  left: 205px; /* 220px (width sidebar) - 15px */
+}
+
+/* Khi sidebar thu gọn - nút ở cạnh trái màn hình */
+.sidebar-toggle.collapsed {
+  left: 0;
+  box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.sidebar-toggle:hover {
+  background: linear-gradient(135deg, #4ecdc4 0%, #2a5298 100%);
+  transform: scale(1.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.sidebar-toggle.collapsed:hover {
+  box-shadow: 3px 3px 15px rgba(0, 0, 0, 0.4);
+}
+
+.toggle-arrow {
+  display: inline-block;
+  transition: transform 0.3s ease;
+  line-height: 1;
+  user-select: none;
+}
+
+/* Hide sidebar content when collapsed */
+.sidebar.collapsed .sidebar-logo,
+.sidebar.collapsed .sidebar-user,
+.sidebar.collapsed .sidebar-menu {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
 }
 
 /* Logo styles for the sidebar */

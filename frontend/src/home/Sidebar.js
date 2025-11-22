@@ -6,6 +6,11 @@ function Sidebar({ userName = "Tên người dùng" }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    // Load collapsed state from localStorage
+    const saved = localStorage.getItem('sidebarCollapsed');
+    return saved === 'true';
+  });
   const settingsRef = useRef(null);
 
   const handleLogout = (e) => {
@@ -26,9 +31,44 @@ function Sidebar({ userName = "Tên người dùng" }) {
     return () => document.removeEventListener('mousedown', onDocClick);
   }, []);
 
+  // Toggle sidebar collapse
+  const toggleSidebar = () => {
+    const newState = !isCollapsed;
+    setIsCollapsed(newState);
+    localStorage.setItem('sidebarCollapsed', newState.toString());
+    // Update body class to adjust main content margin
+    if (newState) {
+      document.body.classList.add('sidebar-collapsed');
+    } else {
+      document.body.classList.remove('sidebar-collapsed');
+    }
+  };
+
+  // Apply initial collapsed state to body
+  useEffect(() => {
+    if (isCollapsed) {
+      document.body.classList.add('sidebar-collapsed');
+    } else {
+      document.body.classList.remove('sidebar-collapsed');
+    }
+  }, []);
+
   return (
-    <nav className="sidebar">
-      {/* Add logo component at the top */}
+    <>
+      {/* Toggle button - tách ra ngoài để luôn hiển thị */}
+      <button 
+        className={`sidebar-toggle ${isCollapsed ? 'collapsed' : ''}`}
+        onClick={toggleSidebar}
+        aria-label={isCollapsed ? "Mở sidebar" : "Đóng sidebar"}
+        title={isCollapsed ? "Mở sidebar" : "Đóng sidebar"}
+      >
+        <span className={`toggle-arrow ${isCollapsed ? 'collapsed' : ''}`}>
+          {isCollapsed ? '›' : '‹'}
+        </span>
+      </button>
+      
+      <nav className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}>
+        {/* Add logo component at the top */}
       <div className="sidebar-logo">
         <div className="logo-icon">
           <div className="coin-stack">
@@ -104,6 +144,7 @@ function Sidebar({ userName = "Tên người dùng" }) {
         </li>
       </ul>
     </nav>
+    </>
   );
 }
 

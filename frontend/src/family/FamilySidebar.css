@@ -25,25 +25,63 @@
   color: #fff;
   border: none;
   z-index: 100;
-  transition: width 0.3s ease;
+  transition: transform 0.3s ease;
 }
 
 .family-sidebar.collapsed {
-  width: 60px;
+  transform: translateX(-100%);
 }
 
-/* Hide text when collapsed */
-.family-sidebar.collapsed .sidebar-item-text,
-.family-sidebar.collapsed .sidebar-header h2,
-.family-sidebar.collapsed .sidebar-header p {
+/* Hide content when collapsed */
+.family-sidebar.collapsed .sidebar-logo,
+.family-sidebar.collapsed .fs-header1,
+.family-sidebar.collapsed .fs-nav,
+.family-sidebar.collapsed .fs-footer {
   opacity: 0;
-  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
 }
 
-/* Adjust icons when collapsed */
-.family-sidebar.collapsed .sidebar-item-icon {
-  margin-right: 0;
-  font-size: 20px;
+/* Toggle button */
+.family-sidebar-toggle {
+  position: fixed;
+  left: 205px;
+  top: 20px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: bold;
+  z-index: 1000;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(42, 82, 152, 0.2);
+}
+
+.family-sidebar-toggle:hover {
+  background: linear-gradient(135deg, #059669 0%, #2563eb 100%);
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(42, 82, 152, 0.3);
+}
+
+.family-sidebar-toggle.collapsed {
+  left: 0;
+  transform: none;
+}
+
+.toggle-arrow {
+  display: inline-block;
+  transition: transform 0.3s ease;
+}
+
+.toggle-arrow.collapsed {
+  transform: rotate(180deg);
 }
 
 /* Logo styles for the sidebar */
@@ -293,6 +331,13 @@
   scroll-behavior: smooth;
   padding: 24px;
   background: #f9fafb;
+  transition: margin-left 0.3s ease, width 0.3s ease;
+}
+
+/* Adjust margin and width when sidebar is collapsed */
+body.family-sidebar-collapsed .family-main {
+  margin-left: 0;
+  width: 100%;
 }
 
 /* Optional: nicer scrollbar */

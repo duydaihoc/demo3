@@ -31,6 +31,9 @@
   box-sizing: border-box; /* Include padding in width calculation */
 }
 
+/* Note: GroupHome uses .groups-page and .groups-main */
+/* Layout is managed by GroupSidebar.css, only add page-specific styles here */
+
 /* Responsive: nhỏ xuống thì main lấy full width */
 @media (max-width: 900px) {
   .group-page {

@@ -6,6 +6,11 @@ export default function FamilySidebar({ active, collapsed = false }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    // Load collapsed state from localStorage (separate key for family sidebar)
+    const saved = localStorage.getItem('familySidebarCollapsed');
+    return saved === 'true';
+  });
 
   // Menu items array với dropdown cho lists
   const items = [
@@ -45,6 +50,28 @@ export default function FamilySidebar({ active, collapsed = false }) {
   };
 
   const activeTab = getActiveTab();
+
+  // Toggle sidebar collapse
+  const toggleSidebar = () => {
+    const newState = !isCollapsed;
+    setIsCollapsed(newState);
+    localStorage.setItem('familySidebarCollapsed', newState.toString());
+    // Update body class to adjust main content margin
+    if (newState) {
+      document.body.classList.add('family-sidebar-collapsed');
+    } else {
+      document.body.classList.remove('family-sidebar-collapsed');
+    }
+  };
+
+  // Apply initial collapsed state to body
+  useEffect(() => {
+    if (isCollapsed) {
+      document.body.classList.add('family-sidebar-collapsed');
+    } else {
+      document.body.classList.remove('family-sidebar-collapsed');
+    }
+  }, [isCollapsed]);
 
   // Auto-open dropdown if submenu is active
   useEffect(() => {
@@ -109,7 +136,18 @@ export default function FamilySidebar({ active, collapsed = false }) {
   };
 
   return (
-    <aside className={`family-sidebar ${collapsed ? 'collapsed' : ''}`} aria-label="Sidebar gia đình">
+    <>
+      <button
+        className={`family-sidebar-toggle ${isCollapsed ? 'collapsed' : ''}`}
+        onClick={toggleSidebar}
+        aria-label={isCollapsed ? "Mở sidebar gia đình" : "Đóng sidebar gia đình"}
+        title={isCollapsed ? "Mở sidebar gia đình" : "Đóng sidebar gia đình"}
+      >
+        <span className={`toggle-arrow ${isCollapsed ? 'collapsed' : ''}`}>
+          {isCollapsed ? '›' : '‹'}
+        </span>
+      </button>
+      <aside className={`family-sidebar ${isCollapsed ? 'collapsed' : ''}`} aria-label="Sidebar gia đình">
       {/* Add logo component at the top */}
       <div className="sidebar-logo">
         <div className="logo-icon">
@@ -180,5 +218,6 @@ export default function FamilySidebar({ active, collapsed = false }) {
         <button className="fs-back" onClick={() => navigate('/home')}>← Về Trang chủ</button>
       </div>
     </aside>
+    </>
   );
 }

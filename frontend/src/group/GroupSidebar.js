@@ -5,6 +5,11 @@ import './GroupSidebar.css';
 export default function GroupSidebar({ active = 'overview' }) {
   const navigate = useNavigate();
   const [selected, setSelected] = useState(active);
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    // Load collapsed state from localStorage (separate key for group sidebar)
+    const saved = localStorage.getItem('groupSidebarCollapsed');
+    return saved === 'true';
+  });
 
   const items = [
     { id: 'home', label: 'Trang chủ', route: '/group' },
@@ -12,6 +17,28 @@ export default function GroupSidebar({ active = 'overview' }) {
     { id: 'friends', label: 'Bạn bè', route: '/friends' }, // mới
     { id: 'activity', label: 'Hoạt động', route: '/activity' },
   ];
+
+  // Toggle sidebar collapse
+  const toggleSidebar = () => {
+    const newState = !isCollapsed;
+    setIsCollapsed(newState);
+    localStorage.setItem('groupSidebarCollapsed', newState.toString());
+    // Update body class to adjust main content margin
+    if (newState) {
+      document.body.classList.add('group-sidebar-collapsed');
+    } else {
+      document.body.classList.remove('group-sidebar-collapsed');
+    }
+  };
+
+  // Apply initial collapsed state to body
+  useEffect(() => {
+    if (isCollapsed) {
+      document.body.classList.add('group-sidebar-collapsed');
+    } else {
+      document.body.classList.remove('group-sidebar-collapsed');
+    }
+  }, [isCollapsed]);
 
   // Keep .groups-main height in sync on resize (UI-only)
   useEffect(() => {
@@ -52,8 +79,21 @@ export default function GroupSidebar({ active = 'overview' }) {
   };
 
   return (
-    <aside className="group-sidebar" aria-label="Sidebar nhóm">
-      {/* Add logo component at the top */}
+    <>
+      {/* Toggle button - tách ra ngoài để luôn hiển thị */}
+      <button 
+        className={`group-sidebar-toggle ${isCollapsed ? 'collapsed' : ''}`}
+        onClick={toggleSidebar}
+        aria-label={isCollapsed ? "Mở sidebar" : "Đóng sidebar"}
+        title={isCollapsed ? "Mở sidebar" : "Đóng sidebar"}
+      >
+        <span className={`toggle-arrow ${isCollapsed ? 'collapsed' : ''}`}>
+          {isCollapsed ? '›' : '‹'}
+        </span>
+      </button>
+      
+      <aside className={`group-sidebar ${isCollapsed ? 'collapsed' : ''}`} aria-label="Sidebar nhóm">
+        {/* Add logo component at the top */}
       <div className="sidebar-logo">
         <div className="logo-icon">
           <div className="coin-stack">
@@ -98,6 +138,7 @@ export default function GroupSidebar({ active = 'overview' }) {
         <button className="gs-back" onClick={() => navigate('/home')}>← Về Trang chủ</button>
       </div>
     </aside>
+    </>
   );
 }
 

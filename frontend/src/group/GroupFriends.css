@@ -1,22 +1,13 @@
+/* Note: .groups-page and .groups-main layout is managed by GroupSidebar.css */
+/* Only add page-specific styles here */
+
 .groups-page {
-  display: flex;
-  min-height: 100vh;
   background: #f7f8fb;
-  align-items: flex-start;
-  box-sizing: border-box;
-  overflow-x: hidden;
 }
 
 /* ensure main content sits to the right of fixed sidebar and can scroll */
 .groups-main {
   padding: 24px;
-  /* remove old hard-coded left margin so layout uses .groups-page padding-left */
-  margin-left: 0;
-  flex: 1;
-  box-sizing: border-box;
-  min-width: 0;
-  min-height: 100vh;
-  overflow: auto;
 }
 
 /* Header styling with animation */

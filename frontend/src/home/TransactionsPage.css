@@ -5,6 +5,13 @@
   font-family: 'Roboto', Arial, sans-serif;
   padding: 0;
   box-sizing: border-box;
+  transition: width 0.3s ease, margin-left 0.3s ease;
+}
+
+/* Adjust width when sidebar is collapsed */
+body.sidebar-collapsed .transactions-main {
+  width: 100vw;
+  margin-left: 0 !important;
 }
 
 .transactions-header {
@@ -189,9 +196,9 @@
   font-size: 1rem;
 }
 
-.transactions-table th {
-  background: #4ecdc4;
-  color: #fff;
+.transactions-table thead th {
+  background: linear-gradient(135deg, #2a5298 0%, #4ecdc4 100%) !important;
+  color: #fff !important;
   border-radius: 6px 6px 0 0;
 }
 

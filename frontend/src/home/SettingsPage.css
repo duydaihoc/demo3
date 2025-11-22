@@ -9,6 +9,13 @@
   position: relative;
   overflow-x: hidden;
   overflow-y: auto; /* THÊM: Cho phép cuộn dọc */
+  transition: width 0.3s ease, margin-left 0.3s ease;
+}
+
+/* Adjust width when sidebar is collapsed */
+body.sidebar-collapsed .settings-main {
+  width: 100vw;
+  margin-left: 0 !important;
 }
 
 /* Animated background particles */
@@ -24,6 +31,12 @@
     radial-gradient(circle at 80% 80%, rgba(42, 82, 152, 0.1) 0%, transparent 50%);
   pointer-events: none;
   z-index: 0;
+  transition: left 0.3s ease;
+}
+
+/* Adjust background position when sidebar is collapsed */
+body.sidebar-collapsed .settings-main::before {
+  left: 0;
 }
 
 .settings-header {

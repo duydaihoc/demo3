@@ -1,4 +1,7 @@
 /* Modern Activity Page Styles */
+/* Note: Activity page uses .groups-page and .groups-main */
+/* Layout is managed by GroupSidebar.css, only add page-specific styles here */
+
 .activity-main {
   background: linear-gradient(135deg, #2a5298 0%, #4ecdc4 100%);
   min-height: 100vh;

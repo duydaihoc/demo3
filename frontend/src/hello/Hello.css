@@ -1538,7 +1538,7 @@ html.hello-scrollable, body.hello-scrollable {
   .cta-ribbon.cta-ribbon--glass {
     background: linear-gradient(135deg, rgba(42,82,152,0.65) 0%, rgba(78,205,196,0.65) 100%);
   }
-}
-
-/* Nếu muốn tạm ẩn gradient glow cũ có thể giảm blur:
+}/* Nếu muốn tạm ẩn gradient glow cũ có thể giảm blur:
    (giữ nguyên nếu không cần) */
+
+
