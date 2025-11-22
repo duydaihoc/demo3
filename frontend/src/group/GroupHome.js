@@ -1,157 +1,428 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './GroupHome.css';
 import GroupSidebar from './GroupSidebar';
 
 export default function GroupHome() {
   const navigate = useNavigate();
-  // eslint-disable-next-line no-unused-vars
-  const userName = localStorage.getItem('userName') || 'Bạn';
+  const [loading, setLoading] = useState(true);
+  const [groups, setGroups] = useState([]);
+  const [allTransactions, setAllTransactions] = useState([]);
+  const [stats, setStats] = useState({
+    totalGroups: 0,
+    totalTransactions: 0,
+    totalAmount: 0
+  });
+  const [recentGroups, setRecentGroups] = useState([]);
+  const [recentTransactions, setRecentTransactions] = useState([]);
+  const [error, setError] = useState(null);
+
+  const API_BASE = 'http://localhost:5000';
+  const token = localStorage.getItem('token');
+
+  // Get current user ID from token
+  const getCurrentUserId = useCallback(() => {
+    if (!token) return null;
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      return payload.id || payload._id || payload.userId || null;
+    } catch (e) {
+      return null;
+    }
+  }, [token]);
+
+  // Format currency helper
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+  };
+
+  // Fetch groups
+  const fetchGroups = useCallback(async () => {
+    if (!token) return [];
+    try {
+      const res = await fetch(`${API_BASE}/api/groups`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Không thể tải danh sách nhóm');
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    } catch (err) {
+      console.error('Error fetching groups:', err);
+      return [];
+    }
+  }, [token, API_BASE]);
+
+  // Fetch transactions for a group
+  const fetchGroupTransactions = useCallback(async (groupId) => {
+    if (!token || !groupId) return [];
+    try {
+      const res = await fetch(`${API_BASE}/api/groups/${groupId}/transactions`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    } catch (err) {
+      console.error(`Error fetching transactions for group ${groupId}:`, err);
+      return [];
+    }
+  }, [token, API_BASE]);
+
+  // Load all data
+  useEffect(() => {
+    const loadData = async () => {
+      if (!token) {
+        navigate('/login');
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Get current user ID
+        const currentUserId = getCurrentUserId();
+        if (!currentUserId) {
+          setError('Không thể xác định người dùng');
+          setLoading(false);
+          return;
+        }
+
+        // Fetch groups - API trả về các nhóm mà user là owner hoặc member
+        const groupsData = await fetchGroups();
+        setGroups(groupsData);
+
+        // Filter groups where user is owner (for total amount calculation)
+        const ownedGroups = groupsData.filter(group => {
+          const ownerId = group.owner?._id || group.owner;
+          return String(ownerId) === String(currentUserId);
+        });
+
+        // Fetch transactions for all groups
+        const allTxs = [];
+        for (const group of groupsData) {
+          const groupId = group._id || group.id;
+          const txs = await fetchGroupTransactions(groupId);
+          // Add group info to each transaction
+          txs.forEach(tx => {
+            tx.groupInfo = {
+              id: groupId,
+              name: group.name,
+              color: group.color,
+              ownerId: group.owner?._id || group.owner
+            };
+          });
+          allTxs.push(...txs);
+        }
+
+        // Filter transactions chỉ theo createdBy = user hiện tại
+        const userCreatedTransactions = allTxs.filter(tx => {
+          const createdById = tx.createdBy?._id || tx.createdBy;
+          return createdById && String(createdById) === String(currentUserId);
+        });
+
+        // Sort user-created transactions by date (newest first)
+        userCreatedTransactions.sort((a, b) => {
+          const dateA = new Date(a.date || a.createdAt || 0);
+          const dateB = new Date(b.date || b.createdAt || 0);
+          return dateB - dateA;
+        });
+
+        setAllTransactions(userCreatedTransactions);
+
+        // Calculate stats
+        const totalGroups = groupsData.length;
+        const totalTransactions = userCreatedTransactions.length;
+        const totalAmount = userCreatedTransactions.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
+
+        setStats({
+          totalGroups,
+          totalTransactions,
+          totalAmount
+        });
+
+        // Get recent groups (last 4) - chỉ lấy các nhóm mà user đã tạo hoặc tham gia
+        // groupsData đã được filter từ API (chỉ trả về nhóm user là owner hoặc member)
+        const sortedGroups = [...groupsData].sort((a, b) => {
+          const dateA = new Date(a.updatedAt || a.createdAt || 0);
+          const dateB = new Date(b.updatedAt || b.createdAt || 0);
+          return dateB - dateA;
+        });
+        setRecentGroups(sortedGroups.slice(0, 4));
+
+        // Get recent transactions của bạn (last 5)
+        setRecentTransactions(userCreatedTransactions.slice(0, 5));
+
+      } catch (err) {
+        console.error('Error loading data:', err);
+        setError('Không thể tải dữ liệu. Vui lòng thử lại.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [token, navigate, fetchGroups, fetchGroupTransactions, getCurrentUserId]);
+
+  // Parse color (can be string or object)
+  const parseColor = (color) => {
+    if (!color) return { colors: ['#2a5298', '#4ecdc4'], direction: '135deg' };
+    if (typeof color === 'string') {
+      try {
+        return JSON.parse(color);
+      } catch {
+        return { colors: [color, color], direction: '135deg' };
+      }
+    }
+    return color;
+  };
+
+  // Get group color gradient
+  const getGroupGradient = (group) => {
+    const colorData = parseColor(group.color);
+    const colors = colorData.colors || ['#2a5298', '#4ecdc4'];
+    const direction = colorData.direction || '135deg';
+    return `linear-gradient(${direction}, ${colors[0]}, ${colors[1] || colors[0]})`;
+  };
+
+  if (loading) {
+    return (
+      <div className="groups-page">
+        <GroupSidebar active="home" />
+        <main className="groups-main">
+          <div className="gh-loading">
+            <div className="gh-loading-spinner"></div>
+            <p>Đang tải dữ liệu nhóm...</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="groups-page">
+        <GroupSidebar active="home" />
+        <main className="groups-main">
+          <div className="gh-error">
+            <i className="fas fa-exclamation-triangle"></i>
+            <p>{error}</p>
+            <button onClick={() => window.location.reload()}>Thử lại</button>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="groups-page">
       <GroupSidebar active="home" />
+      <main className="groups-main">
+        {/* Header Section */}
+        <header className="gh-header">
+          <div className="gh-title-area">
+            <h1>Trang chủ Nhóm Chi tiêu</h1>
+            <p>Quản lý và theo dõi tất cả nhóm của bạn</p>
+          </div>
+          <div className="gh-actions">
+            <button className="gh-btn secondary" onClick={() => navigate('/groups')}>
+              <i className="fas fa-users"></i> Quản lý nhóm
+            </button>
+            <button className="gh-btn primary" onClick={() => navigate('/groups')}>
+              <i className="fas fa-plus"></i> Tạo nhóm mới
+            </button>
+          </div>
+        </header>
 
-      <main className="groups-main" role="main">
-        {/* Hero Section */}
-        <section className="group-hero">
-          <div className="hero-content">
-            <h1 className="hero-title">Chào mừng đến với Quản lý Nhóm Chi tiêu</h1>
-            <p className="hero-subtitle">
-              Chia sẻ chi phí, theo dõi giao dịch và quản lý công nợ dễ dàng cùng bạn bè và gia đình.
-            </p>
-            <div className="hero-actions">
-              <button className="hero-btn primary" onClick={() => navigate('/groups')}>
-                <i className="fas fa-users"></i> Khám phá nhóm của bạn
-              </button>
-              <button className="hero-btn secondary" onClick={() => navigate('/friends')}>
-                <i className="fas fa-user-plus"></i> Kết nối bạn bè
-              </button>
+        {/* Stats Cards */}
+        <section className="gh-stats-overview">
+          <div className="gh-stat-card total-groups">
+            <div className="gh-stat-icon">
+              <i className="fas fa-users"></i>
+            </div>
+            <div className="gh-stat-content">
+              <div className="gh-stat-label">Tổng số nhóm</div>
+              <div className="gh-stat-value">{stats.totalGroups}</div>
             </div>
           </div>
-          <div className="hero-visual">
-            <div className="hero-cards-stack">
-              <div className="hero-card card-1">
-                <div className="card-icon"><i className="fas fa-layer-group"></i></div>
-                <div className="card-text">Nhóm 1</div>
-              </div>
-              <div className="hero-card card-2">
-                <div className="card-icon"><i className="fas fa-exchange-alt"></i></div>
-                <div className="card-text">Giao dịch</div>
-              </div>
-              <div className="hero-card card-3">
-                <div className="card-icon"><i className="fas fa-chart-pie"></i></div>
-                <div className="card-text">Thống kê</div>
-              </div>
+
+          <div className="gh-stat-card total-transactions">
+            <div className="gh-stat-icon">
+              <i className="fas fa-exchange-alt"></i>
+            </div>
+            <div className="gh-stat-content">
+              <div className="gh-stat-label">Tổng giao dịch</div>
+              <div className="gh-stat-value">{stats.totalTransactions}</div>
+            </div>
+          </div>
+
+          <div className="gh-stat-card total-amount">
+            <div className="gh-stat-icon">
+              <i className="fas fa-wallet"></i>
+            </div>
+            <div className="gh-stat-content">
+              <div className="gh-stat-label">Tổng số tiền (nhóm đã tạo)</div>
+              <div className="gh-stat-value">{formatCurrency(stats.totalAmount)}</div>
             </div>
           </div>
         </section>
 
-        {/* Features Section */}
-        <section className="group-features">
-          <div className="features-header">
-            <h2>Tính năng chính</h2>
-            <p>Khám phá các công cụ giúp bạn quản lý chi tiêu nhóm hiệu quả</p>
-          </div>
+        {/* Main Grid */}
+        <div className="gh-grid">
+          {/* Recent Groups */}
+          <section className="gh-recent-groups">
+            <div className="gh-section-header">
+              <h2><i className="fas fa-layer-group"></i> Nhóm gần đây</h2>
+              <button className="gh-btn-link" onClick={() => navigate('/groups')}>
+                Xem tất cả <i className="fas fa-chevron-right"></i>
+              </button>
+            </div>
 
-          <div className="features-grid">
-            <div className="feature-card">
-              <div className="feature-icon">
+            {recentGroups.length === 0 ? (
+              <div className="gh-empty-state">
+                <i className="fas fa-users"></i>
+                <p>Chưa có nhóm nào</p>
+                <button className="gh-btn primary" onClick={() => navigate('/groups')}>
+                  Tạo nhóm đầu tiên
+                </button>
+              </div>
+            ) : (
+              <div className="gh-groups-list">
+                {recentGroups.map(group => {
+                  const groupId = group._id || group.id;
+                  const groupTxs = allTransactions.filter(tx => 
+                    (tx.groupInfo?.id === groupId) || 
+                    (tx.group === groupId) || 
+                    (tx.groupId === groupId)
+                  );
+                  const groupTotal = groupTxs.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
+                  const memberCount = group.members?.length || 0;
+
+                  return (
+                    <div 
+                      key={groupId} 
+                      className="gh-group-card"
+                      onClick={() => navigate(`/groups/${groupId}/transactions`)}
+                      style={{ 
+                        background: getGroupGradient(group),
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <div className="gh-group-card-header">
+                        <h3>{group.name || 'Nhóm không tên'}</h3>
+                        <span className="gh-group-badge">
+                          <i className="fas fa-users"></i> {memberCount} thành viên
+                        </span>
+                      </div>
+                      <div className="gh-group-card-stats">
+                        <div className="gh-group-stat">
+                          <i className="fas fa-exchange-alt"></i>
+                          <span>{groupTxs.length} giao dịch</span>
+                        </div>
+                        <div className="gh-group-stat">
+                          <i className="fas fa-wallet"></i>
+                          <span>{formatCurrency(groupTotal)}</span>
+                        </div>
+                      </div>
+                      {group.description && (
+                        <p className="gh-group-description">{group.description}</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          {/* Recent Transactions */}
+          <section className="gh-recent-transactions">
+            <div className="gh-section-header">
+              <h2><i className="fas fa-exchange-alt"></i> Giao dịch nhóm gần đây của bạn</h2>
+              <button className="gh-btn-link" onClick={() => navigate('/groups')}>
+                Xem tất cả <i className="fas fa-chevron-right"></i>
+              </button>
+            </div>
+
+            {recentTransactions.length === 0 ? (
+              <div className="gh-empty-state">
+                <i className="fas fa-receipt"></i>
+                <p>Chưa có giao dịch nào</p>
+              </div>
+            ) : (
+              <div className="gh-transactions-list">
+                {recentTransactions.map(tx => {
+                  const groupInfo = tx.groupInfo;
+                  const payerName = tx.payer?.name || tx.payer?.email || 'Người tạo';
+                  const categoryName = tx.category?.name || 'Chưa phân loại';
+                  const categoryIcon = tx.category?.icon || 'fas fa-tag';
+
+                  return (
+                    <div key={tx._id} className="gh-transaction-item">
+                      <div className="gh-transaction-date">
+                        {new Date(tx.date || tx.createdAt).toLocaleDateString('vi-VN', { 
+                          day: '2-digit', 
+                          month: '2-digit' 
+                        })}
+                      </div>
+                      <div className="gh-transaction-content">
+                        <div className="gh-transaction-title">{tx.title || 'Giao dịch nhóm'}</div>
+                        <div className="gh-transaction-meta">
+                          <span className="gh-transaction-group" style={{ 
+                            background: groupInfo ? getGroupGradient({ color: groupInfo.color }) : undefined 
+                          }}>
+                            {groupInfo?.name || 'Nhóm'}
+                          </span>
+                          <span className="gh-transaction-separator">•</span>
+                          <span className="gh-transaction-category">
+                            <i className={categoryIcon}></i> {categoryName}
+                          </span>
+                          <span className="gh-transaction-separator">•</span>
+                          <span className="gh-transaction-payer">{payerName}</span>
+                        </div>
+                      </div>
+                      <div className="gh-transaction-amount">
+                        {formatCurrency(tx.amount || 0)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </div>
+
+        {/* Quick Actions */}
+        <section className="gh-quick-actions">
+          <div className="gh-section-header">
+            <h2><i className="fas fa-bolt"></i> Truy cập nhanh</h2>
+          </div>
+          <div className="gh-actions-grid">
+            <button className="gh-action-card" onClick={() => navigate('/groups')}>
+              <div className="gh-action-icon">
                 <i className="fas fa-users-cog"></i>
               </div>
-              <h3>Quản lý nhóm</h3>
-              <p>Tạo nhóm, thêm/xóa thành viên, và tùy chỉnh thiết kế nhóm với màu sắc gradient đẹp mắt.</p>
-              <button className="feature-btn" onClick={() => navigate('/groups')}>
-                <i className="fas fa-arrow-right"></i> Bắt đầu
-              </button>
-            </div>
+              <div className="gh-action-title">Quản lý nhóm</div>
+            </button>
 
-            <div className="feature-card">
-              <div className="feature-icon">
-                <i className="fas fa-exchange-alt"></i>
+            <button className="gh-action-card" onClick={() => navigate('/friends')}>
+              <div className="gh-action-icon">
+                <i className="fas fa-user-plus"></i>
               </div>
-              <h3>Giao dịch nhóm</h3>
-              <p>Ghi lại chi tiêu chung, phân chia chi phí công bằng và theo dõi lịch sử giao dịch chi tiết.</p>
-              <button className="feature-btn" onClick={() => navigate('/groups')}>
-                <i className="fas fa-arrow-right"></i> Xem giao dịch
-              </button>
-            </div>
+              <div className="gh-action-title">Kết nối bạn bè</div>
+            </button>
 
-            <div className="feature-card">
-              <div className="feature-icon">
-                <i className="fas fa-hand-holding-usd"></i>
-              </div>
-              <h3>Công nợ tự động</h3>
-              <p>Tính toán công nợ, theo dõi ai nợ ai bao nhiêu và thanh toán dễ dàng với một click.</p>
-              <button className="feature-btn" onClick={() => navigate('/groups')}>
-                <i className="fas fa-arrow-right"></i> Kiểm tra công nợ
-              </button>
-            </div>
-
-            <div className="feature-card">
-              <div className="feature-icon">
-                <i className="fas fa-chart-line"></i>
-              </div>
-              <h3>Biểu đồ thống kê</h3>
-              <p>Xem biểu đồ giao dịch theo ngày và tỉ lệ chi tiêu của từng thành viên với giao diện trực quan.</p>
-              <button className="feature-btn" onClick={() => navigate('/groups')}>
-                <i className="fas fa-arrow-right"></i> Xem biểu đồ
-              </button>
-            </div>
-
-            <div className="feature-card">
-              <div className="feature-icon">
-                <i className="fas fa-user-friends"></i>
-              </div>
-              <h3>Kết nối bạn bè</h3>
-              <p>Gửi lời mời kết bạn, quản lý danh sách bạn bè và mời họ tham gia nhóm nhanh chóng.</p>
-              <button className="feature-btn" onClick={() => navigate('/friends')}>
-                <i className="fas fa-arrow-right"></i> Kết nối
-              </button>
-            </div>
-
-            <div className="feature-card">
-              <div className="feature-icon">
+            <button className="gh-action-card" onClick={() => navigate('/activity')}>
+              <div className="gh-action-icon">
                 <i className="fas fa-bell"></i>
               </div>
-              <h3>Thông báo realtime</h3>
-              <p>Nhận thông báo tức thời về lời mời nhóm, thanh toán và cập nhật giao dịch.</p>
-              <button className="feature-btn" onClick={() => navigate('/activity')}>
-                <i className="fas fa-arrow-right"></i> Xem hoạt động
-              </button>
-            </div>
-          </div>
-        </section>
+              <div className="gh-action-title">Hoạt động</div>
+            </button>
 
-        {/* Stats Section */}
-        <section className="group-stats">
-          <div className="stats-container">
-            <div className="stat-item">
-              <div className="stat-number">∞</div>
-              <div className="stat-label">Nhóm có thể tạo</div>
-            </div>
-            <div className="stat-item">
-              <div className="stat-number">∞</div>
-              <div className="stat-label">Thành viên mỗi nhóm</div>
-            </div>
-            <div className="stat-item">
-              <div className="stat-number">100%</div>
-              <div className="stat-label">Miễn phí sử dụng</div>
-            </div>
-            <div className="stat-item">
-              <div className="stat-number">24/7</div>
-              <div className="stat-label">Hỗ trợ mọi lúc</div>
-            </div>
-          </div>
-        </section>
-
-        {/* CTA Section */}
-        <section className="group-cta">
-          <div className="cta-content">
-            <h2>Sẵn sàng bắt đầu?</h2>
-            <p>Tạo nhóm đầu tiên của bạn và trải nghiệm cách quản lý chi tiêu nhóm dễ dàng nhất.</p>
-            <button className="cta-btn" onClick={() => navigate('/groups')}>
-              <i className="fas fa-plus-circle"></i> Tạo nhóm ngay
+            <button className="gh-action-card" onClick={() => navigate('/groups')}>
+              <div className="gh-action-icon">
+                <i className="fas fa-chart-pie"></i>
+              </div>
+              <div className="gh-action-title">Thống kê</div>
             </button>
           </div>
         </section>

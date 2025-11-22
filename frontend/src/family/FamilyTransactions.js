@@ -653,8 +653,6 @@ export default function FamilyTransactions() {
 		return member.familyRole || 'Thành viên';
 	};
 
-	// Thêm state cho sidebar toggle
-	const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
 	// Wallet linking state
 	const [userWallets, setUserWallets] = useState([]);
@@ -1079,18 +1077,9 @@ export default function FamilyTransactions() {
 
 	return (
 		<div className="family-page">
-			<FamilySidebar active="transactions" collapsed={sidebarCollapsed} />
+			<FamilySidebar active="transactions" />
 			
-			<main className={`family-main ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
-				{/* Toggle sidebar button */}
-				<button 
-					className="sidebar-toggle-btn"
-					onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-					title={sidebarCollapsed ? 'Mở sidebar' : 'Thu gọn sidebar'}
-				>
-					<i className={`fas ${sidebarCollapsed ? 'fa-bars' : 'fa-times'}`}></i>
-				</button>
-				
+			<main className="family-main">
 				<header className="ft-header">
 					<h1>Giao dịch gia đình</h1>
 					<p>Quản lý thu nhập và chi tiêu của gia đình</p>

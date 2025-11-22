@@ -12,7 +12,6 @@ export default function FamilyShoppingList() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [newItem, setNewItem] = useState({ name: '', quantity: 1, notes: '', category: '' });
   const [saving, setSaving] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [categories, setCategories] = useState([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
   const [familyInfo, setFamilyInfo] = useState(null); // THÊM: family info để kiểm tra owner
@@ -784,18 +783,9 @@ export default function FamilyShoppingList() {
 
   return (
     <div className="family-page">
-      <FamilySidebar active="shopping-list" collapsed={sidebarCollapsed} />
+      <FamilySidebar active="shopping-list" />
       
-      <main className={`family-main ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
-        {/* Toggle sidebar button */}
-        <button 
-          className="sidebar-toggle-btn"
-          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          title={sidebarCollapsed ? 'Mở sidebar' : 'Thu gọn sidebar'}
-        >
-          <i className={`fas ${sidebarCollapsed ? 'fa-bars' : 'fa-times'}`}></i>
-        </button>
-        
+      <main className="family-main">
         {/* Header với dashboard style */}
         <header className="fsl-header">
           <div className="fsl-header-main">

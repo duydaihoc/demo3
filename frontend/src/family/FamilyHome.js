@@ -439,7 +439,7 @@ export default function FamilyHome() {
 
   const closeAllFamilyTransactions = () => {
     setShowAllFamilyTxModal(false);
-    setFamilyTransactionsAll([]);
+    // Không clear familyTransactionsAll để giữ lại data cho phần "Giao dịch gần đây"
     setFamilyTxsError(null);
   };
 
@@ -598,7 +598,7 @@ export default function FamilyHome() {
               </div>
               
               <div className="fh-actions">
-                <button className="fh-btn secondary" onClick={() => navigate('/family/expenses')}>
+                <button className="fh-btn secondary" onClick={() => navigate('/family/transactions')}>
                   <i className="fas fa-receipt"></i> Thêm chi tiêu
                 </button>
                 <button className="fh-btn primary" onClick={() => setShowBudgetModal(true)}>
@@ -905,14 +905,14 @@ export default function FamilyHome() {
                 </div>
                 
                 <div className="fh-actions-grid">
-                  <button className="fh-action-card" onClick={() => navigate('/family/expenses')}>
+                  <button className="fh-action-card" onClick={() => navigate('/family/transactions')}>
                     <div className="fh-action-icon">
                       <i className="fas fa-receipt"></i>
                     </div>
                     <div className="fh-action-title">Thêm chi tiêu</div>
                   </button>
                   
-                  <button className="fh-action-card" onClick={() => navigate('/family/budget')}>
+                  <button className="fh-action-card" onClick={() => { setShowBudgetModal(true); setShowAddBudget(true); }}>
                     <div className="fh-action-icon">
                       <i className="fas fa-wallet"></i>
                     </div>
@@ -926,7 +926,7 @@ export default function FamilyHome() {
                     <div className="fh-action-title">Mục tiêu tiết kiệm</div>
                   </button>
                   
-                  <button className="fh-action-card" onClick={() => navigate('/family/bills')}>
+                  <button className="fh-action-card" onClick={() => navigate('/family/archive')}>
                     <div className="fh-action-icon">
                       <i className="fas fa-file-invoice-dollar"></i>
                     </div>

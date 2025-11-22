@@ -3,8 +3,17 @@
   flex: 1;
   padding: 32px 40px;
   min-height: 100vh;
+  margin-left: 220px; /* matches sidebar width */
+  width: calc(100% - 220px);
   box-sizing: border-box;
   background: radial-gradient(circle at top left, #eef2ff 0%, #f9fafb 40%, #f5f7fb 100%);
+  transition: margin-left 0.3s ease, width 0.3s ease;
+}
+
+/* Adjust margin and width when sidebar is collapsed */
+body.group-sidebar-collapsed .group-transactions-page {
+  margin-left: 0;
+  width: 100%;
 }
 
 .gt-header {
@@ -1356,6 +1365,13 @@
 }
 
 /* Responsive adjustments */
+@media (max-width: 900px) {
+  .group-transactions-page {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
 @media (max-width: 640px) {
   .percentage-table-header,
   .percentage-table-row {

@@ -18,7 +18,6 @@ export default function FamilyTodoList() {
     assignedTo: []
   });
   const [saving, setSaving] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [familyInfo, setFamilyInfo] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -453,18 +452,9 @@ export default function FamilyTodoList() {
 
   return (
     <div className="family-page">
-      <FamilySidebar active="todo-list" collapsed={sidebarCollapsed} />
+      <FamilySidebar active="todo-list" />
       
-      <main className={`family-main ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
-        {/* Toggle sidebar button */}
-        <button 
-          className="sidebar-toggle-btn"
-          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          title={sidebarCollapsed ? 'Mở sidebar' : 'Thu gọn sidebar'}
-        >
-          <i className={`fas ${sidebarCollapsed ? 'fa-bars' : 'fa-times'}`}></i>
-        </button>
-        
+      <main className="family-main">
         {/* Header với dashboard style */}
         <header className="ftl-header">
           <div className="ftl-header-main">

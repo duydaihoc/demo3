@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './FamilySidebar.css';
 
-export default function FamilySidebar({ active, collapsed = false }) {
+export default function FamilySidebar({ active }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [dropdownOpen, setDropdownOpen] = useState(false);

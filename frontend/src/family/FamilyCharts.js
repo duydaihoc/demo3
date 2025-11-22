@@ -33,7 +33,6 @@ export default function FamilyCharts() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [familyInfo, setFamilyInfo] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
 
@@ -936,18 +935,9 @@ export default function FamilyCharts() {
 
   return (
     <div className="family-page">
-      <FamilySidebar active="charts" collapsed={sidebarCollapsed} />
+      <FamilySidebar active="charts" />
       
-      <main className={`family-main ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
-        {/* Toggle sidebar button */}
-        <button 
-          className="sidebar-toggle-btn"
-          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          title={sidebarCollapsed ? 'Mở sidebar' : 'Thu gọn sidebar'}
-        >
-          <i className={`fas ${sidebarCollapsed ? 'fa-bars' : 'fa-times'}`}></i>
-        </button>
-        
+      <main className="family-main">
         <header className="fc-header">
           <div className="fc-header-main">
             <div className="fc-header-title-section">

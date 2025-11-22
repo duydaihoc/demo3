@@ -34,8 +34,6 @@ export default function FamilyArchive() {
   const [currentUser, setCurrentUser] = useState(null);
   const [categories, setCategories] = useState([]);
   
-  // Sidebar state
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   
   // Upload modal states
   const [uploadModal, setUploadModal] = useState(false);
@@ -712,18 +710,9 @@ export default function FamilyArchive() {
 
   return (
     <div className="family-page">
-      <FamilySidebar active="archive" collapsed={sidebarCollapsed} />
+      <FamilySidebar active="archive" />
       
-      <main className={`family-main ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
-        {/* Toggle sidebar button */}
-        <button 
-          className="sidebar-toggle-btn"
-          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          title={sidebarCollapsed ? 'Mở sidebar' : 'Thu gọn sidebar'}
-        >
-          <i className={`fas ${sidebarCollapsed ? 'fa-bars' : 'fa-times'}`}></i>
-        </button>
-        
+      <main className="family-main">
         <header className="fa-header">
           <div>
             <h1>

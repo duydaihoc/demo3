@@ -878,35 +878,7 @@ body.family-sidebar-collapsed .fh-main {
   color: #1e293b;
 }
 
-/* Sidebar toggle button */
-.sidebar-toggle-btn {
-  position: fixed;
-  top: 20px;
-  left: 240px;
-  z-index: 1000;
-  background: linear-gradient(135deg, #4ecdc4 0%, #2a5298 100%);
-  color: white;
-  border: none;
-  border-radius: 12px;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: 18px;
-  box-shadow: 0 4px 16px rgba(42, 82, 152, 0.3);
-  transition: all 0.3s ease;
-}
-
-.sidebar-toggle-btn:hover {
-  transform: scale(1.1);
-  box-shadow: 0 6px 20px rgba(42, 82, 152, 0.4);
-}
-
-.fh-main.sidebar-collapsed .sidebar-toggle-btn {
-  left: 80px;
-}
+/* Sidebar toggle is now handled by FamilySidebar component */
 
 /* Responsive */
 @media (max-width: 1200px) {
@@ -921,13 +893,6 @@ body.family-sidebar-collapsed .fh-main {
     padding: 24px;
   }
   
-  .fh-main.sidebar-collapsed {
-    margin-left: 0;
-  }
-  
-  .sidebar-toggle-btn {
-    left: 20px;
-  }
   
   .fs-header h1 {
     font-size: 32px;

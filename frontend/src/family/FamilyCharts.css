@@ -675,29 +675,7 @@ body.family-sidebar-collapsed .family-main {
 }
 
 /* Sidebar toggle button */
-.sidebar-toggle-btn {
-  position: fixed;
-  top: 20px;
-  left: 20px;
-  z-index: 1001;
-  background: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: 16px;
-  transition: all 0.3s ease;
-}
-
-.sidebar-toggle-btn:hover {
-  background: #2563eb;
-  transform: scale(1.05);
-}
+/* Sidebar toggle is now handled by FamilySidebar component */
 
 /* Chart.js styles */
 .fc-chart-content canvas {

@@ -1179,30 +1179,7 @@ body.family-sidebar-collapsed .family-main {
 }
 
 /* Sidebar toggle button */
-.sidebar-toggle-btn {
-  position: fixed;
-  top: 24px;
-  left: 24px;
-  z-index: 1001;
-  background: linear-gradient(135deg, #2a5298 0%, #4ecdc4 100%);
-  color: white;
-  border: none;
-  border-radius: 12px;
-  width: 48px;
-  height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: 18px;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 16px rgba(42, 82, 152, 0.3);
-}
-
-.sidebar-toggle-btn:hover {
-  transform: scale(1.1) rotate(90deg);
-  box-shadow: 0 8px 24px rgba(42, 82, 152, 0.4);
-}
+/* Sidebar toggle is now handled by FamilySidebar component */
 
 /* CẢNH BÁO QUÁ HẠN */
 .ftl-alerts-section {

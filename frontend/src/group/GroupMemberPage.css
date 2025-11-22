@@ -11,11 +11,20 @@
   padding: 24px 32px;
   background: #f5f7fa;
   height: 100vh; /* Set fixed height to viewport */
-  width: 100%;
+  margin-left: 220px; /* matches sidebar width */
+  width: calc(100% - 220px);
   max-width: 100%;
   font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
   overflow-y: auto; /* Enable vertical scrolling */
   overflow-x: hidden; /* Prevent horizontal scrolling */
+  transition: margin-left 0.3s ease, width 0.3s ease;
+  box-sizing: border-box;
+}
+
+/* Adjust margin and width when sidebar is collapsed */
+body.group-sidebar-collapsed .group-member-page {
+  margin-left: 0;
+  width: 100%;
 }
 
 /* Make scrollbars consistent across browsers */
@@ -158,6 +167,11 @@
 }
 
 @media (max-width: 768px) {
+  .group-member-page {
+    margin-left: 0;
+    width: 100%;
+  }
+  
   .gm-layout {
     grid-template-columns: 1fr;
   }
