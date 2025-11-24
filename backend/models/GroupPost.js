@@ -55,6 +55,11 @@ const groupPostSchema = new mongoose.Schema(
         },
       },
     ],
+    linkedTransaction: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'GroupTransaction',
+      required: false,
+    },
   },
   {
     timestamps: true,

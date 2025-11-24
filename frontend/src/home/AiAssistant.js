@@ -153,7 +153,7 @@ export default function AiAssistant() {
         ]);
       }
 
-      return `😊 [Chế độ mẹ hiền]\n${base}${extraLine ? `\n\n${extraLine}` : ''}`;
+      return `[Chế độ mẹ hiền]\n${base}${extraLine ? `\n\n${extraLine}` : ''}`;
     }
 
     if (persona === 'aggressive') {
@@ -292,9 +292,13 @@ export default function AiAssistant() {
     }
 
     // Xử lý pending + suggestion tạo giao dịch
+    // QUAN TRỌNG: Luôn cập nhật pendingTransaction nếu backend trả về
     if (data.needsMoreInfo && data.pendingTransaction) {
+      console.log('Received pendingTransaction from backend:', data.pendingTransaction);
       setPendingTransaction(data.pendingTransaction);
     } else if (data.transactionSuggestion && data.transactionSuggestion.confidence > 0.6) {
+      // Khi có transactionSuggestion, đã đủ thông tin, không cần pending nữa
+      console.log('Transaction suggestion received, clearing pendingTransaction');
       setPendingTransaction(null);
       setSuggestedTransaction(data.transactionSuggestion);
 
@@ -358,11 +362,29 @@ export default function AiAssistant() {
     setConversationHistory(newHistory);
 
     try {
-      console.log('🚀 Sending message to Gemini AI...');
+      console.log('Sending message to Gemini AI...');
       
       // Gọi AI API với enhanced timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout
+      
+      // QUAN TRỌNG: Luôn gửi pendingTransaction nếu có, để backend nhớ thông tin đã nhận
+      const requestBody = {
+        message: userMessage.text,
+        conversationHistory: newHistory,
+        persona:
+          persona === 'friendly'
+            ? 'friendly'
+            : persona === 'aggressive'
+            ? 'aggressive'
+            : 'neutral'
+      };
+      
+      // THÊM: Luôn gửi pendingTransaction nếu có (kể cả khi null, để backend biết là không có)
+      if (pendingTransaction) {
+        requestBody.pendingTransaction = pendingTransaction;
+        console.log('📤 Sending pendingTransaction to backend:', pendingTransaction);
+      }
       
       const response = await fetch(`${API_BASE}/api/ai/chat`, {
         method: 'POST',
@@ -370,18 +392,7 @@ export default function AiAssistant() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({
-          message: userMessage.text,
-          conversationHistory: newHistory,
-          pendingTransaction: pendingTransaction, // THÊM: gửi pending transaction nếu có
-          // THÊM: gửi persona lên backend
-          persona:
-            persona === 'friendly'
-              ? 'friendly'
-              : persona === 'aggressive'
-              ? 'aggressive'
-              : 'neutral'
-        }),
+        body: JSON.stringify(requestBody),
         signal: controller.signal
       });
 
@@ -399,12 +410,12 @@ export default function AiAssistant() {
     } catch (error) {
       console.error('AI Error:', error);
       
-      let errorMessage = '😅 Xin lỗi, tôi đang gặp sự cố.\n\n';
+      let errorMessage = 'Xin lỗi, tôi đang gặp sự cố.\n\n';
       
       if (error.name === 'AbortError') {
         errorMessage += 'Phản hồi quá lâu, vui lòng thử lại.';
       } else if (error.message.includes('HTTP')) {
-        errorMessage += '🌐 Không thể kết nối server.';
+        errorMessage += 'Không thể kết nối server.';
       } else {
         errorMessage += 'Lỗi hệ thống tạm thời.';
       }
@@ -758,7 +769,7 @@ export default function AiAssistant() {
     setIsTyping(true);
 
     // Text cho message
-    const userMessageText = `📷 Đã tải lên ảnh hóa đơn`;
+    const userMessageText = `Đã tải lên ảnh hóa đơn`;
 
     // Tạo data URL để hiển thị preview ảnh
     const reader = new FileReader();

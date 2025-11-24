@@ -12,6 +12,52 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
+// Helper function to populate category for linkedTransaction
+async function populateLinkedTransactionCategory(post) {
+  if (!post.linkedTransaction || !post.linkedTransaction.category) {
+    return post;
+  }
+
+  const Category = mongoose.model('Category');
+  const category = post.linkedTransaction.category;
+
+  // If category is a string (ObjectId), populate it
+  if (typeof category === 'string' && mongoose.Types.ObjectId.isValid(category)) {
+    try {
+      const categoryDoc = await Category.findById(category).select('name icon').lean();
+      if (categoryDoc) {
+        post.linkedTransaction.category = categoryDoc;
+      } else {
+        post.linkedTransaction.category = null;
+      }
+    } catch (err) {
+      console.error('Error populating category:', err);
+      post.linkedTransaction.category = null;
+    }
+  }
+  // If category is an object but doesn't have name, it might be an ObjectId object
+  else if (typeof category === 'object' && category._id && !category.name) {
+    try {
+      const categoryDoc = await Category.findById(category._id).select('name icon').lean();
+      if (categoryDoc) {
+        post.linkedTransaction.category = categoryDoc;
+      } else {
+        post.linkedTransaction.category = null;
+      }
+    } catch (err) {
+      console.error('Error populating category:', err);
+      post.linkedTransaction.category = null;
+    }
+  }
+  // If category is already an object with name, keep it as is
+  // If category is not a valid format, set to null
+  else if (typeof category !== 'object' || !category.name) {
+    post.linkedTransaction.category = null;
+  }
+
+  return post;
+}
+
 // Helper: kiểm tra user có thuộc nhóm (owner hoặc member) hay không
 async function ensureGroupMember(groupId, userId) {
   const group = await Group.findById(groupId).select('_id owner members');
@@ -822,7 +868,16 @@ router.get('/:groupId/posts', auth, async (req, res) => {
       .populate('author', 'name email')
       .populate('comments.user', 'name email')
       .populate('likes.user', 'name email')
+      .populate({
+        path: 'linkedTransaction',
+        select: 'title description amount date category transactionType tags'
+      })
       .lean();
+
+    // Populate category manually for linkedTransaction because category is Mixed type
+    for (const post of posts) {
+      await populateLinkedTransactionCategory(post);
+    }
 
     res.json(posts);
   } catch (err) {
@@ -841,11 +896,32 @@ router.post('/:groupId/posts', auth, async (req, res) => {
     );
     if (!ok) return res.status(status).json({ message });
 
-    const { content = '', images = [] } = req.body || {};
-    if (!content && (!images || !images.length)) {
+    const { content = '', images = [], linkedTransaction } = req.body || {};
+    if (!content && (!images || !images.length) && !linkedTransaction) {
       return res
         .status(400)
-        .json({ message: 'Nội dung hoặc hình ảnh là bắt buộc' });
+        .json({ message: 'Nội dung, hình ảnh hoặc giao dịch liên kết là bắt buộc' });
+    }
+
+    // Validate linkedTransaction if provided
+    if (linkedTransaction) {
+      const transaction = await GroupTransaction.findOne({
+        _id: linkedTransaction,
+        groupId: group._id
+      });
+      
+      if (!transaction) {
+        return res.status(400).json({ message: 'Giao dịch không tồn tại hoặc không thuộc nhóm này' });
+      }
+      
+      // Kiểm tra xem giao dịch này đã được liên kết với bài viết khác chưa
+      const existingPost = await GroupPost.findOne({
+        group: group._id,
+        linkedTransaction: linkedTransaction
+      });
+      if (existingPost) {
+        return res.status(400).json({ message: 'Giao dịch này đã được liên kết với một bài viết khác' });
+      }
     }
 
     const post = await GroupPost.create({
@@ -855,12 +931,21 @@ router.post('/:groupId/posts', auth, async (req, res) => {
       images: Array.isArray(images)
         ? images.filter((u) => typeof u === 'string' && u.trim())
         : [],
+      linkedTransaction: linkedTransaction || null,
     });
 
     const populated = await GroupPost.findById(post._id)
       .populate('author', 'name email')
       .populate('comments.user', 'name email')
       .populate('likes.user', 'name email')
+      .populate({
+        path: 'linkedTransaction',
+        select: 'title description amount date category transactionType',
+        populate: {
+          path: 'category',
+          select: 'name icon'
+        }
+      })
       .lean();
 
     res.status(201).json(populated);
@@ -894,7 +979,14 @@ router.post('/:groupId/posts/:postId/like', auth, async (req, res) => {
       .populate('author', 'name email')
       .populate('comments.user', 'name email')
       .populate('likes.user', 'name email')
+      .populate({
+        path: 'linkedTransaction',
+        select: 'title description amount date category transactionType tags'
+      })
       .lean();
+
+    // Populate category manually
+    await populateLinkedTransactionCategory(populated);
 
     res.json(populated);
   } catch (err) {
@@ -929,7 +1021,14 @@ router.post('/:groupId/posts/:postId/comments', auth, async (req, res) => {
       .populate('author', 'name email')
       .populate('comments.user', 'name email')
       .populate('likes.user', 'name email')
+      .populate({
+        path: 'linkedTransaction',
+        select: 'title description amount date category transactionType tags'
+      })
       .lean();
+
+    // Populate category manually
+    await populateLinkedTransactionCategory(populated);
 
     res.status(201).json(populated);
   } catch (err) {
@@ -942,8 +1041,8 @@ router.post('/:groupId/posts/:postId/comments', auth, async (req, res) => {
 router.put('/:groupId/posts/:postId', auth, async (req, res) => {
   try {
     const { groupId, postId } = req.params;
-    const { content, images } = req.body || {};
-    const { ok, status, message } = await ensureGroupMember(groupId, req.user._id);
+    const { content, images, linkedTransaction } = req.body || {};
+    const { ok, status, message, group } = await ensureGroupMember(groupId, req.user._id);
     if (!ok) return res.status(status).json({ message });
 
     const post = await GroupPost.findOne({ _id: postId, group: groupId });
@@ -952,6 +1051,34 @@ router.put('/:groupId/posts/:postId', auth, async (req, res) => {
     // Only author can update
     if (String(post.author) !== String(req.user._id)) {
       return res.status(403).json({ message: 'Chỉ người tạo bài viết mới được sửa' });
+    }
+
+    // Validate linkedTransaction if provided
+    if (linkedTransaction !== undefined) {
+      if (linkedTransaction) {
+        const transaction = await GroupTransaction.findOne({
+          _id: linkedTransaction,
+          groupId: group._id
+        });
+        
+        if (!transaction) {
+          return res.status(400).json({ message: 'Giao dịch không tồn tại hoặc không thuộc nhóm này' });
+        }
+        
+        // Kiểm tra xem giao dịch này đã được liên kết với bài viết khác chưa (trừ bài viết hiện tại)
+        const existingPost = await GroupPost.findOne({
+          group: group._id,
+          linkedTransaction: linkedTransaction,
+          _id: { $ne: postId } // Loại trừ bài viết hiện tại
+        });
+        if (existingPost) {
+          return res.status(400).json({ message: 'Giao dịch này đã được liên kết với một bài viết khác' });
+        }
+        
+        post.linkedTransaction = linkedTransaction;
+      } else {
+        post.linkedTransaction = null;
+      }
     }
 
     if (content !== undefined) post.content = content.trim();
@@ -968,7 +1095,14 @@ router.put('/:groupId/posts/:postId', auth, async (req, res) => {
       .populate('author', 'name email')
       .populate('comments.user', 'name email')
       .populate('likes.user', 'name email')
+      .populate({
+        path: 'linkedTransaction',
+        select: 'title description amount date category transactionType tags'
+      })
       .lean();
+
+    // Populate category manually
+    await populateLinkedTransactionCategory(populated);
 
     res.json(populated);
   } catch (err) {
@@ -1031,7 +1165,14 @@ router.put('/:groupId/posts/:postId/comments/:commentId', auth, async (req, res)
       .populate('author', 'name email')
       .populate('comments.user', 'name email')
       .populate('likes.user', 'name email')
+      .populate({
+        path: 'linkedTransaction',
+        select: 'title description amount date category transactionType tags'
+      })
       .lean();
+
+    // Populate category manually
+    await populateLinkedTransactionCategory(populated);
 
     res.json(populated);
   } catch (err) {
@@ -1066,7 +1207,14 @@ router.delete('/:groupId/posts/:postId/comments/:commentId', auth, async (req, r
       .populate('author', 'name email')
       .populate('comments.user', 'name email')
       .populate('likes.user', 'name email')
+      .populate({
+        path: 'linkedTransaction',
+        select: 'title description amount date category transactionType tags'
+      })
       .lean();
+
+    // Populate category manually
+    await populateLinkedTransactionCategory(populated);
 
     res.json(populated);
   } catch (err) {

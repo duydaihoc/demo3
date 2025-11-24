@@ -72,12 +72,50 @@ async function embedText(text) {
 // THÊM: Detect intents for advice/statistics
 function detectAdviceOrStatsIntent(message) {
   const lower = (message || '').toLowerCase();
+  
+  // THÊM: Phát hiện yêu cầu gợi ý chi tiêu TRƯỚC (ưu tiên cao nhất)
+  const spendingSuggestionKeywords = [
+    'gợi ý chi tiêu',
+    'goi y chi tieu',
+    'nên chi gì',
+    'nen chi gi',
+    'chi tiêu gì',
+    'chi tieu gi',
+    'gợi ý tiêu',
+    'nên mua gì',
+    'nen mua gi',
+    'có thể chi',
+    'co the chi',
+    'nên tiêu',
+    'nen tieu',
+    'gợi ý mua',
+    'goi y mua',
+    'nên mua',
+    'nen mua'
+  ];
+  const isSpendingSuggestion = spendingSuggestionKeywords.some(k => lower.includes(k));
+  
+  // THÊM: Trích xuất số tiền từ message nếu có
+  let suggestedAmount = null;
+  if (isSpendingSuggestion) {
+    suggestedAmount = extractAmount(message);
+  }
+  
+  // Nếu là gợi ý chi tiêu, KHÔNG coi là stats hoặc advice thông thường
+  if (isSpendingSuggestion) {
+    return {
+      advice: false,
+      stats: false,
+      spendingSuggestion: true,
+      suggestedAmount: suggestedAmount
+    };
+  }
+  
   const adviceKeywords = ['lời khuyên', 'tiết kiệm', 'đầu tư', 'kế hoạch', 'mục tiêu', 'gợi ý', 'hướng đi'];
   const statsKeywords = [
     'thống kê',
     'báo cáo',
     'phân tích',
-    'chi tiêu',
     'thu nhập',
     'tổng kết',
     'tháng này',
@@ -91,9 +129,18 @@ function detectAdviceOrStatsIntent(message) {
     'tổng quan tài chính',
     'xem tổng quan'
   ];
+  
+  // LƯU Ý: "chi tiêu" chỉ được thêm vào statsKeywords nếu KHÔNG phải là gợi ý chi tiêu
+  // và có kèm theo từ khóa thống kê/phân tích
+  const hasStatsContext = lower.includes('thống kê') || lower.includes('phân tích') || 
+                          lower.includes('báo cáo') || lower.includes('tổng kết');
+  const isStatsWithExpense = hasStatsContext && (lower.includes('chi tiêu') || lower.includes('chi tieu'));
+  
   return {
     advice: adviceKeywords.some(k => lower.includes(k)),
-    stats: statsKeywords.some(k => lower.includes(k))
+    stats: statsKeywords.some(k => lower.includes(k)) || isStatsWithExpense,
+    spendingSuggestion: false, // Đã xử lý ở trên
+    suggestedAmount: null
   };
 }
 
@@ -451,21 +498,58 @@ async function analyzeBasicTransactionIntent(message, model) {
     const analysisPrompt = `
 Bạn là AI phân tích ý định giao dịch tài chính. Phân tích câu nói sau và trích xuất THÔNG TIN CƠ BẢN.
 
-**QUAN TRỌNG:** CHỈ phân tích loại giao dịch (thu/chi), số tiền và mô tả. KHÔNG phân tích danh mục hay ví.
+**QUAN TRỌNG - PHÂN TÍCH KỸ Ý ĐỊNH:** 
+- TRƯỚC TIÊN: Kiểm tra xem câu nói có phải là YÊU CẦU GỢI Ý, PHÂN TÍCH, SỬA, XÓA không
+- CHỈ phân tích loại giao dịch (thu/chi), số tiền và mô tả. KHÔNG phân tích danh mục hay ví.
+- NẾU người dùng chỉ nói ý định chung (ví dụ: "tạo chi tiêu", "tạo thu nhập") mà KHÔNG có tên cụ thể và số tiền, thì set hasIntent = false
+- CHỈ set hasIntent = true khi có ĐỦ cả: loại giao dịch, số tiền VÀ tên giao dịch cụ thể
+
+**LOẠI TRỪ CÁC TRƯỜNG HỢP SAU (set hasIntent = false):**
+- "gợi ý chi tiêu", "nên chi gì", "chi tiêu gì", "gợi ý mua", "nên mua gì" → YÊU CẦU GỢI Ý
+- "phân tích chi tiêu", "phân tích sâu", "chi tiết chi tiêu" → YÊU CẦU PHÂN TÍCH
+- "sửa giao dịch", "chỉnh giao dịch", "đổi giao dịch" → YÊU CẦU SỬA
+- "xóa giao dịch", "hủy giao dịch" → YÊU CẦU XÓA
+- "hủy việc tạo/sửa/xóa" → HỦY HÀNH ĐỘNG
+- "thống kê", "báo cáo", "tổng quan" → YÊU CẦU THỐNG KÊ
 
 CÂU NÓI CỦA NGƯỜI DÙNG: "${message}"
 
-HƯỚNG DẪN PHÂN TÍCH:
-1. Xác định loại giao dịch: "expense" (chi tiêu) hoặc "income" (thu nhập)
-2. Trích xuất số tiền chính xác (chuyển đổi k, nghìn, triệu)
-3. Tạo mô tả ngắn gọn dựa trên câu nói
+HƯỚNG DẪN PHÂN TÍCH (theo thứ tự):
+1. **Bước 1 - Kiểm tra loại yêu cầu:**
+   - Nếu có từ khóa "gợi ý", "phân tích", "sửa", "xóa", "thống kê" → set hasIntent = false ngay, KHÔNG phân tích tiếp
+   
+2. **Bước 2 - Xác định loại giao dịch:**
+   - "expense" (chi tiêu) hoặc "income" (thu nhập)
+   
+3. **Bước 3 - Trích xuất số tiền:**
+   - Chuyển đổi k, nghìn, triệu → số nguyên
+   - BẮT BUỘC phải có số tiền
+   
+4. **Bước 4 - Tạo mô tả:**
+   - Mô tả ngắn gọn, cụ thể
+   - KHÔNG được là từ khóa chung: "chi tiêu", "thu nhập", "giao dịch"
+   - Phải là tên cụ thể: "ăn tối", "mua sách", "nhận lương"
+
+CÁC TRƯỜNG HỢP KHÔNG ĐỦ THÔNG TIN (set hasIntent = false):
+- "tạo chi tiêu" → thiếu tên và số tiền
+- "tạo thu nhập" → thiếu tên và số tiền
+- "chi tiêu 100k" → thiếu tên cụ thể (chỉ có loại và số tiền)
+- "thu nhập 5 triệu" → thiếu tên cụ thể
+- "gợi ý chi tiêu" → đây là yêu cầu gợi ý, không phải tạo giao dịch
+- "phân tích chi tiêu" → đây là yêu cầu phân tích, không phải tạo giao dịch
+
+CÁC TRƯỜNG HỢP ĐỦ THÔNG TIN (set hasIntent = true):
+- "ăn tối 200k" → có đủ: tên (ăn tối), số tiền (200k), loại (chi tiêu)
+- "mua sách 500 nghìn" → có đủ: tên (mua sách), số tiền (500k), loại (chi tiêu)
+- "nhận lương 10 triệu" → có đủ: tên (nhận lương), số tiền (10tr), loại (thu nhập)
+- "đổ xăng 150k" → có đủ: tên (đổ xăng), số tiền (150k), loại (chi tiêu)
 
 Trả về JSON (KHÔNG markdown, CHỈ JSON):
 {
   "hasIntent": true/false,
-  "type": "expense" hoặc "income",
-  "amount": số tiền (số, không đơn vị),
-  "description": "mô tả ngắn gọn",
+  "type": "expense" hoặc "income" (chỉ khi hasIntent = true),
+  "amount": số tiền (số, không đơn vị) (chỉ khi hasIntent = true),
+  "description": "mô tả ngắn gọn" (chỉ khi hasIntent = true, KHÔNG được là từ khóa chung),
   "confidence": độ tự tin 0-1,
   "reasoning": "giải thích ngắn"
 }
@@ -529,23 +613,99 @@ function detectIncompleteTransaction(message, pendingTransaction = null) {
     
     // Nếu đang có pending transaction, check xem message có cung cấp thông tin còn thiếu không
     if (pendingTransaction) {
-      // Kiểm tra có số tiền không
+      console.log('🔍 Processing pending transaction:', {
+        currentPending: pendingTransaction,
+        message: message
+      });
+      
       const amount = extractAmount(message);
+      
+      // Trích xuất tên giao dịch từ message (loại bỏ số tiền và các từ khóa chung)
+      let description = message.trim();
+      const removeKeywords = [
+        'tạo giao dịch', 'thêm giao dịch', 'ghi giao dịch', 
+        'tạo', 'thêm', 'ghi', 'nhận', 'thu', 'chi', 'tiêu'
+      ];
+      removeKeywords.forEach(keyword => {
+        description = description.replace(new RegExp(keyword, 'gi'), '').trim();
+      });
+      
+      // Loại bỏ số tiền khỏi description để kiểm tra xem có tên mới không
+      let descriptionWithoutAmount = description;
       if (amount) {
+        const amountStr = amount.toString();
+        const amountPatterns = [
+          new RegExp(amountStr.replace(/\B(?=(\d{3})+(?!\d))/g, ','), 'gi'),
+          new RegExp(amountStr.replace(/\B(?=(\d{3})+(?!\d))/g, '.'), 'gi'),
+          new RegExp(`${(amount / 1000).toFixed(0)}k`, 'gi'),
+          new RegExp(`${(amount / 1000).toFixed(0)} nghìn`, 'gi'),
+          new RegExp(`${(amount / 1000000).toFixed(0)} triệu`, 'gi'),
+        ];
+        amountPatterns.forEach(pattern => {
+          descriptionWithoutAmount = descriptionWithoutAmount.replace(pattern, '').trim();
+        });
+      }
+      
+      // Kiểm tra description có phải là từ khóa chung chung không
+      const genericKeywords = [
+        'chi tiêu', 'chitieu', 'chi', 'expense',
+        'thu nhập', 'thunhap', 'thu', 'income',
+        'giao dịch', 'giaodich', 'giao dich'
+      ];
+      const isGenericDescription = genericKeywords.some(keyword => 
+        descriptionWithoutAmount.toLowerCase().trim() === keyword.toLowerCase()
+      );
+      
+      // QUAN TRỌNG: Sử dụng description từ pendingTransaction nếu đã có, hoặc description mới nếu hợp lệ
+      const finalDescription = (
+        (!isGenericDescription && descriptionWithoutAmount.trim() !== '') 
+          ? descriptionWithoutAmount.trim() 
+          : (pendingTransaction.description || null)
+      );
+      
+      // Xác định thông tin hiện có
+      const hasAmount = !!amount || !!pendingTransaction.amount;
+      const finalAmount = amount || pendingTransaction.amount || null;
+      const hasDescription = !!finalDescription && !genericKeywords.some(keyword => 
+        finalDescription.toLowerCase().trim() === keyword.toLowerCase()
+      );
+      
+      // Nếu có đủ cả hai, trả về complete
+      if (hasAmount && hasDescription) {
         return {
           complete: true,
           transaction: {
             ...pendingTransaction,
-            amount: amount,
-            fullContext: `${pendingTransaction.description} ${message}`.trim()
+            amount: finalAmount,
+            description: finalDescription,
+            fullContext: `${finalDescription} ${finalAmount}`.trim()
           }
         };
       }
       
+      // Nếu thiếu một hoặc cả hai
+      let missing = [];
+      if (!hasAmount) missing.push('amount');
+      if (!hasDescription) missing.push('description');
+      
+      // Cập nhật pending transaction với thông tin mới (giữ lại thông tin cũ nếu chưa có mới)
+      const updatedPending = {
+        ...pendingTransaction,
+        description: finalDescription,
+        amount: finalAmount
+      };
+      
+      console.log('📝 Updated pending transaction:', {
+        updatedPending: updatedPending,
+        missing: missing,
+        hasAmount: hasAmount,
+        hasDescription: hasDescription
+      });
+      
       return {
         complete: false,
-        missing: 'amount',
-        pendingTransaction: pendingTransaction
+        missing: missing.length === 1 ? missing[0] : 'both',
+        pendingTransaction: updatedPending
       };
     }
     
@@ -569,6 +729,24 @@ function detectIncompleteTransaction(message, pendingTransaction = null) {
       return { complete: false, missing: null };
     }
     
+    // LOẠI TRỪ: Kiểm tra xem có phải là "gợi ý chi tiêu" không (KHÔNG phải tạo giao dịch)
+    const spendingSuggestionKeywords = [
+      'gợi ý chi tiêu', 'goi y chi tieu',
+      'nên chi gì', 'nen chi gi',
+      'chi tiêu gì', 'chi tieu gi',
+      'gợi ý tiêu', 'goi y tieu',
+      'nên mua gì', 'nen mua gi',
+      'có thể chi', 'co the chi',
+      'nên tiêu', 'nen tieu',
+      'gợi ý mua', 'goi y mua'
+    ];
+    const isSpendingSuggestionRequest = spendingSuggestionKeywords.some(k => lowerMessage.includes(k));
+    
+    // Nếu là yêu cầu gợi ý chi tiêu, KHÔNG coi là tạo giao dịch
+    if (isSpendingSuggestionRequest) {
+      return { complete: false, missing: null };
+    }
+    
     // Phát hiện ý định tạo giao dịch mới
     const expenseKeywords = ['tạo', 'thêm', 'ghi', 'ăn', 'mua', 'chi', 'trả', 'đổ', 'mua sắm', 'khám', 'bệnh', 'thuốc', 'sức khỏe', 'cafe', 'cơm', 'phở', 'bún', 'trà', 'nước', 'nhậu', 'bar', 'nhà hàng', 'quán', 'tối', 'sáng', 'trưa', 'ăn vặt', 'đồ ăn', 'thức ăn', 'xe', 'xăng', 'đổ xăng', 'taxi', 'grab', 'bus', 'tàu', 'máy bay', 'vé', 'đi', 'về', 'đường', 'gửi xe', 'bảo dưỡng', 'shopping', 'quần áo', 'giày', 'túi', 'phụ kiện', 'đồ', 'sắm', 'áo', 'dép', 'váy', 'quần', 'phim', 'game', 'vui chơi', 'giải trí', 'karaoke', 'du lịch', 'picnic', 'chơi', 'vui', 'điện', 'nước', 'internet', 'điện thoại', 'wifi', 'cáp', 'gas', 'tiền điện', 'tiền nước', 'học', 'sách', 'khóa học', 'học phí', 'giáo dục', 'trường', 'lớp'];
     const incomeKeywords = ['thu', 'nhận', 'lương', 'thưởng', 'kiếm', 'bán', 'thu nhập', 'nhận tiền', 'bonus', 'salary', 'nhận lương', 'trả lương'];
@@ -580,31 +758,53 @@ function detectIncompleteTransaction(message, pendingTransaction = null) {
     if (hasTransactionIntent) {
       const amount = extractAmount(message);
       
-      if (!amount) {
-        let description = message.trim();
-        const removeKeywords = [
-          'tạo giao dịch', 'thêm giao dịch', 'ghi giao dịch', 
-          'tạo', 'thêm', 'ghi', 'nhận', 'thu'
-        ];
-        removeKeywords.forEach(keyword => {
-          description = description.replace(new RegExp(keyword, 'gi'), '').trim();
-        });
-        
-        let type = 'expense';
-        for (const keyword of incomeKeywords) {
-          if (lowerMessage.includes(keyword)) {
-            type = 'income';
-            break;
-          }
+      // Phát hiện các từ khóa chung chung (chỉ là ý định, không có tên cụ thể)
+      const genericKeywords = [
+        'chi tiêu', 'chitieu', 'chi', 'expense',
+        'thu nhập', 'thunhap', 'thu', 'income',
+        'giao dịch', 'giaodich', 'giao dich',
+        'tạo', 'thêm', 'ghi'
+      ];
+      
+      let description = message.trim();
+      const removeKeywords = [
+        'tạo giao dịch', 'thêm giao dịch', 'ghi giao dịch', 
+        'tạo', 'thêm', 'ghi', 'nhận', 'thu'
+      ];
+      removeKeywords.forEach(keyword => {
+        description = description.replace(new RegExp(keyword, 'gi'), '').trim();
+      });
+      
+      let type = 'expense';
+      for (const keyword of incomeKeywords) {
+        if (lowerMessage.includes(keyword)) {
+          type = 'income';
+          break;
+        }
+      }
+      
+      // Kiểm tra xem description có phải là từ khóa chung chung không
+      const isGenericDescription = genericKeywords.some(keyword => 
+        description.toLowerCase().trim() === keyword.toLowerCase() || 
+        description.toLowerCase().trim() === ''
+      );
+      
+      // Nếu thiếu số tiền HOẶC description quá chung chung, cần hỏi lại
+      if (!amount || isGenericDescription) {
+        // Xác định thiếu gì
+        let missing = [];
+        if (!amount) missing.push('amount');
+        if (isGenericDescription || !description || description.trim() === '') {
+          missing.push('description');
         }
         
         return {
           complete: false,
-          missing: 'amount',
+          missing: missing.length === 1 ? missing[0] : 'both', // 'amount', 'description', hoặc 'both'
           pendingTransaction: {
             type: type,
-            description: description || (type === 'income' ? 'Thu nhập' : 'Giao dịch'),
-            hasDescription: !!description
+            description: isGenericDescription ? null : (description || null), // null nếu quá chung chung
+            hasDescription: !isGenericDescription && !!description
           }
         };
       }
@@ -623,9 +823,20 @@ function generateMissingInfoPrompt(pendingTransaction) {
   
   const { type, description } = pendingTransaction;
   
+  if (!description || description.trim() === '') {
+    // Thiếu cả tên và số tiền
+    return `💡 **Tôi hiểu bạn muốn tạo giao dịch ${type === 'income' ? 'thu nhập' : 'chi tiêu'}:**
+
+❓ **Vui lòng cung cấp:**
+1. 📝 **Tên giao dịch** (ví dụ: "ăn tối", "mua sách", "nhận lương")
+2. 💰 **Số tiền** (ví dụ: "50k", "500 nghìn", "2 triệu")
+
+Bạn có thể trả lời một lần như: "ăn tối 200k" hoặc trả lời từng phần.`;
+  }
+  
   return `💡 **Tôi hiểu bạn muốn tạo giao dịch:**
 
-📝 ${description || 'Giao dịch'}
+📝 ${description}
 ${type === 'income' ? '💰 Thu nhập' : '💸 Chi tiêu'}
 
 ❓ **Số tiền là bao nhiêu?**
@@ -633,45 +844,117 @@ ${type === 'income' ? '💰 Thu nhập' : '💸 Chi tiêu'}
 Ví dụ: "50k", "50 nghìn", "500.000đ", "2 triệu"`;
 }
 
-// THÊM: Helper function phân tích danh mục cho message (sử dụng Gemini)
-async function analyzeCategoryForMessage(message, categories, model, hintedType = null) {
+// THÊM: Helper function phân tích danh mục cho message (sử dụng Gemini) - CẢI THIỆN
+async function analyzeCategoryForMessage(message, categories, model, hintedType = null, userHistory = null) {
   try {
     const expenseCats = categories.filter(c => c.type === 'expense' || !c.type);
     const incomeCats = categories.filter(c => c.type === 'income');
 
+    // Phân tích message để trích xuất thông tin
+    const lowerMessage = message.toLowerCase();
+    const amount = extractAmount(message);
+    const hasAmount = amount !== null;
+    
+    // Tạo context về lịch sử giao dịch nếu có
+    let historyContext = '';
+    if (userHistory && userHistory.length > 0) {
+      // Phân tích pattern từ lịch sử
+      const similarTransactions = userHistory.filter(t => {
+        const txDesc = (t.title || t.description || '').toLowerCase();
+        const txAmount = t.amount || 0;
+        
+        // Tìm giao dịch tương tự về mô tả hoặc số tiền
+        const descSimilar = txDesc.split(' ').some(word => 
+          word.length > 3 && lowerMessage.includes(word)
+        );
+        const amountSimilar = hasAmount && Math.abs(txAmount - amount) < amount * 0.5;
+        
+        return descSimilar || amountSimilar;
+      }).slice(0, 5);
+      
+      if (similarTransactions.length > 0) {
+        const categoryFrequency = new Map();
+        similarTransactions.forEach(t => {
+          if (t.category && t.category.name) {
+            const catName = t.category.name;
+            categoryFrequency.set(catName, (categoryFrequency.get(catName) || 0) + 1);
+          }
+        });
+        
+        const topCategories = Array.from(categoryFrequency.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([name]) => name);
+        
+        if (topCategories.length > 0) {
+          historyContext = `\n\n**LỊCH SỬ GIAO DỊCH TƯƠNG TỰ:**
+- Tìm thấy ${similarTransactions.length} giao dịch tương tự
+- Danh mục thường dùng cho loại giao dịch này: ${topCategories.join(', ')}
+- Hãy ưu tiên chọn danh mục từ danh sách trên nếu phù hợp.`;
+        }
+      }
+    }
+
     const categoryPrompt = `
-Bạn là AI phân tích danh mục cho giao dịch tài chính.
+Bạn là AI chuyên gia phân tích danh mục cho giao dịch tài chính. Nhiệm vụ của bạn là PHÂN TÍCH SÂU và CHỌN DANH MỤC CHÍNH XÁC NHẤT.
 
 DANH MỤC CHI TIÊU CÓ SẴN:
-${expenseCats.map(c => `- ${c.name} (${c.icon || '📝'}) - Mô tả: ${c.description || 'Không có'} (ID: ${c._id})`).join('\n')}
+${expenseCats.map(c => `- ${c.name}${c.icon ? ` (${c.icon})` : ''} - Mô tả: ${c.description || 'Không có mô tả'} (ID: ${c._id})`).join('\n')}
 
 DANH MỤC THU NHẬP CÓ SẴN:
-${incomeCats.map(c => `- ${c.name} (${c.icon || '💰'}) - Mô tả: ${c.description || 'Không có'} (ID: ${c._id})`).join('\n')}
+${incomeCats.map(c => `- ${c.name}${c.icon ? ` (${c.icon})` : ''} - Mô tả: ${c.description || 'Không có mô tả'} (ID: ${c._id})`).join('\n')}
 
 CÂU NÓI VỀ GIAO DỊCH: "${message}"
+${hintedType ? `\nLOẠI GIAO DỊCH: ${hintedType === 'expense' ? 'Chi tiêu' : 'Thu nhập'}` : ''}
+${hasAmount ? `\nSỐ TIỀN: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount)}` : ''}
+${historyContext}
 
-**QUAN TRỌNG:** 
-- CHỈ chọn danh mục TỪ DANH SÁCH TRÊN
-- categoryId PHẢI là ID trong dấu ngoặc (ID: ...), KHÔNG phải tên danh mục
-- Nếu không tìm thấy danh mục phù hợp, trả về categoryId = null
+**QUAN TRỌNG - PHÂN TÍCH SÂU:**
+1. **PHÂN TÍCH NGỮ CẢNH:**
+   - Đọc kỹ mô tả giao dịch, tìm từ khóa chính
+   - Xem xét số tiền (nếu có) để suy đoán loại giao dịch
+   - Phân tích thời gian/địa điểm nếu có trong mô tả
 
-**MAPPING KEYWORDS:**
-- Ăn, uống, cafe, cơm, bún, phở, tối, sáng, trưa → "Ăn uống"
-- Xăng, xe, taxi, grab → "Đi lại" hoặc "Xe cộ"
-- Quần áo, giày dép, mua sắm → "Mua sắm" hoặc "Quần áo"
-- Điện, nước, internet, điện thoại → "Hóa đơn" hoặc "Tiện ích"
+2. **SO SÁNH VỚI DANH MỤC:**
+   - Đọc MÔ TẢ của từng danh mục, không chỉ tên
+   - Tìm danh mục có mô tả KHỚP NHẤT với giao dịch
+   - Nếu có lịch sử tương tự, ưu tiên danh mục đã dùng trước đó
 
-**VÍ DỤ:**
-Input: "ăn tối 50k"
-Danh sách có: "- Ăn uống (🍔) (ID: 507f1f77bcf86cd799439011)"
-Output: {{"categoryId": "507f1f77bcf86cd799439011", "categoryName": "Ăn uống", "confidence": 0.9}}
+3. **MAPPING KEYWORDS THÔNG MINH:**
+   - Ăn, uống, nhậu, cafe, trà sữa, cơm, bún, phở, tối, sáng, trưa, buffet, nhà hàng → Tìm danh mục "Ăn uống" hoặc tương tự
+   - Xăng, đổ xăng, xe, taxi, grab, uber, bus, tàu, máy bay, vé → Tìm "Đi lại", "Xe cộ", "Giao thông"
+   - Quần áo, giày dép, phụ kiện, mua sắm, shopping, thời trang → Tìm "Mua sắm", "Quần áo", "Thời trang"
+   - Điện, nước, internet, wifi, điện thoại, tiền nhà, thuê nhà → Tìm "Hóa đơn", "Tiện ích", "Nhà ở"
+   - Phim, game, giải trí, vui chơi, karaoke, bar, club → Tìm "Giải trí", "Vui chơi"
+   - Sức khỏe, bệnh viện, thuốc, khám, y tế, phòng khám → Tìm "Sức khỏe", "Y tế"
+   - Học, sách, khóa học, trường, học phí, giáo dục → Tìm "Học tập", "Giáo dục"
+   - Lương, thưởng, nhận tiền, tiền lương, thu nhập → Tìm "Lương", "Thu nhập"
+   - Tiết kiệm, đầu tư, gửi tiết kiệm → Tìm "Tiết kiệm", "Đầu tư"
+
+4. **XỬ LÝ TRƯỜNG HỢP ĐẶC BIỆT:**
+   - Nếu mô tả mơ hồ (ví dụ: "chi tiêu 100k"), phân tích dựa trên số tiền và lịch sử
+   - Nếu có nhiều danh mục phù hợp, chọn danh mục CỤ THỂ NHẤT (ví dụ: "Cafe" thay vì "Ăn uống" nếu có)
+   - Nếu không có danh mục phù hợp 100%, chọn danh mục GẦN NHẤT hoặc null
+
+**VÍ DỤ PHÂN TÍCH:**
+Input: "ăn tối nhà hàng 200k"
+- Từ khóa: "ăn tối", "nhà hàng"
+- Số tiền: 200,000 VND (mức trung bình cho bữa ăn)
+- Phân tích: Đây là chi tiêu ăn uống tại nhà hàng
+- Chọn: Danh mục "Ăn uống" (ID: ...)
+
+Input: "đổ xăng xe máy 150k"
+- Từ khóa: "đổ xăng", "xe máy"
+- Số tiền: 150,000 VND (phù hợp với đổ xăng)
+- Phân tích: Chi tiêu cho phương tiện đi lại
+- Chọn: Danh mục "Đi lại" hoặc "Xe cộ" (ID: ...)
 
 Trả về JSON (KHÔNG markdown, CHỈ JSON):
-{{
+{
   "categoryId": "ID dạng 507f1f77bcf86cd799439011" hoặc null,
   "categoryName": "Tên danh mục" hoặc null,
-  "confidence": 0-1,
-  "reasoning": "giải thích"
+  "confidence": 0-1 (độ tự tin, cao hơn nếu có lịch sử tương tự),
+  "reasoning": "Giải thích chi tiết tại sao chọn danh mục này, dựa trên mô tả, số tiền, và lịch sử (nếu có)"
 }
 `;
 
@@ -801,8 +1084,14 @@ router.post('/chat', auth, async (req, res) => {
       (lowerMessageEarly.includes('bỏ') && !lowerMessageEarly.includes('bỏ việc'))
     );
 
-    // Chỉ kiểm tra incomplete transaction khi KHÔNG phải sửa/xóa
-    const incompleteCheck = !isEditIntentEarly && !isDeleteIntentEarly ? detectIncompleteTransaction(message, pendingTransaction) : { complete: false, missing: null };
+    // THÊM: Kiểm tra gợi ý chi tiêu TRƯỚC (ưu tiên cao nhất)
+    const earlyAdviceStatsIntent = detectAdviceOrStatsIntent(message);
+    const isSpendingSuggestionEarly = earlyAdviceStatsIntent.spendingSuggestion;
+    
+    // Chỉ kiểm tra incomplete transaction khi KHÔNG phải sửa/xóa VÀ KHÔNG phải gợi ý chi tiêu
+    const incompleteCheck = !isEditIntentEarly && !isDeleteIntentEarly && !isSpendingSuggestionEarly 
+      ? detectIncompleteTransaction(message, pendingTransaction) 
+      : { complete: false, missing: null };
     
     if (incompleteCheck.complete && incompleteCheck.transaction) {
       // Có đủ thông tin rồi, phân tích category
@@ -822,11 +1111,21 @@ router.post('/chat', auth, async (req, res) => {
           
           console.log('🔍 Analyzing category with full context:', contextForAnalysis);
           
+          // Lấy lịch sử giao dịch để phân tích pattern
+          const userHistory = await Transaction.find({ 
+            wallet: { $in: wallets.map(w => w._id) } 
+          })
+            .populate('category', 'name')
+            .sort({ createdAt: -1 })
+            .limit(50)
+            .lean();
+          
           const categoryAnalysis = await analyzeCategoryForMessage(
             contextForAnalysis,
             categories,
             model,
-            incompleteCheck.transaction.type || null
+            incompleteCheck.transaction.type || null,
+            userHistory
           );
           categoryId = categoryAnalysis.categoryId;
           categoryName = categoryAnalysis.categoryName;
@@ -886,20 +1185,63 @@ ${categoryName ? `📊 ${categoryName}` : ''}
       });
     }
     
-    if (incompleteCheck.missing === 'amount' && incompleteCheck.pendingTransaction) {
-      // Thiếu số tiền, hỏi lại
-      const promptReply = generateMissingInfoPrompt(incompleteCheck.pendingTransaction);
+    // Xử lý khi thiếu thông tin
+    if (incompleteCheck.missing && incompleteCheck.pendingTransaction) {
+      let promptReply = '';
+      const { type, description, amount } = incompleteCheck.pendingTransaction;
+      
+      if (incompleteCheck.missing === 'both') {
+        // Thiếu cả tên và số tiền
+        promptReply = `💡 **Tôi hiểu bạn muốn tạo giao dịch ${type === 'income' ? 'thu nhập' : 'chi tiêu'}:**
+
+❓ **Vui lòng cung cấp:**
+1. 📝 **Tên giao dịch** (ví dụ: "ăn tối", "mua sách", "nhận lương")
+2. 💰 **Số tiền** (ví dụ: "50k", "500 nghìn", "2 triệu")
+
+Bạn có thể trả lời một lần như: "ăn tối 200k" hoặc trả lời từng phần.`;
+      } else if (incompleteCheck.missing === 'description') {
+        // Thiếu tên giao dịch (nhưng có thể đã có số tiền)
+        let infoText = '';
+        if (amount) {
+          infoText = `\n💰 Số tiền đã có: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount)}\n`;
+        }
+        promptReply = `💡 **Tôi hiểu bạn muốn tạo giao dịch ${type === 'income' ? 'thu nhập' : 'chi tiêu'}:**
+${infoText}
+❓ **Tên giao dịch là gì?**
+
+Ví dụ: "ăn tối", "mua sách", "nhận lương", "đổ xăng"...`;
+      } else if (incompleteCheck.missing === 'amount') {
+        // Thiếu số tiền (nhưng đã có tên)
+        let infoText = '';
+        if (description) {
+          infoText = `\n📝 Tên giao dịch: ${description}\n`;
+        }
+        promptReply = `💡 **Tôi hiểu bạn muốn tạo giao dịch ${type === 'income' ? 'thu nhập' : 'chi tiêu'}:**
+${infoText}
+❓ **Số tiền là bao nhiêu?**
+
+Ví dụ: "50k", "50 nghìn", "500.000đ", "2 triệu"`;
+      }
       
       // Lưu ngữ cảnh hỏi thêm thông tin
       try {
-        await addToVectorStore(userId, 'Hỏi bổ sung số tiền cho giao dịch chưa đủ thông tin', { type: 'needs_more_info', missing: 'amount' });
+        await addToVectorStore(userId, `Hỏi bổ sung ${incompleteCheck.missing} cho giao dịch chưa đủ thông tin`, { 
+          type: 'needs_more_info', 
+          missing: incompleteCheck.missing 
+        });
       } catch (memErr) {
         console.warn('⚠️ Need-more-info memory failed:', memErr.message);
       }
+      
+      console.log('📋 Returning needsMoreInfo response:', {
+        missing: incompleteCheck.missing,
+        pendingTransaction: incompleteCheck.pendingTransaction
+      });
+      
       return res.json({
         reply: styleResponseByPersona(personaKey, promptReply),
         needsMoreInfo: true,
-        pendingTransaction: incompleteCheck.pendingTransaction,
+        pendingTransaction: incompleteCheck.pendingTransaction, // QUAN TRỌNG: Luôn trả về pendingTransaction đã cập nhật
         geminiAvailable,
         timestamp: new Date().toISOString()
       });
@@ -941,13 +1283,86 @@ ${categoryName ? `📊 ${categoryName}` : ''}
         const semanticContext = await searchVectorStore(userId, message, 7);
         // THÊM: Ý định lời khuyên / thống kê và tính sẵn thống kê 30 ngày
         const adviceStatsIntent = detectAdviceOrStatsIntent(message);
+        
+        // THÊM: Phát hiện yêu cầu phân tích chi tiêu sâu hơn
+        const lowerMessageForAnalysis = message.toLowerCase();
+        const isDeepSpendingAnalysis = lowerMessageForAnalysis.includes('phân tích chi tiêu') || 
+                                        lowerMessageForAnalysis.includes('phan tich chi tieu') ||
+                                        lowerMessageForAnalysis.includes('phân tích sâu') ||
+                                        lowerMessageForAnalysis.includes('chi tiết chi tiêu') ||
+                                        lowerMessageForAnalysis.includes('đi sâu vào chi tiêu');
+        
+        // THÊM: Phát hiện yêu cầu phân tích theo ví cụ thể
+        let targetWalletId = null;
+        let targetWalletName = null;
+        if (isDeepSpendingAnalysis) {
+          // Tìm tên ví trong message
+          for (const wallet of wallets) {
+            const walletNameLower = wallet.name.toLowerCase();
+            if (lowerMessageForAnalysis.includes(walletNameLower)) {
+              targetWalletId = wallet._id;
+              targetWalletName = wallet.name;
+              break;
+            }
+          }
+        }
+        
         let statsSummaryBlock = '';
-        if (adviceStatsIntent.stats) {
+        let deepSpendingAnalysis = '';
+        
+        if (isDeepSpendingAnalysis) {
+          // Phân tích chi tiêu sâu hơn
+          try {
+            const analysisResult = await performDeepSpendingAnalysis(
+              userId, 
+              targetWalletId, 
+              recentTransactions,
+              wallets,
+              model
+            );
+            deepSpendingAnalysis = analysisResult;
+          } catch (err) {
+            console.error('Error in deep spending analysis:', err);
+            // Fallback to basic stats
+            const computed = computeBasicStats(recentTransactions);
+            const fmt = (n) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n);
+            const top = computed.topCategories.map(c => `${c.name} (${fmt(c.amount)})`).join(', ');
+            statsSummaryBlock = `\nTHỐNG KÊ ${computed.inLastDays} NGÀY:\n- Thu nhập: ${fmt(computed.totals.income)}\n- Chi tiêu: ${fmt(computed.totals.expense)}\n- Cân đối: ${fmt(computed.net)}\n- Top danh mục: ${top}`;
+          }
+        } else if (adviceStatsIntent.stats) {
           const computed = computeBasicStats(recentTransactions);
           const fmt = (n) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n);
           const top = computed.topCategories.map(c => `${c.name} (${fmt(c.amount)})`).join(', ');
           statsSummaryBlock = `\nTHỐNG KÊ ${computed.inLastDays} NGÀY:\n- Thu nhập: ${fmt(computed.totals.income)}\n- Chi tiêu: ${fmt(computed.totals.expense)}\n- Cân đối: ${fmt(computed.net)}\n- Top danh mục: ${top}`;
         }
+        
+        // THÊM: Xử lý gợi ý chi tiêu
+        let spendingSuggestionBlock = '';
+        if (adviceStatsIntent.spendingSuggestion) {
+          try {
+            // Lấy thêm giao dịch để phân tích (60 ngày)
+            const extendedTransactions = await Transaction.find({ 
+              wallet: { $in: wallets.map(w => w._id) } 
+            })
+              .populate('wallet', 'name')
+              .populate('category', 'name icon type')
+              .sort({ createdAt: -1 })
+              .limit(100);
+            
+            const suggestionResult = await generateSpendingSuggestions(
+              userId,
+              extendedTransactions,
+              wallets,
+              adviceStatsIntent.suggestedAmount,
+              model
+            );
+            spendingSuggestionBlock = suggestionResult;
+          } catch (err) {
+            console.error('Error generating spending suggestions:', err);
+            spendingSuggestionBlock = 'Không thể tạo gợi ý chi tiêu lúc này.';
+          }
+        }
+        
         // THÊM: Lịch sử hội thoại để giữ mạch trò chuyện
         const transcript = buildConversationTranscript(conversationHistory, 8);
         
@@ -1011,62 +1426,90 @@ ${categoryName ? `📊 ${categoryName}` : ''}
           }
         }
         
-        // Nếu không phải sửa/xóa VÀ không phải câu hỏi thống kê/đánh giá tổng quan,
+        // Nếu không phải sửa/xóa VÀ không phải câu hỏi thống kê/đánh giá tổng quan/gợi ý chi tiêu,
         // mới phân tích ý định tạo giao dịch.
-        if (!editSuggestion && !deleteSuggestion && !adviceStatsIntent.stats && !adviceStatsIntent.advice) {
+        if (!editSuggestion && !deleteSuggestion && !adviceStatsIntent.stats && !adviceStatsIntent.advice && !adviceStatsIntent.spendingSuggestion) {
           const intentAnalysis = await analyzeBasicTransactionIntent(
             message, 
             model
           );
           
           if (intentAnalysis.success) {
-            transactionSuggestion = {
-              type: intentAnalysis.type,
-              amount: intentAnalysis.amount,
-              description: intentAnalysis.description,
-              categoryId: null,
-              categoryName: null,
-              walletId: null,
-              walletName: null,
-              confidence: intentAnalysis.confidence,
-              reasoning: intentAnalysis.reasoning
-            };
-            console.log('💡 Transaction intent detected:', transactionSuggestion);
+            // KIỂM TRA: Description không được là từ khóa chung chung
+            const genericKeywords = [
+              'chi tiêu', 'chitieu', 'chi', 'expense',
+              'thu nhập', 'thunhap', 'thu', 'income',
+              'giao dịch', 'giaodich', 'giao dich',
+              'tạo', 'thêm', 'ghi'
+            ];
+            const isGenericDescription = genericKeywords.some(keyword => 
+              intentAnalysis.description.toLowerCase().trim() === keyword.toLowerCase() ||
+              intentAnalysis.description.trim() === ''
+            );
+            
+            // Nếu description quá chung chung, KHÔNG tạo suggestion
+            if (isGenericDescription) {
+              console.log('⚠️ Description quá chung chung, không tạo transaction suggestion');
+              // Không set transactionSuggestion, để AI hỏi lại
+            } else {
+              transactionSuggestion = {
+                type: intentAnalysis.type,
+                amount: intentAnalysis.amount,
+                description: intentAnalysis.description,
+                categoryId: null,
+                categoryName: null,
+                walletId: null,
+                walletName: null,
+                confidence: intentAnalysis.confidence,
+                reasoning: intentAnalysis.reasoning
+              };
+              console.log('💡 Transaction intent detected:', transactionSuggestion);
 
-            // THÊM: Phân tích danh mục tự động cho giao dịch tạo từ chat
-            try {
-              const contextForCategory = `${message} | ${intentAnalysis.description}`;
-              let catId = null;
-              let catName = null;
+              // THÊM: Phân tích danh mục tự động cho giao dịch tạo từ chat
+              try {
+                const contextForCategory = `${message} | ${intentAnalysis.description}`;
+                let catId = null;
+                let catName = null;
 
-              if (geminiAvailable && model) {
+                if (geminiAvailable && model) {
+                // Lấy lịch sử giao dịch để phân tích pattern
+                const userHistory = await Transaction.find({ 
+                  wallet: { $in: wallets.map(w => w._id) } 
+                })
+                  .populate('category', 'name')
+                  .sort({ createdAt: -1 })
+                  .limit(50)
+                  .lean();
+                
                 const catAnalysis = await analyzeCategoryForMessage(
                   contextForCategory,
                   categories,
                   model,
-                  intentAnalysis.type
+                  intentAnalysis.type,
+                  userHistory
                 );
-                catId = catAnalysis.categoryId;
-                catName = catAnalysis.categoryName;
-              } else {
-                const fallbackCat = analyzeCategoryWithFallback(
-                  contextForCategory,
-                  categories,
-                  intentAnalysis.type
-                );
-                catId = fallbackCat.categoryId;
-                catName = fallbackCat.categoryName;
+                  catId = catAnalysis.categoryId;
+                  catName = catAnalysis.categoryName;
+                } else {
+                  const fallbackCat = analyzeCategoryWithFallback(
+                    contextForCategory,
+                    categories,
+                    intentAnalysis.type
+                  );
+                  catId = fallbackCat.categoryId;
+                  catName = fallbackCat.categoryName;
+                }
+
+                transactionSuggestion.categoryId = catId;
+                transactionSuggestion.categoryName = catName;
+
+                console.log('📊 Category for basic intent:', {
+                  categoryId: catId,
+                  categoryName: catName
+                });
+              } catch (catErr) {
+                console.warn('⚠️ Category analysis for basic transaction intent failed:', catErr.message);
               }
-
-              transactionSuggestion.categoryId = catId;
-              transactionSuggestion.categoryName = catName;
-
-              console.log('📊 Category for basic intent:', {
-                categoryId: catId,
-                categoryName: catName
-              });
-            } catch (catErr) {
-              console.warn('⚠️ Category analysis for basic transaction intent failed:', catErr.message);
             }
           }
         }
@@ -1085,7 +1528,7 @@ ${categoryName ? `📊 ${categoryName}` : ''}
 
         // Tạo context prompt cho Gemini
         const contextPrompt = `
-Bạn là trợ lý tài chính cá nhân thông minh.
+Bạn là trợ lý tài chính cá nhân thông minh, có khả năng hiểu ngữ cảnh và ý định của người dùng một cách chính xác.
 
 PHONG CÁCH TRẢ LỜI (Persona): ${personaInstruction}
 
@@ -1101,26 +1544,75 @@ TÌNH HÌNH TÀI CHÍNH:
 - Tổng số dư: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(context.totalBalance)}
 
 GIAO DỊCH GẦN ĐÂY:
-${recentTransactions.slice(0, 10).map(t => `- ${t.title}: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(t.amount)} (${t.type === 'income' ? 'Thu' : 'Chi'})`).join('\n')}
+${recentTransactions.slice(0, 10).map(t => `- ${t.title || t.description || 'Giao dịch'}: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(t.amount)} (${t.type === 'income' ? 'Thu' : 'Chi'})`).join('\n')}
 
 LỊCH SỬ HỘI THOẠI (mới nhất ở cuối):
 ${transcript}
 ${statsSummaryBlock}
+${deepSpendingAnalysis ? `\n\nPHÂN TÍCH CHI TIÊU CHI TIẾT:\n${deepSpendingAnalysis}` : ''}
+${spendingSuggestionBlock ? `\n\nGỢI Ý CHI TIÊU THÔNG MINH:\n${spendingSuggestionBlock}` : ''}
 
 ${deleteSuggestion ? 'YÊU CẦU XÓA GIAO DỊCH: Có ý định xóa, xử lý theo hướng dẫn trước.' :
  editSuggestion ? 'YÊU CẦU SỬA GIAO DỊCH: Có ý định cập nhật giao dịch.' :
  transactionSuggestion ? 'Ý ĐỊNH TẠO GIAO DỊCH MỚI: Hỏi xác nhận.' : ''}
 
-**QUAN TRỌNG - PHÂN BIỆT HỦY HÀNH ĐỘNG VÀ TẠO GIAO DỊCH:**
-- Nếu người dùng nói "Tôi đã hủy việc tạo/sửa/xóa giao dịch này" → Đây là HỦY HÀNH ĐỘNG, KHÔNG phải yêu cầu tạo giao dịch mới.
-- Khi người dùng hủy hành động, hãy xác nhận chính xác loại hành động đã hủy (tạo/sửa/xóa) và hỏi xem họ cần gì tiếp theo, KHÔNG hỏi thông tin để tạo giao dịch.
-- Ví dụ: Nếu họ nói "Tôi đã hủy việc sửa giao dịch này" thì trả lời "Tôi hiểu bạn đã hủy việc sửa giao dịch..." chứ KHÔNG phải "Tôi hiểu bạn đã hủy việc tạo giao dịch..."
+**QUAN TRỌNG - PHÂN TÍCH CÂU HỎI CỦA NGƯỜI DÙNG:**
 
-CÂU HỎI: ${message}
+Trước khi trả lời, hãy PHÂN TÍCH KỸ câu hỏi để hiểu đúng ý định:
 
-Hãy trả lời ngắn gọn, rõ ràng, tận dụng NGỮ CẢNH LIÊN QUAN nếu phù hợp.
-Nếu người dùng yêu cầu lời khuyên, đưa ra 2-4 khuyến nghị thực tế dựa trên số liệu của họ (ưu tiên danh mục chi tiêu cao, chênh lệch thu-chi, số dư ví). Nếu yêu cầu thống kê, hãy tóm tắt số liệu và nêu 1-2 insight chính.
-Nếu người dùng hủy hành động (tạo/sửa/xóa giao dịch), hãy xác nhận chính xác loại hành động đã hủy và hỏi xem họ cần gì tiếp theo. Đừng nhầm lẫn loại hành động đã hủy.
+1. **PHÂN BIỆT CÁC LOẠI YÊU CẦU:**
+   - "gợi ý chi tiêu", "nên chi gì", "chi tiêu gì" → YÊU CẦU GỢI Ý, KHÔNG phải tạo giao dịch
+   - "phân tích chi tiêu", "phân tích sâu" → YÊU CẦU PHÂN TÍCH, KHÔNG phải tạo giao dịch
+   - "tạo chi tiêu", "thêm giao dịch" → YÊU CẦU TẠO GIAO DỊCH (nhưng thiếu thông tin)
+   - "ăn tối 200k", "mua sách 500k" → YÊU CẦU TẠO GIAO DỊCH (đủ thông tin)
+   - "sửa giao dịch X", "xóa giao dịch Y" → YÊU CẦU SỬA/XÓA
+   - "hủy việc tạo/sửa/xóa" → HỦY HÀNH ĐỘNG, KHÔNG phải yêu cầu mới
+
+2. **SỬ DỤNG NGỮ CẢNH:**
+   - Đọc kỹ LỊCH SỬ HỘI THOẠI để hiểu mạch trò chuyện
+   - Nếu có PHÂN TÍCH CHI TIÊU CHI TIẾT hoặc GỢI Ý CHI TIÊU THÔNG MINH ở trên, hãy SỬ DỤNG chúng để trả lời
+   - Tận dụng NGỮ CẢNH LIÊN QUAN (RAG) nếu phù hợp
+
+3. **HIỂU ĐÚNG Ý ĐỊNH:**
+   - Nếu người dùng hỏi "gợi ý chi tiêu" → Họ muốn GỢI Ý, KHÔNG muốn tạo giao dịch ngay
+   - Nếu người dùng nói "tạo chi tiêu" → Họ muốn tạo giao dịch nhưng thiếu thông tin, cần hỏi lại
+   - Nếu người dùng nói "ăn tối 200k" → Họ muốn tạo giao dịch với đủ thông tin
+
+CÂU HỎI CỦA NGƯỜI DÙNG: "${message}"
+
+**HƯỚNG DẪN TRẢ LỜI:**
+
+1. **Nếu là YÊU CẦU GỢI Ý CHI TIÊU:**
+   - Sử dụng GỢI Ý CHI TIÊU THÔNG MINH ở trên (nếu có)
+   - Đưa ra các gợi ý CỤ THỂ, THỰC TẾ với tên, số tiền, danh mục, lý do
+   - KHÔNG tạo giao dịch, chỉ gợi ý
+
+2. **Nếu là YÊU CẦU PHÂN TÍCH CHI TIÊU:**
+   - Sử dụng PHÂN TÍCH CHI TIÊU CHI TIẾT ở trên (nếu có)
+   - Phân tích SÂU SẮC: xu hướng, danh mục, ví, bất thường
+   - Đưa ra nhận xét và gợi ý cụ thể
+
+3. **Nếu là YÊU CẦU TẠO GIAO DỊCH:**
+   - Nếu thiếu thông tin (chỉ có "tạo chi tiêu") → Hỏi lại tên và số tiền
+   - Nếu đủ thông tin → Xác nhận và hướng dẫn tạo
+
+4. **Nếu là YÊU CẦU SỬA/XÓA:**
+   - Xử lý theo hướng dẫn đã có ở trên
+
+5. **Nếu là HỦY HÀNH ĐỘNG:**
+   - Xác nhận chính xác loại hành động đã hủy
+   - Hỏi xem họ cần gì tiếp theo
+
+6. **Nếu là CÂU HỎI THÔNG THƯỜNG:**
+   - Trả lời dựa trên dữ liệu tài chính có sẵn
+   - Đưa ra lời khuyên thực tế nếu được yêu cầu
+   - Tóm tắt thống kê nếu được yêu cầu
+
+**LƯU Ý:**
+- Luôn đọc kỹ LỊCH SỬ HỘI THOẠI để hiểu ngữ cảnh
+- Sử dụng các dữ liệu phân tích/gợi ý đã có ở trên
+- Trả lời ngắn gọn, rõ ràng, có số liệu cụ thể
+- Tận dụng NGỮ CẢNH LIÊN QUAN khi phù hợp
 `;
 
         // Gọi Gemini API với timeout
@@ -2611,6 +3103,266 @@ YÊU CẦU:
   }
 }
 
+// THÊM: Hàm phân tích chi tiêu sâu hơn
+async function performDeepSpendingAnalysis(userId, walletId, recentTransactions, wallets, model) {
+  try {
+    if (!geminiAvailable || !model) {
+      return 'Gemini không khả dụng, sử dụng phân tích cơ bản.';
+    }
+
+    // Lọc giao dịch theo ví nếu có
+    let transactionsToAnalyze = recentTransactions;
+    if (walletId) {
+      transactionsToAnalyze = recentTransactions.filter(t => 
+        t.wallet && String(t.wallet._id || t.wallet) === String(walletId)
+      );
+    }
+
+    // Chỉ lấy giao dịch chi tiêu
+    const expenses = transactionsToAnalyze.filter(t => t.type === 'expense');
+    
+    if (expenses.length === 0) {
+      return 'Không có giao dịch chi tiêu để phân tích.';
+    }
+
+    // Tính toán các metrics
+    const now = new Date();
+    const start30 = new Date(now);
+    start30.setDate(start30.getDate() - 30);
+    const start7 = new Date(now);
+    start7.setDate(start7.getDate() - 7);
+    
+    const expenses30 = expenses.filter(t => new Date(t.date || t.createdAt) >= start30);
+    const expenses7 = expenses.filter(t => new Date(t.date || t.createdAt) >= start7);
+    
+    const total30 = expenses30.reduce((sum, t) => sum + (t.amount || 0), 0);
+    const total7 = expenses7.reduce((sum, t) => sum + (t.amount || 0), 0);
+    const avgPerDay30 = total30 / 30;
+    const avgPerDay7 = total7 / 7;
+    
+    // Phân tích theo danh mục
+    const byCategory = new Map();
+    expenses30.forEach(t => {
+      const catName = t.category?.name || 'Khác';
+      byCategory.set(catName, (byCategory.get(catName) || 0) + (t.amount || 0));
+    });
+    
+    const topCategories = Array.from(byCategory.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name, amount]) => ({ name, amount, share: (amount / total30 * 100).toFixed(1) }));
+    
+    // Phân tích theo ví (nếu không filter theo ví)
+    const byWallet = new Map();
+    if (!walletId) {
+      expenses30.forEach(t => {
+        const walletName = t.wallet?.name || 'Không xác định';
+        byWallet.set(walletName, (byWallet.get(walletName) || 0) + (t.amount || 0));
+      });
+    }
+    
+    // Tìm giao dịch lớn nhất
+    const largestExpense = expenses30.reduce((max, t) => 
+      (t.amount || 0) > (max.amount || 0) ? t : max, expenses30[0] || {}
+    );
+    
+    // Phân tích theo ngày trong tuần
+    const byDayOfWeek = new Map();
+    expenses30.forEach(t => {
+      const date = new Date(t.date || t.createdAt);
+      const dayName = date.toLocaleDateString('vi-VN', { weekday: 'long' });
+      byDayOfWeek.set(dayName, (byDayOfWeek.get(dayName) || 0) + (t.amount || 0));
+    });
+    
+    const fmt = (n) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n);
+    
+    // Tạo prompt cho AI
+    const analysisPrompt = `
+Bạn là chuyên gia phân tích tài chính. Phân tích CHI TIẾT và SÂU SẮC dữ liệu chi tiêu sau:
+
+${walletId ? `PHẠM VI: Chỉ phân tích ví "${wallets.find(w => String(w._id) === String(walletId))?.name || 'N/A'}"` : 'PHẠM VI: Tất cả các ví'}
+
+THỐNG KÊ 30 NGÀY:
+- Tổng chi tiêu: ${fmt(total30)}
+- Trung bình/ngày: ${fmt(avgPerDay30)}
+- Số giao dịch: ${expenses30.length}
+
+THỐNG KÊ 7 NGÀY GẦN ĐÂY:
+- Tổng chi tiêu: ${fmt(total7)}
+- Trung bình/ngày: ${fmt(avgPerDay7)}
+- So với 30 ngày: ${avgPerDay7 > avgPerDay30 ? 'TĂNG' : avgPerDay7 < avgPerDay30 ? 'GIẢM' : 'ỔN ĐỊNH'} ${avgPerDay30 > 0 ? `${Math.abs(((avgPerDay7 - avgPerDay30) / avgPerDay30 * 100).toFixed(1))}%` : ''}
+
+TOP 5 DANH MỤC CHI TIÊU:
+${topCategories.map((c, i) => `${i + 1}. ${c.name}: ${fmt(c.amount)} (${c.share}%)`).join('\n')}
+
+${!walletId ? `CHI TIÊU THEO VÍ:\n${Array.from(byWallet.entries()).map(([name, amount]) => `- ${name}: ${fmt(amount)}`).join('\n')}` : ''}
+
+GIAO DỊCH LỚN NHẤT:
+- ${largestExpense.title || largestExpense.description || 'N/A'}: ${fmt(largestExpense.amount || 0)} (${largestExpense.category?.name || 'Không có danh mục'})
+
+CHI TIÊU THEO NGÀY TRONG TUẦN:
+${Array.from(byDayOfWeek.entries()).map(([day, amount]) => `- ${day}: ${fmt(amount)}`).join('\n')}
+
+NHIỆM VỤ:
+Phân tích CHI TIẾT và đưa ra:
+1. **Xu hướng**: Chi tiêu đang tăng/giảm/ổn định? Tốc độ thay đổi?
+2. **Phân tích danh mục**: Danh mục nào chi nhiều nhất? Có bất thường không? Tỷ lệ có hợp lý không?
+3. **So sánh**: So sánh 7 ngày gần đây với 30 ngày (tăng/giảm bao nhiêu %)
+4. **Phát hiện bất thường**: Có giao dịch lớn bất thường không? Chi tiêu theo ngày trong tuần có pattern gì?
+5. **Gợi ý cụ thể**: Dựa trên phân tích, đưa ra 2-3 gợi ý cụ thể để tối ưu chi tiêu
+
+Trả lời bằng tiếng Việt, ngắn gọn nhưng đầy đủ thông tin, có số liệu cụ thể.
+`;
+
+    const result = await Promise.race([
+      model.generateContent(analysisPrompt),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout')), 20000)
+      )
+    ]);
+    
+    const response = await result.response;
+    return response.text().trim();
+    
+  } catch (error) {
+    console.error('Error in performDeepSpendingAnalysis:', error);
+    return `Lỗi khi phân tích chi tiêu: ${error.message}`;
+  }
+}
+
+// THÊM: Hàm tạo gợi ý chi tiêu thông minh
+async function generateSpendingSuggestions(userId, recentTransactions, wallets, availableAmount, model) {
+  try {
+    if (!geminiAvailable || !model) {
+      return 'Gemini không khả dụng, không thể tạo gợi ý chi tiêu.';
+    }
+
+    // Lấy giao dịch chi tiêu trong 60 ngày gần đây
+    const now = new Date();
+    const start60 = new Date(now);
+    start60.setDate(start60.getDate() - 60);
+    
+    const expenses = recentTransactions.filter(t => 
+      t.type === 'expense' && new Date(t.date || t.createdAt) >= start60
+    );
+    
+    // Tính tổng số dư hiện tại
+    const totalBalance = wallets.reduce((sum, w) => sum + (w.initialBalance || 0), 0);
+    
+    // Số tiền có thể chi tiêu (nếu không có số tiền cụ thể, dùng 30% số dư)
+    const budget = availableAmount || Math.floor(totalBalance * 0.3);
+    
+    // Phân tích pattern chi tiêu
+    const byCategory = new Map();
+    const byAmountRange = { small: [], medium: [], large: [] };
+    const categoryFrequency = new Map();
+    
+    expenses.forEach(t => {
+      const catName = t.category?.name || 'Khác';
+      const amount = t.amount || 0;
+      
+      // Phân loại theo danh mục
+      byCategory.set(catName, (byCategory.get(catName) || 0) + amount);
+      categoryFrequency.set(catName, (categoryFrequency.get(catName) || 0) + 1);
+      
+      // Phân loại theo mức giá
+      if (amount < 50000) byAmountRange.small.push(t);
+      else if (amount < 200000) byAmountRange.medium.push(t);
+      else byAmountRange.large.push(t);
+    });
+    
+    // Top danh mục thường dùng
+    const topCategories = Array.from(categoryFrequency.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name]) => name);
+    
+    // Tính mức giá trung bình theo danh mục
+    const avgByCategory = new Map();
+    expenses.forEach(t => {
+      const catName = t.category?.name || 'Khác';
+      if (!avgByCategory.has(catName)) {
+        avgByCategory.set(catName, []);
+      }
+      avgByCategory.get(catName).push(t.amount || 0);
+    });
+    
+    const categoryAverages = Array.from(avgByCategory.entries()).map(([name, amounts]) => {
+      const avg = amounts.reduce((sum, a) => sum + a, 0) / amounts.length;
+      return { name, average: Math.round(avg), count: amounts.length };
+    }).sort((a, b) => b.count - a.count);
+    
+    // Phân tích theo thời điểm
+    const byDayOfWeek = new Map();
+    expenses.forEach(t => {
+      const date = new Date(t.date || t.createdAt);
+      const dayName = date.toLocaleDateString('vi-VN', { weekday: 'long' });
+      byDayOfWeek.set(dayName, (byDayOfWeek.get(dayName) || 0) + 1);
+    });
+    
+    const mostActiveDay = Array.from(byDayOfWeek.entries())
+      .sort((a, b) => b[1] - a[1])[0]?.[0] || 'Không có dữ liệu';
+    
+    const fmt = (n) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n);
+    
+    // Tạo prompt cho AI
+    const suggestionPrompt = `
+Bạn là chuyên gia tư vấn tài chính cá nhân. Dựa trên dữ liệu sau, đưa ra 3-5 gợi ý chi tiêu THỰC TẾ và PHÙ HỢP.
+
+SỐ TIỀN CÓ THỂ CHI TIÊU: ${fmt(budget)}
+${availableAmount ? '(Người dùng đã chỉ định số tiền này)' : '(Tự động tính 30% số dư hiện tại)'}
+
+TỔNG SỐ DƯ HIỆN TẠI: ${fmt(totalBalance)}
+
+LỊCH SỬ CHI TIÊU 60 NGÀY GẦN ĐÂY:
+- Tổng số giao dịch: ${expenses.length}
+- Top 5 danh mục thường dùng: ${topCategories.join(', ')}
+
+MỨC GIÁ TRUNG BÌNH THEO DANH MỤC:
+${categoryAverages.slice(0, 8).map(c => `- ${c.name}: ${fmt(c.average)} (${c.count} lần)`).join('\n')}
+
+PHÂN LOẠI THEO MỨC GIÁ:
+- Chi tiêu nhỏ (< 50k): ${byAmountRange.small.length} giao dịch
+- Chi tiêu trung bình (50k - 200k): ${byAmountRange.medium.length} giao dịch
+- Chi tiêu lớn (> 200k): ${byAmountRange.large.length} giao dịch
+
+NGÀY CHI TIÊU NHIỀU NHẤT: ${mostActiveDay}
+
+NHIỆM VỤ:
+Đưa ra 3-5 gợi ý chi tiêu CỤ THỂ, THỰC TẾ dựa trên:
+1. **Số tiền có sẵn**: Gợi ý phù hợp với ${fmt(budget)} (có thể chia nhỏ thành nhiều gợi ý)
+2. **Lịch sử chi tiêu**: Dựa vào danh mục và mức giá người dùng thường chi
+3. **Thời điểm**: Xem xét ngày trong tuần, tháng hiện tại
+4. **Đa dạng**: Gợi ý cả chi tiêu nhỏ, trung bình và lớn (nếu số tiền đủ)
+5. **Thực tế**: Gợi ý những thứ người dùng thực sự có thể mua/chi tiêu
+
+ĐỊNH DẠNG GỢI Ý:
+Mỗi gợi ý bao gồm:
+- Tên gợi ý (ví dụ: "Ăn tối tại nhà hàng", "Mua sách", "Đổ xăng")
+- Số tiền dự kiến (phù hợp với lịch sử)
+- Danh mục (dựa trên lịch sử)
+- Lý do (tại sao phù hợp)
+
+Trả lời bằng tiếng Việt, ngắn gọn nhưng đầy đủ thông tin, có số liệu cụ thể.
+${expenses.length < 5 ? '\nLƯU Ý: Dữ liệu lịch sử ít, hãy đưa ra gợi ý dựa trên số tiền và các danh mục phổ biến.' : ''}
+`;
+
+    const result = await Promise.race([
+      model.generateContent(suggestionPrompt),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout')), 20000)
+      )
+    ]);
+    
+    const response = await result.response;
+    return response.text().trim();
+    
+  } catch (error) {
+    console.error('Error in generateSpendingSuggestions:', error);
+    return `Lỗi khi tạo gợi ý chi tiêu: ${error.message}`;
+  }
+}
+
 
 // ======================== FALLBACK ANALYZE INTENT ========================
 // THÊM: Helper phân tích ý intention xóa giao dịch
@@ -3269,130 +4021,29 @@ router.post('/analyze-category-for-wallet', auth, async (req, res) => {
       });
     }
 
-    console.log(`📋 Analyzing category for wallet "${wallet.name}" with ${walletCategories.length} categories`);
-    console.log(`📋 Categories available:`, walletCategories.map(c => ({ id: c._id, name: c.name })));
-    console.log(`📋 Message: "${message}"`);
+    // Lấy lịch sử giao dịch của ví này để phân tích pattern
+    const userHistory = await Transaction.find({ wallet: walletId })
+      .populate('category', 'name')
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+
+    console.log(`Analyzing category for wallet "${wallet.name}" with ${walletCategories.length} categories`);
+    console.log(`Found ${userHistory.length} recent transactions in this wallet`);
+    console.log(`Message: "${message}"`);
 
     // Try Gemini first, then fallback
     if (geminiAvailable && model) {
       try {
-        const expenseCats = walletCategories.filter(c => c.type === 'expense' || !c.type);
-        const incomeCats = walletCategories.filter(c => c.type === 'income');
-
-        const categoryPrompt = `
-Bạn là AI phân tích danh mục cho giao dịch tài chính.
-
-DANH MỤC CHI TIÊU CÓ TRONG VÍ "${wallet.name}":
-${expenseCats.map(c => `- ${c.name} (${c.icon || '📝'}) - Mô tả: ${c.description || 'Không có'} (ID: ${c._id})`).join('\n')}
-
-DANH MỤC THU NHẬP CÓ TRONG "${wallet.name}":
-${incomeCats.map(c => `- ${c.name} (${c.icon || '💰'}) - Mô tả: ${c.description || 'Không có'} (ID: ${c._id})`).join('\n')}
-
-CÂU NÓI VỀ GIAO DỊCH: "${message}"
-
-**QUAN TRỌNG:** 
-- CHỈ chọn danh mục TỪ DANH SÁCH TRÊN
-- categoryId PHẢI là ID trong dấu ngoặc (ID: ...), KHÔNG phải tên danh mục
-- Nếu không tìm thấy danh mục phù hợp, trả về categoryId = null
-
-**MAPPING KEYWORDS:**
-- Ăn, uống, cafe, cơm, bún, phở, tối, sáng, trưa → Tìm danh mục có tên chứa "Ăn uống"
-- Xăng, xe, taxi, grab → Tìm danh mục "Đi lại" hoặc "Xe cộ"
-- Quần áo, giày dép, mua sắm → Tìm danh mục "Mua sắm"
-- Điện, nước, internet → Tìm danh mục "Hóa đơn" hoặc "Tiện ích"
-
-**VÍ DỤ:**
-Input: "ăn tối 50k"
-Danh sách có: "- Ăn uống (🍔) (ID: 507f1f77bcf86cd799439011)"
-Output: {{"categoryId": "507f1f77bcf86cd799439011", "categoryName": "Ăn uống", "confidence": 0.9}}
-
-Trả về JSON (KHÔNG markdown, CHỈ JSON):
-{{
-  "categoryId": "ID dạng 507f1f77bcf86cd799439011" hoặc null,
-  "categoryName": "Tên danh mục" hoặc null,
-  "confidence": 0-1,
-  "reasoning": "giải thích"
-}
-`;
-
-        const result = await model.generateContent(categoryPrompt);
-        const response = await result.response;
-        let text = response.text().trim();
+        const result = await analyzeCategoryForMessage(
+          message,
+          walletCategories,
+          model,
+          null,
+          userHistory
+        );
         
-        text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        
-        console.log('🤖 Gemini category analysis raw:', text);
-        
-        const analysis = JSON.parse(text);
-        
-        console.log('📊 Parsed analysis:', {
-          categoryId: analysis.categoryId,
-          categoryName: analysis.categoryName,
-          idType: typeof analysis.categoryId
-        });
-        
-        // SỬA: Validate và fix categoryId
-        let validatedCategoryId = null;
-        let validatedCategoryName = null;
-        
-        if (analysis.categoryId && typeof analysis.categoryId === 'string') {
-          // Nếu categoryId là tên danh mục, tìm ID thực
-          const foundByName = walletCategories.find(c => 
-            c.name.toLowerCase() === analysis.categoryId.toLowerCase()
-          );
-          
-          if (foundByName) {
-            console.log('🔧 Fixed: categoryId was name, found actual ID:', foundByName._id);
-            validatedCategoryId = foundByName._id;
-            validatedCategoryName = foundByName.name;
-          } else {
-            // Kiểm tra xem có phải ObjectId format không
-            if (analysis.categoryId.match(/^[0-9a-fA-F]{24}$/)) {
-              // Là ObjectId, kiểm tra có tồn tại không
-              const foundById = walletCategories.find(c => 
-                String(c._id) === String(analysis.categoryId)
-              );
-              
-              if (foundById) {
-                console.log('✅ Valid ObjectId found in wallet');
-                validatedCategoryId = foundById._id;
-                validatedCategoryName = foundById.name;
-              } else {
-                console.warn('⚠️ ObjectId not found in wallet categories');
-              }
-            } else {
-              console.warn('⚠️ categoryId is neither valid name nor ObjectId:', analysis.categoryId);
-            }
-          }
-        }
-
-        // Nếu vẫn chưa tìm thấy, dùng categoryName để tìm
-        if (!validatedCategoryId && analysis.categoryName) {
-          const foundByName = walletCategories.find(c => 
-            c.name.toLowerCase().includes(analysis.categoryName.toLowerCase()) ||
-            analysis.categoryName.toLowerCase().includes(c.name.toLowerCase())
-          );
-          
-          if (foundByName) {
-            console.log('🔧 Found by categoryName:', foundByName.name);
-            validatedCategoryId = foundByName._id;
-            validatedCategoryName = foundByName.name;
-          }
-        }
-
-        console.log('✅ Final validated result:', {
-          categoryId: validatedCategoryId,
-          categoryName: validatedCategoryName
-        });
-
-        return res.json({
-          categoryId: validatedCategoryId,
-          categoryName: validatedCategoryName,
-          confidence: validatedCategoryId ? analysis.confidence : 0,
-          reasoning: validatedCategoryId 
-            ? (analysis.reasoning || 'Gemini AI đã phân tích dựa trên danh mục có trong ví')
-            : 'Không tìm thấy danh mục phù hợp trong ví này'
-        });
+        return res.json(result);
 
       } catch (geminiError) {
         console.error('❌ Gemini category analysis failed:', geminiError.message);

@@ -30,6 +30,11 @@ export default function GroupActivityFeed({
   const [uploadingImage, setUploadingImage] = useState(false);
   const [posting, setPosting] = useState(false);
   const [expandedCreate, setExpandedCreate] = useState(false);
+  const [showLinkTransaction, setShowLinkTransaction] = useState(false);
+  const [groupTransactions, setGroupTransactions] = useState([]);
+  const [loadingTransactions, setLoadingTransactions] = useState(false);
+  const [selectedTransactionId, setSelectedTransactionId] = useState(null);
+  const [transactionSearch, setTransactionSearch] = useState('');
   const [currentUser, setCurrentUser] = useState(null);
   const [commentInputs, setCommentInputs] = useState({});
   const [editingPostId, setEditingPostId] = useState(null);
@@ -138,9 +143,82 @@ export default function GroupActivityFeed({
     setNewPostImagePreview('');
   };
 
+  const fetchGroupTransactions = async (excludePostId = null) => {
+    if (!groupId || !token) return;
+    setLoadingTransactions(true);
+    try {
+      // Fetch cả transactions và posts để biết giao dịch nào đã được liên kết
+      const [txRes, postsRes] = await Promise.all([
+        fetch(
+          `${API_BASE}/api/groups/${encodeURIComponent(groupId)}/transactions`,
+          {
+            headers: { Authorization: `Bearer ${token}` }
+          }
+        ),
+        fetch(
+          `${API_BASE}/api/groups/${encodeURIComponent(groupId)}/posts?limit=100`,
+          {
+            headers: { Authorization: `Bearer ${token}` }
+          }
+        )
+      ]);
+
+      if (!txRes.ok) {
+        throw new Error('Không thể tải danh sách giao dịch');
+      }
+      if (!postsRes.ok) {
+        throw new Error('Không thể tải danh sách bài viết');
+      }
+
+      const transactionsData = await txRes.json();
+      const postsData = await postsRes.json();
+      const allTransactions = Array.isArray(transactionsData) ? transactionsData : [];
+      const allPosts = Array.isArray(postsData) ? postsData : [];
+      
+      // Lấy danh sách giao dịch đã được liên kết (trừ bài viết đang edit nếu có)
+      const linkedTransactionIds = new Set();
+      allPosts.forEach(post => {
+        // Bỏ qua bài viết đang edit
+        if (excludePostId && post._id === excludePostId) return;
+        
+        if (post.linkedTransaction) {
+          const linkedTxId = post.linkedTransaction._id || post.linkedTransaction.id || post.linkedTransaction;
+          if (linkedTxId) {
+            linkedTransactionIds.add(String(linkedTxId));
+          }
+        }
+      });
+      
+      // Filter chỉ lấy giao dịch do user hiện tại tạo và chưa được liên kết
+      const myId = getMyId();
+      const availableTransactions = allTransactions.filter(tx => {
+        // Chỉ lấy giao dịch do user hiện tại tạo
+        const createdById = tx.createdBy?._id || tx.createdBy?.id || tx.createdBy;
+        if (!createdById || String(createdById) !== String(myId)) {
+          return false;
+        }
+        
+        // Loại bỏ giao dịch đã được liên kết
+        const txId = tx._id || tx.id;
+        if (txId && linkedTransactionIds.has(String(txId))) {
+          return false;
+        }
+        
+        return true;
+      });
+      
+      setGroupTransactions(availableTransactions);
+    } catch (e) {
+      console.error('Error fetching group transactions:', e);
+      setGroupTransactions([]);
+    } finally {
+      setLoadingTransactions(false);
+    }
+  };
+
   const handleCreatePost = async () => {
     if (!groupId || !token) return;
-    if (!newPostContent.trim() && !newPostImageFile) return;
+    if (!newPostContent.trim() && !newPostImageFile && !selectedTransactionId) return;
     setPosting(true);
     setError('');
     try {
@@ -185,6 +263,7 @@ export default function GroupActivityFeed({
           body: JSON.stringify({
             content: newPostContent.trim(),
             images: imageUrl ? [imageUrl] : [],
+            linkedTransaction: selectedTransactionId || null,
           }),
         }
       );
@@ -195,6 +274,8 @@ export default function GroupActivityFeed({
       setNewPostContent('');
       setNewPostImageFile(null);
       setNewPostImagePreview('');
+      setSelectedTransactionId(null);
+      setShowLinkTransaction(false);
       setExpandedCreate(false);
       setPosts((prev) => [data, ...prev]);
     } catch (e) {
@@ -321,6 +402,7 @@ export default function GroupActivityFeed({
           body: JSON.stringify({
             content: editPostContent.trim(),
             images: imageUrl ? [imageUrl] : [],
+            linkedTransaction: selectedTransactionId || null,
           }),
         }
       );
@@ -335,6 +417,8 @@ export default function GroupActivityFeed({
       setEditPostImageFile(null);
       setEditPostImagePreview('');
       setEditPostImageUrl('');
+      setSelectedTransactionId(null);
+      setShowLinkTransaction(false);
     } catch (e) {
       console.error('handleUpdatePost error', e);
       alert('Lỗi khi cập nhật bài viết');
@@ -532,6 +616,124 @@ export default function GroupActivityFeed({
                   )}
                 </div>
 
+                {/* Link Transaction Section */}
+                <div className="gaf-link-transaction-section">
+                  <button
+                    type="button"
+                    className="gaf-link-transaction-btn"
+                    onClick={() => {
+                      setShowLinkTransaction(!showLinkTransaction);
+                      if (!showLinkTransaction && groupTransactions.length === 0) {
+                        fetchGroupTransactions(null);
+                      }
+                    }}
+                    disabled={posting || uploadingImage}
+                  >
+                    <i className="fas fa-link"></i>
+                    <span>{selectedTransactionId ? 'Đã liên kết giao dịch' : 'Liên kết với giao dịch'}</span>
+                  </button>
+
+                  {showLinkTransaction && (
+                    <div className="gaf-transaction-selector">
+                      <div className="gaf-transaction-search">
+                        <i className="fas fa-search"></i>
+                        <input
+                          type="text"
+                          placeholder="Tìm kiếm giao dịch..."
+                          value={transactionSearch}
+                          onChange={(e) => setTransactionSearch(e.target.value)}
+                        />
+                      </div>
+                      {loadingTransactions ? (
+                        <div className="gaf-transaction-loading">
+                          <i className="fas fa-spinner fa-spin"></i> Đang tải...
+                        </div>
+                      ) : (
+                        <div className="gaf-transaction-list">
+                          <button
+                            type="button"
+                            className={`gaf-transaction-item ${!selectedTransactionId ? 'selected' : ''}`}
+                            onClick={() => setSelectedTransactionId(null)}
+                          >
+                            <span>Không liên kết</span>
+                          </button>
+                          {(transactionSearch
+                            ? groupTransactions.filter(tx =>
+                                (tx.title || '').toLowerCase().includes(transactionSearch.toLowerCase()) ||
+                                (tx.description || '').toLowerCase().includes(transactionSearch.toLowerCase())
+                              )
+                            : groupTransactions
+                          ).map(tx => (
+                            <button
+                              key={tx._id}
+                              type="button"
+                              className={`gaf-transaction-item ${selectedTransactionId === tx._id ? 'selected' : ''}`}
+                              onClick={() => setSelectedTransactionId(tx._id)}
+                            >
+                              <div className="gaf-transaction-item-info">
+                                <div className="gaf-transaction-item-title">{tx.title || 'Giao dịch không tên'}</div>
+                                <div className="gaf-transaction-item-meta">
+                                  {tx.category && (
+                                    <span className="gaf-transaction-category">
+                                      {tx.category.icon} {tx.category.name}
+                                    </span>
+                                  )}
+                                  <span className="gaf-transaction-amount">
+                                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(tx.amount || 0)}
+                                  </span>
+                                </div>
+                              </div>
+                              {selectedTransactionId === tx._id && (
+                                <i className="fas fa-check"></i>
+                              )}
+                            </button>
+                          ))}
+                          {groupTransactions.length === 0 && (
+                            <div className="gaf-transaction-empty">
+                              Chưa có giao dịch nào trong nhóm
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Selected Transaction Preview */}
+                  {selectedTransactionId && !showLinkTransaction && (() => {
+                    const selectedTx = groupTransactions.find(tx => tx._id === selectedTransactionId);
+                    if (!selectedTx) return null;
+                    return (
+                      <div className="gaf-linked-transaction-preview">
+                        <div className="gaf-linked-transaction-header">
+                          <i className="fas fa-link"></i>
+                          <span>Giao dịch đã liên kết</span>
+                          <button
+                            type="button"
+                            className="gaf-unlink-btn"
+                            onClick={() => setSelectedTransactionId(null)}
+                            disabled={posting || uploadingImage}
+                          >
+                            <i className="fas fa-times"></i>
+                          </button>
+                        </div>
+                        <div className="gaf-linked-transaction-content">
+                          <div className="gaf-linked-transaction-title">{selectedTx.title || 'Giao dịch không tên'}</div>
+                          <div className="gaf-linked-transaction-details">
+                            {selectedTx.category && (
+                              <span className="gaf-linked-category">
+                                {selectedTx.category.icon} {selectedTx.category.name}
+                              </span>
+                            )}
+                            <span className="gaf-linked-amount">
+                              {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(selectedTx.amount || 0)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+
                 {error && (
                   <div className="gaf-error">
                     <i className="fas fa-exclamation-circle"></i> {error}
@@ -546,6 +748,8 @@ export default function GroupActivityFeed({
                         setNewPostContent('');
                         setNewPostImageFile(null);
                         setNewPostImagePreview('');
+                        setSelectedTransactionId(null);
+                        setShowLinkTransaction(false);
                         setError('');
                       }}
                       disabled={posting || uploadingImage}
@@ -556,7 +760,7 @@ export default function GroupActivityFeed({
                   <button
                     className="gaf-create-btn gaf-create-btn-primary"
                     onClick={handleCreatePost}
-                    disabled={posting || uploadingImage || (!newPostContent.trim() && !newPostImageFile)}
+                    disabled={posting || uploadingImage || (!newPostContent.trim() && !newPostImageFile && !selectedTransactionId)}
                   >
                     {posting || uploadingImage ? (
                       <>
@@ -586,8 +790,8 @@ export default function GroupActivityFeed({
           </div>
         ) : (
           <div className="gaf-container" ref={containerRef}>
-            {posts.map((post) => {
-              const likeCount = post.likes ? post.likes.length : 0;
+              {posts.map((post) => {
+                const likeCount = post.likes ? post.likes.length : 0;
               const commentCount = post.comments ? post.comments.length : 0;
               const hasLiked =
                 post.likes &&
@@ -640,9 +844,48 @@ export default function GroupActivityFeed({
                                 setEditPostImageUrl(existingImage);
                                 setEditPostImagePreview(existingImage);
                                 setEditPostImageFile(null);
+                                setSelectedTransactionId(post.linkedTransaction?._id || post.linkedTransaction || null);
+                                // Fetch transactions, exclude current post ID so its linked transaction is still available
+                                fetchGroupTransactions(post._id);
                               }}
                             >
                               <i className="fas fa-edit"></i> Sửa bài viết
+                            </button>
+                            <button
+                              type="button"
+                              className="gaf-menu-item"
+                              onClick={() => {
+                                setShowLinkTransaction(true);
+                                if (groupTransactions.length === 0) {
+                                  fetchGroupTransactions(post._id);
+                                }
+                                setSelectedTransactionId(post.linkedTransaction?._id || post.linkedTransaction || null);
+                                // Scroll to link transaction section if editing
+                                if (!editingPostId) {
+                                  // If not editing, open edit mode first
+                                  setEditingPostId(post._id);
+                                  setEditPostContent(post.content || '');
+                                  const existingImage = post.images && post.images.length > 0 ? post.images[0] : '';
+                                  setEditPostImageUrl(existingImage);
+                                  setEditPostImagePreview(existingImage);
+                                  setEditPostImageFile(null);
+                                  setTimeout(() => {
+                                    const linkSection = document.querySelector('.gaf-link-transaction-section');
+                                    if (linkSection) {
+                                      linkSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    }
+                                  }, 100);
+                                } else {
+                                  setTimeout(() => {
+                                    const linkSection = document.querySelector('.gaf-link-transaction-section');
+                                    if (linkSection) {
+                                      linkSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    }
+                                  }, 100);
+                                }
+                              }}
+                            >
+                              <i className="fas fa-link"></i> {post.linkedTransaction ? 'Sửa liên kết giao dịch' : 'Liên kết giao dịch'}
                             </button>
                             <button
                               type="button"
@@ -707,23 +950,141 @@ export default function GroupActivityFeed({
                         )}
                       </div>
 
-                      <div className="gaf-edit-actions">
+                      {/* Link Transaction Section for Edit */}
+                      <div className="gaf-link-transaction-section">
                         <button
-                          className="gaf-create-btn gaf-create-btn-secondary"
+                          type="button"
+                          className="gaf-link-transaction-btn"
                           onClick={() => {
-                            setEditingPostId(null);
-                            setEditPostContent('');
-                            setEditPostImageFile(null);
-                            setEditPostImagePreview('');
-                            setEditPostImageUrl('');
+                            setShowLinkTransaction(!showLinkTransaction);
+                      if (!showLinkTransaction && groupTransactions.length === 0) {
+                        fetchGroupTransactions(null);
+                      }
                           }}
                         >
-                          Hủy
+                          <i className="fas fa-link"></i>
+                          <span>{selectedTransactionId ? 'Đã liên kết giao dịch' : 'Liên kết với giao dịch'}</span>
                         </button>
+
+                        {showLinkTransaction && (
+                          <div className="gaf-transaction-selector">
+                            <div className="gaf-transaction-search">
+                              <i className="fas fa-search"></i>
+                              <input
+                                type="text"
+                                placeholder="Tìm kiếm giao dịch..."
+                                value={transactionSearch}
+                                onChange={(e) => setTransactionSearch(e.target.value)}
+                              />
+                            </div>
+                            {loadingTransactions ? (
+                              <div className="gaf-transaction-loading">
+                                <i className="fas fa-spinner fa-spin"></i> Đang tải...
+                              </div>
+                            ) : (
+                              <div className="gaf-transaction-list">
+                                <button
+                                  type="button"
+                                  className={`gaf-transaction-item ${!selectedTransactionId ? 'selected' : ''}`}
+                                  onClick={() => setSelectedTransactionId(null)}
+                                >
+                                  <span>Không liên kết</span>
+                                </button>
+                                {(transactionSearch
+                                  ? groupTransactions.filter(tx =>
+                                      (tx.title || '').toLowerCase().includes(transactionSearch.toLowerCase()) ||
+                                      (tx.description || '').toLowerCase().includes(transactionSearch.toLowerCase())
+                                    )
+                                  : groupTransactions
+                                ).map(tx => (
+                                  <button
+                                    key={tx._id}
+                                    type="button"
+                                    className={`gaf-transaction-item ${selectedTransactionId === tx._id ? 'selected' : ''}`}
+                                    onClick={() => setSelectedTransactionId(tx._id)}
+                                  >
+                                    <div className="gaf-transaction-item-info">
+                                      <div className="gaf-transaction-item-title">{tx.title || 'Giao dịch không tên'}</div>
+                                      <div className="gaf-transaction-item-meta">
+                                        {tx.category && (
+                                          <span className="gaf-transaction-category">
+                                            {tx.category.icon} {tx.category.name}
+                                          </span>
+                                        )}
+                                        <span className="gaf-transaction-amount">
+                                          {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(tx.amount || 0)}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    {selectedTransactionId === tx._id && (
+                                      <i className="fas fa-check"></i>
+                                    )}
+                                  </button>
+                                ))}
+                                {groupTransactions.length === 0 && (
+                                  <div className="gaf-transaction-empty">
+                                    Chưa có giao dịch nào trong nhóm
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Selected Transaction Preview for Edit */}
+                        {selectedTransactionId && !showLinkTransaction && (() => {
+                          const selectedTx = groupTransactions.find(tx => tx._id === selectedTransactionId);
+                          if (!selectedTx) return null;
+                          return (
+                            <div className="gaf-linked-transaction-preview">
+                              <div className="gaf-linked-transaction-header">
+                                <i className="fas fa-link"></i>
+                                <span>Giao dịch đã liên kết</span>
+                                <button
+                                  type="button"
+                                  className="gaf-unlink-btn"
+                                  onClick={() => setSelectedTransactionId(null)}
+                                >
+                                  <i className="fas fa-times"></i>
+                                </button>
+                              </div>
+                              <div className="gaf-linked-transaction-content">
+                                <div className="gaf-linked-transaction-title">{selectedTx.title || 'Giao dịch không tên'}</div>
+                                <div className="gaf-linked-transaction-details">
+                                  {selectedTx.category && (
+                                    <span className="gaf-linked-category">
+                                      {selectedTx.category.icon} {selectedTx.category.name}
+                                    </span>
+                                  )}
+                                  <span className="gaf-linked-amount">
+                                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(selectedTx.amount || 0)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                       <div className="gaf-edit-actions">
+                      <button
+                        className="gaf-create-btn gaf-create-btn-secondary"
+                        onClick={() => {
+                          setEditingPostId(null);
+                          setEditPostContent('');
+                          setEditPostImageFile(null);
+                          setEditPostImagePreview('');
+                          setEditPostImageUrl('');
+                          setSelectedTransactionId(null);
+                          setShowLinkTransaction(false);
+                        }}
+                      >
+                        Hủy
+                      </button>
                         <button
                           className="gaf-create-btn gaf-create-btn-primary"
                           onClick={() => handleUpdatePost(post._id)}
-                          disabled={!editPostContent.trim() && !editPostImagePreview}
+                          disabled={!editPostContent.trim() && !editPostImagePreview && !selectedTransactionId}
                         >
                           <i className="fas fa-save"></i> Lưu
                         </button>
@@ -734,6 +1095,81 @@ export default function GroupActivityFeed({
                       {/* Post Content */}
                       {post.content && (
                         <div className="gaf-post-content">{post.content}</div>
+                      )}
+
+
+                      {/* Linked Transaction */}
+                      {post.linkedTransaction && (
+                        <div className="gaf-linked-transaction-card">
+                          <div className="gaf-linked-transaction-header">
+                            <i className="fas fa-link"></i>
+                            <span>Giao dịch liên kết</span>
+                          </div>
+                          <div className="gaf-linked-transaction-body">
+                            <div className="gaf-linked-transaction-title">
+                              {post.linkedTransaction.title || 'Giao dịch không tên'}
+                            </div>
+                            {post.linkedTransaction.description && (
+                              <div className="gaf-linked-transaction-description">
+                                {post.linkedTransaction.description}
+                              </div>
+                            )}
+                            <div className="gaf-linked-transaction-meta">
+                              <div className="gaf-linked-meta-left">
+                                {(() => {
+                                  const category = post.linkedTransaction.category;
+                                  // Kiểm tra category có tồn tại và có name không
+                                  if (category && typeof category === 'object' && category.name) {
+                                    return (
+                                      <span className="gaf-linked-category-badge">
+                                        {category.icon && <span className="gaf-category-icon">{category.icon}</span>}
+                                        <span className="gaf-category-name">{category.name}</span>
+                                        {/* Hiển thị tags bên trong category badge nếu có */}
+                                        {post.linkedTransaction.tags && Array.isArray(post.linkedTransaction.tags) && post.linkedTransaction.tags.length > 0 && (
+                                          <span className="gaf-category-tags">
+                                            {post.linkedTransaction.tags
+                                              .filter(tag => tag && typeof tag === 'string' && tag.trim())
+                                              .map((tag, idx) => (
+                                                <span key={idx} className="gaf-category-tag">
+                                                  #{tag.trim()}
+                                                </span>
+                                              ))}
+                                          </span>
+                                        )}
+                                      </span>
+                                    );
+                                  }
+                                  // Nếu category là string (ObjectId chưa được populate)
+                                  if (category && typeof category === 'string') {
+                                    console.warn('Category is string (not populated):', category, 'for transaction:', post.linkedTransaction._id);
+                                  }
+                                  // Nếu category là object nhưng không có name
+                                  if (category && typeof category === 'object' && !category.name) {
+                                    console.warn('Category object missing name:', category, 'for transaction:', post.linkedTransaction._id);
+                                  }
+                                  // Nếu không có category nhưng có tags, hiển thị tags riêng
+                                  if (!category && post.linkedTransaction.tags && Array.isArray(post.linkedTransaction.tags) && post.linkedTransaction.tags.length > 0) {
+                                    return (
+                                      <span className="gaf-linked-tags-only">
+                                        {post.linkedTransaction.tags
+                                          .filter(tag => tag && typeof tag === 'string' && tag.trim())
+                                          .map((tag, idx) => (
+                                            <span key={idx} className="gaf-linked-tag">
+                                              #{tag.trim()}
+                                            </span>
+                                          ))}
+                                      </span>
+                                    );
+                                  }
+                                  return null;
+                                })()}
+                              </div>
+                              <span className="gaf-linked-amount-badge">
+                                {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(post.linkedTransaction.amount || 0)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
                       )}
 
                       {/* Post Image */}

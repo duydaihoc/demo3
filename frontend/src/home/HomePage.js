@@ -6,11 +6,13 @@ import { savingsGoalSteps } from './savingsTourConfig';
 import Sidebar from './Sidebar';
 import Wallets from './Wallets';
 import './HomePage.css';
+import './TransactionsPage.css'; // Import CSS for transaction modal
 import FinanceDashboard from './FinanceDashboard';
 import SavingsGoals from './SavingsGoals';
 import AiAssistant from './AiAssistant';
 import { useNavigate } from 'react-router-dom';
 import SpendingMap from './SpendingMap'; // NEW
+import { showNotification } from '../utils/notify';
 
 // Custom next/previous button component for the tour
 const TourNavigation = (props) => {
@@ -80,6 +82,24 @@ const TourNavigation = (props) => {
   );
 };
 
+// Leaflet dynamic loader (reuse from TransactionsPage)
+const loadLeaflet = async () => {
+  if (typeof window === 'undefined') return null;
+  if (window.L) return window.L;
+  await new Promise((resolve, reject) => {
+    const css = document.createElement('link');
+    css.rel='stylesheet';
+    css.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(css);
+    const js = document.createElement('script');
+    js.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    js.onload=resolve;
+    js.onerror=()=>reject(new Error('Leaflet load failed'));
+    document.head.appendChild(js);
+  });
+  return window.L;
+};
+
 const HomePageContent = () => {
   const userName = localStorage.getItem('userName') || 'Tên người dùng';
   const navigate = useNavigate();
@@ -90,6 +110,32 @@ const HomePageContent = () => {
   const goalsRef = useRef(null);
   const aiRef = useRef(null);
   const statsRef = useRef(null);
+
+  // Transaction modal state
+  const [showTransactionModal, setShowTransactionModal] = useState(false);
+  const [wallets, setWallets] = useState([]);
+  const [form, setForm] = useState({
+    walletId: '',
+    name: '',
+    type: 'expense',
+    categoryId: '',
+    amount: '',
+    date: new Date().toISOString().slice(0,10),
+    note: '',
+    placeName: '',
+    lat: '',
+    lng: '',
+    accuracy: ''
+  });
+  const [saving, setSaving] = useState(false);
+  const [txMessage, setTxMessage] = useState(null);
+  const [showMapModal, setShowMapModal] = useState(false);
+  const [mapSearch, setMapSearch] = useState('');
+  const [mapResults, setMapResults] = useState([]);
+  const [mapLoading, setMapLoading] = useState(false);
+  const mapRef = useRef(null);
+  const leafletMapRef = useRef(null);
+  const markerRef = useRef(null);
 
   // Check if this is the first visit - CHỈ cho user mới
   useEffect(() => {
@@ -282,6 +328,197 @@ const HomePageContent = () => {
     return () => observer.disconnect();
   }, [currentStep]);
 
+  // Fetch wallets when modal opens
+  useEffect(() => {
+    if (showTransactionModal) {
+      const fetchWallets = async () => {
+        try {
+          const token = localStorage.getItem('token');
+          const headers = {};
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+          const res = await fetch('http://localhost:5000/api/wallets', { headers });
+          if (res.ok) {
+            const data = await res.json();
+            setWallets(data || []);
+          }
+        } catch (err) {
+          console.error('Fetch wallets failed', err);
+        }
+      };
+      fetchWallets();
+    }
+  }, [showTransactionModal]);
+
+  // Transaction form handlers
+  const handleFormChange = (k, v) => {
+    setForm(prev => ({ ...prev, [k]: v }));
+    if (k === 'walletId' || k === 'type') {
+      setForm(prev => ({ ...prev, categoryId: '' }));
+    }
+  };
+
+  const availableCategories = (() => {
+    if (!form.walletId) return [];
+    const w = wallets.find(x => String(x._id) === String(form.walletId));
+    if (!w || !Array.isArray(w.categories)) return [];
+    return (w.categories || []).filter(c => c.type === form.type);
+  })();
+
+  const handleSubmit = async (e) => {
+    e && e.preventDefault();
+    setTxMessage(null);
+    if (!form.walletId) return setTxMessage({ type: 'error', text: 'Vui lòng chọn ví.' });
+    if (!form.name || !form.name.trim()) return setTxMessage({ type: 'error', text: 'Vui lòng nhập tên giao dịch.' });
+    if (!form.categoryId) return setTxMessage({ type: 'error', text: 'Vui lòng chọn danh mục.' });
+    if (!form.amount || Number(form.amount) <= 0) return setTxMessage({ type: 'error', text: 'Số tiền phải lớn hơn 0.' });
+
+    setSaving(true);
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const body = {
+        wallet: form.walletId,
+        category: form.categoryId,
+        type: form.type,
+        amount: Number(form.amount),
+        title: form.name,
+        description: form.note,
+        date: new Date().toISOString(),
+        location: (form.lat && form.lng) ? {
+          lat: Number(form.lat),
+          lng: Number(form.lng),
+          placeName: form.placeName || '',
+          accuracy: form.accuracy ? Number(form.accuracy) : undefined
+        } : undefined
+      };
+
+      const res = await fetch('http://localhost:5000/api/transactions', { method: 'POST', headers, body: JSON.stringify(body) });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Tạo giao dịch thất bại');
+      }
+      const created = await res.json();
+      showNotification('Đã thêm giao dịch thành công', 'success');
+      try { window.dispatchEvent(new CustomEvent('transactionsUpdated', { detail: created })); } catch(_) {}
+      try { window.dispatchEvent(new CustomEvent('walletsUpdated')); } catch(_) {}
+
+      // Reset form and close modal
+      setForm({
+        walletId: '',
+        name: '',
+        type: 'expense',
+        categoryId: '',
+        amount: '',
+        date: new Date().toISOString().slice(0,10),
+        note: '',
+        placeName: '',
+        lat: '',
+        lng: '',
+        accuracy: ''
+      });
+      setShowTransactionModal(false);
+    } catch (err) {
+      console.error('Create transaction failed', err);
+      const msg = err.message || 'Lỗi khi thêm giao dịch';
+      setTxMessage({ type: 'error', text: msg });
+      showNotification(msg, 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Map functions
+  const grabGeo = () => {
+    if (!navigator.geolocation) return showNotification('Thiết bị không hỗ trợ GPS', 'error');
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const { latitude, longitude, accuracy } = pos.coords;
+        setForm(prev => ({ ...prev, lat: latitude.toFixed(6), lng: longitude.toFixed(6), accuracy: Math.round(accuracy) }));
+        showNotification('Đã lấy vị trí', 'success');
+      },
+      err => showNotification(`GPS lỗi: ${err.code}`, 'error'),
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+    );
+  };
+
+  const performSearch = async () => {
+    if (!mapSearch.trim()) return;
+    setMapLoading(true);
+    setMapResults([]);
+    try {
+      const q = encodeURIComponent(mapSearch.trim());
+      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=8&q=${q}`;
+      const res = await fetch(url, { headers: { 'Accept-Language': 'vi' } });
+      const data = await res.json();
+      setMapResults(data || []);
+    } catch (e) {
+      showNotification('Không tìm được địa điểm', 'error');
+    } finally {
+      setMapLoading(false);
+    }
+  };
+
+  const selectSearchResult = (r) => {
+    const lat = Number(r.lat);
+    const lng = Number(r.lon);
+    setForm(prev => ({
+      ...prev,
+      placeName: r.display_name,
+      lat: lat.toFixed(6),
+      lng: lng.toFixed(6)
+    }));
+    if (leafletMapRef.current && window.L) {
+      leafletMapRef.current.setView([lat,lng], 14);
+      if (!markerRef.current) markerRef.current = window.L.marker([lat,lng]).addTo(leafletMapRef.current);
+      else markerRef.current.setLatLng([lat,lng]);
+    }
+    setMapResults([]);
+  };
+
+  // Init map when modal opens
+  useEffect(() => {
+    if (!showMapModal) {
+      if (leafletMapRef.current) {
+        try { leafletMapRef.current.remove(); } catch(_) {}
+        leafletMapRef.current = null;
+        markerRef.current = null;
+      }
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      await new Promise(r => setTimeout(r, 50));
+      if (!mapRef.current || cancelled) return;
+      try {
+        const L = await loadLeaflet();
+        if (!L || cancelled) return;
+        const center = [21.0278,105.8342];
+        const map = L.map(mapRef.current).setView(center, 6);
+        leafletMapRef.current = map;
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution:'© OpenStreetMap'
+        }).addTo(map);
+        map.on('click', e => {
+          const { lat, lng } = e.latlng;
+          setForm(prev => ({ ...prev, lat: lat.toFixed(6), lng: lng.toFixed(6) }));
+          if (!markerRef.current) {
+            markerRef.current = L.marker([lat,lng]).addTo(map);
+          } else {
+            markerRef.current.setLatLng([lat,lng]);
+          }
+        });
+      } catch (err) {
+        console.error('Map init error:', err);
+        showNotification('Không thể tải bản đồ', 'error');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showMapModal]);
+
   return (
     <div className="home-container">
       <Sidebar userName={userName} />
@@ -381,7 +618,7 @@ const HomePageContent = () => {
             </div>
           </div>
           <div className="home-actions">
-            <button onClick={() => navigate('/transactions')}>+ Ghi chép</button>
+            <button onClick={() => setShowTransactionModal(true)}>+ Ghi chép</button>
             <button onClick={() => navigate('/switch')} style={{ marginLeft: 8 }}>
               <i className="fas fa-layer-group"></i> Nhóm/Gia đình
             </button>
@@ -414,6 +651,346 @@ const HomePageContent = () => {
         </div>
       </main>
       <AiAssistant />
+
+      {/* Transaction Modal */}
+      {showTransactionModal && (
+        <div className="tx-overlay" onClick={(e) => {
+          if (e.target.className === 'tx-overlay') {
+            setShowTransactionModal(false);
+            setForm({
+              walletId: '',
+              name: '',
+              type: 'expense',
+              categoryId: '',
+              amount: '',
+              date: new Date().toISOString().slice(0,10),
+              note: '',
+              placeName: '',
+              lat: '',
+              lng: '',
+              accuracy: ''
+            });
+            setTxMessage(null);
+          }
+        }}>
+          <div className="tx-edit-modal" style={{
+            maxWidth: '600px',
+            width: '90%',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column'
+          }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0 }}>
+              <h3 style={{ margin: 0 }}>Thêm giao dịch</h3>
+              <button
+                onClick={() => {
+                  setShowTransactionModal(false);
+                  setForm({
+                    walletId: '',
+                    name: '',
+                    type: 'expense',
+                    categoryId: '',
+                    amount: '',
+                    date: new Date().toISOString().slice(0,10),
+                    note: '',
+                    placeName: '',
+                    lat: '',
+                    lng: '',
+                    accuracy: ''
+                  });
+                  setTxMessage(null);
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: '#666',
+                  padding: '0',
+                  width: '30px',
+                  height: '30px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                ×
+              </button>
+            </div>
+            <form onSubmit={handleSubmit} style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '14px',
+              flex: 1,
+              minHeight: 0,
+              overflowY: 'auto',
+              paddingRight: '4px'
+            }}>
+              <select
+                value={form.walletId}
+                onChange={(e) => handleFormChange('walletId', e.target.value)}
+                required
+                style={{
+                  padding: '10px 12px',
+                  border: '1px solid #e3f6f5',
+                  borderRadius: 8,
+                  fontSize: '1rem',
+                  background: '#f7fafd',
+                  width: '100%',
+                  boxSizing: 'border-box'
+                }}
+              >
+                <option value="">-- Chọn ví --</option>
+                {wallets.map(w => (
+                  <option key={w._id} value={w._id}>{w.name} — {w.currency} {w.initialBalance}</option>
+                ))}
+              </select>
+
+              <input
+                type="text"
+                placeholder="Tên giao dịch"
+                value={form.name}
+                onChange={(e) => handleFormChange('name', e.target.value)}
+                required
+                style={{
+                  padding: '10px 12px',
+                  border: '1px solid #e3f6f5',
+                  borderRadius: 8,
+                  fontSize: '1rem',
+                  background: '#f7fafd',
+                  width: '100%',
+                  boxSizing: 'border-box'
+                }}
+              />
+
+              <select
+                value={form.type}
+                onChange={(e) => handleFormChange('type', e.target.value)}
+                style={{
+                  padding: '10px 12px',
+                  border: '1px solid #e3f6f5',
+                  borderRadius: 8,
+                  fontSize: '1rem',
+                  background: '#f7fafd',
+                  width: '100%',
+                  boxSizing: 'border-box'
+                }}
+              >
+                <option value="expense">Chi tiêu</option>
+                <option value="income">Thu nhập</option>
+              </select>
+
+              <select
+                value={form.categoryId}
+                onChange={(e) => handleFormChange('categoryId', e.target.value)}
+                required
+                style={{
+                  padding: '10px 12px',
+                  border: '1px solid #e3f6f5',
+                  borderRadius: 8,
+                  fontSize: '1rem',
+                  background: '#f7fafd',
+                  width: '100%',
+                  boxSizing: 'border-box'
+                }}
+              >
+                <option value="">-- Chọn danh mục --</option>
+                {availableCategories.map(c => (
+                  <option key={c._id} value={c._id}>{c.icon || ''} {c.name}</option>
+                ))}
+              </select>
+
+              <input
+                type="number"
+                placeholder="Số tiền"
+                value={form.amount}
+                onChange={(e) => handleFormChange('amount', e.target.value)}
+                required
+                min="0"
+                style={{
+                  padding: '10px 12px',
+                  border: '1px solid #e3f6f5',
+                  borderRadius: 8,
+                  fontSize: '1rem',
+                  background: '#f7fafd',
+                  width: '100%',
+                  boxSizing: 'border-box'
+                }}
+              />
+              <input
+                type="text"
+                placeholder="Ghi chú"
+                value={form.note}
+                onChange={(e) => handleFormChange('note', e.target.value)}
+                style={{
+                  padding: '10px 12px',
+                  border: '1px solid #e3f6f5',
+                  borderRadius: 8,
+                  fontSize: '1rem',
+                  background: '#f7fafd',
+                  width: '100%',
+                  boxSizing: 'border-box'
+                }}
+              />
+
+              <button
+                type="button"
+                onClick={() => setShowMapModal(true)}
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  background: 'linear-gradient(90deg,#2a5298,#4ecdc4)',
+                  color: '#fff',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  border: 'none'
+                }}
+              >
+                Bản đồ
+              </button>
+
+              {(form.lat || form.lng || form.placeName) && (
+                <div style={{ fontSize: '.85rem', color: '#506a82', fontWeight: 600, padding: '8px', background: '#f0f9ff', borderRadius: 6 }}>
+                  {form.placeName && <div>Địa điểm: {form.placeName}</div>}
+                  {(form.lat && form.lng) && <div>Tọa độ: {form.lat}, {form.lng}</div>}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 8, marginTop: '4px', flexShrink: 0 }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowTransactionModal(false);
+                    setForm({
+                      walletId: '',
+                      name: '',
+                      type: 'expense',
+                      categoryId: '',
+                      amount: '',
+                      date: new Date().toISOString().slice(0,10),
+                      note: '',
+                      placeName: '',
+                      lat: '',
+                      lng: '',
+                      accuracy: ''
+                    });
+                    setTxMessage(null);
+                  }}
+                  style={{
+                    padding: '10px 20px',
+                    borderRadius: 8,
+                    border: '1px solid #ddd',
+                    background: '#fff',
+                    cursor: 'pointer',
+                    fontWeight: 600
+                  }}
+                >
+                  Hủy
+                </button>
+                <button
+                  className="save-btn"
+                  type="submit"
+                  disabled={saving}
+                  style={{ flex: 1, minWidth: 160 }}
+                >
+                  {saving ? 'Đang lưu...' : 'Thêm giao dịch'}
+                </button>
+              </div>
+
+              {txMessage && (
+                <div style={{
+                  marginTop: 8,
+                  color: txMessage.type === 'error' ? '#b71c1c' : '#1565c0',
+                  padding: '8px',
+                  background: txMessage.type === 'error' ? '#ffebee' : '#e3f2fd',
+                  borderRadius: 6,
+                  fontSize: '0.9rem',
+                  flexShrink: 0
+                }}>
+                  {txMessage.text}
+                </div>
+              )}
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Map Modal */}
+      {showMapModal && (
+        <div className="tx-overlay">
+          <div className="tx-map-modal">
+            <div className="tx-map-modal-header">
+              <div className="tx-map-modal-title">Chọn vị trí trên bản đồ</div>
+              <button className="tx-map-modal-close" onClick={() => setShowMapModal(false)}>×</button>
+            </div>
+            <div className="tx-map-picker">
+              <div className="tx-map-search-row">
+                <input
+                  type="text"
+                  placeholder="Tìm địa điểm (VD: quán cà phê, đường...)"
+                  value={mapSearch}
+                  onChange={e => setMapSearch(e.target.value)}
+                />
+                <button type="button" onClick={performSearch} disabled={mapLoading}>
+                  {mapLoading ? 'Đang tìm...' : 'Tìm'}
+                </button>
+              </div>
+              {mapResults.length > 0 && (
+                <div className="tx-map-results">
+                  {mapResults.map(r => (
+                    <div
+                      key={r.place_id}
+                      className="tx-map-results-item"
+                      onClick={() => selectSearchResult(r)}
+                      title="Chọn địa điểm"
+                    >
+                      {r.display_name}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="tx-map-canvas" ref={mapRef} aria-label="Bản đồ chọn vị trí"></div>
+              <div className="tx-map-hint">
+                Nhấp trên bản đồ để đặt tọa độ hoặc dùng ô tìm kiếm.
+              </div>
+
+              <input
+                type="text"
+                placeholder="Tên địa điểm (ví dụ: Quán cà phê A)"
+                value={form.placeName}
+                onChange={(e) => handleFormChange('placeName', e.target.value)}
+                style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #e3f6f5' }}
+              />
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button
+                  type="button"
+                  onClick={grabGeo}
+                  style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #d0e4ef', background: '#eef7fb', cursor: 'pointer', fontWeight: 600 }}
+                >
+                  GPS
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm(prev => ({ ...prev, lat: '', lng: '', accuracy: '', placeName: '' }))}
+                  style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #e6e6e6', background: '#fafafa', cursor: 'pointer', fontWeight: 600 }}
+                >
+                  Xóa vị trí
+                </button>
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowMapModal(false)}
+                  style={{ marginLeft: 'auto', padding: '8px 16px', borderRadius: 8, background: 'linear-gradient(90deg,#2a5298,#4ecdc4)', color: '#fff', fontWeight: 700, border: 'none', cursor: 'pointer' }}
+                >
+                  Xong
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

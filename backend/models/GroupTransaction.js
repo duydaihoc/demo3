@@ -24,6 +24,7 @@ const groupTransactionSchema = new mongoose.Schema({
   participants: { type: [participantSchema], default: [] },
   percentages: { type: [{ user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, email: String, percentage: Number }], default: [] },
   category: { type: mongoose.Schema.Types.Mixed, required: false },
+  tags: [{ type: String, trim: true }], // Tags cho giao dịch
   wallet: { type: mongoose.Schema.Types.ObjectId, ref: 'Wallet', required: false }, // Ví của người trả dùm
   perPerson: { type: Boolean, default: false },
   createdBy: { type: mongoose.Schema.Types.Mixed, required: false },

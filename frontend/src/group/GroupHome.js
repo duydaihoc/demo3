@@ -100,17 +100,34 @@ export default function GroupHome() {
 
         // Fetch transactions for all groups
         const allTxs = [];
+        // Tạo map để tra cứu thông tin nhóm nhanh
+        const groupMap = new Map();
+        groupsData.forEach(group => {
+          const groupId = String(group._id || group.id);
+          groupMap.set(groupId, {
+            id: groupId,
+            name: group.name,
+            color: group.color,
+            ownerId: group.owner?._id || group.owner
+          });
+        });
+
         for (const group of groupsData) {
           const groupId = group._id || group.id;
           const txs = await fetchGroupTransactions(groupId);
           // Add group info to each transaction
           txs.forEach(tx => {
-            tx.groupInfo = {
-              id: groupId,
+            // Đảm bảo groupInfo luôn được thêm vào
+            const txGroupId = String(tx.groupId || tx.group || groupId);
+            const groupInfo = groupMap.get(txGroupId) || {
+              id: String(groupId),
               name: group.name,
               color: group.color,
               ownerId: group.owner?._id || group.owner
             };
+            tx.groupInfo = groupInfo;
+            // Đảm bảo groupId luôn có trong transaction
+            tx.groupId = txGroupId;
           });
           allTxs.push(...txs);
         }
@@ -351,13 +368,40 @@ export default function GroupHome() {
             ) : (
               <div className="gh-transactions-list">
                 {recentTransactions.map(tx => {
-                  const groupInfo = tx.groupInfo;
+                  // Lấy thông tin nhóm từ nhiều nguồn để đảm bảo có dữ liệu
+                  let groupInfo = tx.groupInfo;
+                  
+                  // Nếu không có groupInfo, thử lấy từ groupsData
+                  if (!groupInfo && tx.groupId) {
+                    const foundGroup = groups.find(g => 
+                      String(g._id || g.id) === String(tx.groupId || tx.group)
+                    );
+                    if (foundGroup) {
+                      groupInfo = {
+                        id: String(foundGroup._id || foundGroup.id),
+                        name: foundGroup.name,
+                        color: foundGroup.color,
+                        ownerId: foundGroup.owner?._id || foundGroup.owner
+                      };
+                    }
+                  }
+                  
                   const payerName = tx.payer?.name || tx.payer?.email || 'Người tạo';
                   const categoryName = tx.category?.name || 'Chưa phân loại';
                   const categoryIcon = tx.category?.icon || '';
+                  const groupName = groupInfo?.name || 'Nhóm không xác định';
 
                   return (
-                    <div key={tx._id} className="gh-transaction-item">
+                    <div 
+                      key={tx._id || tx.id} 
+                      className="gh-transaction-item"
+                      onClick={() => {
+                        if (groupInfo?.id) {
+                          navigate(`/groups/${groupInfo.id}/transactions`);
+                        }
+                      }}
+                      style={{ cursor: groupInfo?.id ? 'pointer' : 'default' }}
+                    >
                       <div className="gh-transaction-date">
                         {new Date(tx.date || tx.createdAt).toLocaleDateString('vi-VN', { 
                           day: '2-digit', 
@@ -368,9 +412,9 @@ export default function GroupHome() {
                         <div className="gh-transaction-title">{tx.title || 'Giao dịch nhóm'}</div>
                         <div className="gh-transaction-meta">
                           <span className="gh-transaction-group" style={{ 
-                            background: groupInfo ? getGroupGradient({ color: groupInfo.color }) : undefined 
+                            background: groupInfo ? getGroupGradient({ color: groupInfo.color }) : 'linear-gradient(135deg, #64748b, #94a3b8)'
                           }}>
-                            {groupInfo?.name || 'Nhóm'}
+                            <i className="fas fa-users"></i> {groupName}
                           </span>
                           <span className="gh-transaction-separator">•</span>
                           <span className="gh-transaction-category">
@@ -378,7 +422,9 @@ export default function GroupHome() {
                             <span>{categoryName}</span>
                           </span>
                           <span className="gh-transaction-separator">•</span>
-                          <span className="gh-transaction-payer">{payerName}</span>
+                          <span className="gh-transaction-payer">
+                            <i className="fas fa-user"></i> {payerName}
+                          </span>
                         </div>
                       </div>
                       <div className="gh-transaction-amount">

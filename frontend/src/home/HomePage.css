@@ -10,12 +10,13 @@
   flex: 1;
   height: 100vh;
   margin-left: 220px; /* Move margin from inline style to CSS */
-  padding: 20px;
+  padding: 24px;
   font-family: 'Roboto', Arial, sans-serif;
   box-sizing: border-box;
   overflow-y: auto; /* Enable vertical scrolling */
   overflow-x: hidden; /* Prevent horizontal scrolling */
   transition: margin-left 0.3s ease;
+  width: calc(100% - 220px); /* Đảm bảo không bị tràn */
 }
 
 /* Adjust margin when sidebar is collapsed */
@@ -212,15 +213,17 @@ body.tour-open {
 
 .home-content {
   display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 30px;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 24px;
   padding-bottom: 40px; /* Add bottom padding for better scrolling experience */
+  width: 100%; /* Sử dụng toàn bộ chiều rộng */
 }
 
 .home-left {
   display: flex;
   flex-direction: column;
-  gap: 30px;
+  gap: 24px;
+  min-width: 0; /* Cho phép flex items co lại khi cần */
   /* đảm bảo timeline không dính vào dashboard */
 }
 
@@ -267,7 +270,9 @@ body.tour-open {
 .home-right {
   display: flex;
   flex-direction: column;
-  gap: 30px;
+  gap: 24px;
+  min-width: 0; /* Cho phép flex items co lại khi cần */
+  max-width: 100%; /* Đảm bảo không vượt quá container */
 }
 
 .home-reminder {
@@ -501,13 +506,43 @@ body.tour-open {
   }
 }
 
+/* Responsive breakpoints */
+@media (max-width: 1400px) {
+  .home-content {
+    grid-template-columns: 1.5fr 1fr;
+    gap: 20px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .home-content {
+    grid-template-columns: 1.4fr 1fr;
+    gap: 18px;
+  }
+}
+
 @media (max-width: 900px) {
   .home-content {
     grid-template-columns: 1fr;
+    gap: 20px;
   }
   .home-main {
     padding: 20px;
     margin-left: 220px;
+  }
+  .home-left,
+  .home-right {
+    width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .home-main {
+    margin-left: 0;
+    padding: 16px;
+  }
+  .home-content {
+    gap: 16px;
   }
 }
 

@@ -525,7 +525,7 @@
 
 /* Wrapper bên trong để giữ border-radius cho các phần tử chính */
 .gaf-post-inner {
-  overflow: hidden;
+  overflow: visible;
   border-radius: 20px 20px 0 0;
 }
 
@@ -547,6 +547,7 @@
   position: relative;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
+  z-index: 10;
 }
 
 .gaf-post-avatar {
@@ -632,6 +633,7 @@
 
 .gaf-post-menu-dropdown {
   position: relative;
+  z-index: 10001;
 }
 
 .gaf-menu-btn {
@@ -674,7 +676,7 @@
   border-radius: 12px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
   min-width: 180px;
-  z-index: 1000;
+  z-index: 10000;
   display: none;
   overflow: hidden;
   border: 1px solid #dbdbdb;
@@ -738,6 +740,8 @@
   white-space: pre-wrap;
   background: #ffffff;
   font-weight: 400;
+  position: relative;
+  z-index: 1;
 }
 
 .gaf-post-content:empty {
@@ -1476,6 +1480,413 @@
   gap: 8px;
 }
 
+/* Link Transaction Section */
+.gaf-link-transaction-section {
+  margin-bottom: 20px;
+  width: 100%;
+  display: block;
+}
+
+.gaf-link-transaction-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  justify-content: center;
+}
+
+.gaf-link-transaction-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.5s ease;
+}
+
+.gaf-link-transaction-btn:hover:not(:disabled) {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+}
+
+.gaf-link-transaction-btn:hover:not(:disabled)::before {
+  left: 100%;
+}
+
+.gaf-link-transaction-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.gaf-link-transaction-btn i {
+  font-size: 16px;
+}
+
+/* Transaction Selector */
+.gaf-transaction-selector {
+  margin-top: 16px;
+  background: #ffffff;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  max-height: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.gaf-transaction-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.gaf-transaction-search i {
+  position: absolute;
+  left: 12px;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.gaf-transaction-search input {
+  width: 100%;
+  padding: 10px 12px 10px 36px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+  background: #f8fafc;
+  transition: all 0.2s ease;
+}
+
+.gaf-transaction-search input:focus {
+  outline: none;
+  border-color: #10b981;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+}
+
+.gaf-transaction-loading {
+  padding: 20px;
+  text-align: center;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.gaf-transaction-list {
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gaf-transaction-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+  width: 100%;
+}
+
+.gaf-transaction-item:hover {
+  border-color: #10b981;
+  background: #f0fdf4;
+  transform: translateX(4px);
+}
+
+.gaf-transaction-item.selected {
+  border-color: #10b981;
+  background: #ecfdf5;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.15);
+}
+
+.gaf-transaction-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.gaf-transaction-item-title {
+  font-weight: 600;
+  color: #0f172a;
+  font-size: 15px;
+  margin-bottom: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gaf-transaction-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.gaf-transaction-category {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.gaf-transaction-amount {
+  font-weight: 700;
+  color: #059669;
+  font-size: 14px;
+}
+
+.gaf-transaction-item i.fa-check {
+  color: #10b981;
+  font-size: 16px;
+  margin-left: 12px;
+}
+
+.gaf-transaction-empty {
+  padding: 20px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+/* Linked Transaction Preview */
+.gaf-linked-transaction-preview {
+  margin-top: 16px;
+  background: #ecfdf5;
+  border: 2px solid #10b981;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.1);
+}
+
+.gaf-linked-transaction-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-weight: 600;
+  color: #059669;
+  font-size: 14px;
+}
+
+.gaf-unlink-btn {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  font-size: 14px;
+}
+
+.gaf-unlink-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.gaf-linked-transaction-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gaf-linked-transaction-title {
+  font-weight: 700;
+  color: #0f172a;
+  font-size: 16px;
+}
+
+.gaf-linked-transaction-details {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.gaf-linked-category {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: #ffffff;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #475569;
+}
+
+.gaf-linked-amount {
+  font-weight: 700;
+  color: #059669;
+  font-size: 15px;
+}
+
+
+/* Linked Transaction Card in Post */
+.gaf-linked-transaction-card {
+  margin: 16px 18px;
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  border: 2px solid #10b981;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+  transition: all 0.3s ease;
+}
+
+.gaf-linked-transaction-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.2);
+}
+
+.gaf-linked-transaction-card .gaf-linked-transaction-header {
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.gaf-linked-transaction-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gaf-linked-transaction-card .gaf-linked-transaction-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 4px;
+}
+
+.gaf-linked-transaction-description {
+  font-size: 14px;
+  color: #475569;
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+
+.gaf-linked-transaction-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.gaf-linked-meta-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.gaf-linked-category-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 1px solid #bae6fd;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0c4a6e;
+  box-shadow: 0 2px 6px rgba(14, 165, 233, 0.15);
+  transition: all 0.2s ease;
+}
+
+.gaf-linked-category-badge:hover {
+  background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+  box-shadow: 0 4px 8px rgba(14, 165, 233, 0.2);
+  transform: translateY(-1px);
+}
+
+.gaf-category-icon {
+  font-size: 16px;
+  display: inline-block;
+  line-height: 1;
+}
+
+.gaf-category-name {
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+/* Tags trong category badge */
+.gaf-category-tags {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding-left: 8px;
+  border-left: 1px solid rgba(14, 165, 233, 0.3);
+}
+
+.gaf-category-tag {
+  display: inline-block;
+  padding: 2px 6px;
+  background: rgba(14, 165, 233, 0.15);
+  color: #0c4a6e;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+/* Tags riêng khi không có category */
+.gaf-linked-tags-only {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.gaf-linked-tag {
+  display: inline-block;
+  padding: 4px 10px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 1px solid #bae6fd;
+  color: #0c4a6e;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(14, 165, 233, 0.1);
+}
+
+.gaf-linked-amount-badge {
+  padding: 6px 12px;
+  background: #10b981;
+  color: white;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.3);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .gaf-post {
@@ -1508,5 +1919,14 @@
 
   .gaf-action-btn i {
     font-size: 20px;
+  }
+
+  .gaf-transaction-selector {
+    max-height: 300px;
+  }
+
+  .gaf-linked-transaction-card {
+    margin: 12px;
+    padding: 12px;
   }
 }
