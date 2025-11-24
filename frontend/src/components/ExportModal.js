@@ -14,11 +14,12 @@ function ExportModal({
   const [exportFormat, setExportFormat] = useState('csv');
   const [loading, setLoading] = useState(false);
   const [includeDetails, setIncludeDetails] = useState(true);
+  const [reportType, setReportType] = useState('personal'); // 'personal', 'group', 'family', 'all'
   
   if (!isOpen) return null;
 
   // Export report function
-  const exportReport = async (format = 'csv', includeDetails = true) => {
+  const exportReport = async (format = 'csv', includeDetails = true, reportType = 'personal') => {
     try {
       const now = new Date();
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -89,30 +90,123 @@ function ExportModal({
         console.warn('Could not fetch categories for export', err);
       }
 
-      // Get all transactions for the month
-      const allTxs = transactions || [];
+      // Helper function to determine transaction type (same logic as TransactionsPage.js)
+      const getTransactionType = (tx) => {
+        const isGroupTx = tx.groupTransaction === true;
+        const isFamilyTransfer = tx.metadata && tx.metadata.source === 'family_transfer';
+        const isFamilyPersonal = tx.metadata && tx.metadata.source === 'family_personal';
+        const isFamilyTx = !!(tx.metadata && (tx.metadata.familyId || tx.metadata.familyTransactionId || isFamilyTransfer || isFamilyPersonal));
+        const isPersonalTx = !isGroupTx && !isFamilyTx;
+        
+        if (isGroupTx) return { type: 'group', isPending: tx.isPending === true };
+        if (isFamilyTx) return { type: 'family', isTransfer: isFamilyTransfer, isPersonal: isFamilyPersonal };
+        return { type: 'personal' };
+      };
+
+      // Fetch group and family metadata for display
+      let groups = [];
+      let families = [];
+      
+      if (reportType === 'group' || reportType === 'all') {
+        try {
+          const groupsRes = await fetch('http://localhost:5000/api/groups', { headers });
+          if (groupsRes.ok) {
+            groups = await groupsRes.json();
+          }
+        } catch (err) {
+          console.warn('Could not fetch groups for export', err);
+        }
+      }
+
+      if (reportType === 'family' || reportType === 'all') {
+        try {
+          const familiesRes = await fetch('http://localhost:5000/api/families', { headers });
+          if (familiesRes.ok) {
+            families = await familiesRes.json();
+          }
+        } catch (err) {
+          console.warn('Could not fetch families for export', err);
+        }
+      }
+
+      // Create maps for quick lookup
+      const groupMap = {};
+      groups.forEach(g => {
+        groupMap[String(g._id)] = { name: g.name || 'Không tên', color: g.color || '' };
+      });
+
+      const familyMap = {};
+      families.forEach(f => {
+        familyMap[String(f._id)] = { name: f.name || 'Không tên' };
+      });
+
+      // Process all transactions from the main transactions list
+      // The transactions list already contains personal, group, and family transactions
+      // We just need to classify and filter them based on reportType
+      const allTxs = (transactions || []).map(tx => {
+        const txType = getTransactionType(tx);
+        let sourceType = txType.type;
+        let sourceName = '';
+        
+        if (txType.type === 'group') {
+          const groupId = tx.groupId || (tx.group && (typeof tx.group === 'string' ? tx.group : tx.group._id));
+          const groupInfo = groupId ? groupMap[String(groupId)] : null;
+          sourceName = groupInfo ? groupInfo.name : (tx.groupName || 'Nhóm');
+        } else if (txType.type === 'family') {
+          const familyId = tx.metadata?.familyId || (tx.familyId && (typeof tx.familyId === 'string' ? tx.familyId : tx.familyId._id));
+          const familyInfo = familyId ? familyMap[String(familyId)] : null;
+          sourceName = familyInfo ? familyInfo.name : (tx.metadata?.familyName || 'Gia đình');
+        }
+        
+        return {
+          ...tx,
+          _txType: txType,
+          sourceType,
+          sourceName
+        };
+      });
+      // Filter transactions by report type and date
       const monthTxs = allTxs.filter(tx => {
+        // Filter by report type
+        if (reportType === 'personal' && tx._txType.type !== 'personal') return false;
+        if (reportType === 'group' && tx._txType.type !== 'group') return false;
+        if (reportType === 'family' && tx._txType.type !== 'family') return false;
+        // 'all' includes everything, no filter needed
+        
+        // Filter by date
         const txDate = tx.date ? new Date(tx.date) : null;
         if (!txDate || txDate < monthStart || txDate >= monthEnd) return false;
+        
+        // Filter by wallet if selected
         if (selectedWallet && selectedWallet !== 'all') {
           const walletId = tx.wallet?._id || tx.wallet;
           return String(walletId) === String(selectedWallet);
         }
+        
         return true;
       });
 
-      // Get today's transactions
+      // Get today's transactions with same filters
       const today = new Date();
       const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
       const endToday = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
       const todayTxs = allTxs.filter(tx => {
+        // Filter by report type
+        if (reportType === 'personal' && tx._txType.type !== 'personal') return false;
+        if (reportType === 'group' && tx._txType.type !== 'group') return false;
+        if (reportType === 'family' && tx._txType.type !== 'family') return false;
+        
+        // Filter by date
         const txDate = tx.date ? new Date(tx.date) : null;
         if (!txDate) return false;
         if (txDate < startToday || txDate > endToday) return false;
+        
+        // Filter by wallet if selected
         if (selectedWallet && selectedWallet !== 'all') {
           const walletId = tx.wallet?._id || tx.wallet;
           return String(walletId) === String(selectedWallet);
         }
+        
         return true;
       });
 
@@ -164,9 +258,16 @@ function ExportModal({
       const sections = [];
 
       // Export file metadata
-      sections.push([['# Báo cáo tài chính cá nhân']]);
+      const reportTypeLabels = {
+        personal: 'Cá nhân',
+        group: 'Nhóm',
+        family: 'Gia đình',
+        all: 'Tất cả'
+      };
+      sections.push([['# Báo cáo tài chính ' + reportTypeLabels[reportType] || 'Cá nhân']]);
       sections.push([['# Được xuất ngày:', new Date().toLocaleString()]]);
       sections.push([['# Kỳ báo cáo:', `Tháng ${now.getMonth() + 1}/${now.getFullYear()}`]]);
+      sections.push([['# Loại báo cáo:', reportTypeLabels[reportType] || 'Cá nhân']]);
       sections.push([[]]);
 
       // Metadata section (user info) - Enhanced with profile data
@@ -178,19 +279,62 @@ function ExportModal({
       sections.push([['ID', userProfile.id || userProfile._id || 'N/A']]);
       sections.push([[]]);
 
-      // Wallets section - Include all wallet data with more detail
-      sections.push([['## Ví của người dùng']]);
-      sections.push([['ID', 'Tên ví', 'Loại tiền', 'Số dư ban đầu', 'Ghi chú']]);
-      (wallets || []).forEach(w => {
-        sections.push([[
-          w._id || '', 
-          w.name || 'Không tên', 
-          w.currency || 'VND',
-          w.initialBalance != null ? w.initialBalance : 0,
-          w.notes || ''
-        ]]);
-      });
-      sections.push([[]]);
+      // Wallets section - Include all wallet data with more detail (only for personal/all)
+      if (reportType === 'personal' || reportType === 'all') {
+        sections.push([['## Ví của người dùng']]);
+        sections.push([['ID', 'Tên ví', 'Loại tiền', 'Số dư ban đầu', 'Ghi chú']]);
+        (wallets || []).forEach(w => {
+          sections.push([[
+            w._id || '', 
+            w.name || 'Không tên', 
+            w.currency || 'VND',
+            w.initialBalance != null ? w.initialBalance : 0,
+            w.notes || ''
+          ]]);
+        });
+        sections.push([[]]);
+      }
+
+      // Groups section (only for group/all)
+      if ((reportType === 'group' || reportType === 'all') && groups.length > 0) {
+        sections.push([['## Nhóm']]);
+        sections.push([['ID', 'Tên nhóm', 'Màu sắc', 'Số thành viên', 'Số giao dịch']]);
+        groups.forEach(g => {
+          const groupTxsCount = monthTxs.filter(tx => {
+            if (tx._txType.type !== 'group') return false;
+            const groupId = tx.groupId || (tx.group && (typeof tx.group === 'string' ? tx.group : tx.group._id));
+            return String(groupId) === String(g._id);
+          }).length;
+          sections.push([[
+            g._id || '',
+            g.name || 'Không tên',
+            g.color || '',
+            g.members ? (Array.isArray(g.members) ? g.members.length : 0) : 0,
+            groupTxsCount
+          ]]);
+        });
+        sections.push([[]]);
+      }
+
+      // Families section (only for family/all)
+      if ((reportType === 'family' || reportType === 'all') && families.length > 0) {
+        sections.push([['## Gia đình']]);
+        sections.push([['ID', 'Tên gia đình', 'Số thành viên', 'Số giao dịch']]);
+        families.forEach(f => {
+          const familyTxsCount = monthTxs.filter(tx => {
+            if (tx._txType.type !== 'family') return false;
+            const familyId = tx.metadata?.familyId || (tx.familyId && (typeof tx.familyId === 'string' ? tx.familyId : tx.familyId._id));
+            return String(familyId) === String(f._id);
+          }).length;
+          sections.push([[
+            f._id || '',
+            f.name || 'Không tên',
+            f.members ? (Array.isArray(f.members) ? f.members.length : 0) : 0,
+            familyTxsCount
+          ]]);
+        });
+        sections.push([[]]);
+      }
 
       // Categories section - Include all user-created categories
       sections.push([['## Danh mục']]);
@@ -209,7 +353,7 @@ function ExportModal({
 
       // Today's transactions section with more detailed info
       sections.push([['## Giao dịch hôm nay', `(${new Date().toLocaleDateString()})`]]);
-      sections.push([['Ngày', 'Tiêu đề', 'Số tiền', 'Loại', 'Ví', 'Danh mục', 'Loại tiền', 'Ghi chú']]);
+      sections.push([['Ngày', 'Tiêu đề', 'Số tiền', 'Loại', 'Nguồn', 'Ví/Nhóm/Gia đình', 'Danh mục', 'Loại tiền', 'Ghi chú', 'Trạng thái']]);
       todayTxs.forEach(tx => {
         const date = tx.date ? (new Date(tx.date)).toLocaleString() : '';
         const title = tx.title || tx.description || 'Không tiêu đề';
@@ -224,13 +368,55 @@ function ExportModal({
         const currency = (tx.wallet && tx.wallet.currency) || (tx.currency) || 'VND';
         const note = includeDetails ? (tx.note || tx.description || '') : '';
         
-        sections.push([[date, title, amount, type, walletName, categoryName, currency, note]]);
+        // Determine source type and name (already set in allTxs processing)
+        const sourceType = tx.sourceType || 'Cá nhân';
+        let sourceName = tx.sourceName || walletName;
+        
+        // Add additional info for group transactions
+        let additionalInfo = '';
+        let status = '';
+        if (tx._txType.type === 'group') {
+          if (tx._txType.isPending) {
+            additionalInfo = ' (Chưa thanh toán)';
+            status = 'Chưa thanh toán';
+          } else {
+            status = 'Đã thanh toán';
+          }
+          if (tx.groupRole) {
+            const roleText = tx.groupRole === 'payer' ? 'Người tạo' : 
+                           tx.groupRole === 'receiver' ? 'Người nhận' : 
+                           tx.groupRole === 'participant' ? 'Người nợ' : '';
+            if (roleText) additionalInfo += ` - ${roleText}`;
+          }
+        } else if (tx._txType.type === 'family') {
+          if (tx._txType.isTransfer) {
+            const direction = tx.metadata?.direction;
+            if (direction === 'to-family') {
+              additionalInfo = ' (Nạp vào quỹ)';
+              status = 'Nạp quỹ';
+            } else if (direction === 'from-family') {
+              additionalInfo = ' (Nhận từ quỹ)';
+              status = 'Rút quỹ';
+            } else {
+              status = 'Giao dịch quỹ';
+            }
+          } else if (tx._txType.isPersonal) {
+            additionalInfo = ' (Giao dịch cá nhân trong gia đình)';
+            status = 'Cá nhân trong gia đình';
+          } else {
+            status = 'Giao dịch gia đình';
+          }
+        } else {
+          status = 'Bình thường';
+        }
+        
+        sections.push([[date, title + additionalInfo, amount, type, sourceType, sourceName, categoryName, currency, note, status]]);
       });
       sections.push([[]]);
 
       // Month transactions section with the same detailed format
       sections.push([['## Giao dịch trong tháng', `(Tháng ${now.getMonth() + 1}/${now.getFullYear()})`]]);
-      sections.push([['Ngày', 'Tiêu đề', 'Số tiền', 'Loại', 'Ví', 'Danh mục', 'Loại tiền', 'Ghi chú']]);
+      sections.push([['Ngày', 'Tiêu đề', 'Số tiền', 'Loại', 'Nguồn', 'Ví/Nhóm/Gia đình', 'Danh mục', 'Loại tiền', 'Ghi chú', 'Trạng thái']]);
       monthTxs.forEach(tx => {
         const date = tx.date ? (new Date(tx.date)).toLocaleString() : '';
         const title = tx.title || tx.description || 'Không tiêu đề';
@@ -245,7 +431,49 @@ function ExportModal({
         const currency = (tx.wallet && tx.wallet.currency) || (tx.currency) || 'VND';
         const note = includeDetails ? (tx.note || tx.description || '') : '';
         
-        sections.push([[date, title, amount, type, walletName, categoryName, currency, note]]);
+        // Determine source type and name (already set in allTxs processing)
+        const sourceType = tx.sourceType || 'Cá nhân';
+        let sourceName = tx.sourceName || walletName;
+        
+        // Add additional info for group transactions
+        let additionalInfo = '';
+        let status = '';
+        if (tx._txType.type === 'group') {
+          if (tx._txType.isPending) {
+            additionalInfo = ' (Chưa thanh toán)';
+            status = 'Chưa thanh toán';
+          } else {
+            status = 'Đã thanh toán';
+          }
+          if (tx.groupRole) {
+            const roleText = tx.groupRole === 'payer' ? 'Người tạo' : 
+                           tx.groupRole === 'receiver' ? 'Người nhận' : 
+                           tx.groupRole === 'participant' ? 'Người nợ' : '';
+            if (roleText) additionalInfo += ` - ${roleText}`;
+          }
+        } else if (tx._txType.type === 'family') {
+          if (tx._txType.isTransfer) {
+            const direction = tx.metadata?.direction;
+            if (direction === 'to-family') {
+              additionalInfo = ' (Nạp vào quỹ)';
+              status = 'Nạp quỹ';
+            } else if (direction === 'from-family') {
+              additionalInfo = ' (Nhận từ quỹ)';
+              status = 'Rút quỹ';
+            } else {
+              status = 'Giao dịch quỹ';
+            }
+          } else if (tx._txType.isPersonal) {
+            additionalInfo = ' (Giao dịch cá nhân trong gia đình)';
+            status = 'Cá nhân trong gia đình';
+          } else {
+            status = 'Giao dịch gia đình';
+          }
+        } else {
+          status = 'Bình thường';
+        }
+        
+        sections.push([[date, title + additionalInfo, amount, type, sourceType, sourceName, categoryName, currency, note, status]]);
       });
 
       // Add summary section
@@ -316,26 +544,73 @@ function ExportModal({
         // Helper: build rows HTML for a list of transactions
         const buildTableHtml = (txList) => {
           if (!txList || txList.length === 0) return '<div class="no-data">Không có giao dịch</div>';
-          const headers = ['Ngày', 'Tiêu đề', 'Ví', 'Danh mục', 'Loại', 'Số tiền', 'Tiền tệ', 'Ghi chú'];
+          const headers = ['Ngày', 'Tiêu đề', 'Nguồn', 'Ví/Nhóm/Gia đình', 'Danh mục', 'Loại', 'Số tiền', 'Tiền tệ', 'Ghi chú', 'Trạng thái'];
           const headerHtml = `<thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>`;
           const bodyHtml = `<tbody>${txList.map(tx => {
             const date = tx.date ? (new Date(tx.date)).toLocaleString() : '';
-            const titleRow = tx.title || tx.description || '';
+            let titleRow = tx.title || tx.description || '';
             const wName = (tx.wallet && typeof tx.wallet !== 'string') ? (tx.wallet.name || '') : (walletMap[String(tx.wallet)] || tx.wallet || '');
             const catName = tx.category && (typeof tx.category !== 'string') ? (tx.category.name || '') : (categoryMap[String(tx.category)] || tx.category || '');
             const typeRow = tx.type || '';
             const amount = tx.amount != null ? Number(tx.amount).toLocaleString() : '';
             const currency = (tx.wallet && tx.wallet.currency) || (tx.currency) || '';
             const note = includeDetails ? (tx.note || tx.description || '') : '';
+            
+            // Determine source type and name
+            const sourceType = tx.sourceType || 'Cá nhân';
+            const sourceName = tx.sourceName || wName;
+            
+            // Add additional info and status
+            let additionalInfo = '';
+            let status = '';
+            if (tx._txType && tx._txType.type === 'group') {
+              if (tx._txType.isPending) {
+                additionalInfo = ' (Chưa thanh toán)';
+                status = 'Chưa thanh toán';
+              } else {
+                status = 'Đã thanh toán';
+              }
+              if (tx.groupRole) {
+                const roleText = tx.groupRole === 'payer' ? 'Người tạo' : 
+                               tx.groupRole === 'receiver' ? 'Người nhận' : 
+                               tx.groupRole === 'participant' ? 'Người nợ' : '';
+                if (roleText) additionalInfo += ` - ${roleText}`;
+              }
+            } else if (tx._txType && tx._txType.type === 'family') {
+              if (tx._txType.isTransfer) {
+                const direction = tx.metadata?.direction;
+                if (direction === 'to-family') {
+                  additionalInfo = ' (Nạp vào quỹ)';
+                  status = 'Nạp quỹ';
+                } else if (direction === 'from-family') {
+                  additionalInfo = ' (Nhận từ quỹ)';
+                  status = 'Rút quỹ';
+                } else {
+                  status = 'Giao dịch quỹ';
+                }
+              } else if (tx._txType.isPersonal) {
+                additionalInfo = ' (Giao dịch cá nhân trong gia đình)';
+                status = 'Cá nhân trong gia đình';
+              } else {
+                status = 'Giao dịch gia đình';
+              }
+            } else {
+              status = 'Bình thường';
+            }
+            
+            titleRow = titleRow + additionalInfo;
+            
             return `<tr>
               <td>${date}</td>
               <td>${titleRow}</td>
-              <td>${wName}</td>
+              <td>${sourceType}</td>
+              <td>${sourceName}</td>
               <td>${catName}</td>
               <td>${typeRow === 'income' ? 'Thu nhập' : 'Chi tiêu'}</td>
               <td class="${typeRow === 'income' ? 'income' : 'expense'}">${amount} ${currency}</td>
               <td>${currency}</td>
               <td>${note}</td>
+              <td>${status}</td>
             </tr>`;
           }).join('')}</tbody>`;
           return `<table border="0" cellpadding="0" cellspacing="0">${headerHtml}${bodyHtml}</table>`;
@@ -429,10 +704,10 @@ function ExportModal({
     }
   };
 
-  const handleExport = async () => {
+      const handleExport = async () => {
     setLoading(true);
     try {
-      await exportReport(exportFormat, includeDetails);
+      await exportReport(exportFormat, includeDetails, reportType);
       setTimeout(() => onClose(), 800); // Close after successful export
     } catch (err) {
       console.error('Export error:', err);
@@ -472,6 +747,77 @@ function ExportModal({
           </div>
           
           <div className="export-options">
+            <h3>Chọn Loại Báo Cáo</h3>
+            <div className="export-format-options" style={{ marginBottom: '24px' }}>
+              <label className={`export-format-option ${reportType === 'personal' ? 'selected' : ''}`}>
+                <input 
+                  type="radio" 
+                  name="reportType" 
+                  value="personal" 
+                  checked={reportType === 'personal'}
+                  onChange={() => setReportType('personal')}
+                />
+                <div className="format-icon">
+                  <span className="material-icon">👤</span>
+                </div>
+                <div className="format-info">
+                  <div className="format-name">Cá nhân</div>
+                  <div className="format-desc">Chỉ xuất dữ liệu cá nhân của bạn</div>
+                </div>
+              </label>
+              
+              <label className={`export-format-option ${reportType === 'group' ? 'selected' : ''}`}>
+                <input 
+                  type="radio" 
+                  name="reportType" 
+                  value="group" 
+                  checked={reportType === 'group'}
+                  onChange={() => setReportType('group')}
+                />
+                <div className="format-icon">
+                  <span className="material-icon">👥</span>
+                </div>
+                <div className="format-info">
+                  <div className="format-name">Nhóm</div>
+                  <div className="format-desc">Xuất dữ liệu từ các nhóm của bạn</div>
+                </div>
+              </label>
+              
+              <label className={`export-format-option ${reportType === 'family' ? 'selected' : ''}`}>
+                <input 
+                  type="radio" 
+                  name="reportType" 
+                  value="family" 
+                  checked={reportType === 'family'}
+                  onChange={() => setReportType('family')}
+                />
+                <div className="format-icon">
+                  <span className="material-icon">🏠</span>
+                </div>
+                <div className="format-info">
+                  <div className="format-name">Gia đình</div>
+                  <div className="format-desc">Xuất dữ liệu từ các gia đình của bạn</div>
+                </div>
+              </label>
+              
+              <label className={`export-format-option ${reportType === 'all' ? 'selected' : ''}`}>
+                <input 
+                  type="radio" 
+                  name="reportType" 
+                  value="all" 
+                  checked={reportType === 'all'}
+                  onChange={() => setReportType('all')}
+                />
+                <div className="format-icon">
+                  <span className="material-icon">📊</span>
+                </div>
+                <div className="format-info">
+                  <div className="format-name">Tất cả</div>
+                  <div className="format-desc">Xuất tất cả dữ liệu (cá nhân + nhóm + gia đình)</div>
+                </div>
+              </label>
+            </div>
+            
             <h3>Chọn Định dạng</h3>
             
             <div className="export-format-options">

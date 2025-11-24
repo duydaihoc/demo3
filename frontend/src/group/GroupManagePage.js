@@ -43,6 +43,10 @@ export default function GroupManagePage() {
 	// Thêm state cho modal chia sẻ
 	const [showShareModal, setShowShareModal] = useState(false);
 
+	// Tab state
+	const [activeTab, setActiveTab] = useState('members');
+	const [activitySubTab, setActivitySubTab] = useState('transactions'); // 'transactions' or 'posts'
+
 	// Group posts (hoạt động nhóm)
 	const [posts, setPosts] = useState([]);
 	const [loadingPosts, setLoadingPosts] = useState(false);
@@ -792,37 +796,43 @@ const getUserNameById = (userIdOrEmail) => {
 					<>
 						{/* Banking-style dashboard summary */}
 						<div className="gm-dashboard">
-							<div className="gm-dashboard-header">
-								<h2 className="gm-dashboard-title">
+							<div className="gm-dashboard-info">
+								<div 
+									className="gm-dashboard-avatar" 
+									style={getGradientStyle(
+										group.color && typeof group.color === 'object' ? group.color.colors : ['#1a3b5d'], 
+										group.color && typeof group.color === 'object' ? group.color.direction : '135deg'
+									)}
+								>
+									{getGroupInitial(group.name)}
+								</div>
+								<div className="gm-dashboard-info-content">
+									<div className="gm-dashboard-name">
 									<i className="fas fa-layer-group"></i>
 									{group.name}
-								</h2>
-								{/* Actions: thêm nút chia sẻ */}
-								{!editing && (
-									<div style={{display:'flex', gap:8, alignItems:'center'}}>
+									</div>
+									<div className="gm-dashboard-actions">
 										{isOwner && (
 											<>
-												<button className="gm-btn primary" onClick={() => setEditing(true)}>
-													<i className="fas fa-edit"></i> Quản lý nhóm
+												<button className="gm-btn" onClick={() => setEditing(true)}>
+													<i className="fas fa-edit"></i> Chỉnh sửa
 												</button>
-												<button 
-													className="gm-btn secondary" 
-													onClick={() => setShowShareModal(true)}
-													style={{background:'#10b981', borderColor:'#10b981'}}
-												>
-													<i className="fas fa-share-alt"></i> Chia sẻ
+												<button className="gm-btn danger" onClick={handleDeleteGroup}>
+													<i className="fas fa-trash-alt"></i> Xóa nhóm
 												</button>
 											</>
 										)}
+										<button className="gm-btn" onClick={() => setShowShareModal(true)}>
+											<i className="fas fa-share-alt"></i> Chia sẻ
+										</button>
 										<button
-											className="gm-btn primary"
+											className="gm-btn"
 											onClick={() => navigate(`/groups/${groupId}/transactions`)}
-											style={{background:'#0ea5e9', border:'none', color:'white'}}
 										>
 											<i className="fas fa-exchange-alt"></i> Giao dịch
 										</button>
 									</div>
-								)}
+								</div>
 							</div>
 							
 							<div className="gm-dashboard-stats">
@@ -858,185 +868,42 @@ const getUserNameById = (userIdOrEmail) => {
 							</div>
 						</div>
 						
-						<div className="gm-layout">
-							{editing ? (
-								// Group editing form in banking-style
-								<div className="gm-card gm-full-width">
-									<div className="gm-card-header">
-										<h2 className="gm-card-title">
-											<i className="fas fa-cogs"></i> Chỉnh sửa thông tin nhóm
-										</h2>
-									</div>
-									
-									<div className="gm-card-body">
-										<div className="gm-edit-form">
-											<div className="gm-form-group">
-												<label htmlFor="group-name">Tên nhóm</label>
-												<input
-													type="text"
-													id="group-name"
-													className="gm-form-input"
-													value={editName}
-													onChange={(e) => setEditName(e.target.value)}
-													disabled={saving}
-													placeholder="Nhập tên nhóm..."
-												/>
-											</div>
-											
-											<div className="gm-edit-color">
-												<div>
-													<label>Màu sắc nhóm</label>
-													<div className="gm-color-picker">
-														{colorOptions.map(c => (
+						{/* Tab Navigation */}
+						<div className="gm-tabs-container">
+							<div className="gm-tabs">
+								{isOwner && (
 															<button
-																key={c}
-																type="button"
-																className={`gm-color-swatch${editColors.includes(c) ? ' selected' : ''}`}
-																style={{ background: c }}
-																onClick={() => setEditColors(prev => 
-																	prev.includes(c) 
-																	? prev.filter(x => x !== c) 
-																	: [...prev, c]
-																)}
+										className={`gm-tab ${activeTab === 'members' ? 'active' : ''}`}
+										onClick={() => { setActiveTab('members'); setEditing(false); }}
 															>
-																{editColors.includes(c) && <span className="gm-color-check">✓</span>}
+										<i className="fas fa-users"></i> Thành viên
 															</button>
-														))}
-													</div>
-												</div>
-												
-												<div>
-													<label>Hướng gradient</label>
-													<div className="gm-direction-picker">
-														{gradientDirections.map(dir => (
+								)}
 															<button
-																key={dir.value}
-																type="button"
-																className={`gm-direction-btn${editDirection === dir.value ? ' selected' : ''}`}
-																onClick={() => setEditDirection(dir.value)}
+									className={`gm-tab ${activeTab === 'activity' ? 'active' : ''}`}
+									onClick={() => { setActiveTab('activity'); setEditing(false); }}
 															>
-																{dir.label}
+									<i className="fas fa-stream"></i> Hoạt động
 															</button>
-														))}
-													</div>
-												</div>
-											</div>
-											
-											{/* Preview gradient - banking style */}
-											<div 
-												className="gm-group-preview" 
-												style={getGradientStyle(editColors, editDirection)}
-											>
-												{editName || group.name}
-											</div>
-											
-											<div className="gm-action-section">
 												<button 
-													className="gm-btn success" 
-													onClick={handleSave}
-													disabled={saving}
+									className={`gm-tab ${activeTab === 'charts' ? 'active' : ''}`}
+									onClick={() => { setActiveTab('charts'); setEditing(false); }}
 												>
-													{saving ? 
-														<><i className="fas fa-spinner fa-spin"></i> Đang lưu...</> : 
-														<><i className="fas fa-check-circle"></i> Lưu thay đổi</>
-													}
+									<i className="fas fa-chart-pie"></i> Biểu đồ
 												</button>
 												<button 
-													className="gm-btn secondary" 
-													onClick={() => setEditing(false)}
-													disabled={saving}
+									className={`gm-tab ${activeTab === 'debts' ? 'active' : ''}`}
+									onClick={() => { setActiveTab('debts'); setEditing(false); }}
 												>
-													<i className="fas fa-times-circle"></i> Hủy
+									<i className="fas fa-hand-holding-usd"></i> Công nợ
 												</button>
 											</div>
 											
-											{error && (
-												<div className="gm-error" style={{marginTop: 20, padding: 16, borderRadius: 10}}>
-													<i className="fas fa-exclamation-circle"></i> {error}
-												</div>
-											)}
-										</div>
-									</div>
-								</div>
-							) : (
-								<>
-									{/* Group Information Card - Banking Style */}
-									<div className="gm-card" style={{gridColumn: "1 / span 1"}}>
-										<div className="gm-card-header">
-											<h2 className="gm-card-title">
-												<i className="fas fa-info-circle"></i> Thông tin nhóm
-											</h2>
-										</div>
-										
-										<div className="gm-card-body">
-											<div className="gm-group-header">
-												<div 
-													className="gm-group-avatar" 
-													style={getGradientStyle(
-														group.color && typeof group.color === 'object' ? group.color.colors : ['#1a3b5d'], 
-														group.color && typeof group.color === 'object' ? group.color.direction : '135deg'
-													)}
-												>
-													{getGroupInitial(group.name)}
-												</div>
-												
-												<div className="gm-group-info">
-													<h2>{group.name}</h2>
-													{group.description && <p>{group.description}</p>}
-												</div>
-											</div>
-											
-											<div className="gm-group-meta">
-												<div className="gm-meta-item">
-													<div className="gm-meta-label">
-														<i className="fas fa-user-shield"></i> Người tạo
-													</div>
-													<div className="gm-meta-value">
-														{group.owner && (group.owner.name || group.owner.email)}
-													</div>
-												</div>
-												
-												<div className="gm-meta-item">
-													<div className="gm-meta-label">
-														<i className="fas fa-users"></i> Số thành viên
-													</div>
-													<div className="gm-meta-value">
-														{group.members ? group.members.length : 0}
-													</div>
-												</div>
-												
-												{group.createdAt && (
-													<div className="gm-meta-item">
-														<div className="gm-meta-label">
-															<i className="fas fa-calendar-alt"></i> Ngày tạo
-														</div>
-														<div className="gm-meta-value">
-															{formatDate(group.createdAt)}
-														</div>
-													</div>
-												)}
-											</div>
-											
-											{isOwner && (
-												<div className="gm-action-section">
-													<button className="gm-btn primary" onClick={() => setEditing(true)}>
-														<i className="fas fa-edit"></i> Chỉnh sửa
-													</button>
-													{/* Thêm nút xóa nhóm vào đây */}
-													<button 
-														className="gm-btn danger" 
-														onClick={handleDeleteGroup}
-														style={{marginLeft: '12px'}}
-													>
-														<i className="fas fa-trash-alt"></i> Xóa nhóm
-													</button>
-												</div>
-											)}
-										</div>
-									</div>
-									
-									{/* Members Management - Banking Style */}
-									<div className="gm-card" style={{gridColumn: "2 / -1"}}>
+							<div className="gm-tab-content">
+								{/* Tab: Thành viên */}
+								{activeTab === 'members' && (
+									<div className="gm-tab-pane active">
+										<div className="gm-card">
 										<div className="gm-card-header">
 											<h2 className="gm-card-title">
 												<i className="fas fa-users"></i> Thành viên nhóm
@@ -1241,12 +1108,33 @@ const getUserNameById = (userIdOrEmail) => {
 											)}
 										</div>
 									</div>
-								</>
+								</div>
 							)}
 							
-							{/* Group Activity (Transactions) and Posts side by side */}
-							{/* NEW: Group Activity Card - Transactions */}
-							<div className="gm-card" style={{gridColumn: "1 / span 1"}}>
+								{/* Tab: Hoạt động */}
+								{activeTab === 'activity' && (
+									<div className="gm-tab-pane active">
+										{/* Sub-tabs cho Hoạt động */}
+										<div className="gm-sub-tabs-container">
+											<div className="gm-sub-tabs">
+												<button 
+													className={`gm-sub-tab ${activitySubTab === 'transactions' ? 'active' : ''}`}
+													onClick={() => setActivitySubTab('transactions')}
+												>
+													<i className="fas fa-exchange-alt"></i> Giao dịch
+												</button>
+												<button 
+													className={`gm-sub-tab ${activitySubTab === 'posts' ? 'active' : ''}`}
+													onClick={() => setActivitySubTab('posts')}
+												>
+													<i className="fas fa-comment-dots"></i> Bài viết
+												</button>
+											</div>
+										</div>
+										
+										{/* Sub-tab: Giao dịch */}
+										{activitySubTab === 'transactions' && (
+											<div className="gm-card">
 								<div className="gm-card-header">
 									<h2 className="gm-card-title"><i className="fas fa-stream"></i> Hoạt động nhóm</h2>
 									<button className="gm-btn secondary" onClick={fetchTxs}>Làm mới</button>
@@ -1369,18 +1257,28 @@ const getUserNameById = (userIdOrEmail) => {
 									)}
 								</div>
 							</div>
+										)}
 
-							{/* Group posts / hoạt động bài viết (shared component) */}
+										{/* Sub-tab: Bài viết */}
+										{activitySubTab === 'posts' && (
+											<div style={{ padding: 0 }}>
 							<GroupActivityFeed groupId={groupId} canPost={true} />
+											</div>
+										)}
+									</div>
+								)}
 
-							{/* ADD: Charts (transactions over time + member percentage) */}
-							{/* place charts between activity and debts */}
-							<div style={{gridColumn: "1 / span 1"}}>
+								{/* Tab: Biểu đồ */}
+								{activeTab === 'charts' && (
+									<div className="gm-tab-pane active">
 								<GroupCharts txs={txs} members={group ? group.members : []} />
 							</div>
+								)}
 
-							{/* NEW: Debts Card - Thay đổi gridColumn */}
-							<div className="gm-card" style={{gridColumn: "2 / -1"}}>
+								{/* Tab: Công nợ */}
+								{activeTab === 'debts' && (
+									<div className="gm-tab-pane active">
+										<div className="gm-card">
 								<div className="gm-card-header">
 									<h2 className="gm-card-title"><i className="fas fa-hand-holding-usd"></i> Công nợ</h2>
 								</div>
@@ -1493,6 +1391,10 @@ const getUserNameById = (userIdOrEmail) => {
 											);
 										})()
 									)}
+											</div>
+										</div>
+									</div>
+									)}
 								</div>
 							</div>
 
@@ -1562,13 +1464,129 @@ const getUserNameById = (userIdOrEmail) => {
 					</div>
 				)}
 
+				{/* Edit Group Modal */}
+				{editing && (
+					<div style={{
+						position: 'fixed',
+						inset: 0,
+						background: 'rgba(0,0,0,0.5)',
+						display: 'flex',
+						alignItems: 'center',
+						justifyContent: 'center',
+						zIndex: 2000,
+						padding: '20px'
+					}}>
+						<div style={{
+							width: '100%',
+							maxWidth: '600px',
+							background: '#fff',
+							borderRadius: 12,
+							overflow: 'hidden',
+							boxShadow: '0 12px 40px rgba(0,0,0,0.3)',
+							maxHeight: '90vh',
+							overflowY: 'auto'
+						}}>
+							<div style={{ padding: 20, borderBottom: '1px solid #eee' }}>
+								<h3 style={{ margin: 0 }}>Chỉnh sửa nhóm</h3>
+							</div>
+							<div style={{ padding: 20 }}>
+								<div className="gm-edit-form">
+									<div className="gm-form-group">
+										<label htmlFor="group-name">Tên nhóm</label>
+										<input
+											type="text"
+											id="group-name"
+											className="gm-form-input"
+											value={editName}
+											onChange={(e) => setEditName(e.target.value)}
+											disabled={saving}
+											placeholder="Nhập tên nhóm..."
+										/>
+									</div>
+									
+									<div className="gm-edit-color">
+										<div>
+											<label>Màu sắc nhóm</label>
+											<div className="gm-color-picker">
+												{colorOptions.map(c => (
+													<button
+														key={c}
+														type="button"
+														className={`gm-color-swatch${editColors.includes(c) ? ' selected' : ''}`}
+														style={{ background: c }}
+														onClick={() => setEditColors(prev => 
+															prev.includes(c) 
+															? prev.filter(x => x !== c) 
+															: [...prev, c]
+														)}
+													>
+														{editColors.includes(c) && <span className="gm-color-check">✓</span>}
+													</button>
+												))}
+											</div>
+										</div>
+										
+										<div>
+											<label>Hướng gradient</label>
+											<div className="gm-direction-picker">
+												{gradientDirections.map(dir => (
+													<button
+														key={dir.value}
+														type="button"
+														className={`gm-direction-btn${editDirection === dir.value ? ' selected' : ''}`}
+														onClick={() => setEditDirection(dir.value)}
+													>
+														{dir.label}
+													</button>
+												))}
+											</div>
+										</div>
+									</div>
+									
+									<div 
+										className="gm-group-preview" 
+										style={getGradientStyle(editColors, editDirection)}
+									>
+										{editName || group.name}
+									</div>
+									
+									<div className="gm-action-section" style={{ marginTop: 20 }}>
+										<button 
+											className="gm-btn success" 
+											onClick={handleSave}
+											disabled={saving}
+										>
+											{saving ? 
+												<><i className="fas fa-spinner fa-spin"></i> Đang lưu...</> : 
+												<><i className="fas fa-check-circle"></i> Lưu thay đổi</>
+											}
+										</button>
+										<button 
+											className="gm-btn secondary" 
+											onClick={() => { setEditing(false); }}
+											disabled={saving}
+										>
+											<i className="fas fa-times-circle"></i> Hủy
+										</button>
+									</div>
+									
+									{error && (
+										<div className="gm-error" style={{marginTop: 20, padding: 16, borderRadius: 10}}>
+											<i className="fas fa-exclamation-circle"></i> {error}
+										</div>
+									)}
+								</div>
+							</div>
+						</div>
+					</div>
+				)}
+
 				{/* Share Modal */}
 				<GroupShareModal
 					groupId={groupId}
 					isOpen={showShareModal}
 					onClose={() => setShowShareModal(false)}
 				/>
-						</div>
 					</>
 				)}
 			</main>

@@ -1,5 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { 
+  Home, 
+  Users, 
+  Mail, 
+  Bell,
+  Network,
+  LayoutGrid
+} from 'lucide-react';
 import './GroupSidebar.css';
 
 export default function GroupSidebar({ active = 'overview' }) {
@@ -12,10 +20,10 @@ export default function GroupSidebar({ active = 'overview' }) {
   });
 
   const items = [
-    { id: 'home', label: 'Trang chủ', route: '/group' },
-    { id: 'groups', label: 'Nhóm', route: '/groups' },
-    { id: 'friends', label: 'Bạn bè', route: '/friends' }, // mới
-    { id: 'activity', label: 'Hoạt động', route: '/activity' },
+    { id: 'home', label: 'Trang chủ', route: '/group', icon: Home },
+    { id: 'groups', label: 'Nhóm', route: '/groups', icon: Users },
+    { id: 'friends', label: 'Bạn bè', route: '/friends', icon: Mail },
+    { id: 'activity', label: 'Hoạt động', route: '/activity', icon: Bell },
   ];
 
   // Toggle sidebar collapse
@@ -110,32 +118,47 @@ export default function GroupSidebar({ active = 'overview' }) {
       </div>
       
       <div className="gs-header">
-        <div className="gs-logo">NHÓM</div>
         <div className="gs-sub">Quản lý nhóm</div>
       </div>
 
       <nav className="gs-nav" role="navigation">
         <ul className="sidebar-menu">
-          {items.map(it => (
-            <li key={it.id}>
-              <button
-                className={`gs-item ${selected === it.id ? 'active' : ''}`}
-                onClick={() => handleNav(it)}
-                aria-pressed={selected === it.id}
-                aria-label={it.label}
-              >
-                {it.label}
-              </button>
-            </li>
-          ))}
+          {items.map(it => {
+            const IconComponent = it.icon;
+            return (
+              <li key={it.id}>
+                <button
+                  className={`gs-item ${selected === it.id ? 'active' : ''}`}
+                  onClick={() => handleNav(it)}
+                  aria-pressed={selected === it.id}
+                  aria-label={it.label}
+                >
+                  <IconComponent className="gs-item-icon" />
+                  <span>{it.label}</span>
+                </button>
+              </li>
+            );
+          })}
         </ul>
       </nav>
 
       <div className="gs-footer">
-        <button className="gs-family-btn" onClick={() => navigate('/family-selector')}>
-          <i className="fas fa-home"></i> Chuyển sang Gia đình
+        <button 
+          className="gs-family-btn" 
+          onClick={() => navigate('/family-selector')}
+          title="Chuyển sang Gia đình"
+          aria-label="Chuyển sang Gia đình"
+        >
+          <Network className="gs-btn-icon" />
         </button>
-        <button className="gs-back" onClick={() => navigate('/home')}>← Về Trang chủ</button>
+        <button 
+          className="gs-back" 
+          onClick={() => navigate('/home')}
+          title="Về Trang cá nhân"
+          aria-label="Về Trang cá nhân"
+        >
+          <LayoutGrid className="gs-btn-icon" />
+        </button>
       </div>
     </aside>
     </>

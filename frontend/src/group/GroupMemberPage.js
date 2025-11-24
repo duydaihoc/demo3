@@ -27,6 +27,10 @@ export default function GroupMemberPage() {
 	const [loadingFriends, setLoadingFriends] = useState(false);
 	const [selectedFriends, setSelectedFriends] = useState([]);
 
+	// Tab state
+	const [activeTab, setActiveTab] = useState('members');
+	const [activitySubTab, setActivitySubTab] = useState('transactions'); // 'transactions' or 'posts'
+
 	const API_BASE = 'http://localhost:5000';
 	const token = localStorage.getItem('token');
 
@@ -445,29 +449,35 @@ export default function GroupMemberPage() {
 					<>
 						{/* Banking-style dashboard summary */}
 						<div className="gm-dashboard">
-							<div className="gm-dashboard-header">
-								<h2 className="gm-dashboard-title">
-									<i className="fas fa-layer-group"></i>
-									{group.name}
-								</h2>
-								
-								{/* Show actions: quản lý chỉ owner, giao dịch cho mọi thành viên */}
-								<div style={{display:'flex', gap:8, alignItems:'center'}}>
-									{isOwner && (
-										<button 
-											className="gm-btn primary"
-											onClick={() => navigate(`/groups/${groupId}/manage`)}
-										>
-											<i className="fas fa-cogs"></i> Quản lý nhóm
-										</button>
+							<div className="gm-dashboard-info">
+								<div 
+									className="gm-dashboard-avatar" 
+									style={getGradientStyle(
+										group.color && typeof group.color === 'object' ? group.color.colors : ['#1a3b5d'], 
+										group.color && typeof group.color === 'object' ? group.color.direction : '135deg'
 									)}
+								>
+									{getGroupInitial(group.name)}
+								</div>
+								<div className="gm-dashboard-info-content">
+									<div className="gm-dashboard-name">
+									<i className="fas fa-layer-group"></i>
+										<span>{group.name}</span>
+									</div>
+									<div className="gm-dashboard-actions">
+										<button className="gm-btn leave" onClick={handleLeaveGroup} disabled={leaving}>
+											{leaving ? 
+												<><i className="fas fa-spinner fa-spin"></i> Đang rời...</> : 
+												<><i className="fas fa-sign-out-alt"></i> Rời nhóm</>
+											}
+										</button>
 									<button
-										className="gm-btn primary"
+											className="gm-btn"
 										onClick={() => navigate(`/groups/${groupId}/transactions`)}
-										style={{background:'#0ea5e9', border:'none', color:'white'}}
 									>
 										<i className="fas fa-exchange-alt"></i> Giao dịch
 									</button>
+									</div>
 								</div>
 							</div>
 							
@@ -490,73 +500,54 @@ export default function GroupMemberPage() {
 								
 								<div className="gm-stat-item">
 									<div className="gm-stat-label">
-										<i className="fas fa-shield-alt"></i> Vai trò của bạn
+										<i className="fas fa-calendar-alt"></i> Ngày tạo
 									</div>
-									<div className="gm-stat-value">{isOwner ? "Quản trị viên" : "Thành viên"}</div>
-								</div>
-							</div>
+									<div className="gm-stat-value">{formatDate(group.createdAt) || "N/A"}</div>
 						</div>
 						
-						<div className="gm-layout">
-							{/* Group Information Card */}
-							<div className="gm-card" style={{gridColumn: "1 / span 1"}}>
-								<div className="gm-card-header">
-									<h2 className="gm-card-title">
-										<i className="fas fa-info-circle"></i> Thông tin nhóm
-									</h2>
+								<div className="gm-stat-item">
+									<div className="gm-stat-label">
+										<i className="fas fa-shield-alt"></i> Vai trò của bạn
 								</div>
-								
-								<div className="gm-card-body">
-									<div className="gm-group-header">
-										<div 
-											className="gm-group-avatar" 
-											style={getGradientStyle(
-												group.color && typeof group.color === 'object' ? group.color.colors : ['#1a3b5d'], 
-												group.color && typeof group.color === 'object' ? group.color.direction : '135deg'
-											)}
-										>
-											{getGroupInitial(group.name)}
+									<div className="gm-stat-value">{isOwner ? "Quản trị viên" : "Thành viên"}</div>
 										</div>
-										
-										<div className="gm-group-info">
-											<h2>{group.name}</h2>
-											{group.description && <p>{group.description}</p>}
 										</div>
 									</div>
 									
-									{group.createdAt && (
-										<div style={{marginTop: 20, color: '#64748b', fontSize: '0.9rem'}}>
-											<i className="fas fa-calendar-alt"></i> Ngày tạo: {formatDate(group.createdAt)}
-										</div>
-									)}
-									
-									{!isOwner && (
-										<div className="gm-leave-section" style={{marginTop: 24}}>
-											<div className="gm-leave-section-title">
-												<i className="fas fa-sign-out-alt"></i> Rời nhóm
-											</div>
-											<div className="gm-leave-section-text">
-												Khi rời nhóm, bạn sẽ không còn quyền truy cập vào nội dung của nhóm này nữa.
-												Bạn có thể được thêm lại vào nhóm bởi quản trị viên trong tương lai.
-											</div>
+						{/* Tab Navigation */}
+						<div className="gm-tabs-container">
+							<div className="gm-tabs">
 											<button 
-												className="gm-btn leave" 
-												onClick={handleLeaveGroup}
-												disabled={leaving}
-											>
-												{leaving ? (
-													<><i className="fas fa-spinner fa-spin"></i> Đang xử lý...</>
-												) : (
-													<><i className="fas fa-sign-out-alt"></i> Rời nhóm</>
-												)}
+									className={`gm-tab ${activeTab === 'members' ? 'active' : ''}`}
+									onClick={() => setActiveTab('members')}
+								>
+									<i className="fas fa-users"></i> Thành viên
+								</button>
+								<button 
+									className={`gm-tab ${activeTab === 'activity' ? 'active' : ''}`}
+									onClick={() => setActiveTab('activity')}
+								>
+									<i className="fas fa-stream"></i> Hoạt động
+								</button>
+								<button 
+									className={`gm-tab ${activeTab === 'charts' ? 'active' : ''}`}
+									onClick={() => setActiveTab('charts')}
+								>
+									<i className="fas fa-chart-pie"></i> Biểu đồ
+								</button>
+								<button 
+									className={`gm-tab ${activeTab === 'debts' ? 'active' : ''}`}
+									onClick={() => setActiveTab('debts')}
+								>
+									<i className="fas fa-hand-holding-usd"></i> Công nợ
 											</button>
-										</div>
-									)}
-								</div>
 							</div>
 							
-							{/* Members Card */}
-							<div className="gm-card" style={{gridColumn: "2 / -1"}}>
+							<div className="gm-tab-content">
+								{/* Tab: Thành viên */}
+								{activeTab === 'members' && (
+									<div className="gm-tab-pane active">
+										<div className="gm-card">
 								<div className="gm-card-header">
 									<h2 className="gm-card-title">
 										<i className="fas fa-users"></i> Thành viên nhóm
@@ -571,7 +562,6 @@ export default function GroupMemberPage() {
 										}
 									</button>
 								</div>
-								
 								<div className="gm-card-body">
 									{/* Add member section */}
 									{showAddMember && (
@@ -686,6 +676,7 @@ export default function GroupMemberPage() {
 										</div>
 									)}
 									
+												{/* Members list */}
 									{group.members && group.members.length > 0 ? (
 										<ul className="gm-members-list">
 											{group.members.map(member => {
@@ -750,10 +741,33 @@ export default function GroupMemberPage() {
 									)}
 								</div>
 							</div>
-
-							{/* Group Activity (Transactions) and Posts side by side */}
-							{/* NEW: Activity card - Transactions */}
-							<div className="gm-card" style={{gridColumn: "1 / span 1"}}>
+									</div>
+								)}
+								
+								{/* Tab: Hoạt động */}
+								{activeTab === 'activity' && (
+									<div className="gm-tab-pane active">
+										{/* Sub-tabs cho Hoạt động */}
+										<div className="gm-sub-tabs-container">
+											<div className="gm-sub-tabs">
+												<button 
+													className={`gm-sub-tab ${activitySubTab === 'transactions' ? 'active' : ''}`}
+													onClick={() => setActivitySubTab('transactions')}
+												>
+													<i className="fas fa-exchange-alt"></i> Giao dịch
+												</button>
+												<button 
+													className={`gm-sub-tab ${activitySubTab === 'posts' ? 'active' : ''}`}
+													onClick={() => setActivitySubTab('posts')}
+												>
+													<i className="fas fa-comment-dots"></i> Bài viết
+												</button>
+											</div>
+										</div>
+										
+										{/* Sub-tab: Giao dịch */}
+										{activitySubTab === 'transactions' && (
+											<div className="gm-card">
 								<div className="gm-card-header">
 									<h2 className="gm-card-title"><i className="fas fa-stream"></i> Hoạt động nhóm</h2>
 									<button className="gm-btn secondary" onClick={fetchTxs}>Làm mới</button>
@@ -872,17 +886,28 @@ export default function GroupMemberPage() {
 									}
 								</div>
 							</div>
+										)}
 
-							{/* Bài viết hoạt động - dùng component chung */}
+										{/* Sub-tab: Bài viết */}
+										{activitySubTab === 'posts' && (
+											<div style={{ padding: 0 }}>
 							<GroupActivityFeed groupId={groupId} canPost={true} />
+											</div>
+										)}
+									</div>
+								)}
 
-							{/* ADD: Charts */}
-							<div style={{gridColumn: "1 / span 1"}}>
+								{/* Tab: Biểu đồ */}
+								{activeTab === 'charts' && (
+									<div className="gm-tab-pane active">
 								<GroupCharts txs={txs} members={group ? group.members : []} />
 							</div>
+								)}
 
-							{/* NEW: Debts card - Thay đổi gridColumn */}
-							<div className="gm-card" style={{gridColumn: "2 / -1"}}>
+								{/* Tab: Công nợ */}
+								{activeTab === 'debts' && (
+									<div className="gm-tab-pane active">
+										<div className="gm-card">
 								<div className="gm-card-header">
 									<h2 className="gm-card-title"><i className="fas fa-hand-holding-usd"></i> Công nợ</h2>
 								</div>
@@ -1006,6 +1031,9 @@ export default function GroupMemberPage() {
 										);
 									})()}
 								</div>
+										</div>
+									</div>
+								)}
 							</div>
 						</div>
 					</>

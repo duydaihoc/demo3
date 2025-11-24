@@ -48,6 +48,71 @@ body.group-sidebar-collapsed .group-manage-page {
   overflow: hidden;
 }
 
+.gm-dashboard-info {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.gm-dashboard-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: bold;
+  color: white;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  border: 3px solid rgba(255, 255, 255, 0.3);
+}
+
+.gm-dashboard-info-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.gm-dashboard-name {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.gm-dashboard-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.gm-dashboard-actions .gm-btn {
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+}
+
+.gm-dashboard-actions .gm-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.gm-dashboard-actions .gm-btn.danger {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.gm-dashboard-actions .gm-btn.danger:hover {
+  background: rgba(239, 68, 68, 0.3);
+}
+
 .gm-dashboard::after {
   content: '';
   position: absolute;
@@ -1006,4 +1071,163 @@ body.group-sidebar-collapsed .group-manage-page {
 .modal-overlay {
   overflow-y: auto;
   padding: 40px 0;
+}
+
+/* Tab System */
+.gm-tabs-container {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  margin-bottom: 28px;
+  overflow: hidden;
+}
+
+.gm-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid #f0f2f5;
+  background: #fbfbfd;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.gm-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.gm-tab {
+  padding: 16px 24px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+}
+
+.gm-tab:hover {
+  color: #1a3b5d;
+  background: rgba(26, 59, 93, 0.05);
+}
+
+.gm-tab.active {
+  color: #1a3b5d;
+  border-bottom-color: #1a3b5d;
+  background: white;
+}
+
+.gm-tab i {
+  font-size: 1rem;
+}
+
+.gm-tab-content {
+  padding: 0;
+  min-height: 400px;
+}
+
+.gm-tab-pane {
+  display: none;
+  padding: 24px;
+  animation: fadeIn 0.3s ease;
+}
+
+.gm-tab-pane.active {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Sub-tabs for Activity tab */
+.gm-sub-tabs-container {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.gm-sub-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid #f0f2f5;
+  background: #fbfbfd;
+}
+
+.gm-sub-tab {
+  flex: 1;
+  padding: 12px 20px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.gm-sub-tab:hover {
+  color: #1a3b5d;
+  background: rgba(26, 59, 93, 0.05);
+}
+
+.gm-sub-tab.active {
+  color: #1a3b5d;
+  background: white;
+  border-bottom-color: #1a3b5d;
+}
+
+.gm-sub-tab i {
+  font-size: 0.9rem;
+}
+
+/* Responsive tabs */
+@media (max-width: 768px) {
+  .gm-tabs {
+    gap: 0;
+  }
+  
+  .gm-tab {
+    padding: 12px 16px;
+    font-size: 0.85rem;
+  }
+  
+  .gm-dashboard-info {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .gm-dashboard-actions {
+    width: 100%;
+  }
+  
+  .gm-dashboard-actions .gm-btn {
+    flex: 1;
+    min-width: 120px;
+  }
 }

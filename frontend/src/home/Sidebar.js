@@ -1,5 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { 
+  Home, 
+  ArrowLeftRight, 
+  Settings, 
+  LogOut
+} from 'lucide-react';
 import './Sidebar.css';
 
 function Sidebar({ userName = "Tên người dùng" }) {
@@ -94,7 +100,8 @@ function Sidebar({ userName = "Tên người dùng" }) {
             to="/home"
             className={location.pathname === "/home" ? "active" : ""}
           >
-            Trang chủ
+            <Home className="sidebar-item-icon" />
+            <span>Trang chủ</span>
           </Link>
         </li>
         <li>
@@ -102,7 +109,8 @@ function Sidebar({ userName = "Tên người dùng" }) {
             to="/transactions"
             className={location.pathname === "/transactions" ? "active" : ""}
           >
-            Giao dịch
+            <ArrowLeftRight className="sidebar-item-icon" />
+            <span>Giao dịch</span>
           </Link>
         </li>
         <li ref={settingsRef}>
@@ -114,7 +122,9 @@ function Sidebar({ userName = "Tên người dùng" }) {
             aria-expanded={showSettingsMenu}
             aria-haspopup="menu"
           >
-            Cài đặt <span className="caret">▾</span>
+            <Settings className="sidebar-item-icon" />
+            <span>Cài đặt</span>
+            <span className="caret">▾</span>
           </button>
 
           {showSettingsMenu && (
@@ -139,7 +149,8 @@ function Sidebar({ userName = "Tên người dùng" }) {
             className={location.pathname === "/logout" ? "active" : ""}
             onClick={handleLogout}
           >
-            Đăng xuất
+            <LogOut className="sidebar-item-icon" />
+            <span>Đăng xuất</span>
           </Link>
         </li>
       </ul>

@@ -1,5 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { 
+  Home, 
+  ArrowLeftRight, 
+  List, 
+  Archive,
+  BarChart3,
+  Users,
+  Settings,
+  ShoppingCart,
+  CheckSquare,
+  Network,
+  LayoutGrid
+} from 'lucide-react';
 import './FamilySidebar.css';
 
 export default function FamilySidebar({ active }) {
@@ -14,22 +27,22 @@ export default function FamilySidebar({ active }) {
 
   // Menu items array với dropdown cho lists
   const items = [
-    { id: 'home', label: 'Trang chủ', route: '/family', icon: 'fas fa-home' },
-    { id: 'transactions', label: 'Giao dịch', route: '/family/transactions', icon: 'fas fa-exchange-alt' },
+    { id: 'home', label: 'Trang chủ', route: '/family', icon: Home },
+    { id: 'transactions', label: 'Giao dịch', route: '/family/transactions', icon: ArrowLeftRight },
     { 
       id: 'lists', 
       label: 'Danh sách', 
-      icon: 'fas fa-list',
+      icon: List,
       hasDropdown: true,
       submenu: [
-        { id: 'shopping-list', label: 'Danh sách mua sắm', route: '/family/shopping-list', icon: 'fas fa-shopping-cart' },
-        { id: 'todo-list', label: 'Danh sách việc cần làm', route: '/family/todo-list', icon: 'fas fa-tasks' }
+        { id: 'shopping-list', label: 'Danh sách mua sắm', route: '/family/shopping-list', icon: ShoppingCart },
+        { id: 'todo-list', label: 'Danh sách việc cần làm', route: '/family/todo-list', icon: CheckSquare }
       ]
     },
-    { id: 'archive', label: 'Lưu trữ', route: '/family/archive', icon: 'fas fa-archive' },
-    { id: 'charts', label: 'Biểu đồ', route: '/family/charts', icon: 'fas fa-chart-bar' },
-    { id: 'members', label: 'Thành viên', route: '/family/members', icon: 'fas fa-users' },
-    { id: 'settings', label: 'Cài đặt', route: '/family/settings', icon: 'fas fa-cog' },
+    { id: 'archive', label: 'Lưu trữ', route: '/family/archive', icon: Archive },
+    { id: 'charts', label: 'Biểu đồ', route: '/family/charts', icon: BarChart3 },
+    { id: 'members', label: 'Thành viên', route: '/family/members', icon: Users },
+    { id: 'settings', label: 'Cài đặt', route: '/family/settings', icon: Settings },
   ];
 
   // Xác định tab active dựa trên URL hiện tại
@@ -160,62 +173,79 @@ export default function FamilySidebar({ active }) {
         </div>
         <div className="logo-text">
           <span className="text-primary">Quản lý</span>
-          <span className="text-secondary">Gia đình</span>
+          <span className="text-secondary">Chi tiêu</span>
         </div>
       </div>
       
       <div className="fs-header1">
-        <div className="fs-logo">GIA ĐÌNH</div>
         <div className="fs-sub">Quản lý tài chính gia đình</div>
       </div>
 
       <nav className="fs-nav" role="navigation">
         <ul className="sidebar-menu">
-          {items.map(it => (
-            <li key={it.id}>
-              <button
-                className={`fs-item ${activeTab === it.id || (it.submenu && it.submenu.some(sub => sub.id === activeTab)) ? 'active' : ''}`}
-                onClick={() => handleNav(it)}
-                aria-pressed={activeTab === it.id}
-                aria-label={it.label}
-                title={it.label}
-              >
-                <i className={it.icon + ' fs-icon'} aria-hidden="true"></i>
-                <span className="fs-label">{it.label}</span>
-                {it.hasDropdown && (
-                  <i className={`fas fa-chevron-${dropdownOpen ? 'up' : 'down'} fs-dropdown-icon`} aria-hidden="true"></i>
+          {items.map(it => {
+            const IconComponent = it.icon;
+            return (
+              <li key={it.id}>
+                <button
+                  className={`fs-item ${activeTab === it.id || (it.submenu && it.submenu.some(sub => sub.id === activeTab)) ? 'active' : ''}`}
+                  onClick={() => handleNav(it)}
+                  aria-pressed={activeTab === it.id}
+                  aria-label={it.label}
+                  title={it.label}
+                >
+                  <IconComponent className="fs-item-icon" />
+                  <span className="fs-label">{it.label}</span>
+                  {it.hasDropdown && (
+                    <i className={`fas fa-chevron-${dropdownOpen ? 'up' : 'down'} fs-dropdown-icon`} aria-hidden="true"></i>
+                  )}
+                </button>
+                
+                {/* Submenu dropdown */}
+                {it.hasDropdown && it.submenu && (
+                  <ul className={`fs-submenu ${dropdownOpen ? 'open' : ''}`}>
+                    {it.submenu.map(subItem => {
+                      const SubIconComponent = subItem.icon;
+                      return (
+                        <li key={subItem.id}>
+                          <button
+                            className={`fs-submenu-item ${activeTab === subItem.id ? 'active' : ''}`}
+                            onClick={() => handleSubmenuNav(subItem)}
+                            aria-pressed={activeTab === subItem.id}
+                            aria-label={subItem.label}
+                            title={subItem.label}
+                          >
+                            <SubIconComponent className="fs-submenu-icon" />
+                            <span className="fs-submenu-label">{subItem.label}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 )}
-              </button>
-              
-              {/* Submenu dropdown */}
-              {it.hasDropdown && it.submenu && (
-                <ul className={`fs-submenu ${dropdownOpen ? 'open' : ''}`}>
-                  {it.submenu.map(subItem => (
-                    <li key={subItem.id}>
-                      <button
-                        className={`fs-submenu-item ${activeTab === subItem.id ? 'active' : ''}`}
-                        onClick={() => handleSubmenuNav(subItem)}
-                        aria-pressed={activeTab === subItem.id}
-                        aria-label={subItem.label}
-                        title={subItem.label}
-                      >
-                        <i className={subItem.icon + ' fs-submenu-icon'} aria-hidden="true"></i>
-                        <span className="fs-submenu-label">{subItem.label}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       </nav>
 
       <div className="fs-footer">
-        <button className="fs-group-btn" onClick={() => navigate('/group')}>
-          <i className="fas fa-users"></i> Chuyển sang Nhóm
+        <button 
+          className="fs-group-btn" 
+          onClick={() => navigate('/group')}
+          title="Chuyển sang Nhóm"
+          aria-label="Chuyển sang Nhóm"
+        >
+          <Network className="fs-btn-icon" />
         </button>
-        <button className="fs-back" onClick={() => navigate('/home')}>← Về Trang chủ</button>
+        <button 
+          className="fs-back" 
+          onClick={() => navigate('/home')}
+          title="Về Trang cá nhân"
+          aria-label="Về Trang cá nhân"
+        >
+          <LayoutGrid className="fs-btn-icon" />
+        </button>
       </div>
     </aside>
     </>

@@ -1,15 +1,15 @@
-/* Modern Activity Feed - Enhanced Design */
+/* Modern Activity Feed - Enhanced Design - Compact */
 .gaf-container {
   background: transparent;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
   max-width: 100%;
   width: 100%;
-  max-height: 700px;
+  max-height: 600px;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 12px 12px 12px 0;
+  padding: 8px 8px 8px 0;
   position: relative;
   scrollbar-width: thin;
   scrollbar-color: rgba(131, 58, 180, 0.3) rgba(248, 250, 252, 0.8);
@@ -38,22 +38,22 @@
 }
 
 
-/* Modern Create Post Section - Glassmorphism Design */
+/* Modern Create Post Section - Glassmorphism Design - Compact */
 .gaf-create-post {
-  padding: 20px 24px;
+  padding: 12px 16px;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 20px;
+  border-radius: 12px;
   display: flex;
-  gap: 16px;
+  gap: 12px;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
   cursor: pointer;
-  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition: all 0.3s ease;
   box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.08),
-    0 2px 8px rgba(131, 58, 180, 0.06),
+    0 4px 16px rgba(0, 0, 0, 0.06),
+    0 1px 4px rgba(131, 58, 180, 0.04),
     inset 0 1px 0 rgba(255, 255, 255, 0.8);
   position: relative;
   overflow: hidden;
@@ -73,10 +73,10 @@
 .gaf-create-post:hover {
   border-color: rgba(131, 58, 180, 0.3);
   box-shadow:
-    0 12px 40px rgba(0, 0, 0, 0.12),
-    0 4px 12px rgba(131, 58, 180, 0.1),
+    0 6px 20px rgba(0, 0, 0, 0.08),
+    0 2px 6px rgba(131, 58, 180, 0.08),
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  transform: translateY(-2px) scale(1.01);
+  transform: translateY(-1px);
 }
 
 .gaf-create-post:hover::before {
@@ -84,8 +84,8 @@
 }
 
 .gaf-create-avatar {
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background: linear-gradient(135deg,
     #667eea 0%,
@@ -98,6 +98,7 @@
   justify-content: center;
   color: white;
   font-weight: 700;
+  font-size: 0.9rem;
   font-size: 17px;
   flex-shrink: 0;
   border: 3px solid rgba(255, 255, 255, 0.9);
@@ -490,14 +491,14 @@
   background: rgba(255, 255, 255, 0.98);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 20px;
-  margin-bottom: 24px;
+  border-radius: 16px;
+  margin: 0 5px 16px 5px;
   overflow: visible;
   box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.08),
-    0 2px 8px rgba(102, 126, 234, 0.06),
+    0 4px 16px rgba(0, 0, 0, 0.06),
+    0 1px 4px rgba(102, 126, 234, 0.04),
     inset 0 1px 0 rgba(255, 255, 255, 0.8);
-  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition: all 0.3s ease;
   position: relative;
 }
 
@@ -514,7 +515,7 @@
     #f093fb,
     #f5576c,
     #4facfe);
-  border-radius: 20px 20px 0 0;
+  border-radius: 16px 16px 0 0;
   opacity: 0;
   transition: opacity 0.3s ease;
 }
@@ -526,33 +527,34 @@
 /* Wrapper bên trong để giữ border-radius cho các phần tử chính */
 .gaf-post-inner {
   overflow: visible;
-  border-radius: 20px 20px 0 0;
+  border-radius: 16px 16px 0 0;
 }
 
 .gaf-post:hover {
   box-shadow:
-    0 12px 40px rgba(0, 0, 0, 0.12),
-    0 4px 16px rgba(102, 126, 234, 0.1),
+    0 6px 20px rgba(0, 0, 0, 0.08),
+    0 2px 8px rgba(102, 126, 234, 0.08),
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
   border-color: rgba(102, 126, 234, 0.3);
-  transform: translateY(-3px) scale(1.01);
+  transform: translateY(-2px);
 }
 
 .gaf-post-header {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 18px 24px;
-  border-bottom: 2px solid rgba(102, 126, 234, 0.08);
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(102, 126, 234, 0.08);
   position: relative;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
   z-index: 10;
+  border-radius: 16px 16px 0 0;
 }
 
 .gaf-post-avatar {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   background: linear-gradient(135deg,
     #667eea 0%,
@@ -565,15 +567,15 @@
   justify-content: center;
   color: white;
   font-weight: 700;
-  font-size: 18px;
+  font-size: 16px;
   flex-shrink: 0;
-  border: 3px solid rgba(255, 255, 255, 0.9);
+  border: 2px solid rgba(255, 255, 255, 0.9);
   box-shadow:
-    0 4px 16px rgba(102, 126, 234, 0.3),
-    0 2px 8px rgba(0, 0, 0, 0.1),
+    0 2px 8px rgba(102, 126, 234, 0.2),
+    0 1px 4px rgba(0, 0, 0, 0.08),
     inset 0 1px 0 rgba(255, 255, 255, 0.3);
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
 }
@@ -610,10 +612,10 @@
 
 .gaf-post-author {
   font-weight: 700;
-  font-size: 16px;
+  font-size: 14px;
   color: #1e293b;
-  margin-bottom: 4px;
-  letter-spacing: -0.3px;
+  margin-bottom: 2px;
+  letter-spacing: -0.2px;
   line-height: 1.3;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
@@ -732,10 +734,10 @@
 }
 
 .gaf-post-content {
-  font-size: 15px;
+  font-size: 14px;
   color: #1a1a1a;
-  line-height: 1.6;
-  padding: 16px 18px;
+  line-height: 1.5;
+  padding: 12px 16px;
   word-wrap: break-word;
   white-space: pre-wrap;
   background: #ffffff;
@@ -751,20 +753,21 @@
 .gaf-post-image-wrapper {
   width: 100%;
   margin: 0;
-  background: #000;
+  background: #f8fafc;
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 200px;
-  max-height: 500px;
+  max-height: 400px;
   position: relative;
   overflow: hidden;
 }
 
 .gaf-post-image {
-  width: 100%;
+  width: auto;
+  max-width: 100%;
   height: auto;
-  max-height: 500px;
+  max-height: 400px;
   object-fit: contain;
   display: block;
   cursor: pointer;
@@ -800,6 +803,7 @@
   gap: 24px;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
+  border-radius: 0 0 16px 16px;
 }
 
 .gaf-action-btn {
@@ -1981,15 +1985,91 @@
 }
 
 
+/* Split Layout for Transaction and Image */
+.gaf-post-split-layout {
+  display: flex;
+  gap: 6px;
+  margin: 16px 18px;
+  align-items: stretch;
+}
+
+.gaf-split-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.gaf-split-right {
+  flex: 1;
+  min-width: 0;
+}
+
+.gaf-split-right .gaf-post-image-wrapper {
+  margin: 0;
+  height: 100%;
+  min-height: 200px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gaf-split-right .gaf-post-image {
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  object-fit: cover;
+}
+
 /* Linked Transaction Card in Post */
 .gaf-linked-transaction-card {
-  margin: 16px 18px;
+  margin: 12px 18px;
   background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
   border: 2px solid #10b981;
   border-radius: 12px;
-  padding: 16px;
+  padding: 12px;
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
   transition: all 0.3s ease;
+  position: relative;
+  max-width: 65%;
+  margin-right: auto;
+}
+
+/* Card with image - dư bên phải (same as default now) */
+.gaf-linked-transaction-card.gaf-has-image {
+  max-width: 65%;
+  margin-right: auto;
+}
+
+/* When in split layout, remove margin */
+.gaf-split-left .gaf-linked-transaction-card {
+  margin: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.gaf-split-left .gaf-linked-transaction-body {
+  align-items: flex-start;
+  text-align: left;
+}
+
+.gaf-split-left .gaf-linked-transaction-header {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.gaf-split-left .gaf-linked-transaction-title {
+  text-align: left;
+}
+
+.gaf-split-left .gaf-linked-transaction-description {
+  text-align: left;
+}
+
+.gaf-split-left .gaf-linked-transaction-meta {
+  justify-content: space-between;
 }
 
 .gaf-linked-transaction-card:hover {
@@ -1998,37 +2078,327 @@
 }
 
 .gaf-linked-transaction-card .gaf-linked-transaction-header {
-  margin-bottom: 12px;
-  padding-bottom: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
   border-bottom: 1px solid rgba(16, 185, 129, 0.2);
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .gaf-linked-transaction-body {
   display: flex;
   flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  text-align: center;
+  position: relative;
+}
+
+/* Split layout inside transaction card - only when has image */
+.gaf-transaction-split {
+  flex-direction: row !important;
+  align-items: flex-start !important;
+  gap: 12px;
+  text-align: left !important;
+  position: relative;
+  flex-wrap: wrap;
+  padding-bottom: 50px;
+}
+
+.gaf-transaction-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  align-items: flex-start;
+  text-align: left;
+}
+
+/* Content in split layout */
+.gaf-transaction-split .gaf-transaction-content {
+  flex: 1;
+  min-width: 0;
+  padding-bottom: 45px; /* Space for meta at bottom */
+  align-items: flex-start;
+  text-align: left;
+}
+
+.gaf-transaction-split .gaf-linked-transaction-title {
+  text-align: left;
+}
+
+.gaf-transaction-split .gaf-linked-transaction-description {
+  text-align: left;
+}
+
+.gaf-transaction-split .gaf-linked-transaction-meta {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: flex-start;
+  align-items: flex-end;
+  padding-top: 8px;
+}
+
+/* Meta for normal layout (no image) */
+.gaf-linked-transaction-body .gaf-linked-transaction-meta {
+  display: flex;
+  justify-content: center;
+  align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
+  width: 100%;
+  position: relative;
+}
+
+/* Meta for split layout (with image) */
+.gaf-transaction-split .gaf-linked-transaction-meta {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: flex-start;
+  align-items: flex-end;
+  padding-top: 8px;
+}
+
+/* Category badge - left bottom */
+.gaf-transaction-split .gaf-linked-meta-left {
+  flex: 0 0 auto;
+}
+
+/* Amount badge - bottom right, below image in split layout */
+.gaf-transaction-split .gaf-linked-amount-badge.gaf-amount-corner {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  z-index: 10;
+  margin: 0;
+}
+
+/* Amount badge for normal layout (no image) - in meta */
+.gaf-linked-transaction-body:not(.gaf-transaction-split) .gaf-linked-amount-badge.gaf-amount-corner {
+  position: relative;
+  margin: 0;
+}
+
+/* Ensure body has enough height for amount badge */
+.gaf-transaction-split {
+  padding-bottom: 50px;
+}
+
+/* Image inside transaction card */
+.gaf-linked-transaction-image {
+  width: 100%;
+  margin: 8px 0;
+  background: #f8fafc;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-height: 180px;
+}
+
+/* Hover effect for image container */
+.gaf-linked-transaction-image:hover {
+  overflow: visible;
+  z-index: 10;
+}
+
+/* Image in split layout (inside transaction card) */
+.gaf-transaction-split .gaf-linked-transaction-image {
+  flex: 0 0 auto;
+  width: 180px;
+  height: 180px;
+  margin: 0;
+  align-self: flex-start;
+  border: 2px solid rgba(16, 185, 129, 0.2);
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+/* Hover effect for image container in split layout */
+.gaf-transaction-split .gaf-linked-transaction-image:hover {
+  overflow: visible;
+  z-index: 10;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.gaf-linked-transaction-image-img {
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: 200px;
+  object-fit: contain;
+  display: block;
+  cursor: pointer;
+  transition: transform 0.3s ease;
+}
+
+/* Hover effect - zoom in image */
+.gaf-linked-transaction-image:hover .gaf-linked-transaction-image-img {
+  transform: scale(1.5);
+  z-index: 10;
+}
+
+.gaf-transaction-split .gaf-linked-transaction-image-img {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  transition: transform 0.3s ease;
+}
+
+/* Hover effect - zoom in image in split layout */
+.gaf-transaction-split .gaf-linked-transaction-image:hover .gaf-linked-transaction-image-img {
+  transform: scale(1.5);
+  z-index: 10;
+}
+
+/* Image Modal - Full Screen */
+.gaf-image-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+  cursor: pointer;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.gaf-image-modal-content {
+  position: relative;
+  max-width: 95vw;
+  max-height: 95vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+}
+
+.gaf-image-modal-close {
+  position: absolute;
+  top: -40px;
+  right: 0;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 20px;
+  transition: all 0.2s ease;
+  z-index: 10000;
+}
+
+.gaf-image-modal-close:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.1);
+}
+
+.gaf-image-modal-img {
+  max-width: 100%;
+  max-height: 95vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  animation: zoomIn 0.3s ease;
+}
+
+@keyframes zoomIn {
+  from {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Responsive for image modal */
+@media (max-width: 768px) {
+  .gaf-image-modal-content {
+    max-width: 100vw;
+    max-height: 100vh;
+    padding: 10px;
+  }
+
+  .gaf-image-modal-close {
+    top: 10px;
+    right: 10px;
+    background: rgba(0, 0, 0, 0.5);
+  }
+
+  .gaf-image-modal-img {
+    max-height: 90vh;
+  }
 }
 
 .gaf-linked-transaction-card .gaf-linked-transaction-title {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   color: #0f172a;
   margin-bottom: 4px;
+  text-align: left;
+}
+
+/* Title left-aligned in split layout */
+.gaf-transaction-split .gaf-linked-transaction-title {
+  text-align: left !important;
 }
 
 .gaf-linked-transaction-description {
-  font-size: 14px;
+  font-size: 13px;
   color: #475569;
-  line-height: 1.5;
-  margin-bottom: 8px;
+  line-height: 1.4;
+  margin-bottom: 6px;
+  text-align: left;
 }
 
 .gaf-linked-transaction-meta {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: center;
+  gap: 10px;
   flex-wrap: wrap;
+  width: 100%;
 }
 
 .gaf-linked-meta-left {
@@ -2163,5 +2533,16 @@
   .gaf-linked-transaction-card {
     margin: 12px;
     padding: 12px;
+  }
+  
+  /* Split layout responsive - stack on mobile */
+  .gaf-post-split-layout {
+    flex-direction: column;
+    gap: 12px;
+    margin: 12px;
+  }
+  
+  .gaf-split-right .gaf-post-image-wrapper {
+    min-height: 200px;
   }
 }

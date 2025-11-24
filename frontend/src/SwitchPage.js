@@ -1,14 +1,9 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import './SwitchPage.css';
 
 export default function SwitchPage() {
   const navigate = useNavigate();
-
-  // Optional: Add slight delay to animations to enhance UX
-  useEffect(() => {
-    // Nothing to do here, but kept for potential future enhancements
-  }, []);
 
   return (
     <div className="switch-page">

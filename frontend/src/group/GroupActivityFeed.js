@@ -47,6 +47,8 @@ export default function GroupActivityFeed({
   const [deletingPostId, setDeletingPostId] = useState(null);
   const [deletingCommentId, setDeletingCommentId] = useState(null);
   const [hoveredLikePostId, setHoveredLikePostId] = useState(null);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [selectedImageUrl, setSelectedImageUrl] = useState('');
   const containerRef = useRef(null);
 
   // Get current user info
@@ -85,6 +87,26 @@ export default function GroupActivityFeed({
         .catch(() => {});
     }
   }, [token]);
+
+  // Handle ESC key to close image modal
+  useEffect(() => {
+    const handleEscKey = (e) => {
+      if (e.key === 'Escape' && showImageModal) {
+        setShowImageModal(false);
+      }
+    };
+
+    if (showImageModal) {
+      document.addEventListener('keydown', handleEscKey);
+      // Prevent body scroll when modal is open
+      document.body.style.overflow = 'hidden';
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscKey);
+      document.body.style.overflow = '';
+    };
+  }, [showImageModal]);
 
   const fetchPosts = async () => {
     if (!groupId || !token) return;
@@ -1121,97 +1143,140 @@ export default function GroupActivityFeed({
                       )}
 
 
-                      {/* Linked Transaction */}
-                      {post.linkedTransaction && (
-                        <div className="gaf-linked-transaction-card">
-                          <div className="gaf-linked-transaction-header">
-                            <i className="fas fa-link"></i>
-                            <span>Giao dịch liên kết</span>
-                          </div>
-                          <div className="gaf-linked-transaction-body">
-                            <div className="gaf-linked-transaction-title">
-                              {post.linkedTransaction.title || 'Giao dịch không tên'}
-                            </div>
-                            {post.linkedTransaction.description && (
-                              <div className="gaf-linked-transaction-description">
-                                {post.linkedTransaction.description}
+                      {/* Linked Transaction and Image */}
+                      {(() => {
+                        const hasLinkedTransaction = post.linkedTransaction;
+                        const hasImage = post.images && post.images.length > 0;
+                        const hasBoth = hasLinkedTransaction && hasImage;
+
+                        return (
+                          <>
+                            {/* Linked Transaction */}
+                            {hasLinkedTransaction && (
+                              <div className={`gaf-linked-transaction-card ${hasBoth ? 'gaf-has-image' : ''}`}>
+                                <div className="gaf-linked-transaction-header">
+                                  <i className="fas fa-link"></i>
+                                  <span>Giao dịch liên kết</span>
+                                </div>
+                                <div className={`gaf-linked-transaction-body ${hasBoth ? 'gaf-transaction-split' : ''}`}>
+                                  {/* Left: Transaction Content */}
+                                  <div className="gaf-transaction-content">
+                                    <div className="gaf-linked-transaction-title">
+                                      {post.linkedTransaction.title || 'Giao dịch không tên'}
+                                    </div>
+                                    {post.linkedTransaction.description && (
+                                      <div className="gaf-linked-transaction-description">
+                                        {post.linkedTransaction.description}
+                                      </div>
+                                    )}
+                                  </div>
+                                  
+                                  {/* Meta: Category and Amount */}
+                                  <div className="gaf-linked-transaction-meta">
+                                    <div className="gaf-linked-meta-left">
+                                      {(() => {
+                                        const category = post.linkedTransaction.category;
+                                        if (category && typeof category === 'object' && category.name) {
+                                          return (
+                                            <span className="gaf-linked-category-badge">
+                                              {category.icon && <span className="gaf-category-icon">{category.icon}</span>}
+                                              <span className="gaf-category-name">{category.name}</span>
+                                              {post.linkedTransaction.tags && Array.isArray(post.linkedTransaction.tags) && post.linkedTransaction.tags.length > 0 && (
+                                                <span className="gaf-category-tags">
+                                                  {post.linkedTransaction.tags
+                                                    .filter(tag => tag && typeof tag === 'string' && tag.trim())
+                                                    .map((tag, idx) => (
+                                                      <span key={idx} className="gaf-category-tag">
+                                                        #{tag.trim()}
+                                                      </span>
+                                                    ))}
+                                                </span>
+                                              )}
+                                            </span>
+                                          );
+                                        }
+                                        if (category && typeof category === 'string') {
+                                          console.warn('Category is string (not populated):', category, 'for transaction:', post.linkedTransaction._id);
+                                        }
+                                        if (category && typeof category === 'object' && !category.name) {
+                                          console.warn('Category object missing name:', category, 'for transaction:', post.linkedTransaction._id);
+                                        }
+                                        if (!category && post.linkedTransaction.tags && Array.isArray(post.linkedTransaction.tags) && post.linkedTransaction.tags.length > 0) {
+                                          return (
+                                            <span className="gaf-linked-tags-only">
+                                              {post.linkedTransaction.tags
+                                                .filter(tag => tag && typeof tag === 'string' && tag.trim())
+                                                .map((tag, idx) => (
+                                                  <span key={idx} className="gaf-linked-tag">
+                                                    #{tag.trim()}
+                                                  </span>
+                                                ))}
+                                            </span>
+                                          );
+                                        }
+                                        return null;
+                                      })()}
+                                    </div>
+                                    {/* Amount badge - in meta for normal layout, absolute for split layout */}
+                                    {!hasBoth && (
+                                      <span className="gaf-linked-amount-badge">
+                                        {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(post.linkedTransaction.amount || 0)}
+                                      </span>
+                                    )}
+                                  </div>
+                                  
+                                  {/* Right: Image inside transaction card if exists */}
+                                  {hasImage && (
+                                    <div className="gaf-linked-transaction-image">
+                                      <img
+                                        src={post.images[0].startsWith('http') ? post.images[0] : `${API_BASE}${post.images[0]}`}
+                                        alt="post"
+                                        className="gaf-linked-transaction-image-img"
+                                        onClick={() => {
+                                          setSelectedImageUrl(post.images[0].startsWith('http') ? post.images[0] : `${API_BASE}${post.images[0]}`);
+                                          setShowImageModal(true);
+                                        }}
+                                        onError={(e) => {
+                                          e.target.style.display = 'none';
+                                          if (e.target.parentElement) {
+                                            e.target.parentElement.style.display = 'none';
+                                          }
+                                        }}
+                                        loading="lazy"
+                                      />
+                                    </div>
+                                  )}
+                                  
+                                  {/* Amount badge - bottom right, below image (only for split layout) */}
+                                  {hasBoth && (
+                                    <span className="gaf-linked-amount-badge gaf-amount-corner">
+                                      {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(post.linkedTransaction.amount || 0)}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             )}
-                            <div className="gaf-linked-transaction-meta">
-                              <div className="gaf-linked-meta-left">
-                                {(() => {
-                                  const category = post.linkedTransaction.category;
-                                  // Kiểm tra category có tồn tại và có name không
-                                  if (category && typeof category === 'object' && category.name) {
-                                    return (
-                                      <span className="gaf-linked-category-badge">
-                                        {category.icon && <span className="gaf-category-icon">{category.icon}</span>}
-                                        <span className="gaf-category-name">{category.name}</span>
-                                        {/* Hiển thị tags bên trong category badge nếu có */}
-                                        {post.linkedTransaction.tags && Array.isArray(post.linkedTransaction.tags) && post.linkedTransaction.tags.length > 0 && (
-                                          <span className="gaf-category-tags">
-                                            {post.linkedTransaction.tags
-                                              .filter(tag => tag && typeof tag === 'string' && tag.trim())
-                                              .map((tag, idx) => (
-                                                <span key={idx} className="gaf-category-tag">
-                                                  #{tag.trim()}
-                                                </span>
-                                              ))}
-                                          </span>
-                                        )}
-                                      </span>
-                                    );
-                                  }
-                                  // Nếu category là string (ObjectId chưa được populate)
-                                  if (category && typeof category === 'string') {
-                                    console.warn('Category is string (not populated):', category, 'for transaction:', post.linkedTransaction._id);
-                                  }
-                                  // Nếu category là object nhưng không có name
-                                  if (category && typeof category === 'object' && !category.name) {
-                                    console.warn('Category object missing name:', category, 'for transaction:', post.linkedTransaction._id);
-                                  }
-                                  // Nếu không có category nhưng có tags, hiển thị tags riêng
-                                  if (!category && post.linkedTransaction.tags && Array.isArray(post.linkedTransaction.tags) && post.linkedTransaction.tags.length > 0) {
-                                    return (
-                                      <span className="gaf-linked-tags-only">
-                                        {post.linkedTransaction.tags
-                                          .filter(tag => tag && typeof tag === 'string' && tag.trim())
-                                          .map((tag, idx) => (
-                                            <span key={idx} className="gaf-linked-tag">
-                                              #{tag.trim()}
-                                            </span>
-                                          ))}
-                                      </span>
-                                    );
-                                  }
-                                  return null;
-                                })()}
-                              </div>
-                              <span className="gaf-linked-amount-badge">
-                                {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(post.linkedTransaction.amount || 0)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
 
-                      {/* Post Image */}
-                      {post.images && post.images.length > 0 && (
-                        <div className="gaf-post-image-wrapper">
-                          <img
-                            src={post.images[0].startsWith('http') ? post.images[0] : `${API_BASE}${post.images[0]}`}
-                            alt="post"
-                            className="gaf-post-image"
-                            onError={(e) => {
-                              e.target.style.display = 'none';
-                              if (e.target.parentElement) {
-                                e.target.parentElement.style.display = 'none';
-                              }
-                            }}
-                            loading="lazy"
-                          />
-                        </div>
-                      )}
+                            {/* Post Image - only if no linked transaction */}
+                            {!hasLinkedTransaction && hasImage && (
+                              <div className="gaf-post-image-wrapper">
+                                <img
+                                  src={post.images[0].startsWith('http') ? post.images[0] : `${API_BASE}${post.images[0]}`}
+                                  alt="post"
+                                  className="gaf-post-image"
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    if (e.target.parentElement) {
+                                      e.target.parentElement.style.display = 'none';
+                                    }
+                                  }}
+                                  loading="lazy"
+                                />
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                     </>
                   )}
 
@@ -1434,6 +1499,32 @@ export default function GroupActivityFeed({
           </div>
         )}
       </div>
+
+      {/* Image Modal - Full Screen */}
+      {showImageModal && (
+        <div 
+          className="gaf-image-modal-overlay"
+          onClick={() => setShowImageModal(false)}
+        >
+          <div 
+            className="gaf-image-modal-content"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button 
+              className="gaf-image-modal-close"
+              onClick={() => setShowImageModal(false)}
+              aria-label="Đóng"
+            >
+              <i className="fas fa-times"></i>
+            </button>
+            <img
+              src={selectedImageUrl}
+              alt="Phóng to"
+              className="gaf-image-modal-img"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

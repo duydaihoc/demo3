@@ -110,6 +110,7 @@ const HomePageContent = () => {
   const goalsRef = useRef(null);
   const aiRef = useRef(null);
   const statsRef = useRef(null);
+  const financeDashboardRef = useRef(null);
 
   // Transaction modal state
   const [showTransactionModal, setShowTransactionModal] = useState(false);
@@ -619,8 +620,18 @@ const HomePageContent = () => {
           </div>
           <div className="home-actions">
             <button onClick={() => setShowTransactionModal(true)}>+ Ghi chép</button>
-            <button onClick={() => navigate('/switch')} style={{ marginLeft: 8 }}>
+            <button onClick={() => navigate('/switch')}>
               <i className="fas fa-layer-group"></i> Nhóm/Gia đình
+            </button>
+            <button 
+              onClick={() => {
+                if (financeDashboardRef.current) {
+                  financeDashboardRef.current.openExportModal();
+                }
+              }}
+              className="report-btn"
+            >
+              Xuất báo cáo
             </button>
           </div>
         </div>
@@ -629,7 +640,7 @@ const HomePageContent = () => {
             {/* NEW: Move SpendingMap to top */}
             <SpendingMap />
             {/* FinanceDashboard renders below the map now */}
-            <FinanceDashboard />
+            <FinanceDashboard ref={financeDashboardRef} />
             {/* <SpendingTimeline />  // ...removed... */}
           </section>
           <aside className="home-right">

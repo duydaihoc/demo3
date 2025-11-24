@@ -1,13 +1,22 @@
 .family-selector-page {
   min-height: 100vh;
+  max-height: 100vh;
   background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: 20px;
+  padding: 0 20px;
   font-family: 'Inter', 'Segoe UI', sans-serif;
   position: relative;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Hide scrollbar but keep scroll functionality */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.family-selector-page::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
 }
 
 /* Background animated elements */
@@ -65,6 +74,7 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
   transform: translateY(0);
   animation: container-appear 0.8s ease-out forwards;
+  margin: 20px auto;
 }
 
 @keyframes container-appear {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo, useImperativeHandle, forwardRef } from 'react';
 import './FinanceDashboard.css';
 import SpendingTimeline from './SpendingTimeline';
 // Import Chart.js
@@ -30,7 +30,7 @@ ChartJS.register(
   PointElement
 );
 
-export default function FinanceDashboard() {
+const FinanceDashboard = forwardRef((props, ref) => {
   const [loading, setLoading] = useState(true);
   const [walletTotals, setWalletTotals] = useState({});
   const [incomeByCurrency, setIncomeByCurrency] = useState({});
@@ -908,19 +908,15 @@ export default function FinanceDashboard() {
     return wallet ? wallet.name : 'Ví đã chọn';
   };
 
+  // Expose function to open export modal via ref
+  useImperativeHandle(ref, () => ({
+    openExportModal: () => {
+      setShowExportModal(true);
+    }
+  }));
+
   return (
     <div className="fd-root tour-stats-component" aria-label="Bảng điều khiển tài chính">
-      {/* Export report button at top */}
-      <div className="fd-export-wrap" style={{ marginBottom: 12 }}>
-        <button 
-          className="fd-export-btn" 
-          onClick={() => setShowExportModal(true)} 
-          aria-label="Xuất báo cáo"
-        >
-          Xuất báo cáo
-        </button>
-      </div>
-      
       {/* Export Modal - Pass necessary data to handle export processing */}
       <ExportModal 
         isOpen={showExportModal}
@@ -1191,7 +1187,9 @@ export default function FinanceDashboard() {
       </div>
     </div>
   );
-}
+});
+
+export default FinanceDashboard;
 
 
 

@@ -8,19 +8,18 @@
 /* Sidebar: fixed position at left edge */
 .group-sidebar {
   width: 220px;
-  height: 100%;
-  min-height: 100vh;
+  height: 100vh;
   position: fixed;
   left: 0;
   top: 0;
   bottom: 0;
-  padding: 40px 0 20px 0;
+  padding: 20px 0;
   border-radius: 0;
-  overflow-y: auto;
+  overflow: hidden;
   box-shadow: 2px 0 10px rgba(42,82,152,0.08);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
   background: linear-gradient(135deg, #2a5298 0%, #4ecdc4 100%);
   color: #fff;
   border: none;
@@ -97,9 +96,10 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 24px 0 0;
-  margin-bottom: 10px;
+  padding: 20px 0 16px 0;
+  margin-bottom: 8px;
   width: 100%;
+  flex-shrink: 0;
 }
 
 .logo-icon {
@@ -204,6 +204,7 @@
   100% { transform: scaleX(0); transform-origin: bottom right; }
 }
 
+
 /* Header (group name) centered like main sidebar */
 .gs-header {
   display: flex;
@@ -211,12 +212,20 @@
   gap: 6px;
   align-items: center;
   text-align: center;
-  padding-bottom: 16px;
-  margin-bottom: 20px;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
   border-bottom: 1px solid rgba(255,255,255,0.2);
   width: 80%;
   margin-left: auto;
   margin-right: auto;
+  flex-shrink: 0;
+}
+
+.gs-sub {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #fff;
+  opacity: 0.9;
 }
 
 /* Nav - similar to main sidebar */
@@ -225,6 +234,16 @@
   flex-direction: column;
   width: 100%;
   padding: 0;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+/* Hide scrollbar but keep functionality */
+.gs-nav::-webkit-scrollbar {
+  width: 0;
+  background: transparent;
 }
 
 /* Style for sidebar-menu list */
@@ -237,26 +256,53 @@
   overflow: hidden;
 }
 
+.sidebar-menu {
+  padding: 0;
+}
+
 .sidebar-menu li {
   width: 100%;
   margin-bottom: 0;
+  flex-shrink: 0;
 }
 
 /* Make items look like main sidebar links */
 .gs-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   width: calc(100% - 40px);
-  margin: 0 auto 16px auto;
-  padding: 12px 20px;
+  margin: 0 auto 8px auto;
+  padding: 10px 20px;
   text-align: left;
   border-radius: 8px;
   border: none;
   background: transparent;
   color: #fff;
   font-weight: 600;
-  font-size: 1.1rem;
+  font-size: 1rem;
   cursor: pointer;
   transition: background 0.2s, transform 0.2s;
+  flex-shrink: 0;
+}
+
+.gs-item-icon {
+  font-size: 1.2rem;
+  width: 24px;
+  text-align: center;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.7);
+  opacity: 0.7;
+  transition: all 0.2s ease;
+}
+
+.gs-item.active .gs-item-icon,
+.gs-item:hover .gs-item-icon {
+  color: #4ecdc4;
+  opacity: 1;
 }
 
 /* Match hover style */
@@ -280,18 +326,8 @@
 }
 
 .gs-item.active::after {
-  content: '';
-  display: block;
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: 8px;
-  height: 3px;
-  background: linear-gradient(90deg, #4ecdc4, #2a5298);
-  border-radius: 2px;
-  box-shadow: 0 2px 8px rgba(42,82,152,0.15);
-  animation: underlineSlide 0.4s;
-  z-index: 1;
+  content: none;
+  display: none;
 }
 
 @keyframes underlineSlide {
@@ -308,56 +344,86 @@
 .gs-footer {
   margin-top: auto;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 10px;
-  padding-top: 16px;
-  width: 80%;
-  margin-left: auto;
-  margin-right: auto;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px 0;
+  width: 100%;
   border-top: 1px solid rgba(255,255,255,0.2);
+  flex-shrink: 0;
 }
 
 /* Nút chuyển sang gia đình */
 .gs-family-btn {
-  background: rgba(255, 255, 255, 0.18);
-  border: none;
-  width: calc(100% - 40px);
-  padding: 12px 20px;
-  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.25);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  width: 50px;
+  height: 50px;
+  padding: 0;
+  border-radius: 50%;
   cursor: pointer;
   color: #fff;
   font-weight: 600;
-  text-align: left;
-  font-size: 1rem;
-  transition: background 0.2s, transform 0.2s;
+  transition: all 0.2s ease;
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.gs-btn-icon {
+  font-size: 1.8rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  opacity: 1;
+  transition: all 0.2s ease;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+.gs-family-btn:hover .gs-btn-icon,
+.gs-back:hover .gs-btn-icon {
+  opacity: 1;
+  transform: scale(1.15);
+  color: #4ecdc4;
+  filter: drop-shadow(0 4px 8px rgba(78, 205, 196, 0.4));
 }
 
 .gs-family-btn:hover {
-  background: rgba(255, 255, 255, 0.25);
-  transform: translateX(8px);
-}
-
-.gs-family-btn i {
-  font-size: 1.1rem;
-  color: #4ecdc4;
+  background: rgba(255, 255, 255, 0.35);
+  border-color: rgba(78, 205, 196, 0.5);
+  transform: scale(1.1);
+  box-shadow: 0 4px 16px rgba(78, 205, 196, 0.3);
 }
 
 .gs-back {
-  background: rgba(255,255,255,0.12);
-  border: none;
-  width: calc(100% - 40px);
-  padding: 12px 20px;
-  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.25);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  width: 50px;
+  height: 50px;
+  padding: 0;
+  border-radius: 50%;
   cursor: pointer;
   color: #fff;
   font-weight: 600;
-  text-align: center;
-  font-size: 1.1rem;
-  transition: background 0.2s, transform 0.2s;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+
+.gs-back:hover {
+  background: rgba(255, 255, 255, 0.35);
+  border-color: rgba(78, 205, 196, 0.5);
+  transform: scale(1.1);
+  box-shadow: 0 4px 16px rgba(78, 205, 196, 0.3);
 }
 
 /* Ensure the main content area next to the fixed sidebar is a viewport-height scroll container.

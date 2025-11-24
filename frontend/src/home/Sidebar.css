@@ -1,21 +1,21 @@
 .sidebar {
   width: 220px;
-  min-height: 100vh; /* đảm bảo chiều cao tối thiểu là 100% viewport */
-  height: 100%; /* kéo dài theo kích thước thực của trang */
+  height: 100vh;
   background: linear-gradient(135deg, #2a5298 0%, #4ecdc4 100%);
   color: #fff;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-top: 40px;
+  padding: 20px 0;
   box-shadow: 2px 0 10px rgba(42,82,152,0.08);
   position: fixed;
   left: 0;
   top: 0;
-  bottom: 0; /* đảm bảo sidebar kéo dài đến cuối trang */
+  bottom: 0;
   z-index: 10;
-  overflow-y: auto; /* cho phép cuộn nếu nội dung quá dài */
+  overflow: hidden;
   transition: transform 0.3s ease, width 0.3s ease;
+  gap: 0;
 }
 
 /* Collapsed state */
@@ -86,9 +86,10 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 24px 0;
-  margin-bottom: 10px;
+  padding: 16px 0 12px 0;
+  margin-bottom: 6px;
   width: 100%;
+  flex-shrink: 0;
 }
 
 .logo-icon {
@@ -194,13 +195,14 @@
 }
 
 .sidebar-user {
-  font-size: 1.2rem;
+  font-size: 1rem;
   font-weight: bold;
-  margin-bottom: 30px;
-  padding: 10px 0;
+  margin-bottom: 12px;
+  padding: 8px 0;
   border-bottom: 1px solid rgba(255,255,255,0.2);
   width: 80%;
   text-align: center;
+  flex-shrink: 0;
 }
 
 .sidebar-menu {
@@ -210,13 +212,36 @@
   width: 100%;
   position: relative;
   overflow: visible;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+/* Show scrollbar when needed */
+.sidebar-menu::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-menu::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+}
+
+.sidebar-menu::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.sidebar-menu::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .sidebar-menu li {
   width: 100%;
-  margin-bottom: 30px; /* Tăng khoảng cách giữa các menu item */
+  margin-bottom: 8px;
   position: relative;
-  z-index: 1; /* Base z-index for inactive items */
+  z-index: 1;
+  flex-shrink: 0;
 }
 
 /* Active items should appear above others */
@@ -227,19 +252,39 @@
 
 /* Links (existing) */
 .sidebar-menu a {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   width: calc(100% - 40px); 
   margin: 0 auto;
-  padding: 14px 24px; /* Tăng padding để nội dung có nhiều không gian hơn */
+  padding: 10px 20px;
   color: #fff;
   text-decoration: none;
-  font-size: 1.15rem; /* Tăng nhẹ kích thước font */
-  font-weight: 500; /* Thêm độ đậm nhẹ */
+  font-size: 1rem;
+  font-weight: 600;
   border-radius: 8px;
   transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
   position: relative;
   box-sizing: border-box;
-  letter-spacing: 0.3px; /* Tăng khoảng cách chữ để dễ đọc hơn */
+}
+
+.sidebar-item-icon {
+  font-size: 1.2rem;
+  width: 24px;
+  text-align: center;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.7);
+  opacity: 0.7;
+  transition: all 0.2s ease;
+}
+
+.sidebar-menu a.active .sidebar-item-icon,
+.sidebar-menu a:hover .sidebar-item-icon {
+  color: #4ecdc4;
+  opacity: 1;
 }
 
 /* Hover state - adjusted to prevent overlap issues */
@@ -259,20 +304,10 @@
   transform: none; /* Prevent transform conflicts with hover */
 }
 
-/* Active indicator */
+/* Active indicator - removed */
 .sidebar-menu a.active::after {
-  content: '';
-  display: block;
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: 8px;
-  height: 3px;
-  background: linear-gradient(90deg, #4ecdc4, #2a5298);
-  border-radius: 2px;
-  box-shadow: 0 2px 8px rgba(42,82,152,0.15);
-  animation: underlineSlide 0.4s;
-  z-index: 11; /* Above the active item itself */
+  content: none;
+  display: none;
 }
 
 /* Prevent hover effect on active items to avoid visual conflicts */
@@ -283,22 +318,48 @@
 
 /* Settings button */
 .sidebar-settings-btn {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   width: calc(100% - 40px);
   margin: 0 auto;
-  padding: 14px 24px; /* Tăng padding để khớp với menu items */
+  padding: 10px 20px;
   color: #fff;
   background: transparent;
   border: none;
   text-align: left;
-  font-size: 1.15rem; /* Tăng nhẹ kích thước font */
-  font-weight: 500; /* Thêm độ đậm nhẹ */
+  font-size: 1rem;
+  font-weight: 600;
   border-radius: 8px;
   cursor: pointer;
   transition: background 0.2s, transform 0.2s;
   box-sizing: border-box;
   position: relative;
-  letter-spacing: 0.3px; /* Tăng khoảng cách chữ để dễ đọc hơn */
+}
+
+.sidebar-settings-btn .sidebar-item-icon {
+  font-size: 1.2rem;
+  width: 24px;
+  text-align: center;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.7);
+  opacity: 0.7;
+  transition: all 0.2s ease;
+}
+
+.sidebar-settings-btn.active .sidebar-item-icon,
+.sidebar-settings-btn:hover .sidebar-item-icon {
+  color: #4ecdc4;
+  opacity: 1;
+}
+
+.sidebar-settings-btn .caret {
+  margin-left: auto;
+  font-size: 0.9rem;
+  opacity: 0.8;
 }
 
 /* Settings hover state */
