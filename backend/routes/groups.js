@@ -215,8 +215,9 @@ router.post('/:groupId/invite', auth, async (req, res) => {
     const { email, inviterId } = req.body;
     if (!email) return res.status(400).json({ message: 'email required' });
 
-    const group = await Group.findById(groupId);
-    if (!group) return res.status(404).json({ message: 'Group not found' });
+    // Ensure user is a member of the group (owner or member can invite)
+    const { ok, status, message, group } = await ensureGroupMember(groupId, req.user._id);
+    if (!ok) return res.status(status).json({ message });
 
     const emailNormalized = email.toLowerCase().trim();
     if (group.members.some(m => m.email === emailNormalized)) {

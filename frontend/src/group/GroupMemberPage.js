@@ -17,6 +17,15 @@ export default function GroupMemberPage() {
 	const [txError, setTxError] = useState('');
 	const [loading, setLoading] = useState(true);
 	const [leaving, setLeaving] = useState(false);
+	// Add member states
+	const [showAddMember, setShowAddMember] = useState(false);
+	const [newMemberEmail, setNewMemberEmail] = useState('');
+	const [addingMember, setAddingMember] = useState(false);
+	const [addMemberError, setAddMemberError] = useState('');
+	const [addMemberSuccess, setAddMemberSuccess] = useState('');
+	const [friendsList, setFriendsList] = useState([]);
+	const [loadingFriends, setLoadingFriends] = useState(false);
+	const [selectedFriends, setSelectedFriends] = useState([]);
 
 	const API_BASE = 'http://localhost:5000';
 	const token = localStorage.getItem('token');
@@ -92,15 +101,31 @@ export default function GroupMemberPage() {
 		}
 	};
 
-	useEffect(() => {
+	// Extracted loader so we can refresh after actions
+	const refreshGroup = async () => {
 		if (!groupId || !token) return;
 		setLoading(true);
-		fetch(`${API_BASE}/api/groups/${groupId}`, {
-			headers: { Authorization: `Bearer ${token}` }
-		})
-			.then(res => res.json())
-			.then(data => { setGroup(data); setLoading(false); })
-			.catch(() => setLoading(false));
+		try {
+			const res = await fetch(`${API_BASE}/api/groups/${groupId}`, {
+				headers: { Authorization: `Bearer ${token}` }
+			});
+			if (!res.ok) {
+				setGroup(null);
+				setLoading(false);
+				return;
+			}
+			const data = await res.json();
+			setGroup(data);
+		} catch (e) {
+			console.warn('refreshGroup error', e);
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	useEffect(() => {
+		if (!groupId || !token) return;
+		refreshGroup();
 
 		// also load txs
 		fetchTxs();
@@ -205,6 +230,173 @@ export default function GroupMemberPage() {
 	const getMemberInitial = (member) => {
 		if (member.email) return member.email.charAt(0).toUpperCase();
 		return 'U';
+	};
+
+	// Add member helpers
+	const fetchFriendsList = async () => {
+		if (!token) return;
+		setLoadingFriends(true);
+		try {
+			const res = await fetch(`${API_BASE}/api/friends/list`, {
+				headers: { Authorization: `Bearer ${token}` }
+			});
+			if (!res.ok) {
+				setFriendsList([]);
+				return;
+			}
+			const data = await res.json().catch(() => []);
+			const arr = Array.isArray(data) ? data : (data && Array.isArray(data.data) ? data.data : []);
+			const normalized = arr.map(u => ({
+				id: u.id || u._id,
+				name: u.name || u.email || 'Người dùng',
+				email: (u.email || '').toLowerCase().trim()
+			}));
+			setFriendsList(normalized);
+		} catch (e) {
+			console.warn('fetchFriendsList error', e);
+			setFriendsList([]);
+		} finally {
+			setLoadingFriends(false);
+		}
+	};
+
+	const handleShowAddMember = () => {
+		const next = !showAddMember;
+		setShowAddMember(next);
+		setAddMemberError('');
+		setAddMemberSuccess('');
+		setSelectedFriends([]);
+		if (next) fetchFriendsList();
+	};
+
+	const getNonMemberFriends = () => {
+		if (!group || !Array.isArray(group.members) || !friendsList.length) return friendsList;
+		const memberEmails = new Set(
+			group.members
+				.map(m => (m.email || '').toLowerCase().trim())
+				.filter(Boolean)
+		);
+		const memberUserIds = new Set(
+			group.members
+				.map(m => (m.user && (m.user._id || m.user) ? String(m.user._id || m.user) : '').trim())
+				.filter(Boolean)
+		);
+		return friendsList.filter(f => {
+			if (!f || !f.email) return true;
+			if (memberEmails.has(f.email.toLowerCase().trim())) return false;
+			if (memberUserIds.has(String(f.id))) return false;
+			return true;
+		});
+	};
+
+	const toggleSelectedFriend = (friend) => {
+		if (!friend) return;
+		setSelectedFriends(prev => {
+			const exists = prev.some(f => (f.email || '').toLowerCase().trim() === (friend.email || '').toLowerCase().trim());
+			if (exists) return prev.filter(f => (f.email || '').toLowerCase().trim() !== (friend.email || '').toLowerCase().trim());
+			return [...prev, friend];
+		});
+	};
+
+	const handleAddSelectedFriends = async () => {
+		if (!selectedFriends.length) {
+			setAddMemberError('Chưa chọn bạn bè nào để mời');
+			return;
+		}
+		setAddingMember(true);
+		setAddMemberError('');
+		setAddMemberSuccess('');
+		try {
+			const results = [];
+			for (const f of selectedFriends) {
+				const email = (f.email || '').toLowerCase().trim();
+				if (!email) continue;
+				try {
+					const res = await fetch(`${API_BASE}/api/groups/${encodeURIComponent(groupId)}/invite`, {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+						body: JSON.stringify({ email })
+					});
+					results.push({ email, ok: res.ok });
+				} catch (e) {
+					results.push({ email, ok: false });
+				}
+			}
+			const okCount = results.filter(r => r.ok).length;
+			setAddMemberSuccess(`Đã gửi ${okCount}/${results.length} lời mời`);
+			await refreshGroup();
+			await fetchFriendsList();
+			setSelectedFriends([]);
+		} catch (e) {
+			console.error('handleAddSelectedFriends error', e);
+			setAddMemberError('Lỗi khi gửi lời mời');
+		} finally {
+			setAddingMember(false);
+		}
+	};
+
+	const handleAddMember = async () => {
+		setAddMemberError('');
+		setAddMemberSuccess('');
+		const email = (newMemberEmail || '').trim().toLowerCase();
+		if (!email) {
+			setAddMemberError('Vui lòng nhập email.');
+			return;
+		}
+		if (!group) {
+			setAddMemberError('Thông tin nhóm chưa tải xong.');
+			return;
+		}
+		setAddingMember(true);
+		try {
+			const chkRes = await fetch(`${API_BASE}/api/groups/search-users?email=${encodeURIComponent(email)}`, {
+				headers: token ? { Authorization: `Bearer ${token}` } : {}
+			});
+			if (!chkRes.ok) {
+				setAddMemberError('Lỗi khi kiểm tra người dùng');
+				return;
+			}
+			const users = await chkRes.json().catch(() => []);
+			if (!Array.isArray(users) || users.length === 0) {
+				setAddMemberError('Người dùng không tồn tại');
+				return;
+			}
+			const foundUser = users[0];
+			const foundUserId = foundUser._id || foundUser.id || null;
+
+			const already = Array.isArray(group.members) && group.members.some(m => {
+				const mUserId = m.user && (m.user._id ? m.user._id : m.user);
+				const mEmail = (m.email || '').toLowerCase().trim();
+				if (mUserId && foundUserId && String(mUserId) === String(foundUserId)) return true;
+				if (mEmail && mEmail === email) return true;
+				return false;
+			});
+			if (already) {
+				setAddMemberError('Người dùng đã tồn tại trong nhóm');
+				return;
+			}
+
+			const res = await fetch(`${API_BASE}/api/groups/${encodeURIComponent(groupId)}/invite`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+				body: JSON.stringify({ email })
+			});
+			const body = await res.json().catch(() => null);
+			if (!res.ok) {
+				const msg = body && (body.message || body.error) ? (body.message || body.error) : 'Không thể thêm thành viên';
+				setAddMemberError(msg);
+				return;
+			}
+
+			setAddMemberSuccess('Đã thêm/lời mời đã được gửi tới người dùng');
+			setNewMemberEmail('');
+			await refreshGroup();
+		} catch (e) {
+			console.error('handleAddMember error', e);
+			setAddMemberError('Lỗi mạng');
+		} finally {
+			setAddingMember(false);
+		}
 	};
 
 	// Thêm hàm tra cứu tên/email từ id
@@ -369,9 +561,131 @@ export default function GroupMemberPage() {
 									<h2 className="gm-card-title">
 										<i className="fas fa-users"></i> Thành viên nhóm
 									</h2>
+									<button 
+										className="gm-btn primary" 
+										onClick={handleShowAddMember}
+									>
+										{showAddMember ? 
+											<><i className="fas fa-times"></i> Đóng</> : 
+											<><i className="fas fa-user-plus"></i> Thêm thành viên</>
+										}
+									</button>
 								</div>
 								
 								<div className="gm-card-body">
+									{/* Add member section */}
+									{showAddMember && (
+										<div className="gm-add-member">
+											{/* Friends list section */}
+											<div className="gm-friends-section">
+												<h3 style={{ fontSize: '1.1rem', marginTop: 0, marginBottom: 12 }}>
+													Thêm từ danh sách bạn bè
+												</h3>
+												
+												{loadingFriends ? (
+													<div className="gm-loading-inline">
+														<i className="fas fa-spinner fa-spin"></i> Đang tải danh sách bạn bè...
+													</div>
+												) : (
+													<>
+														{getNonMemberFriends().length === 0 ? (
+															<div className="gm-empty-friends">
+																<i className="fas fa-user-friends"></i>
+																<p>Tất cả bạn bè của bạn đã là thành viên hoặc bạn chưa có bạn bè nào</p>
+															</div>
+														) : (
+															<>
+																<div className="gm-friends-grid">
+																	{getNonMemberFriends().map(friend => {
+																		const isSelected = selectedFriends.some(f => f.email === friend.email);
+																		const initial = (friend.name || friend.email || '?')[0].toUpperCase();
+																		
+																		return (
+																			<div 
+																				key={friend.id || friend.email} 
+																				className={`gm-friend-card ${isSelected ? 'selected' : ''}`}
+																				onClick={() => toggleSelectedFriend(friend)}
+																			>
+																				<div className="gm-friend-avatar">
+																					{initial}
+																				</div>
+																				<div className="gm-friend-info">
+																					<div className="gm-friend-name">{friend.name}</div>
+																					<div className="gm-friend-email">{friend.email}</div>
+																				</div>
+																				<div className="gm-friend-checkbox">
+																					<input 
+																						type="checkbox" 
+																						checked={isSelected}
+																						onChange={(e) => {
+																							e.stopPropagation();
+																							toggleSelectedFriend(friend);
+																						}}
+																					/>
+																				</div>
+																			</div>
+																		);
+																	})}
+																</div>
+																
+																<div style={{ marginTop: 12, marginBottom: 12 }}>
+																	<button 
+																		className="gm-btn success" 
+																		onClick={handleAddSelectedFriends}
+																		disabled={!selectedFriends.length || addingMember}
+																	>
+																		{addingMember ? 
+																			<><i className="fas fa-spinner fa-spin"></i> Đang thêm...</> : 
+																			<><i className="fas fa-user-plus"></i> Thêm {selectedFriends.length} người đã chọn</>
+																		}
+																	</button>
+																</div>
+															</>
+														)}
+													</>
+												)}
+											</div>
+											
+											<div style={{ margin: '16px 0', borderTop: '1px solid #e2e8f0', paddingTop: 16 }}>
+												<h3 style={{ fontSize: '1.1rem', marginTop: 0, marginBottom: 12 }}>
+													Hoặc thêm bằng email
+												</h3>
+												
+												<div className="gm-add-member-form">
+													<input
+														type="email"
+														placeholder="Nhập email thành viên mới..."
+														value={newMemberEmail}
+														onChange={e => setNewMemberEmail(e.target.value)}
+														className="gm-form-input"
+														disabled={addingMember}
+													/>
+													<button 
+														className="gm-btn success" 
+														onClick={handleAddMember} 
+														disabled={addingMember || !newMemberEmail.trim()}
+													>
+														{addingMember ? 
+															<><i className="fas fa-spinner fa-spin"></i> Đang thêm...</> : 
+															<><i className="fas fa-plus-circle"></i> Thêm</>
+														}
+													</button>
+												</div>
+											</div>
+											
+											{addMemberError && (
+												<div className="gm-error" style={{marginTop: 12, padding: 12, borderRadius: 8}}>
+													<i className="fas fa-exclamation-circle"></i> {addMemberError}
+												</div>
+											)}
+											{addMemberSuccess && (
+												<div className="gm-success-message">
+													<i className="fas fa-check-circle"></i> {addMemberSuccess}
+												</div>
+											)}
+										</div>
+									)}
+									
 									{group.members && group.members.length > 0 ? (
 										<ul className="gm-members-list">
 											{group.members.map(member => {
@@ -427,6 +741,11 @@ export default function GroupMemberPage() {
 										<div className="gm-empty-state">
 											<i className="fas fa-users-slash"></i>
 											<div className="gm-empty-state-text">Chưa có thành viên nào trong nhóm</div>
+											{!showAddMember && (
+												<button className="gm-btn primary" onClick={() => setShowAddMember(true)}>
+													<i className="fas fa-user-plus"></i> Thêm thành viên đầu tiên
+												</button>
+											)}
 										</div>
 									)}
 								</div>

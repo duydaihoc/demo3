@@ -646,7 +646,8 @@ export default function GroupActivityFeed({
                       </div>
                       {loadingTransactions ? (
                         <div className="gaf-transaction-loading">
-                          <i className="fas fa-spinner fa-spin"></i> Đang tải...
+                          <i className="fas fa-spinner fa-spin"></i>
+                          <span>Đang tải giao dịch...</span>
                         </div>
                       ) : (
                         <div className="gaf-transaction-list">
@@ -655,7 +656,15 @@ export default function GroupActivityFeed({
                             className={`gaf-transaction-item ${!selectedTransactionId ? 'selected' : ''}`}
                             onClick={() => setSelectedTransactionId(null)}
                           >
-                            <span>Không liên kết</span>
+                            <div className="gaf-transaction-item-info">
+                              <div className="gaf-transaction-item-title">
+                                <i className="fas fa-unlink" style={{ marginRight: '8px', opacity: 0.7 }}></i>
+                                Không liên kết
+                              </div>
+                            </div>
+                            {!selectedTransactionId && (
+                              <i className="fas fa-check"></i>
+                            )}
                           </button>
                           {(transactionSearch
                             ? groupTransactions.filter(tx =>
@@ -690,7 +699,21 @@ export default function GroupActivityFeed({
                           ))}
                           {groupTransactions.length === 0 && (
                             <div className="gaf-transaction-empty">
-                              Chưa có giao dịch nào trong nhóm
+                              <i className="fas fa-inbox"></i>
+                              <div>Chưa có giao dịch nào trong nhóm</div>
+                            </div>
+                          )}
+                          {groupTransactions.length > 0 && transactionSearch && 
+                           (transactionSearch
+                             ? groupTransactions.filter(tx =>
+                                 (tx.title || '').toLowerCase().includes(transactionSearch.toLowerCase()) ||
+                                 (tx.description || '').toLowerCase().includes(transactionSearch.toLowerCase())
+                               )
+                             : groupTransactions
+                           ).length === 0 && (
+                            <div className="gaf-transaction-empty">
+                              <i className="fas fa-search"></i>
+                              <div>Không tìm thấy giao dịch phù hợp</div>
                             </div>
                           )}
                         </div>
