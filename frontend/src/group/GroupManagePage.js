@@ -54,7 +54,7 @@ export default function GroupManagePage() {
 	const [newPostContent, setNewPostContent] = useState('');
 	const [newPostImage, setNewPostImage] = useState('');
 	const [posting, setPosting] = useState(false);
-	
+
 	// Pending invites for this group
 	const [pendingInvites, setPendingInvites] = useState([]);
 	const [loadingInvites, setLoadingInvites] = useState(false);
@@ -149,22 +149,27 @@ export default function GroupManagePage() {
 			const notifications = Array.isArray(notifData) ? notifData : (Array.isArray(notifData.notifications) ? notifData.notifications : []);
 			
 			// Kết hợp lời mời từ Group model và Notifications
-			// Ưu tiên lấy từ Group model (đảm bảo không mất), bổ sung thông tin từ Notifications
+			// Mỗi lời mời là một entry riêng biệt, không gộp lại theo email/userId
 			const inviteMap = new Map();
 			
-			// Thêm lời mời từ Group model
+			// Thêm lời mời từ Group model - mỗi lời mời có key duy nhất
 			groupInvites.forEach(invite => {
 				if (String(invite.invitedBy?._id || invite.invitedBy) === String(myId)) {
-					const key = invite.email || String(invite.userId?._id || invite.userId);
-					inviteMap.set(key, {
-						_id: invite.notificationId || `group-${invite.email}`,
+					// Tạo key duy nhất: notificationId hoặc kết hợp email/userId + createdAt + status
+					const uniqueKey = invite.notificationId 
+						? `notif-${invite.notificationId}` 
+						: `group-${invite.email || String(invite.userId?._id || invite.userId)}-${invite.invitedAt || Date.now()}-${invite.status || 'pending'}`;
+					
+					inviteMap.set(uniqueKey, {
+						_id: invite.notificationId || `group-${invite.email}-${invite.invitedAt}`,
 						type: 'group.invite',
 						recipient: invite.userId ? { _id: invite.userId._id || invite.userId, email: invite.email, name: invite.userId.name } : { email: invite.email },
 						sender: { _id: invite.invitedBy._id || invite.invitedBy },
 						data: { groupId, email: invite.email, groupName: groupData?.name },
 						status: invite.status,
 						createdAt: invite.invitedAt,
-						inviteStatus: invite.status
+						inviteStatus: invite.status,
+						notificationId: invite.notificationId
 					});
 				}
 			});
@@ -185,35 +190,34 @@ export default function GroupManagePage() {
 				return String(senderId) === String(myId);
 			});
 			
-			// Cập nhật thông tin từ Notifications vào map
+			// Thêm lời mời từ Notifications - mỗi notification là một lời mời riêng biệt
 			inviteNotifications.forEach(notif => {
-				const recipientEmail = (notif.data?.email || notif.recipient?.email || '').toLowerCase().trim();
-				const recipientId = notif.recipient?._id || notif.recipient;
-				const key = recipientEmail || String(recipientId);
+				// Tạo key duy nhất cho mỗi notification
+				const uniqueKey = `notif-${notif._id}`;
 				
-				if (inviteMap.has(key)) {
-					// Cập nhật thông tin từ notification
-					const existing = inviteMap.get(key);
-					inviteMap.set(key, {
+				// Chỉ thêm nếu chưa có trong map (tránh trùng với lời mời từ Group model)
+				if (!inviteMap.has(uniqueKey)) {
+					inviteMap.set(uniqueKey, {
+						...notif,
+						inviteStatus: 'pending',
+						notificationId: notif._id
+					});
+				} else {
+					// Cập nhật thông tin từ notification nếu đã có trong Group model
+					const existing = inviteMap.get(uniqueKey);
+					inviteMap.set(uniqueKey, {
 						...existing,
 						_id: notif._id || existing._id,
 						recipient: notif.recipient || existing.recipient,
 						sender: notif.sender || existing.sender,
 						data: notif.data || existing.data,
 						createdAt: notif.createdAt || existing.createdAt,
-						// Giữ status từ Group model nếu có
-						inviteStatus: existing.inviteStatus || 'pending'
-					});
-				} else {
-					// Thêm lời mời mới từ notification (nếu chưa có trong Group model)
-					inviteMap.set(key, {
-						...notif,
-						inviteStatus: 'pending'
+						notificationId: notif._id || existing.notificationId
 					});
 				}
 			});
 			
-			// Chuyển map thành array
+			// Chuyển map thành array - giữ tất cả lời mời riêng biệt
 			const allInvites = Array.from(inviteMap.values());
 			
 			// Lấy các notification response để xác định trạng thái
@@ -233,56 +237,76 @@ export default function GroupManagePage() {
 				return true;
 			});
 			
-			// Tạo map để tra cứu trạng thái nhanh
-			// Key: recipient ID/email của lời mời (người được mời)
-			// Value: status (accepted/rejected)
-			const statusMap = new Map();
-			responseNotifications.forEach(resp => {
-				// Trong response notification, sender là người được mời (người phản hồi)
-				const invitedUserId = resp.sender?._id || resp.sender || resp.data?.userId;
-				const invitedUserEmail = (resp.data?.email || resp.sender?.email || '').toLowerCase().trim();
-				const status = resp.type === 'group.invite.accepted' ? 'accepted' : 'rejected';
-				
-				// Lưu theo cả ID và email để matching chính xác hơn
-				if (invitedUserId) {
-					statusMap.set(`id:${String(invitedUserId)}`, status);
-				}
-				if (invitedUserEmail) {
-					statusMap.set(`email:${invitedUserEmail}`, status);
-				}
-			});
-			
-			// Gắn trạng thái cho mỗi lời mời (cập nhật từ response notifications nếu chưa có từ Group model)
+			// Gắn trạng thái cho mỗi lời mời
+			// Match response notification với lời mời cụ thể dựa trên thời gian và user
+			// Nếu có nhiều lời mời cho cùng user, match response với lời mời gần nhất (createdAt mới nhất)
 			const invitesWithStatus = allInvites.map(invite => {
 				// Nếu đã có status từ Group model, ưu tiên dùng nó
 				if (invite.inviteStatus && invite.inviteStatus !== 'pending') {
 					return invite;
 				}
+				
 				// Trong invite notification, recipient là người được mời
 				const recipientId = invite.recipient?._id || invite.recipient || invite.data?.userId;
 				const recipientEmail = (invite.data?.email || invite.recipient?.email || '').toLowerCase().trim();
-				let status = 'pending'; // Mặc định là đang chờ
+				const inviteCreatedAt = new Date(invite.createdAt || 0).getTime();
 				
-				// Kiểm tra trạng thái từ response notifications
-				// Match: invite.recipient === response.sender (cùng là người được mời)
-				if (recipientId) {
-					const idKey = `id:${String(recipientId)}`;
-					if (statusMap.has(idKey)) {
-						status = statusMap.get(idKey);
+				// Tìm tất cả response notifications phù hợp với user này
+				const candidateResponses = responseNotifications.filter(resp => {
+					const respCreatedAt = new Date(resp.createdAt || 0).getTime();
+					// Response phải được tạo sau lời mời
+					if (respCreatedAt < inviteCreatedAt) return false;
+					
+					// Match bằng userId
+					const respUserId = resp.sender?._id || resp.sender || resp.data?.userId;
+					if (recipientId && respUserId && String(recipientId) === String(respUserId)) {
+						return true;
+					}
+					
+					// Match bằng email
+					const respEmail = (resp.data?.email || resp.sender?.email || '').toLowerCase().trim();
+					if (recipientEmail && respEmail && recipientEmail === respEmail) {
+						return true;
+					}
+					
+					return false;
+				});
+				
+				// Nếu có nhiều response, tìm response gần nhất với lời mời này (thời gian gần nhất)
+				if (candidateResponses.length > 0) {
+					// Sắp xếp theo thời gian tạo (mới nhất trước)
+					candidateResponses.sort((a, b) => {
+						const timeA = new Date(a.createdAt || 0).getTime();
+						const timeB = new Date(b.createdAt || 0).getTime();
+						return timeB - timeA;
+					});
+					
+					// Tìm response gần nhất với lời mời này (thời gian chênh lệch nhỏ nhất)
+					let closestResponse = null;
+					let minTimeDiff = Infinity;
+					
+					candidateResponses.forEach(resp => {
+						const respCreatedAt = new Date(resp.createdAt || 0).getTime();
+						const timeDiff = respCreatedAt - inviteCreatedAt;
+						if (timeDiff >= 0 && timeDiff < minTimeDiff) {
+							minTimeDiff = timeDiff;
+							closestResponse = resp;
+						}
+					});
+					
+					if (closestResponse) {
+						const status = closestResponse.type === 'group.invite.accepted' ? 'accepted' : 'rejected';
+						return {
+							...invite,
+							inviteStatus: status
+						};
 					}
 				}
 				
-				// Nếu chưa match bằng ID, thử match bằng email
-				if (status === 'pending' && recipientEmail) {
-					const emailKey = `email:${recipientEmail}`;
-					if (statusMap.has(emailKey)) {
-						status = statusMap.get(emailKey);
-					}
-				}
-				
+				// Mặc định là pending
 				return {
 					...invite,
-					inviteStatus: status
+					inviteStatus: 'pending'
 				};
 			});
 			
@@ -460,11 +484,11 @@ export default function GroupManagePage() {
 				return;
 			}
 
-		// success
+			// success
 		setAddMemberSuccess('Đã gửi lời mời! Người dùng có thể chấp nhận hoặc từ chối trong trang Hoạt động.');
-		setNewMemberEmail('');
-		// reload group để cập nhật danh sách thành viên
-		await refreshGroup();
+			setNewMemberEmail('');
+			// reload group để cập nhật danh sách thành viên
+			await refreshGroup();
 		// Refresh pending invites
 		await fetchPendingInvites();
 		} catch (e) {
@@ -734,13 +758,13 @@ const getUserNameById = (userIdOrEmail) => {
 					results.push({ email, ok: false });
 				}
 			}
-		const okCount = results.filter(r => r.ok).length;
-		setAddMemberSuccess(`Đã gửi ${okCount}/${results.length} lời mời`);
-		// Refresh group and friends list to update UI
-		await refreshGroup();
-		await fetchFriendsList();
+			const okCount = results.filter(r => r.ok).length;
+			setAddMemberSuccess(`Đã gửi ${okCount}/${results.length} lời mời`);
+			// Refresh group and friends list to update UI
+			await refreshGroup();
+			await fetchFriendsList();
 		await fetchPendingInvites();
-		setSelectedFriends([]);
+			setSelectedFriends([]);
 		} catch (e) {
 			console.error('handleAddSelectedFriends error', e);
 			setAddMemberError('Lỗi khi gửi lời mời');

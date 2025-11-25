@@ -91,6 +91,8 @@ router.get('/', auth, async (req, res) => {
     })
       .populate('owner', 'name email')
       .populate('members.user', 'name email')
+      .populate('pendingInvites.userId', 'name email')
+      .populate('pendingInvites.invitedBy', 'name email')
       .sort({ updatedAt: -1 });
 
     // convert docs to plain objects and parse color if it's a JSON string
@@ -174,6 +176,18 @@ router.post('/', auth, async (req, res) => {
       const user = await User.findOne({ email });
       if (user) {
         try {
+          // Kiểm tra xem đã có lời mời pending cho user này chưa
+          // Chỉ kiểm tra lời mời pending, không kiểm tra rejected (cho phép tạo nhiều lời mời)
+          const existingPendingInviteIndex = group.pendingInvites.findIndex(
+            inv => (inv.email === email || (inv.userId && String(inv.userId) === String(user._id))) && inv.status === 'pending'
+          );
+          
+          // Nếu đã có lời mời pending, bỏ qua user này
+          if (existingPendingInviteIndex !== -1) {
+            continue;
+          }
+          
+          // Nếu có lời mời rejected, vẫn cho phép tạo lời mời mới (không xóa lời mời cũ)
           const notification = await Notification.create({
             recipient: user._id,
             sender: creator._id,
@@ -187,7 +201,7 @@ router.post('/', auth, async (req, res) => {
             }
           });
           
-          // Lưu lời mời vào Group model
+          // Lưu lời mời mới vào Group model
           group.pendingInvites.push({
             email: email,
             userId: user._id,
@@ -269,23 +283,28 @@ router.post('/:groupId/invite', auth, async (req, res) => {
       group.pendingInvites = [];
     }
     
-    // Kiểm tra xem đã có lời mời cho email này chưa
-    const existingInviteIndex = group.pendingInvites.findIndex(
-      inv => inv.email === emailNormalized && inv.status === 'pending'
+    // Kiểm tra xem đã có lời mời pending cho email này chưa
+    // Chỉ kiểm tra lời mời pending, không kiểm tra rejected (cho phép tạo nhiều lời mời)
+    const existingPendingInviteIndex = group.pendingInvites.findIndex(
+      inv => (inv.email === emailNormalized || (inv.userId && String(inv.userId) === String(user._id))) && inv.status === 'pending'
     );
     
-    if (existingInviteIndex === -1) {
-      // Thêm lời mời mới
-      group.pendingInvites.push({
-        email: emailNormalized,
-        userId: user._id,
-        invitedBy: inviterId || req.user._id,
-        status: 'pending',
-        invitedAt: new Date(),
-        notificationId: notification._id
-      });
-      await group.save();
+    if (existingPendingInviteIndex !== -1) {
+      // Đã có lời mời pending, không tạo mới
+      return res.status(400).json({ message: 'Đã có lời mời đang chờ phản hồi cho người dùng này' });
     }
+    
+    // Nếu có lời mời rejected, vẫn cho phép tạo lời mời mới (không xóa lời mời cũ)
+    // Tạo lời mời mới hoàn toàn riêng biệt
+    group.pendingInvites.push({
+      email: emailNormalized,
+      userId: user._id,
+      invitedBy: inviterId || req.user._id,
+      status: 'pending',
+      invitedAt: new Date(),
+      notificationId: notification._id
+    });
+    await group.save();
 
     res.status(200).json({ message: 'Đã gửi lời mời', email: emailNormalized });
   } catch (err) {

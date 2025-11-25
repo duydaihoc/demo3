@@ -623,25 +623,30 @@ body.group-sidebar-collapsed .groups-main {
 .received-invite-actions {
 	flex-shrink: 0;
 	display: flex;
-	gap: 8px;
+	gap: 10px;
+	align-items: center;
 }
 
 .invite-action-btn {
-	padding: 10px 16px;
+	padding: 12px 20px;
 	border: none;
-	border-radius: 8px;
-	font-size: 13px;
+	border-radius: 10px;
+	font-size: 14px;
 	font-weight: 600;
 	cursor: pointer;
 	transition: all 0.3s ease;
 	display: flex;
 	align-items: center;
+	justify-content: center;
 	gap: 6px;
 	white-space: nowrap;
+	min-width: 110px;
+	flex: 1;
+	max-width: 140px;
 }
 
 .invite-action-btn i {
-	font-size: 12px;
+	font-size: 13px;
 }
 
 .invite-action-btn.accept-btn {
@@ -656,10 +661,16 @@ body.group-sidebar-collapsed .groups-main {
 	box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
 }
 
+.invite-action-btn.accept-btn:active {
+	transform: translateY(0);
+	box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
+}
+
 .invite-action-btn.reject-btn {
 	background: #f1f5f9;
 	color: #64748b;
 	border: 1px solid #e2e8f0;
+	font-weight: 600;
 }
 
 .invite-action-btn.reject-btn:hover {
@@ -667,6 +678,12 @@ body.group-sidebar-collapsed .groups-main {
 	color: #dc2626;
 	border-color: #fecaca;
 	transform: translateY(-2px);
+	box-shadow: 0 2px 8px rgba(220, 38, 38, 0.15);
+}
+
+.invite-action-btn.reject-btn:active {
+	transform: translateY(0);
+	box-shadow: 0 1px 4px rgba(220, 38, 38, 0.1);
 }
 
 /* Pending Invites Section - Lời mời đã gửi đang chờ phản hồi */
@@ -1459,12 +1476,16 @@ body.group-sidebar-collapsed .groups-main {
 	.received-invite-actions {
 		width: 100%;
 		display: flex;
-		gap: 8px;
+		gap: 10px;
 	}
 	
 	.invite-action-btn {
 		flex: 1;
 		justify-content: center;
+		min-width: 0;
+		max-width: none;
+		padding: 11px 16px;
+		font-size: 13px;
 	}
 	
 	.pending-invite-item {

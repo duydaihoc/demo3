@@ -95,6 +95,102 @@ function detectAdviceOrStatsIntent(message) {
   ];
   const isSpendingSuggestion = spendingSuggestionKeywords.some(k => lower.includes(k));
   
+  // THÊM: Phát hiện yêu cầu hỏi ý kiến/tham khảo về mua/chi tiêu (KHÔNG phải tạo giao dịch)
+  const adviceRequestKeywords = [
+    'có nên mua',
+    'co nen mua',
+    'có nên chi',
+    'co nen chi',
+    'có nên tiêu',
+    'co nen tieu',
+    'nên mua không',
+    'nen mua khong',
+    'nên chi không',
+    'nen chi khong',
+    'nên tiêu không',
+    'nen tieu khong',
+    'mua được không',
+    'mua duoc khong',
+    'chi được không',
+    'chi duoc khong',
+    'tiêu được không',
+    'tieu duoc khong',
+    'tham khảo',
+    'tham khao',
+    'hỏi ý kiến',
+    'hoi y kien',
+    'tư vấn',
+    'tu van',
+    'có nên',
+    'co nen',
+    'nên không',
+    'nen khong',
+    'được không',
+    'duoc khong',
+    'có đáng',
+    'co dang',
+    'đáng mua',
+    'dang mua',
+    'đáng chi',
+    'dang chi',
+    // THÊM: Các từ khóa mới cho "dự định" và "bạn thấy sao"
+    'dự định mua',
+    'du dinh mua',
+    'dự định chi',
+    'du dinh chi',
+    'dự định tiêu',
+    'du dinh tieu',
+    'bạn thấy sao',
+    'ban thay sao',
+    'bạn nghĩ sao',
+    'ban nghi sao',
+    'bạn thấy thế nào',
+    'ban thay the nao',
+    'bạn nghĩ thế nào',
+    'ban nghi the nao',
+    'cho ý kiến',
+    'cho y kien',
+    'ý kiến',
+    'y kien',
+    'thấy sao',
+    'thay sao',
+    'nghĩ sao',
+    'nghi sao',
+    'thấy thế nào',
+    'thay the nao',
+    'nghĩ thế nào',
+    'nghi the nao'
+  ];
+  const isAdviceRequest = adviceRequestKeywords.some(k => lower.includes(k));
+  
+  // THÊM: Phát hiện pattern phức tạp hơn như "tôi dự định mua X bạn thấy sao"
+  const complexAdvicePatterns = [
+    /dự\s*định\s+mua/i,
+    /du\s*dinh\s+mua/i,
+    /dự\s*định\s+chi/i,
+    /du\s*dinh\s+chi/i,
+    /bạn\s+thấy\s+sao/i,
+    /ban\s+thay\s+sao/i,
+    /bạn\s+nghĩ\s+sao/i,
+    /ban\s+nghi\s+sao/i,
+    /bạn\s+thấy\s+thế\s+nào/i,
+    /ban\s+thay\s+the\s+nao/i,
+    /cho\s+ý\s+kiến/i,
+    /cho\s+y\s+kien/i
+  ];
+  const hasComplexAdvicePattern = complexAdvicePatterns.some(pattern => pattern.test(lower));
+  
+  // Nếu phát hiện pattern phức tạp, cũng coi là advice request
+  if (hasComplexAdvicePattern) {
+    return {
+      advice: true,
+      stats: false,
+      spendingSuggestion: false,
+      suggestedAmount: null,
+      adviceRequest: true
+    };
+  }
+  
   // THÊM: Trích xuất số tiền từ message nếu có
   let suggestedAmount = null;
   if (isSpendingSuggestion) {
@@ -107,7 +203,19 @@ function detectAdviceOrStatsIntent(message) {
       advice: false,
       stats: false,
       spendingSuggestion: true,
-      suggestedAmount: suggestedAmount
+      suggestedAmount: suggestedAmount,
+      adviceRequest: false
+    };
+  }
+  
+  // Nếu là hỏi ý kiến/tham khảo về mua/chi tiêu, coi là advice request
+  if (isAdviceRequest) {
+    return {
+      advice: true, // Coi là advice để AI trả lời phân tích
+      stats: false,
+      spendingSuggestion: false,
+      suggestedAmount: null,
+      adviceRequest: true // Flag đặc biệt để không tạo transaction
     };
   }
   
@@ -140,7 +248,8 @@ function detectAdviceOrStatsIntent(message) {
     advice: adviceKeywords.some(k => lower.includes(k)),
     stats: statsKeywords.some(k => lower.includes(k)) || isStatsWithExpense,
     spendingSuggestion: false, // Đã xử lý ở trên
-    suggestedAmount: null
+    suggestedAmount: null,
+    adviceRequest: false // Không phải advice request đặc biệt
   };
 }
 
@@ -511,12 +620,14 @@ Bạn là AI phân tích ý định giao dịch tài chính. Phân tích câu n�
 - "xóa giao dịch", "hủy giao dịch" → YÊU CẦU XÓA
 - "hủy việc tạo/sửa/xóa" → HỦY HÀNH ĐỘNG
 - "thống kê", "báo cáo", "tổng quan" → YÊU CẦU THỐNG KÊ
+- "có nên mua", "có nên chi", "nên mua không", "mua được không", "tham khảo", "hỏi ý kiến", "tư vấn" → HỎI Ý KIẾN/THAM KHẢO (KHÔNG phải tạo giao dịch)
+- "dự định mua", "dự định chi", "bạn thấy sao", "bạn nghĩ sao", "cho ý kiến", "thấy thế nào" → HỎI Ý KIẾN/THAM KHẢO (KHÔNG phải tạo giao dịch)
 
 CÂU NÓI CỦA NGƯỜI DÙNG: "${message}"
 
 HƯỚNG DẪN PHÂN TÍCH (theo thứ tự):
 1. **Bước 1 - Kiểm tra loại yêu cầu:**
-   - Nếu có từ khóa "gợi ý", "phân tích", "sửa", "xóa", "thống kê" → set hasIntent = false ngay, KHÔNG phân tích tiếp
+   - Nếu có từ khóa "gợi ý", "phân tích", "sửa", "xóa", "thống kê", "có nên", "nên không", "tham khảo", "hỏi ý kiến", "tư vấn", "được không", "dự định", "bạn thấy", "bạn nghĩ", "cho ý kiến", "thấy sao", "nghĩ sao" → set hasIntent = false ngay, KHÔNG phân tích tiếp
    
 2. **Bước 2 - Xác định loại giao dịch:**
    - "expense" (chi tiêu) hoặc "income" (thu nhập)
@@ -744,6 +855,65 @@ function detectIncompleteTransaction(message, pendingTransaction = null) {
     
     // Nếu là yêu cầu gợi ý chi tiêu, KHÔNG coi là tạo giao dịch
     if (isSpendingSuggestionRequest) {
+      return { complete: false, missing: null };
+    }
+    
+    // LOẠI TRỪ: Kiểm tra xem có phải là "hỏi ý kiến/tham khảo" không (KHÔNG phải tạo giao dịch)
+    const adviceRequestKeywords = [
+      'có nên mua', 'co nen mua',
+      'có nên chi', 'co nen chi',
+      'có nên tiêu', 'co nen tieu',
+      'nên mua không', 'nen mua khong',
+      'nên chi không', 'nen chi khong',
+      'nên tiêu không', 'nen tieu khong',
+      'mua được không', 'mua duoc khong',
+      'chi được không', 'chi duoc khong',
+      'tiêu được không', 'tieu duoc khong',
+      'tham khảo', 'tham khao',
+      'hỏi ý kiến', 'hoi y kien',
+      'tư vấn', 'tu van',
+      'có nên', 'co nen',
+      'nên không', 'nen khong',
+      'được không', 'duoc khong',
+      'có đáng', 'co dang',
+      'đáng mua', 'dang mua',
+      'đáng chi', 'dang chi',
+      // THÊM: Các từ khóa mới cho "dự định" và "bạn thấy sao"
+      'dự định mua', 'du dinh mua',
+      'dự định chi', 'du dinh chi',
+      'dự định tiêu', 'du dinh tieu',
+      'bạn thấy sao', 'ban thay sao',
+      'bạn nghĩ sao', 'ban nghi sao',
+      'bạn thấy thế nào', 'ban thay the nao',
+      'bạn nghĩ thế nào', 'ban nghi the nao',
+      'cho ý kiến', 'cho y kien',
+      'ý kiến', 'y kien',
+      'thấy sao', 'thay sao',
+      'nghĩ sao', 'nghi sao',
+      'thấy thế nào', 'thay the nao',
+      'nghĩ thế nào', 'nghi the nao'
+    ];
+    const isAdviceRequest = adviceRequestKeywords.some(k => lowerMessage.includes(k));
+    
+    // THÊM: Phát hiện pattern phức tạp hơn như "tôi dự định mua X bạn thấy sao"
+    const complexAdvicePatterns = [
+      /dự\s*định\s+mua/i,
+      /du\s*dinh\s+mua/i,
+      /dự\s*định\s+chi/i,
+      /du\s*dinh\s+chi/i,
+      /bạn\s+thấy\s+sao/i,
+      /ban\s+thay\s+sao/i,
+      /bạn\s+nghĩ\s+sao/i,
+      /ban\s+nghi\s+sao/i,
+      /bạn\s+thấy\s+thế\s+nào/i,
+      /ban\s+thay\s+the\s+nao/i,
+      /cho\s+ý\s+kiến/i,
+      /cho\s+y\s+kien/i
+    ];
+    const hasComplexAdvicePattern = complexAdvicePatterns.some(pattern => pattern.test(lowerMessage));
+    
+    // Nếu là hỏi ý kiến/tham khảo (từ khóa hoặc pattern phức tạp), KHÔNG coi là tạo giao dịch
+    if (isAdviceRequest || hasComplexAdvicePattern) {
       return { complete: false, missing: null };
     }
     
@@ -1426,9 +1596,9 @@ Ví dụ: "50k", "50 nghìn", "500.000đ", "2 triệu"`;
           }
         }
         
-        // Nếu không phải sửa/xóa VÀ không phải câu hỏi thống kê/đánh giá tổng quan/gợi ý chi tiêu,
+        // Nếu không phải sửa/xóa VÀ không phải câu hỏi thống kê/đánh giá tổng quan/gợi ý chi tiêu/hỏi ý kiến,
         // mới phân tích ý định tạo giao dịch.
-        if (!editSuggestion && !deleteSuggestion && !adviceStatsIntent.stats && !adviceStatsIntent.advice && !adviceStatsIntent.spendingSuggestion) {
+        if (!editSuggestion && !deleteSuggestion && !adviceStatsIntent.stats && !adviceStatsIntent.advice && !adviceStatsIntent.spendingSuggestion && !adviceStatsIntent.adviceRequest) {
           const intentAnalysis = await analyzeBasicTransactionIntent(
             message, 
             model
@@ -1554,7 +1724,8 @@ ${spendingSuggestionBlock ? `\n\nGỢI Ý CHI TIÊU THÔNG MINH:\n${spendingSugg
 
 ${deleteSuggestion ? 'YÊU CẦU XÓA GIAO DỊCH: Có ý định xóa, xử lý theo hướng dẫn trước.' :
  editSuggestion ? 'YÊU CẦU SỬA GIAO DỊCH: Có ý định cập nhật giao dịch.' :
- transactionSuggestion ? 'Ý ĐỊNH TẠO GIAO DỊCH MỚI: Hỏi xác nhận.' : ''}
+ transactionSuggestion ? 'Ý ĐỊNH TẠO GIAO DỊCH MỚI: Hỏi xác nhận.' :
+ adviceStatsIntent.adviceRequest ? 'HỎI Ý KIẾN/THAM KHẢO: Người dùng đang hỏi ý kiến về việc mua/chi tiêu, KHÔNG phải yêu cầu tạo giao dịch. Hãy phân tích và đưa ra lời khuyên dựa trên tình hình tài chính.' : ''}
 
 **QUAN TRỌNG - PHÂN TÍCH CÂU HỎI CỦA NGƯỜI DÙNG:**
 
@@ -1563,6 +1734,7 @@ Trước khi trả lời, hãy PHÂN TÍCH KỸ câu hỏi để hiểu đúng �
 1. **PHÂN BIỆT CÁC LOẠI YÊU CẦU:**
    - "gợi ý chi tiêu", "nên chi gì", "chi tiêu gì" → YÊU CẦU GỢI Ý, KHÔNG phải tạo giao dịch
    - "phân tích chi tiêu", "phân tích sâu" → YÊU CẦU PHÂN TÍCH, KHÔNG phải tạo giao dịch
+   - "có nên mua X", "nên mua X không", "mua X được không", "tham khảo về X", "hỏi ý kiến về X", "tư vấn về X" → HỎI Ý KIẾN/THAM KHẢO, KHÔNG phải tạo giao dịch (trả lời phân tích, đưa ra lời khuyên)
    - "tạo chi tiêu", "thêm giao dịch" → YÊU CẦU TẠO GIAO DỊCH (nhưng thiếu thông tin)
    - "ăn tối 200k", "mua sách 500k" → YÊU CẦU TẠO GIAO DỊCH (đủ thông tin)
    - "sửa giao dịch X", "xóa giao dịch Y" → YÊU CẦU SỬA/XÓA
@@ -1575,6 +1747,7 @@ Trước khi trả lời, hãy PHÂN TÍCH KỸ câu hỏi để hiểu đúng �
 
 3. **HIỂU ĐÚNG Ý ĐỊNH:**
    - Nếu người dùng hỏi "gợi ý chi tiêu" → Họ muốn GỢI Ý, KHÔNG muốn tạo giao dịch ngay
+   - Nếu người dùng hỏi "có nên mua X", "nên mua X không", "mua X được không", "dự định mua X", "tôi dự định mua X bạn thấy sao" → Họ muốn HỎI Ý KIẾN/THAM KHẢO, KHÔNG muốn tạo giao dịch. Hãy phân tích và đưa ra lời khuyên dựa trên tình hình tài chính của họ
    - Nếu người dùng nói "tạo chi tiêu" → Họ muốn tạo giao dịch nhưng thiếu thông tin, cần hỏi lại
    - Nếu người dùng nói "ăn tối 200k" → Họ muốn tạo giao dịch với đủ thông tin
 
@@ -1586,6 +1759,13 @@ CÂU HỎI CỦA NGƯỜI DÙNG: "${message}"
    - Sử dụng GỢI Ý CHI TIÊU THÔNG MINH ở trên (nếu có)
    - Đưa ra các gợi ý CỤ THỂ, THỰC TẾ với tên, số tiền, danh mục, lý do
    - KHÔNG tạo giao dịch, chỉ gợi ý
+
+1b. **Nếu là HỎI Ý KIẾN/THAM KHẢO về mua/chi tiêu:**
+   - Phân tích dựa trên tình hình tài chính hiện tại (số dư, lịch sử chi tiêu)
+   - Đưa ra lời khuyên CỤ THỂ: có nên mua/chi hay không, tại sao
+   - So sánh với lịch sử chi tiêu tương tự (nếu có)
+   - Đưa ra các lựa chọn thay thế hoặc cách tối ưu
+   - KHÔNG tạo giao dịch, chỉ tư vấn và phân tích
 
 2. **Nếu là YÊU CẦU PHÂN TÍCH CHI TIÊU:**
    - Sử dụng PHÂN TÍCH CHI TIÊU CHI TIẾT ở trên (nếu có)

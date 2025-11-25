@@ -194,8 +194,166 @@ const sendVerificationEmail = async (email, name, code) => {
   }
 };
 
+// Hàm gửi email reset password
+const sendPasswordResetEmail = async (email, name, code) => {
+  const transporter = createTransporter();
+  
+  const mailOptions = {
+    from: process.env.EMAIL_USER || 'your-email@gmail.com',
+    to: email,
+    subject: 'Đặt lại mật khẩu MoneyWise',
+    html: `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              background-color: #f4f4f4;
+              margin: 0;
+              padding: 0;
+            }
+            .container {
+              max-width: 600px;
+              margin: 20px auto;
+              background-color: #ffffff;
+              border-radius: 10px;
+              overflow: hidden;
+              box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            }
+            .header {
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              color: white;
+              padding: 30px;
+              text-align: center;
+            }
+            .content {
+              padding: 40px 30px;
+            }
+            .code {
+              background-color: #f8f9fa;
+              border: 2px dashed #667eea;
+              border-radius: 8px;
+              padding: 20px;
+              text-align: center;
+              margin: 30px 0;
+            }
+            .code-number {
+              font-size: 36px;
+              font-weight: bold;
+              color: #667eea;
+              letter-spacing: 8px;
+            }
+            .footer {
+              background-color: #f8f9fa;
+              padding: 20px;
+              text-align: center;
+              color: #6c757d;
+              font-size: 14px;
+            }
+            .button {
+              display: inline-block;
+              padding: 12px 30px;
+              background-color: #667eea;
+              color: white;
+              text-decoration: none;
+              border-radius: 5px;
+              margin: 20px 0;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>🔐 Đặt lại mật khẩu</h1>
+            </div>
+            <div class="content">
+              <h2>Xin chào ${name}!</h2>
+              <p>Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản MoneyWise của bạn. Vui lòng sử dụng mã xác thực dưới đây để đặt lại mật khẩu:</p>
+              
+              <div class="code">
+                <p style="margin: 0; color: #6c757d; font-size: 14px;">Mã xác thực của bạn là:</p>
+                <div class="code-number">${code}</div>
+                <p style="margin: 10px 0 0 0; color: #6c757d; font-size: 12px;">Mã có hiệu lực trong 10 phút</p>
+              </div>
+              
+              <p style="color: #dc3545; font-size: 14px;">
+                <strong>⚠️ Lưu ý:</strong> Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email này. Mật khẩu của bạn sẽ không thay đổi.
+              </p>
+              
+              <p>Trân trọng,<br><strong>Đội ngũ MoneyWise</strong></p>
+            </div>
+            <div class="footer">
+              <p>© ${new Date().getFullYear()} MoneyWise. All rights reserved.</p>
+              <p>Email này được gửi tự động, vui lòng không trả lời.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `
+  };
+
+  try {
+    console.log(`📧 Đang gửi email reset password tới: ${email}`);
+    
+    const info = await transporter.sendMail(mailOptions);
+    
+    console.log('✅ Password reset email sent successfully!');
+    console.log('   Message ID:', info.messageId);
+    
+    if (info.rejected && info.rejected.length > 0) {
+      console.error('❌ Email bị reject:', info.rejected);
+      return { 
+        success: false, 
+        error: 'Invalid email: Email address does not exist or cannot receive messages',
+        responseCode: 550 
+      };
+    }
+    
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error('❌ Error sending password reset email:');
+    console.error('   Error message:', error.message);
+    console.error('   Error code:', error.code);
+    console.error('   Response code:', error.responseCode);
+    
+    let errorMessage = error.message;
+    let responseCode = error.responseCode;
+    
+    if (error.code === 'EAUTH' || error.responseCode === 535) {
+      errorMessage = 'Authentication failed: Email service not properly configured';
+      responseCode = 535;
+    } else if (error.responseCode === 550 || error.responseCode === 551 || error.responseCode === 553) {
+      errorMessage = 'Invalid email: Email address does not exist or cannot receive messages';
+      responseCode = error.responseCode;
+    } else if (error.message && (
+      error.message.includes('does not exist') || 
+      error.message.includes('No such user') ||
+      error.message.includes('NoSuchUser') ||
+      error.message.includes('User unknown') ||
+      error.message.includes('Recipient address rejected')
+    )) {
+      errorMessage = 'Invalid email: Email address does not exist or cannot receive messages';
+      responseCode = 550;
+    } else if (error.code === 'ECONNECTION' || error.code === 'ETIMEDOUT') {
+      errorMessage = 'Connection error: Unable to connect to email server';
+    } else if (error.message && error.message.includes('Invalid email')) {
+      errorMessage = 'Invalid email: Email format is incorrect';
+    }
+    
+    return { 
+      success: false, 
+      error: errorMessage, 
+      code: error.code, 
+      responseCode: responseCode,
+      originalError: error.message 
+    };
+  }
+};
+
 module.exports = {
   generateVerificationCode,
-  sendVerificationEmail
+  sendVerificationEmail,
+  sendPasswordResetEmail
 };
 

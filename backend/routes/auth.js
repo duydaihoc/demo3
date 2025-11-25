@@ -3,7 +3,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { auth } = require('../middleware/auth'); // THÊM: import auth middleware
-const { generateVerificationCode, sendVerificationEmail } = require('../config/email');
+const { generateVerificationCode, sendVerificationEmail, sendPasswordResetEmail } = require('../config/email');
 const router = express.Router();
 
 // Register route - Gửi mã xác thực qua email
@@ -20,7 +20,10 @@ router.post('/register', async (req, res) => {
     
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(400).json({ message: 'Email này đã tồn tại' });
+      return res.status(400).json({ 
+        message: 'Email này đã được sử dụng. Vui lòng sử dụng email khác hoặc đăng nhập nếu đây là tài khoản của bạn.',
+        emailExists: true
+      });
     }
     
     const userRole = role || 'user';
@@ -276,6 +279,130 @@ router.post('/mark-tour-seen', auth, async (req, res) => {
   } catch (error) {
     console.error('Error marking tour as seen:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Forgot password route - Gửi mã reset password
+router.post('/forgot-password', async (req, res) => {
+  const { email } = req.body;
+  try {
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ 
+        message: 'Email không đúng định dạng. Vui lòng nhập email hợp lệ.' 
+      });
+    }
+    
+    const user = await User.findOne({ email });
+    if (!user) {
+      // Báo lỗi nếu email không tồn tại trong hệ thống
+      return res.status(404).json({ 
+        message: 'Email không tồn tại trong hệ thống. Vui lòng kiểm tra lại email hoặc đăng ký tài khoản mới.',
+        emailNotFound: true
+      });
+    }
+    
+    // Tạo mã reset password
+    const resetCode = generateVerificationCode();
+    const resetCodeExpiry = new Date(Date.now() + 10 * 60 * 1000); // Hết hạn sau 10 phút
+    
+    // Lưu mã vào database
+    user.resetPasswordCode = resetCode;
+    user.resetPasswordCodeExpiry = resetCodeExpiry;
+    await user.save();
+    
+    // Gửi email
+    const emailResult = await sendPasswordResetEmail(email, user.name, resetCode);
+    
+    if (!emailResult.success) {
+      // Xóa mã nếu không gửi được email
+      user.resetPasswordCode = undefined;
+      user.resetPasswordCodeExpiry = undefined;
+      await user.save();
+      
+      if (emailResult.responseCode === 550 || 
+          emailResult.responseCode === 551 || 
+          emailResult.responseCode === 553 ||
+          (emailResult.error && (
+            emailResult.error.includes('Invalid email') || 
+            emailResult.error.includes('does not exist') ||
+            emailResult.error.includes('No such user')
+          ))) {
+        return res.status(400).json({ 
+          message: 'Email không chính xác hoặc không thể nhận email. Vui lòng kiểm tra lại địa chỉ email.',
+          emailError: true
+        });
+      }
+      
+      return res.status(500).json({ 
+        message: 'Không thể gửi email. Vui lòng thử lại sau hoặc liên hệ admin.',
+        emailError: true
+      });
+    }
+    
+    res.status(200).json({ 
+      message: 'Mã đặt lại mật khẩu đã được gửi đến email của bạn. Vui lòng kiểm tra email.',
+      success: true,
+      email: email
+    });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ message: 'Lỗi server. Vui lòng thử lại sau.', error: error.message });
+  }
+});
+
+// Reset password route - Xác thực mã và đặt mật khẩu mới
+router.post('/reset-password', async (req, res) => {
+  const { email, code, newPassword } = req.body;
+  try {
+    // Validate input
+    if (!email || !code || !newPassword) {
+      return res.status(400).json({ message: 'Vui lòng nhập đầy đủ thông tin.' });
+    }
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ message: 'Email không đúng định dạng.' });
+    }
+    
+    // Validate password length
+    if (!newPassword || newPassword.length < 1) {
+      return res.status(400).json({ message: 'Mật khẩu không được để trống.' });
+    }
+    
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: 'Người dùng không tồn tại.' });
+    }
+    
+    // Kiểm tra mã reset password
+    if (!user.resetPasswordCode || user.resetPasswordCode !== code) {
+      return res.status(400).json({ message: 'Mã xác thực không đúng.' });
+    }
+    
+    // Kiểm tra mã đã hết hạn chưa
+    if (!user.resetPasswordCodeExpiry || new Date() > user.resetPasswordCodeExpiry) {
+      return res.status(400).json({ message: 'Mã xác thực đã hết hạn. Vui lòng yêu cầu mã mới.' });
+    }
+    
+    // Hash mật khẩu mới
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    
+    // Cập nhật mật khẩu và xóa mã reset
+    user.password = hashedPassword;
+    user.resetPasswordCode = undefined;
+    user.resetPasswordCodeExpiry = undefined;
+    await user.save();
+    
+    res.json({ 
+      message: 'Đặt lại mật khẩu thành công! Bạn có thể đăng nhập với mật khẩu mới.',
+      success: true
+    });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ message: 'Đặt lại mật khẩu thất bại', error: error.message });
   }
 });
 

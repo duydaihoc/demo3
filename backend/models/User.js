@@ -16,7 +16,10 @@ const userSchema = new mongoose.Schema(
     // THÊM: Email verification fields
     isVerified: { type: Boolean, default: false },
     verificationCode: { type: String },
-    verificationCodeExpiry: { type: Date }
+    verificationCodeExpiry: { type: Date },
+    // THÊM: Password reset fields
+    resetPasswordCode: { type: String },
+    resetPasswordCodeExpiry: { type: Date }
   },
   { timestamps: true }
 );

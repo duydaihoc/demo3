@@ -45,6 +45,10 @@ export default function GroupsPage() {
 	const [receivedInvites, setReceivedInvites] = useState([]); // Lời mời nhận được (chờ chấp nhận/từ chối)
 	const [loadingReceivedInvites, setLoadingReceivedInvites] = useState(false);
 	
+	// Lưu danh sách các notification ID đã từ chối/chấp nhận để không hiển thị lại
+	const rejectedInviteIdsRef = useRef(new Set());
+	const acceptedInviteIdsRef = useRef(new Set());
+	
 	// Cache tên nhóm để tránh fetch nhiều lần
 	const [groupNamesCache, setGroupNamesCache] = useState({});
 	const groupNamesCacheRef = useRef({});
@@ -329,47 +333,192 @@ export default function GroupsPage() {
 			const userGroups = Array.isArray(groupsData) ? groupsData : [];
 			
 			// Lọc các notification group.invite mà mình là người nhận (recipient)
-			const invites = notifications.filter(notif => {
+			// Dùng Promise.all vì có thể cần fetch riêng group để kiểm tra pendingInvites
+			const inviteChecks = await Promise.all(
+				notifications
+					.filter(notif => {
+						if (notif.type !== 'group.invite') return false;
+						if (!notif.recipient) return false;
+						return true;
+					})
+					.map(async (notif) => {
 				if (notif.type !== 'group.invite') return false;
 				if (!notif.recipient) return false;
 				
-				const recipientId = notif.recipient._id || notif.recipient;
-				if (String(recipientId) !== String(myId)) return false;
-				
-				const groupId = notif.data?.groupId;
-				if (!groupId) return false;
-				
-				// Kiểm tra xem user đã là thành viên của nhóm này chưa
-				const isMember = userGroups.some(g => {
-					if (String(g._id) !== String(groupId)) return false;
-					return g.members && g.members.some(m => {
-						const memberUserId = m.user?._id || m.user;
-						const memberEmail = (m.email || '').toLowerCase().trim();
-						return (memberUserId && String(memberUserId) === String(myId)) ||
-						       (memberEmail && String(memberEmail) === String((notif.recipient?.email || '').toLowerCase().trim()));
+					// Kiểm tra xem notification này đã bị từ chối hoặc chấp nhận trong session này chưa
+					if (rejectedInviteIdsRef.current.has(notif._id)) {
+						return { notif, shouldShow: false };
+					}
+					if (acceptedInviteIdsRef.current.has(notif._id)) {
+						return { notif, shouldShow: false };
+					}
+					
+					const recipientId = notif.recipient._id || notif.recipient;
+					if (String(recipientId) !== String(myId)) {
+						return { notif, shouldShow: false };
+					}
+					
+					const groupId = notif.data?.groupId;
+					if (!groupId) {
+						return { notif, shouldShow: false };
+					}
+					
+					// Kiểm tra xem user đã là thành viên của nhóm này chưa
+					const isMember = userGroups.some(g => {
+						if (String(g._id) !== String(groupId)) return false;
+						return g.members && g.members.some(m => {
+							const memberUserId = m.user?._id || m.user;
+							const memberEmail = (m.email || '').toLowerCase().trim();
+							return (memberUserId && String(memberUserId) === String(myId)) ||
+							       (memberEmail && String(memberEmail) === String((notif.recipient?.email || '').toLowerCase().trim()));
+						});
 					});
-				});
-				
-				// Nếu đã là thành viên thì không hiển thị lời mời
-				if (isMember) return false;
-				
-				// Kiểm tra xem đã có phản hồi chưa bằng cách tìm notification accepted/rejected
-				const hasResponse = notifications.some(resp => {
-					if (resp.type !== 'group.invite.accepted' && resp.type !== 'group.invite.rejected') return false;
-					const respGroupId = resp.data?.groupId;
-					if (!respGroupId || String(respGroupId) !== String(groupId)) return false;
-					// Response notification: sender là người được mời (người phản hồi)
-					const responseSenderId = resp.sender?._id || resp.sender;
-					return String(responseSenderId) === String(myId);
-				});
-				
-				// Nếu đã có phản hồi thì không hiển thị
-				if (hasResponse) return false;
-				
-				// Nếu notification đã được đánh dấu là đọc và có groupId, có thể đã phản hồi
-				// Nhưng vẫn hiển thị nếu chưa có response notification và chưa là thành viên
-				return true;
-			});
+					
+					// Nếu đã là thành viên thì không hiển thị lời mời
+					if (isMember) {
+						return { notif, shouldShow: false };
+					}
+					
+					// Kiểm tra xem notification này đã có phản hồi chưa
+					// Match response notification với notification cụ thể này dựa trên thời gian
+					const notifTime = new Date(notif.createdAt || 0).getTime();
+					const matchingResponse = notifications.find(resp => {
+						if (resp.type !== 'group.invite.accepted' && resp.type !== 'group.invite.rejected') return false;
+						const respGroupId = resp.data?.groupId;
+						if (!respGroupId || String(respGroupId) !== String(groupId)) return false;
+						
+						const respTime = new Date(resp.createdAt || 0).getTime();
+						// Response phải được tạo sau notification
+						if (respTime < notifTime) return false;
+						
+						const responseSenderId = resp.sender?._id || resp.sender;
+						const responseUserId = resp.data?.userId;
+						const responseEmail = resp.data?.email || resp.sender?.email;
+						const myEmail = (notif.recipient?.email || '').toLowerCase().trim();
+						
+						// Match bằng userId
+						if (String(responseSenderId) === String(myId) || 
+						    (responseUserId && String(responseUserId) === String(myId))) {
+							return true;
+						}
+						
+						// Match bằng email
+						if (responseEmail && myEmail && 
+						    String(responseEmail).toLowerCase().trim() === myEmail) {
+							return true;
+						}
+						
+						return false;
+					});
+					
+					// Nếu có response notification được tạo sau notification này, đây là notification đã được phản hồi
+					// Nhưng chỉ ẩn nếu response được tạo gần với notification này (chênh lệch < 1 giờ)
+					// Để tránh ẩn notification mới do response của notification cũ
+					if (matchingResponse) {
+						const respTime = new Date(matchingResponse.createdAt || 0).getTime();
+						const timeDiff = respTime - notifTime;
+						// Chỉ ẩn nếu response được tạo trong vòng 1 giờ sau notification (3600000ms)
+						if (timeDiff >= 0 && timeDiff < 3600000) {
+							return { notif, shouldShow: false };
+						}
+					}
+					
+					// QUAN TRỌNG: Kiểm tra trạng thái trong Group model (pendingInvites)
+					// Match chính xác notification với lời mời trong Group model bằng notificationId
+					let groupWithInvite = userGroups.find(g => String(g._id) === String(groupId));
+					
+					// Nếu không tìm thấy trong userGroups, fetch riêng group để kiểm tra pendingInvites
+					if (!groupWithInvite) {
+						try {
+							const groupRes = await fetch(`${API_BASE}/api/groups/${groupId}`, {
+								headers: { Authorization: `Bearer ${token}` }
+							});
+							if (groupRes.ok) {
+								const groupData = await groupRes.json().catch(() => null);
+								if (groupData) {
+									groupWithInvite = groupData;
+								}
+							}
+						} catch (e) {
+							console.warn('Error fetching group for pendingInvites check:', e);
+						}
+					}
+					
+					if (groupWithInvite && groupWithInvite.pendingInvites && Array.isArray(groupWithInvite.pendingInvites)) {
+						const myEmail = (notif.recipient?.email || notif.data?.email || '').toLowerCase().trim();
+						
+						// QUAN TRỌNG: Kiểm tra xem notification có match với lời mời rejected không
+						// Nếu có, đây là notification cũ, không hiển thị
+						const rejectedInvites = groupWithInvite.pendingInvites.filter(inv => {
+							const invUserId = inv.userId?._id || inv.userId;
+							const invEmail = (inv.email || '').toLowerCase().trim();
+							return inv.status === 'rejected' && (
+								(invUserId && String(invUserId) === String(myId)) ||
+								(invEmail && invEmail === myEmail)
+							);
+						});
+						
+						// Kiểm tra xem notification có match với lời mời rejected không (CHỈ bằng notificationId)
+						const matchingRejectedInvite = rejectedInvites.find(inv => {
+							return inv.notificationId && String(inv.notificationId) === String(notif._id);
+						});
+						
+						// Nếu notification match với lời mời rejected, không hiển thị
+						if (matchingRejectedInvite) {
+							return { notif, shouldShow: false };
+						}
+						
+						// Tìm lời mời pending cho user này
+						const pendingInvites = groupWithInvite.pendingInvites.filter(inv => {
+							const invUserId = inv.userId?._id || inv.userId;
+							const invEmail = (inv.email || '').toLowerCase().trim();
+							return inv.status === 'pending' && (
+								(invUserId && String(invUserId) === String(myId)) ||
+								(invEmail && invEmail === myEmail)
+							);
+						});
+						
+						// Nếu không có lời mời pending nào, không hiển thị notification này
+						if (pendingInvites.length === 0) {
+							return { notif, shouldShow: false };
+						}
+						
+						// CHỈ hiển thị notification nếu nó match với lời mời pending bằng notificationId
+						// Không dùng fallback match bằng thời gian để tránh match nhầm với notification cũ
+						const matchingByNotificationId = pendingInvites.find(inv => {
+							return inv.notificationId && String(inv.notificationId) === String(notif._id);
+						});
+						
+						// Chỉ hiển thị nếu match bằng notificationId
+						if (matchingByNotificationId) {
+							return { notif, shouldShow: true };
+						}
+						
+						// Nếu không match bằng notificationId, kiểm tra xem có lời mời rejected nào có notificationId match không
+						// Nếu có, đây là notification cũ đã bị từ chối, không hiển thị
+						const rejectedMatchByNotificationId = rejectedInvites.find(inv => {
+							return inv.notificationId && String(inv.notificationId) === String(notif._id);
+						});
+						
+						if (rejectedMatchByNotificationId) {
+							return { notif, shouldShow: false };
+						}
+						
+						// Nếu không match với cả pending và rejected bằng notificationId
+						// Có thể đây là notification cũ không có notificationId trong pendingInvites
+						// Hoặc notification mới chưa được lưu vào pendingInvites
+						// Để an toàn, không hiển thị nếu không match bằng notificationId
+						return { notif, shouldShow: false };
+					}
+					
+					return { notif, shouldShow: true };
+				})
+			);
+			
+			// Lọc các notification nên hiển thị
+			const invites = inviteChecks
+				.filter(check => check.shouldShow)
+				.map(check => check.notif);
 			
 			setReceivedInvites(invites);
 		} catch (err) {
@@ -410,12 +559,15 @@ export default function GroupsPage() {
 				return;
 			}
 
+			// Lưu notification ID vào danh sách đã chấp nhận để không hiển thị lại
+			acceptedInviteIdsRef.current.add(invite._id);
+			
 			// Loại bỏ lời mời khỏi danh sách ngay lập tức
 			setReceivedInvites(prev => prev.filter(inv => inv._id !== invite._id));
 			
 			// Refresh data
 			await fetchGroups();
-			await fetchReceivedInvites();
+			// Không cần fetch lại received invites vì user đã là thành viên, logic filter sẽ loại bỏ
 			showNotification('✅ Đã tham gia nhóm thành công!', 'success');
 		} catch (error) {
 			console.error('Error accepting group invite:', error);
@@ -451,18 +603,22 @@ export default function GroupsPage() {
 				})
 			});
 
-			if (!res.ok) {
-				const err = await res.json().catch(() => ({ message: 'Lỗi khi từ chối lời mời' }));
-				alert(err.message);
-				return;
-			}
+		if (!res.ok) {
+			const err = await res.json().catch(() => ({ message: 'Lỗi khi từ chối lời mời' }));
+			alert(err.message);
+			return;
+		}
 
-			// Loại bỏ lời mời khỏi danh sách ngay lập tức
-			setReceivedInvites(prev => prev.filter(inv => inv._id !== invite._id));
-			
-			// Refresh data
-			await fetchReceivedInvites();
-			showNotification('Đã từ chối lời mời', 'info');
+		// Lưu notification ID vào danh sách đã từ chối để không hiển thị lại
+		rejectedInviteIdsRef.current.add(invite._id);
+		
+		// Loại bỏ lời mời khỏi danh sách ngay lập tức
+		setReceivedInvites(prev => prev.filter(inv => inv._id !== invite._id));
+		
+		showNotification('Đã từ chối lời mời', 'info');
+		
+		// Không fetch lại ngay để tránh lời mời xuất hiện lại
+		// Chỉ fetch lại khi user reload trang hoặc navigate đi rồi quay lại
 		} catch (error) {
 			console.error('Error rejecting group invite:', error);
 			alert('Có lỗi xảy ra khi từ chối lời mời');

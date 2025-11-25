@@ -13,6 +13,7 @@ function Register() {
   const [showVerification, setShowVerification] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [registeredEmail, setRegisteredEmail] = useState('');
+  const [emailExists, setEmailExists] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -32,6 +33,7 @@ function Register() {
     setLoading(true);
     setError('');
     setSuccess('');
+    setEmailExists(false);
     try {
       const response = await fetch('http://localhost:5000/api/auth/register', {
         method: 'POST',
@@ -56,18 +58,22 @@ function Register() {
         }
       } else {
         // Hiển thị lỗi cụ thể
-        if (data.emailError) {
-          // Lỗi email không tồn tại hoặc không hợp lệ
-          setError(data.message);
-        } else if (data.configError) {
-          setError(data.message);
+        if (data.emailExists) {
+          // Email đã tồn tại
+          setEmailExists(true);
+          setError(data.message || 'Email này đã được sử dụng. Vui lòng sử dụng email khác hoặc đăng nhập.');
+          setEmail(''); // Reset email field để user nhập lại
         } else {
-          setError(data.message);
-        }
-        
-        // Nếu là lỗi email, reset trường email để user nhập lại
-        if (data.emailError) {
-          setEmail('');
+          setEmailExists(false);
+          if (data.emailError) {
+            // Lỗi email không tồn tại hoặc không hợp lệ
+            setError(data.message);
+            setEmail(''); // Reset email field
+          } else if (data.configError) {
+            setError(data.message);
+          } else {
+            setError(data.message || 'Đăng ký thất bại. Vui lòng thử lại.');
+          }
         }
       }
     } catch (err) {
@@ -144,7 +150,16 @@ function Register() {
             {error && (
               <div className="alert alert-danger">
                 <FaExclamationCircle />
-                <span>{error}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <span>{error}</span>
+                  {emailExists && (
+                    <div style={{ marginTop: '8px', fontSize: '14px' }}>
+                      <a href="/login" style={{ color: '#fff', textDecoration: 'underline', fontWeight: 600 }}>
+                        → Đăng nhập ngay nếu đây là tài khoản của bạn
+                      </a>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
             
@@ -245,7 +260,13 @@ function Register() {
                 <input
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (emailExists) {
+                      setEmailExists(false);
+                      setError('');
+                    }
+                  }}
                   required
                   placeholder="Email"
                   className="form-control"
