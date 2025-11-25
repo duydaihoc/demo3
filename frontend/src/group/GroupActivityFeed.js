@@ -683,6 +683,7 @@ export default function GroupActivityFeed({
                                 <i className="fas fa-unlink" style={{ marginRight: '8px', opacity: 0.7 }}></i>
                                 Không liên kết
                               </div>
+                              <div className="gaf-transaction-item-meta"></div>
                             </div>
                             {!selectedTransactionId && (
                               <i className="fas fa-check"></i>
@@ -1033,7 +1034,16 @@ export default function GroupActivityFeed({
                                   className={`gaf-transaction-item ${!selectedTransactionId ? 'selected' : ''}`}
                                   onClick={() => setSelectedTransactionId(null)}
                                 >
-                                  <span>Không liên kết</span>
+                                  <div className="gaf-transaction-item-info">
+                                    <div className="gaf-transaction-item-title">
+                                      <i className="fas fa-unlink" style={{ marginRight: '8px', opacity: 0.7 }}></i>
+                                      Không liên kết
+                                    </div>
+                                    <div className="gaf-transaction-item-meta"></div>
+                                  </div>
+                                  {!selectedTransactionId && (
+                                    <i className="fas fa-check"></i>
+                                  )}
                                 </button>
                                 {(transactionSearch
                                   ? groupTransactions.filter(tx =>

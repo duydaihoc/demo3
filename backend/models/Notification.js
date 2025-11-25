@@ -15,7 +15,8 @@ const notificationSchema = new mongoose.Schema({
     required: true,
     enum: [
       'friend.request', 'friend.response', 'friend.remove',
-      'group.invite', 'group.added', 'group.response', 
+      'group.invite', 'group.invite.accepted', 'group.invite.rejected',
+      'group.added', 'group.response', 
       'group.transaction', 'group.transaction.settle',
       'group.transaction.created', 
       'group.transaction.updated',

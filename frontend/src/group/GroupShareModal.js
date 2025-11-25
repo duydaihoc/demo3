@@ -9,7 +9,9 @@ export default function GroupShareModal({ groupId, isOpen, onClose }) {
       transactions: true,
       members: false,
       statistics: true,
-      charts: true
+      charts: true,
+      debts: false,
+      posts: false
     },
     expiresInDays: null
   });
@@ -43,7 +45,9 @@ export default function GroupShareModal({ groupId, isOpen, onClose }) {
             transactions: true,
             members: false,
             statistics: true,
-            charts: true
+            charts: true,
+            debts: false,
+            posts: false
           },
           expiresInDays: data.shareSettings?.expiresAt ? 
             Math.ceil((new Date(data.shareSettings.expiresAt) - new Date()) / (1000 * 60 * 60 * 24)) : null
@@ -220,6 +224,30 @@ export default function GroupShareModal({ groupId, isOpen, onClose }) {
                       <span className="gsm-checkbox-text">
                         <i className="fas fa-users"></i>
                         Thống kê theo thành viên (ẩn bớt tên, không hiện email)
+                      </span>
+                    </label>
+
+                    <label className="gsm-checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={shareSettings.allowedData.debts}
+                        onChange={(e) => updateAllowedData('debts', e.target.checked)}
+                      />
+                      <span className="gsm-checkbox-text">
+                        <i className="fas fa-hand-holding-usd"></i>
+                        Thông tin công nợ chi tiết (ai nợ ai, số tiền cụ thể)
+                      </span>
+                    </label>
+
+                    <label className="gsm-checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={shareSettings.allowedData.posts}
+                        onChange={(e) => updateAllowedData('posts', e.target.checked)}
+                      />
+                      <span className="gsm-checkbox-text">
+                        <i className="fas fa-comment-dots"></i>
+                        Bài viết và hoạt động nhóm (tối đa 20 bài viết gần nhất)
                       </span>
                     </label>
                   </div>

@@ -206,16 +206,11 @@ router.post('/:groupId/transactions', auth, async (req, res) => {
           settled: false
         }));
       } else if (transactionType === 'equal_split') {
-        const totalParticipants = normalizedParticipants.length + 1;
-        const shareAmount = Number(amount) / totalParticipants;
+        // Chia đều cho các người được chọn (không bao gồm người tạo)
+        const totalParticipants = normalizedParticipants.length;
+        const shareAmount = totalParticipants > 0 ? Number(amount) / totalParticipants : 0;
 
-        participantsBuilt.push({
-          user: req.user._id,
-          shareAmount: Number(shareAmount.toFixed(2)),
-          percentage: 0,
-          settled: false
-        });
-
+        // Chỉ thêm các người được chọn vào participants, không thêm người tạo
         participantsBuilt.push(...normalizedParticipants.map(p => ({
           user: p.user,
           email: p.email,
@@ -948,7 +943,8 @@ router.put('/:groupId/transactions/:txId', auth, async (req, res) => {
           settled: false
         }));
       } else if (transaction.transactionType === 'equal_split') {
-        const total = updatedParticipants.length + 1;
+        // Chia đều cho các người được chọn (không bao gồm người tạo)
+        const total = updatedParticipants.length || 1;
         const per = Number(transaction.amount) / total;
         updatedParticipants = updatedParticipants.map(p => ({
           ...p,

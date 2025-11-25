@@ -138,18 +138,8 @@ router.post('/', auth, async (req, res) => {
 
     const creator = req.user;
 
-    // build members array, attempt to link existing users
-    const builtMembers = await Promise.all(members.map(async (m) => {
-      const email = (m.email || '').toLowerCase().trim();
-      const user = await User.findOne({ email });
-      return {
-        user: user ? user._id : undefined,
-        email,
-        role: m.role || 'member',
-        invited: true,
-        invitedAt: new Date()
-      };
-    }));
+    // Chỉ lấy danh sách email để gửi lời mời sau
+    const inviteEmails = members.map(m => (m.email || '').toLowerCase().trim()).filter(Boolean);
 
     const creatorEmailForMember = creator.email || '';
 
@@ -157,9 +147,9 @@ router.post('/', auth, async (req, res) => {
       name,
       description,
       owner: creator._id,
+      // Chỉ thêm owner vào members, các members khác sẽ được thêm sau khi chấp nhận lời mời
       members: [
-        { user: creator._id, email: creatorEmailForMember, role: 'owner', invited: false, joinedAt: new Date() },
-        ...builtMembers
+        { user: creator._id, email: creatorEmailForMember, role: 'owner', invited: false, joinedAt: new Date() }
       ],
       createdBy: creator._id
     };
@@ -174,22 +164,46 @@ router.post('/', auth, async (req, res) => {
     
     await group.save();
     
-    // Notify invited existing users (don't abort on notification errors)
-    for (const member of builtMembers) {
-      if (member.user) {
+    // Gửi lời mời cho các thành viên (không thêm vào group.members ngay)
+    // Lưu lời mời vào Group model để không bị mất khi reload
+    if (!group.pendingInvites) {
+      group.pendingInvites = [];
+    }
+    
+    for (const email of inviteEmails) {
+      const user = await User.findOne({ email });
+      if (user) {
         try {
-          await Notification.create({
-            recipient: member.user,
+          const notification = await Notification.create({
+            recipient: user._id,
             sender: creator._id,
-            type: 'group.added', // Đổi từ group.invite thành group.added
-            message: `Bạn đã được thêm vào nhóm "${name}"`, // Thay đổi nội dung
-            data: { groupId: group._id }
+            type: 'group.invite',
+            message: `Bạn được mời tham gia nhóm "${name}"`,
+            data: { 
+              groupId: group._id,
+              groupName: name,
+              inviterName: creator.name || creator.email,
+              email: email
+            }
+          });
+          
+          // Lưu lời mời vào Group model
+          group.pendingInvites.push({
+            email: email,
+            userId: user._id,
+            invitedBy: creator._id,
+            status: 'pending',
+            invitedAt: new Date(),
+            notificationId: notification._id
           });
         } catch (notifErr) {
-          console.warn('Failed to create notification for member', member.email, notifErr.message);
+          console.warn('Failed to create notification for member', email, notifErr.message);
         }
       }
     }
+    
+    // Lưu group với pendingInvites
+    await group.save();
 
     const populated = await Group.findById(group._id)
       .populate('owner', 'name email')
@@ -225,40 +239,206 @@ router.post('/:groupId/invite', auth, async (req, res) => {
     }
 
     const user = await User.findOne({ email: emailNormalized });
-    const newMember = {
-      user: user ? user._id : undefined,
-      email: emailNormalized,
-      role: 'member',
-      invited: true,
-      invitedAt: new Date()
-    };
-
-    group.members.push(newMember);
-    await group.save();
-
-    if (user) {
-      try {
-        await Notification.create({
-          recipient: user._id,
-          sender: inviterId || req.user._id,
-          type: 'group.added', // Đổi từ group.invite thành group.added
-          message: `Bạn đã được thêm vào nhóm "${group.name}"`, // Thay đổi nội dung
-          data: { groupId: group._id }
-        });
-      } catch (notifErr) {
-        console.warn('Failed to notify invited user:', notifErr.message);
-      }
+    if (!user) {
+      return res.status(404).json({ message: 'Không tìm thấy người dùng với email này' });
     }
 
-    res.status(200).json({ message: 'Invited', member: newMember });
+    // Không thêm vào group.members ngay, chỉ gửi thông báo mời
+    // Tạo notification với type 'group.invite' để người nhận có thể chấp nhận/từ chối
+    let notification = null;
+    try {
+      notification = await Notification.create({
+        recipient: user._id,
+        sender: inviterId || req.user._id,
+        type: 'group.invite',
+        message: `Bạn được mời tham gia nhóm "${group.name}"`,
+        data: { 
+          groupId: group._id,
+          groupName: group.name,
+          inviterName: req.user.name || req.user.email,
+          email: emailNormalized
+        }
+      });
+    } catch (notifErr) {
+      console.warn('Failed to notify invited user:', notifErr.message);
+      return res.status(500).json({ message: 'Không thể gửi lời mời' });
+    }
+
+    // Lưu lời mời vào Group model để không bị mất khi reload
+    if (!group.pendingInvites) {
+      group.pendingInvites = [];
+    }
+    
+    // Kiểm tra xem đã có lời mời cho email này chưa
+    const existingInviteIndex = group.pendingInvites.findIndex(
+      inv => inv.email === emailNormalized && inv.status === 'pending'
+    );
+    
+    if (existingInviteIndex === -1) {
+      // Thêm lời mời mới
+      group.pendingInvites.push({
+        email: emailNormalized,
+        userId: user._id,
+        invitedBy: inviterId || req.user._id,
+        status: 'pending',
+        invitedAt: new Date(),
+        notificationId: notification._id
+      });
+      await group.save();
+    }
+
+    res.status(200).json({ message: 'Đã gửi lời mời', email: emailNormalized });
   } catch (err) {
     console.error('Groups invite error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
+// POST /api/groups/:groupId/respond-invite
+// body: { accept: boolean, notificationId }
+// User phản hồi lời mời từ notification
+router.post('/:groupId/respond-invite', auth, async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const { accept, notificationId } = req.body;
+
+    if (typeof accept !== 'boolean') {
+      return res.status(400).json({ message: 'accept(boolean) is required' });
+    }
+
+    const group = await Group.findById(groupId);
+    if (!group) return res.status(404).json({ message: 'Group not found' });
+
+    const user = req.user;
+    const email = (user.email || '').toLowerCase().trim();
+
+    // Kiểm tra xem user đã là thành viên chưa
+    const existingMember = group.members.find(m =>
+      (m.user && m.user.toString() === user._id.toString()) || 
+      (m.email && m.email.toLowerCase() === email)
+    );
+
+    if (existingMember && !existingMember.invited) {
+      return res.status(400).json({ message: 'Bạn đã là thành viên của nhóm này' });
+    }
+
+    if (accept) {
+      // Chấp nhận lời mời - thêm vào nhóm
+      const newMember = {
+        user: user._id,
+        email: email,
+        role: 'member',
+        invited: false,
+        joinedAt: new Date()
+      };
+
+      if (existingMember) {
+        // Cập nhật thành viên hiện có
+        Object.assign(existingMember, newMember);
+      } else {
+        // Thêm thành viên mới
+        group.members.push(newMember);
+      }
+      
+      // Cập nhật trạng thái lời mời trong Group model
+      if (group.pendingInvites && Array.isArray(group.pendingInvites)) {
+        const inviteIndex = group.pendingInvites.findIndex(
+          inv => (inv.email === email || (inv.userId && String(inv.userId) === String(user._id))) && inv.status === 'pending'
+        );
+        if (inviteIndex !== -1) {
+          group.pendingInvites[inviteIndex].status = 'accepted';
+          group.pendingInvites[inviteIndex].respondedAt = new Date();
+        }
+      }
+      
+      await group.save();
+
+      // Thông báo cho owner
+      const ownerId = group.owner || group.createdBy;
+      if (ownerId) {
+        try {
+          await Notification.create({
+            recipient: ownerId,
+            sender: user._id,
+            type: 'group.invite.accepted',
+            message: `${user.name || user.email} đã chấp nhận lời mời vào nhóm "${group.name}"`,
+            data: { 
+              groupId: group._id, 
+              userId: user._id, 
+              email: user.email,
+              groupName: group.name 
+            }
+          });
+        } catch (notifErr) {
+          console.warn('Failed to notify owner about acceptance:', notifErr.message);
+        }
+      }
+
+      // Đánh dấu notification là đã đọc
+      if (notificationId) {
+        try {
+          await Notification.findByIdAndUpdate(notificationId, { read: true });
+        } catch (e) {
+          console.warn('Failed to mark notification as read:', e);
+        }
+      }
+
+      return res.json({ message: 'Đã tham gia nhóm', member: newMember });
+    } else {
+      // Từ chối lời mời - không thêm vào nhóm
+      
+      // Cập nhật trạng thái lời mời trong Group model
+      if (group.pendingInvites && Array.isArray(group.pendingInvites)) {
+        const inviteIndex = group.pendingInvites.findIndex(
+          inv => (inv.email === email || (inv.userId && String(inv.userId) === String(user._id))) && inv.status === 'pending'
+        );
+        if (inviteIndex !== -1) {
+          group.pendingInvites[inviteIndex].status = 'rejected';
+          group.pendingInvites[inviteIndex].respondedAt = new Date();
+        }
+      }
+      await group.save();
+      
+      const ownerId = group.owner || group.createdBy;
+      if (ownerId) {
+        try {
+          await Notification.create({
+            recipient: ownerId,
+            sender: user._id,
+            type: 'group.invite.rejected',
+            message: `${user.name || user.email} đã từ chối lời mời vào nhóm "${group.name}"`,
+            data: { 
+              groupId: group._id, 
+              userId: user._id, 
+              email: user.email,
+              groupName: group.name 
+            }
+          });
+        } catch (notifErr) {
+          console.warn('Failed to notify owner about rejection:', notifErr.message);
+        }
+      }
+
+      // Đánh dấu notification là đã đọc
+      if (notificationId) {
+        try {
+          await Notification.findByIdAndUpdate(notificationId, { read: true });
+        } catch (e) {
+          console.warn('Failed to mark notification as read:', e);
+        }
+      }
+
+      return res.json({ message: 'Đã từ chối lời mời' });
+    }
+  } catch (err) {
+    console.error('Groups respond-invite error:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // POST /api/groups/:groupId/respond
 // body: { userId, accept: boolean }
+// (Giữ lại endpoint cũ để tương thích ngược)
 router.post('/:groupId/respond', auth, async (req, res) => {
   try {
     const { groupId } = req.params;
@@ -391,6 +571,29 @@ router.post('/:groupId/remove-member', auth, async (req, res) => {
     }
  
     group.members.splice(idx, 1);
+    
+    // Xóa tất cả lời mời liên quan đến thành viên này trong pendingInvites
+    if (group.pendingInvites && Array.isArray(group.pendingInvites)) {
+      group.pendingInvites = group.pendingInvites.filter(invite => {
+        // Xóa lời mời nếu email hoặc userId trùng với thành viên bị xóa
+        const inviteEmail = (invite.email || '').toLowerCase().trim();
+        const inviteUserId = invite.userId ? String(invite.userId._id || invite.userId) : null;
+        
+        // Kiểm tra match bằng email
+        if (targetEmail && inviteEmail && inviteEmail === targetEmail) {
+          return false; // Xóa lời mời này
+        }
+        
+        // Kiểm tra match bằng userId
+        if (targetId && inviteUserId && String(inviteUserId) === String(targetId)) {
+          return false; // Xóa lời mời này
+        }
+        
+        // Giữ lại lời mời này
+        return true;
+      });
+    }
+    
     await group.save();
 
     // Xóa tất cả giao dịch liên quan đến thành viên này
@@ -433,6 +636,39 @@ router.post('/:groupId/remove-member', auth, async (req, res) => {
       // Continue even if transaction deletion fails
     }
 
+    // Xóa tất cả notification liên quan đến lời mời của thành viên này
+    try {
+      if (targetId) {
+        const targetObjectId = mongoose.Types.ObjectId.isValid(targetId) ? new mongoose.Types.ObjectId(targetId) : targetId;
+        const groupObjectId = mongoose.Types.ObjectId.isValid(groupId) ? new mongoose.Types.ObjectId(groupId) : groupId;
+        
+        // Xóa notification group.invite mà recipient là thành viên bị xóa và groupId trùng
+        const inviteNotifResult = await Notification.deleteMany({
+          type: 'group.invite',
+          recipient: targetObjectId,
+          $or: [
+            { 'data.groupId': String(groupId) },
+            { 'data.groupId': groupObjectId }
+          ]
+        });
+        
+        // Xóa notification group.invite.accepted/rejected mà sender là thành viên bị xóa và groupId trùng
+        const responseNotifResult = await Notification.deleteMany({
+          type: { $in: ['group.invite.accepted', 'group.invite.rejected'] },
+          sender: targetObjectId,
+          $or: [
+            { 'data.groupId': String(groupId) },
+            { 'data.groupId': groupObjectId }
+          ]
+        });
+        
+        console.log(`Deleted ${inviteNotifResult.deletedCount + responseNotifResult.deletedCount} notifications for removed member`);
+      }
+    } catch (notifErr) {
+      console.error('Error deleting notifications for removed member:', notifErr);
+      // Continue even if notification deletion fails
+    }
+
     // Trả về group mới
     const populated = await Group.findById(group._id)
       .populate('owner', 'name email')
@@ -456,7 +692,9 @@ router.get('/:groupId', auth, async (req, res) => {
 
     const group = await Group.findById(groupId)
       .populate('owner', 'name email')
-      .populate('members.user', 'name email');
+      .populate('members.user', 'name email')
+      .populate('pendingInvites.userId', 'name email')
+      .populate('pendingInvites.invitedBy', 'name email');
     if (!group) return res.status(404).json({ message: 'Group not found' });
 
     // parse color if stored as string
@@ -563,7 +801,9 @@ router.post('/:groupId/share', auth, async (req, res) => {
         transactions: allowedData?.transactions ?? true,
         members: allowedData?.members ?? false,
         statistics: allowedData?.statistics ?? true,
-        charts: allowedData?.charts ?? true
+        charts: allowedData?.charts ?? true,
+        debts: allowedData?.debts ?? false,
+        posts: allowedData?.posts ?? false
       };
       group.shareSettings.createdAt = group.shareSettings.createdAt || new Date();
       if (expiresInDays && expiresInDays > 0) {
@@ -777,6 +1017,88 @@ router.get('/public/:shareKey', async (req, res) => {
         categories: categoryBreakdown,
         members: membersOverview
       };
+    }
+
+    // Debts (công nợ chi tiết)
+    if (allowed.debts && txs.length > 0) {
+      const debtsMap = new Map(); // key: "payerId->participantId", value: { amount, txCount, details[] }
+      
+      txs.forEach(tx => {
+        const payerId = tx.payer && (tx.payer._id || tx.payer);
+        const payerName = tx.payer && typeof tx.payer === 'object'
+          ? (tx.payer.name || tx.payer.email || 'Người trả')
+          : 'Người trả';
+        
+        if (!tx.participants || !Array.isArray(tx.participants)) return;
+        
+        tx.participants.forEach(p => {
+          if (p.settled) return; // chỉ tính các khoản chưa thanh toán
+          
+          const participantId = p.user && (p.user._id || p.user);
+          const participantName = p.user && typeof p.user === 'object'
+            ? (p.user.name || p.user.email || 'Thành viên')
+            : (p.email || 'Thành viên');
+          
+          if (!payerId || !participantId) return;
+          if (String(payerId) === String(participantId)) return; // không tính nợ chính mình
+          
+          const key = `${payerId}->${participantId}`;
+          if (!debtsMap.has(key)) {
+            debtsMap.set(key, {
+              payerId,
+              payerName,
+              participantId,
+              participantName,
+              totalAmount: 0,
+              txCount: 0,
+              details: []
+            });
+          }
+          
+          const debt = debtsMap.get(key);
+          debt.totalAmount += Number(p.shareAmount) || 0;
+          debt.txCount += 1;
+          debt.details.push({
+            txId: tx._id,
+            txTitle: tx.title,
+            amount: p.shareAmount,
+            date: tx.date || tx.createdAt
+          });
+        });
+      });
+      
+      payload.debts = Array.from(debtsMap.values())
+        .filter(d => d.totalAmount > 0)
+        .sort((a, b) => b.totalAmount - a.totalAmount)
+        .slice(0, 50); // giới hạn 50 mối quan hệ nợ
+    }
+
+    // Posts (bài viết nhóm)
+    if (allowed.posts) {
+      const posts = await GroupPost.find({ group: group._id })
+        .populate('author', 'name')
+        .select('content images likes comments createdAt')
+        .sort({ createdAt: -1 })
+        .limit(20)
+        .lean();
+      
+      payload.posts = posts.map(post => ({
+        _id: post._id,
+        content: post.content,
+        images: post.images || [],
+        authorName: post.author?.name || 'Thành viên',
+        likesCount: post.likes?.length || 0,
+        commentsCount: post.comments?.length || 0,
+        // Lấy 3 comment gần nhất để hiển thị preview
+        recentComments: (post.comments || [])
+          .slice(-3)
+          .map(c => ({
+            authorName: c.author?.name || 'Thành viên',
+            content: c.content,
+            createdAt: c.createdAt
+          })),
+        createdAt: post.createdAt
+      }));
     }
 
     res.json(payload);

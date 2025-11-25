@@ -512,6 +512,291 @@ body.group-sidebar-collapsed .groups-main {
 	margin-bottom: 32px;
 }
 
+/* Received Invites Section - Lời mời nhận được */
+.groups-section-received-invites {
+	margin-bottom: 28px;
+	background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+	border-radius: 16px;
+	padding: 20px 24px;
+	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+	border: 2px solid #3b82f6;
+}
+
+.section-header-received {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 16px;
+	padding-bottom: 12px;
+	border-bottom: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.section-header-received h2 {
+	margin: 0;
+	font-size: 18px;
+	font-weight: 600;
+	color: #1e40af;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.section-header-received i {
+	font-size: 18px;
+	color: #3b82f6;
+}
+
+.received-count {
+	background: #3b82f6;
+	color: white;
+	padding: 4px 12px;
+	border-radius: 12px;
+	font-size: 13px;
+	font-weight: 600;
+	margin-left: auto;
+}
+
+.received-invites-list {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.received-invite-item {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	padding: 16px;
+	background: white;
+	border-radius: 12px;
+	border: 1px solid #bfdbfe;
+	transition: all 0.3s ease;
+}
+
+.received-invite-item:hover {
+	background: #f8fafc;
+	border-color: #93c5fd;
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+}
+
+.received-invite-icon {
+	width: 48px;
+	height: 48px;
+	border-radius: 12px;
+	background: linear-gradient(135deg, #3b82f6, #2563eb);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: white;
+	font-size: 20px;
+	flex-shrink: 0;
+}
+
+.received-invite-content {
+	flex: 1;
+	min-width: 0;
+}
+
+.received-invite-group {
+	font-size: 15px;
+	font-weight: 600;
+	color: #1e40af;
+	margin-bottom: 4px;
+}
+
+.received-invite-group strong {
+	color: #1e40af;
+}
+
+.received-invite-inviter {
+	font-size: 13px;
+	color: #64748b;
+	margin-bottom: 4px;
+}
+
+.received-invite-time {
+	font-size: 12px;
+	color: #94a3b8;
+}
+
+.received-invite-actions {
+	flex-shrink: 0;
+	display: flex;
+	gap: 8px;
+}
+
+.invite-action-btn {
+	padding: 10px 16px;
+	border: none;
+	border-radius: 8px;
+	font-size: 13px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.3s ease;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	white-space: nowrap;
+}
+
+.invite-action-btn i {
+	font-size: 12px;
+}
+
+.invite-action-btn.accept-btn {
+	background: linear-gradient(135deg, #10b981, #059669);
+	color: white;
+	box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+}
+
+.invite-action-btn.accept-btn:hover {
+	background: linear-gradient(135deg, #059669, #047857);
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+}
+
+.invite-action-btn.reject-btn {
+	background: #f1f5f9;
+	color: #64748b;
+	border: 1px solid #e2e8f0;
+}
+
+.invite-action-btn.reject-btn:hover {
+	background: #fee2e2;
+	color: #dc2626;
+	border-color: #fecaca;
+	transform: translateY(-2px);
+}
+
+/* Pending Invites Section - Lời mời đã gửi đang chờ phản hồi */
+.groups-section-pending-invites {
+	margin-bottom: 28px;
+	background: white;
+	border-radius: 16px;
+	padding: 20px 24px;
+	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+	border: 1px solid #e2e8f0;
+}
+
+.section-header-pending {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 16px;
+	padding-bottom: 12px;
+	border-bottom: 1px solid #e2e8f0;
+}
+
+.section-header-pending h2 {
+	margin: 0;
+	font-size: 18px;
+	font-weight: 600;
+	color: #0f172a;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.section-header-pending i {
+	font-size: 18px;
+	color: #f59e0b;
+}
+
+.pending-count {
+	background: #fef3c7;
+	color: #92400e;
+	padding: 4px 12px;
+	border-radius: 12px;
+	font-size: 13px;
+	font-weight: 600;
+	margin-left: auto;
+}
+
+.pending-invites-list {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.pending-invite-item {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	padding: 16px;
+	background: #f8fafc;
+	border-radius: 12px;
+	border: 1px solid #e2e8f0;
+	transition: all 0.3s ease;
+}
+
+.pending-invite-item:hover {
+	background: #f1f5f9;
+	border-color: #cbd5e1;
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.pending-invite-icon {
+	width: 48px;
+	height: 48px;
+	border-radius: 12px;
+	background: linear-gradient(135deg, #fef3c7, #fde68a);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: #92400e;
+	font-size: 20px;
+	flex-shrink: 0;
+}
+
+.pending-invite-content {
+	flex: 1;
+	min-width: 0;
+}
+
+.pending-invite-group {
+	font-size: 15px;
+	font-weight: 600;
+	color: #0f172a;
+	margin-bottom: 4px;
+}
+
+.pending-invite-group strong {
+	color: #1a3b5d;
+}
+
+.pending-invite-recipient {
+	font-size: 13px;
+	color: #64748b;
+	margin-bottom: 4px;
+}
+
+.pending-invite-time {
+	font-size: 12px;
+	color: #94a3b8;
+}
+
+.pending-invite-status {
+	flex-shrink: 0;
+}
+
+.status-badge.pending {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 12px;
+	border-radius: 8px;
+	background: #fef3c7;
+	color: #92400e;
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.status-badge.pending i {
+	font-size: 11px;
+}
+
 /* Modal Styles (keep existing) */
 .modal-overlay {
 	position: fixed;
@@ -1163,6 +1448,29 @@ body.group-sidebar-collapsed .groups-main {
 
 	.card-design-container {
 		grid-template-columns: 1fr;
+	}
+	
+	.received-invite-item {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 12px;
+	}
+	
+	.received-invite-actions {
+		width: 100%;
+		display: flex;
+		gap: 8px;
+	}
+	
+	.invite-action-btn {
+		flex: 1;
+		justify-content: center;
+	}
+	
+	.pending-invite-item {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 12px;
 	}
 }
 

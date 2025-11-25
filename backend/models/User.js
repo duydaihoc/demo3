@@ -12,7 +12,11 @@ const userSchema = new mongoose.Schema(
     // THÊM: Flag để đánh dấu user mới
     isNewUser: { type: Boolean, default: true },
     // THÊM: Lưu thời gian user đã xem tour
-    hasSeenTour: { type: Boolean, default: false }
+    hasSeenTour: { type: Boolean, default: false },
+    // THÊM: Email verification fields
+    isVerified: { type: Boolean, default: false },
+    verificationCode: { type: String },
+    verificationCodeExpiry: { type: Date }
   },
   { timestamps: true }
 );

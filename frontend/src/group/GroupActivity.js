@@ -8,6 +8,7 @@ export default function GroupActivity() {
   const [loadingNotifs, setLoadingNotifs] = useState(false);
   const [filters, setFilters] = useState({ showAll: true, showUnread: false });
   const [selectedNotif, setSelectedNotif] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState('all'); // 'all', 'friends', 'groups'
   
   // Add state to cache group names by ID
   const [groupNamesCache, setGroupNamesCache] = useState({});
@@ -89,10 +90,22 @@ export default function GroupActivity() {
     } catch (e) { /* ignore */ }
   };
 
-  // Lọc thông báo theo bộ lọc hiện tại
+  // Lọc thông báo theo bộ lọc hiện tại và category
   const filteredNotifications = notifications.filter(n => {
-    if (filters.showAll) return true;
-    if (filters.showUnread) return !n.read;
+    // Lọc theo read/unread
+    if (filters.showUnread && n.read) return false;
+    
+    // Lọc theo category
+    if (selectedCategory === 'friends') {
+      // Chỉ hiển thị thông báo liên quan đến bạn bè
+      return n.type && n.type.includes('friend');
+    }
+    if (selectedCategory === 'groups') {
+      // Chỉ hiển thị thông báo liên quan đến nhóm
+      return n.type && n.type.includes('group');
+    }
+    
+    // Mặc định hiển thị tất cả
     return true;
   });
 
@@ -189,6 +202,88 @@ export default function GroupActivity() {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount || 0);
   };
 
+  // Xử lý chấp nhận lời mời nhóm
+  const handleAcceptGroupInvite = async (notification) => {
+    const token = getToken();
+    if (!token) return;
+
+    const groupId = notification.data?.groupId;
+    if (!groupId) {
+      alert('Không tìm thấy thông tin nhóm');
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/groups/${groupId}/respond-invite`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          accept: true,
+          notificationId: notification._id
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: 'Lỗi khi chấp nhận lời mời' }));
+        alert(err.message);
+        return;
+      }
+
+      // Refresh notifications
+      await fetchNotifications();
+      alert('Đã tham gia nhóm thành công!');
+    } catch (error) {
+      console.error('Error accepting group invite:', error);
+      alert('Có lỗi xảy ra khi chấp nhận lời mời');
+    }
+  };
+
+  // Xử lý từ chối lời mời nhóm
+  const handleRejectGroupInvite = async (notification) => {
+    const token = getToken();
+    if (!token) return;
+
+    const groupId = notification.data?.groupId;
+    if (!groupId) {
+      alert('Không tìm thấy thông tin nhóm');
+      return;
+    }
+
+    if (!window.confirm('Bạn có chắc muốn từ chối lời mời này?')) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/groups/${groupId}/respond-invite`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          accept: false,
+          notificationId: notification._id
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: 'Lỗi khi từ chối lời mời' }));
+        alert(err.message);
+        return;
+      }
+
+      // Refresh notifications
+      await fetchNotifications();
+      alert('Đã từ chối lời mời');
+    } catch (error) {
+      console.error('Error rejecting group invite:', error);
+      alert('Có lỗi xảy ra khi từ chối lời mời');
+    }
+  };
+
   // New function to fetch group details by ID
   const fetchGroupNameById = useCallback(async (groupId) => {
     if (!groupId) return;
@@ -256,10 +351,14 @@ export default function GroupActivity() {
   // Helper to get group name from notification data or cache
   const getGroupName = (notification) => {
     const data = notification?.data || {};
-    // Use groupName from notification data if available
+    // Use groupName from notification data if available (backend should send this)
     if (data.groupName) return data.groupName;
     // Otherwise use cached group name if available
     if (data.groupId && groupNamesCache[data.groupId]) return groupNamesCache[data.groupId];
+    // For group.invite, try to fetch if not in cache
+    if (data.groupId && notification.type === 'group.invite' && !groupNamesCache[data.groupId]) {
+      fetchGroupNameById(data.groupId);
+    }
     // Fall back to showing truncated group ID
     return data.groupId ? `Nhóm #${data.groupId.substring(0,6)}...` : 'Không xác định';
   };
@@ -610,17 +709,35 @@ export default function GroupActivity() {
               <div className="activity-categories">
                 <h3>Phân loại</h3>
                 <div className="category-list">
-                  <div className="category-item">
+                  <div 
+                    className={`category-item ${selectedCategory === 'all' ? 'active' : ''}`}
+                    onClick={() => setSelectedCategory('all')}
+                  >
+                    <span className="category-icon">📋</span>
+                    <span className="category-name">Tất cả</span>
+                    <span className="category-count">
+                      {notifications.length}
+                    </span>
+                  </div>
+                  <div 
+                    className={`category-item ${selectedCategory === 'friends' ? 'active' : ''}`}
+                    onClick={() => setSelectedCategory('friends')}
+                  >
                     <span className="category-icon">👥</span>
                     <span className="category-name">Bạn bè</span>
+                    <span className="category-count">
+                      {notifications.filter(n => n.type && n.type.includes('friend')).length}
+                    </span>
                   </div>
-                  <div className="category-item">
+                  <div 
+                    className={`category-item ${selectedCategory === 'groups' ? 'active' : ''}`}
+                    onClick={() => setSelectedCategory('groups')}
+                  >
                     <span className="category-icon">👨‍👩‍👧‍👦</span>
                     <span className="category-name">Nhóm</span>
-                  </div>
-                  <div className="category-item">
-                    <span className="category-icon">💰</span>
-                    <span className="category-name">Tài chính</span>
+                    <span className="category-count">
+                      {notifications.filter(n => n.type && n.type.includes('group')).length}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -629,7 +746,9 @@ export default function GroupActivity() {
 
           <section className="activity-feed">
             <h2 className="feed-title">
-              {filters.showUnread ? 'Thông báo chưa đọc' : 'Tất cả hoạt động'}
+              {selectedCategory === 'friends' ? '👥 Thông báo Bạn bè' :
+               selectedCategory === 'groups' ? '👨‍👩‍👧‍👦 Thông báo Nhóm' :
+               filters.showUnread ? '📪 Thông báo chưa đọc' : '📋 Tất cả hoạt động'}
             </h2>
 
             {loadingNotifs ? (
@@ -656,12 +775,25 @@ export default function GroupActivity() {
                         {getNotificationIcon(effectiveType)}
                       </div>
                       <div className="activity-content">
-                        <div className="activity-message">{notif.message}</div>
+                        {/* For group.invite, show badge instead of message */}
+                        {notif.type === 'group.invite' ? (
+                          <div className="activity-message">
+                            {notif.data && notif.data.groupId ? (
+                              <span className="activity-group-badge">
+                                <i className="fas fa-users"></i> {getGroupName(notif)}
+                              </span>
+                            ) : (
+                              notif.message
+                            )}
+                          </div>
+                        ) : (
+                          <div className="activity-message">{notif.message}</div>
+                        )}
                         <div className="activity-meta">
                           <span className="activity-time">{formatTime(notif.createdAt)}</span>
                           
                           {/* Use getGroupName instead of direct access to notif.data.groupName */}
-                          {notif.data && notif.data.groupId && (
+                          {notif.data && notif.data.groupId && notif.type !== 'group.invite' && (
                             <span className="activity-group-badge">
                               <i className="fas fa-users"></i> {getGroupName(notif)}
                             </span>
@@ -681,6 +813,45 @@ export default function GroupActivity() {
                             </span>
                           )}
                         </div>
+                        
+                        {/* Hiển thị nút chấp nhận/từ chối cho lời mời nhóm */}
+                        {notif.type === 'group.invite' && !notif.read && (
+                          <div className="group-invite-actions">
+                            <button 
+                              className="invite-btn accept-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAcceptGroupInvite(notif);
+                              }}
+                            >
+                              <i className="fas fa-check"></i> Chấp nhận
+                            </button>
+                            <button 
+                              className="invite-btn reject-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRejectGroupInvite(notif);
+                              }}
+                            >
+                              <i className="fas fa-times"></i> Từ chối
+                            </button>
+                          </div>
+                        )}
+                        
+                        {/* Hiển thị trạng thái cho các phản hồi lời mời */}
+                        {notif.type === 'group.invite.accepted' && (
+                          <div className="invite-response accepted">
+                            <i className="fas fa-check-circle"></i>
+                            <span>{notif.data?.userName || 'Người dùng'} đã chấp nhận lời mời</span>
+                          </div>
+                        )}
+                        
+                        {notif.type === 'group.invite.rejected' && (
+                          <div className="invite-response rejected">
+                            <i className="fas fa-times-circle"></i>
+                            <span>{notif.data?.userName || 'Người dùng'} đã từ chối lời mời</span>
+                          </div>
+                        )}
                       </div>
                       {!notif.read && <div className="unread-dot"></div>}
                     </div>
@@ -721,14 +892,35 @@ export default function GroupActivity() {
                       Đánh dấu đã đọc
                     </button>
                     
-                    {/* Nút chuyển đến trang giao dịch */}
-                    {selectedNotif.data && selectedNotif.data.groupId && (
+                    {/* Nút chuyển đến trang giao dịch - không hiển thị cho lời mời nhóm */}
+                    {selectedNotif.data && selectedNotif.data.groupId && 
+                     selectedNotif.type !== 'group.invite' && (
                       <button 
                         className="detail-action view-tx"
                         onClick={() => window.open(`/groups/${selectedNotif.data.groupId}/transactions`, '_blank')}
                       >
                         Xem trong nhóm
                       </button>
+                    )}
+                    
+                    {/* Nút chấp nhận/từ chối cho lời mời nhóm trong chi tiết */}
+                    {selectedNotif.type === 'group.invite' && !selectedNotif.read && (
+                      <div className="group-invite-actions" style={{ marginTop: '12px', display: 'flex', gap: '12px' }}>
+                        <button 
+                          className="invite-btn accept-btn"
+                          onClick={() => handleAcceptGroupInvite(selectedNotif)}
+                          style={{ flex: 1 }}
+                        >
+                          <i className="fas fa-check"></i> Chấp nhận
+                        </button>
+                        <button 
+                          className="invite-btn reject-btn"
+                          onClick={() => handleRejectGroupInvite(selectedNotif)}
+                          style={{ flex: 1 }}
+                        >
+                          <i className="fas fa-times"></i> Từ chối
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>

@@ -7,7 +7,7 @@ export default function PublicGroupView() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
-  const [expanded, setExpanded] = useState({ transactions: true, members: true, charts: true });
+  const [expanded, setExpanded] = useState({ transactions: true, members: true, charts: true, debts: true, posts: true });
   const API_BASE = 'http://localhost:5000';
 
   useEffect(() => {
@@ -94,7 +94,7 @@ export default function PublicGroupView() {
     );
   }
 
-  const { groupInfo, shareSettings, transactions = [], statistics, charts, membersCount } = data;
+  const { groupInfo, shareSettings, transactions = [], statistics, charts, membersCount, debts = [], posts = [] } = data;
   const toggle = key => setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
 
   const trendValues = charts?.trend?.values || [];
@@ -255,6 +255,105 @@ export default function PublicGroupView() {
                 );
               })}
             </ul>
+          )}
+        </section>
+      )}
+
+      {shareSettings?.debts && debts.length > 0 && (
+        <section className="pgp-section">
+          <div className="pgp-section-header" onClick={() => toggle('debts')}>
+            <h2><i className="fas fa-hand-holding-usd"></i> Công nợ chi tiết ({debts.length})</h2>
+            <button className="pgp-toggle-btn">{expanded.debts ? 'Ẩn' : 'Hiện'}</button>
+          </div>
+          {expanded.debts && (
+            <div className="pgp-debts-grid">
+              {debts.map((debt, idx) => (
+                <div key={idx} className="pgp-debt-card">
+                  <div className="pgp-debt-header">
+                    <div className="pgp-debt-parties">
+                      <div className="pgp-debt-party">
+                        <div className="pgp-debt-avatar creditor">{maskName(debt.payerName).charAt(0).toUpperCase()}</div>
+                        <div className="pgp-debt-name">{maskName(debt.payerName)}</div>
+                        <div className="pgp-debt-role">Người cho vay</div>
+                      </div>
+                      <div className="pgp-debt-arrow">
+                        <i className="fas fa-long-arrow-alt-right"></i>
+                      </div>
+                      <div className="pgp-debt-party">
+                        <div className="pgp-debt-avatar debtor">{maskName(debt.participantName).charAt(0).toUpperCase()}</div>
+                        <div className="pgp-debt-name">{maskName(debt.participantName)}</div>
+                        <div className="pgp-debt-role">Người nợ</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="pgp-debt-amount">
+                    <div className="pgp-debt-total">{fmtMoney(debt.totalAmount)}</div>
+                    <div className="pgp-debt-count">{debt.txCount} giao dịch</div>
+                  </div>
+                  {debt.details && debt.details.length > 0 && (
+                    <div className="pgp-debt-details">
+                      <div className="pgp-debt-details-title">Chi tiết:</div>
+                      {debt.details.slice(0, 3).map((detail, i) => (
+                        <div key={i} className="pgp-debt-detail-item">
+                          <span className="pgp-debt-detail-title">{detail.txTitle}</span>
+                          <span className="pgp-debt-detail-amount">{fmtMoney(detail.amount)}</span>
+                        </div>
+                      ))}
+                      {debt.details.length > 3 && (
+                        <div className="pgp-debt-detail-more">+{debt.details.length - 3} giao dịch khác</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {shareSettings?.posts && posts.length > 0 && (
+        <section className="pgp-section">
+          <div className="pgp-section-header" onClick={() => toggle('posts')}>
+            <h2><i className="fas fa-comment-dots"></i> Bài viết hoạt động ({posts.length})</h2>
+            <button className="pgp-toggle-btn">{expanded.posts ? 'Ẩn' : 'Hiện'}</button>
+          </div>
+          {expanded.posts && (
+            <div className="pgp-posts-list">
+              {posts.map(post => (
+                <div key={post._id} className="pgp-post-card">
+                  <div className="pgp-post-header">
+                    <div className="pgp-post-avatar">{maskName(post.authorName).charAt(0).toUpperCase()}</div>
+                    <div className="pgp-post-meta">
+                      <div className="pgp-post-author">{maskName(post.authorName)}</div>
+                      <div className="pgp-post-date">{fmtDate(post.createdAt)}</div>
+                    </div>
+                  </div>
+                  {post.content && (
+                    <div className="pgp-post-content">{post.content}</div>
+                  )}
+                  {post.images && post.images.length > 0 && (
+                    <div className="pgp-post-images">
+                      {post.images.slice(0, 3).map((img, i) => (
+                        <img key={i} src={img} alt="" className="pgp-post-image" />
+                      ))}
+                    </div>
+                  )}
+                  <div className="pgp-post-stats">
+                    <span><i className="fas fa-heart"></i> {post.likesCount} thích</span>
+                    <span><i className="fas fa-comment"></i> {post.commentsCount} bình luận</span>
+                  </div>
+                  {post.recentComments && post.recentComments.length > 0 && (
+                    <div className="pgp-post-comments">
+                      {post.recentComments.map((comment, i) => (
+                        <div key={i} className="pgp-post-comment">
+                          <strong>{maskName(comment.authorName)}:</strong> {comment.content}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
         </section>
       )}

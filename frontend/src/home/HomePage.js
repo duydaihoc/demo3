@@ -684,17 +684,11 @@ const HomePageContent = () => {
             setTxMessage(null);
           }
         }}>
-          <div className="tx-edit-modal" style={{
-            maxWidth: '600px',
-            width: '90%',
-            maxHeight: '90vh',
-            overflowY: 'auto',
-            display: 'flex',
-            flexDirection: 'column'
-          }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexShrink: 0 }}>
-              <h3 style={{ margin: 0 }}>Thêm giao dịch</h3>
+          <div className="tx-edit-modal tx-modal-custom" onClick={(e) => e.stopPropagation()}>
+            <div className="tx-modal-header">
+              <h3>Thêm giao dịch</h3>
               <button
+                className="tx-modal-close-btn"
                 onClick={() => {
                   setShowTransactionModal(false);
                   setForm({
@@ -712,32 +706,11 @@ const HomePageContent = () => {
                   });
                   setTxMessage(null);
                 }}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  fontSize: '24px',
-                  cursor: 'pointer',
-                  color: '#666',
-                  padding: '0',
-                  width: '30px',
-                  height: '30px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
               >
                 ×
               </button>
             </div>
-            <form onSubmit={handleSubmit} style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '14px',
-              flex: 1,
-              minHeight: 0,
-              overflowY: 'auto',
-              paddingRight: '4px'
-            }}>
+            <form onSubmit={handleSubmit} className="tx-modal-form">
               <select
                 value={form.walletId}
                 onChange={(e) => handleFormChange('walletId', e.target.value)}
@@ -862,67 +835,54 @@ const HomePageContent = () => {
               </button>
 
               {(form.lat || form.lng || form.placeName) && (
-                <div style={{ fontSize: '.85rem', color: '#506a82', fontWeight: 600, padding: '8px', background: '#f0f9ff', borderRadius: 6 }}>
+                <div className="tx-location-info">
                   {form.placeName && <div>Địa điểm: {form.placeName}</div>}
                   {(form.lat && form.lng) && <div>Tọa độ: {form.lat}, {form.lng}</div>}
                 </div>
               )}
 
-              <div style={{ display: 'flex', gap: 8, marginTop: '4px', flexShrink: 0 }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowTransactionModal(false);
-                    setForm({
-                      walletId: '',
-                      name: '',
-                      type: 'expense',
-                      categoryId: '',
-                      amount: '',
-                      date: new Date().toISOString().slice(0,10),
-                      note: '',
-                      placeName: '',
-                      lat: '',
-                      lng: '',
-                      accuracy: ''
-                    });
-                    setTxMessage(null);
-                  }}
-                  style={{
-                    padding: '10px 20px',
-                    borderRadius: 8,
-                    border: '1px solid #ddd',
-                    background: '#fff',
-                    cursor: 'pointer',
-                    fontWeight: 600
-                  }}
-                >
-                  Hủy
-                </button>
-                <button
-                  className="save-btn"
-                  type="submit"
-                  disabled={saving}
-                  style={{ flex: 1, minWidth: 160 }}
-                >
-                  {saving ? 'Đang lưu...' : 'Thêm giao dịch'}
-                </button>
-              </div>
-
               {txMessage && (
-                <div style={{
-                  marginTop: 8,
-                  color: txMessage.type === 'error' ? '#b71c1c' : '#1565c0',
-                  padding: '8px',
-                  background: txMessage.type === 'error' ? '#ffebee' : '#e3f2fd',
-                  borderRadius: 6,
-                  fontSize: '0.9rem',
-                  flexShrink: 0
-                }}>
+                <div className={`tx-message tx-message-${txMessage.type}`}>
                   {txMessage.text}
                 </div>
               )}
             </form>
+            <div className="tx-modal-footer">
+              <button
+                type="button"
+                className="tx-btn-cancel"
+                onClick={() => {
+                  setShowTransactionModal(false);
+                  setForm({
+                    walletId: '',
+                    name: '',
+                    type: 'expense',
+                    categoryId: '',
+                    amount: '',
+                    date: new Date().toISOString().slice(0,10),
+                    note: '',
+                    placeName: '',
+                    lat: '',
+                    lng: '',
+                    accuracy: ''
+                  });
+                  setTxMessage(null);
+                }}
+              >
+                Hủy
+              </button>
+              <button
+                className="tx-btn-submit"
+                type="button"
+                disabled={saving}
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleSubmit(e);
+                }}
+              >
+                {saving ? 'Đang lưu...' : 'Thêm giao dịch'}
+              </button>
+            </div>
           </div>
         </div>
       )}

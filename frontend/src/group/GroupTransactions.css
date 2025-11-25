@@ -8,6 +8,8 @@
   box-sizing: border-box;
   background: radial-gradient(circle at top left, #eef2ff 0%, #f9fafb 40%, #f5f7fb 100%);
   transition: margin-left 0.3s ease, width 0.3s ease;
+  overflow-y: auto;
+  height: 100vh;
 }
 
 /* Adjust margin and width when sidebar is collapsed */
@@ -127,11 +129,8 @@ body.group-sidebar-collapsed .group-transactions-page {
   z-index: 1;
 }
 
-/* Make the list card have a fixed max height */
-.gt-list-card {
-  max-height: 80vh; /* Limit height to 80% of viewport height */
-  overflow: hidden; /* Hide overflow for container */
-}
+/* List card - no max height, scroll with page */
+/* Removed max-height and overflow to allow page scroll */
 
 .gt-list-card h2 {
   margin-top: 0;
@@ -142,11 +141,10 @@ body.group-sidebar-collapsed .group-transactions-page {
   color: #0f172a;
 }
 
-/* Add a scrollable container for the transactions list */
+/* List container - no internal scroll, page scrolls */
 .gt-list-container {
-  overflow-y: auto; /* Enable vertical scrolling */
-  flex-grow: 1; /* Fill remaining space */
-  padding-right: 8px; /* Add space for scrollbar */
+  /* Removed overflow-y to allow page scroll */
+  padding-right: 8px;
 }
 
 .gt-form label { display:block; margin-top:10px; font-weight:600; color:#334155; }
@@ -872,6 +870,22 @@ body.group-sidebar-collapsed .group-transactions-page {
 
 .gt-toggle-settled.unsettled:hover {
   background: #fee2e2;
+}
+
+.gt-toggle-settled:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.gt-toggle-settled.settled:disabled {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.gt-toggle-settled.unsettled:disabled {
+  background: #fee2e2;
+  color: #881337;
 }
 
 /* Optimize Debt Button */
@@ -1989,5 +2003,223 @@ body.group-sidebar-collapsed .group-transactions-page {
   .gt-cancel-btn {
     width: 100%;
     justify-content: center;
+  }
+}
+
+/* ===== Filter Section Styles ===== */
+.gt-filter-section {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.gt-filter-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  font-weight: 600;
+  color: #334155;
+  font-size: 15px;
+}
+
+.gt-filter-header i {
+  color: #3b82f6;
+  font-size: 16px;
+}
+
+.gt-filter-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.gt-filter-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gt-filter-item label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #475569;
+}
+
+.gt-filter-item label i {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.gt-filter-clear-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.gt-filter-clear-wrapper::before {
+  content: '';
+  height: 19.5px; /* Match label height exactly (13px font-size * 1.5 line-height) */
+  display: block;
+  flex-shrink: 0;
+}
+
+.gt-filter-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+  background: #ffffff;
+  transition: all 0.2s;
+  box-sizing: border-box;
+}
+
+.gt-filter-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.gt-filter-item select.gt-filter-input {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg fill='%2364748b' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/><path d='M0 0h24v24H0z' fill='none'/></svg>");
+  background-repeat: no-repeat;
+  background-position-x: calc(100% - 10px);
+  background-position-y: 50%;
+  padding-right: 36px;
+  cursor: pointer;
+}
+
+.gt-filter-clear-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+  height: 38px; /* Match input field height (8px padding top + 8px padding bottom + line-height) */
+  box-sizing: border-box;
+}
+
+.gt-filter-clear-btn:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
+.gt-filter-result {
+  padding: 8px 12px;
+  background: #e0f2fe;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #0369a1;
+  font-weight: 500;
+  text-align: center;
+}
+
+/* Responsive for filter */
+@media (max-width: 768px) {
+  .gt-filter-controls {
+    grid-template-columns: 1fr;
+  }
+  
+  .gt-filter-clear-wrapper {
+    justify-content: flex-start;
+  }
+}
+
+/* ===== Pagination Styles ===== */
+.gt-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 20px;
+  margin-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.gt-pagination-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.gt-pagination-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #3b82f6;
+  color: #3b82f6;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
+}
+
+.gt-pagination-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #f8fafc;
+}
+
+.gt-pagination-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  color: #334155;
+  font-weight: 500;
+}
+
+.gt-pagination-count {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 400;
+}
+
+/* Responsive for pagination */
+@media (max-width: 640px) {
+  .gt-pagination {
+    gap: 12px;
+    padding: 16px;
+  }
+  
+  .gt-pagination-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 12px;
+  }
+  
+  .gt-pagination-info {
+    font-size: 13px;
+  }
+  
+  .gt-pagination-count {
+    font-size: 11px;
   }
 }

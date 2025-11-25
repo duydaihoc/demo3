@@ -20,7 +20,11 @@ router.get('/', auth, async (req, res) => {
       return res.json([]); // Return empty array instead of error
     }
 
-    const notifs = await Notification.find({ recipient: userId }).sort({ createdAt: -1 }).limit(200);
+    const notifs = await Notification.find({ recipient: userId })
+      .populate('sender', 'name email')
+      .populate('recipient', 'name email')
+      .sort({ createdAt: -1 })
+      .limit(200);
     res.json(notifs);
   } catch (err) {
     console.error(err);

@@ -289,6 +289,9 @@ body.group-sidebar-collapsed .group-manage-page {
   /* Bỏ scroll riêng của card, để trang chính cuộn 1 lần duy nhất */
   max-height: none;
   overflow-y: visible;
+  overflow-x: hidden;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* Banking-style loading and errors */
@@ -423,26 +426,14 @@ body.group-sidebar-collapsed .group-manage-page {
 .gm-activity-list {
   max-height: 260px; /* ~ chiều cao 3 item */
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #c1c1c1 #f1f1f1;
+  overflow-x: hidden;
+  /* Ẩn scrollbar nhưng vẫn cho phép scroll */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
 }
 
 .gm-activity-list::-webkit-scrollbar {
-  width: 8px;
-}
-
-.gm-activity-list::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 4px;
-}
-
-.gm-activity-list::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 4px;
-}
-
-.gm-activity-list::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  display: none; /* Chrome, Safari, Opera */
 }
 
 .gm-member-item {
@@ -459,6 +450,106 @@ body.group-sidebar-collapsed .group-manage-page {
 
 .gm-member-item:last-child {
   border-bottom: none;
+}
+
+/* Bỏ bo tròn cho các item giao dịch trong hoạt động nhóm */
+.gm-activity-list {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+.gm-activity-list .gm-member-item {
+  border-radius: 12px;
+  padding: 16px;
+  margin: 0 0 12px 0;
+  border: 1px solid #d1d5db;
+  border-left: 4px solid #4a6fa1;
+  background: #ffffff;
+  width: 100%;
+  box-sizing: border-box;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s ease;
+  overflow: hidden;
+  position: relative;
+}
+
+.gm-activity-list .gm-member-item:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+  border-left-color: #1a3b5d;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+/* Badge "Đã thanh toán" nằm bên trong item */
+.gm-activity-list .gm-member-item .gm-settled-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: #dcfce7;
+  color: #14532d;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  z-index: 5;
+  box-shadow: 0 1px 3px rgba(20, 83, 45, 0.15);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.gm-activity-list .gm-member-item .gm-settled-badge i {
+  font-size: 10px;
+}
+
+.gm-activity-list .gm-member-item:first-child {
+  margin-top: 0;
+}
+
+.gm-activity-list .gm-member-item:last-child {
+  margin-bottom: 0;
+}
+
+/* Đảm bảo nội dung bên trong item không bị tràn */
+.gm-activity-list .gm-member-item > div {
+  min-width: 0;
+  flex: 1;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
+}
+
+/* Đảm bảo phần nội dung bên trái không bị che bởi badge */
+.gm-activity-list .gm-member-item > div:first-of-type {
+  padding-right: 120px;
+}
+
+/* Phần bên phải (số tiền) không cần padding */
+.gm-activity-list .gm-member-item > div[style*="textAlign: 'right'"],
+.gm-activity-list .gm-member-item > div[style*="text-align: right"] {
+  padding-right: 0;
+  flex-shrink: 0;
+}
+
+/* Đảm bảo các phần tử inline không bị tràn */
+.gm-activity-list .gm-member-item span,
+.gm-activity-list .gm-member-item div {
+  max-width: 100%;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Đảm bảo phần tử bên phải (số tiền) không bị tràn */
+.gm-activity-list .gm-member-item > div[style*="textAlign: 'right'"],
+.gm-activity-list .gm-member-item > div[style*="text-align: right"] {
+  flex-shrink: 0;
+  min-width: fit-content;
+  max-width: 40%;
+  text-align: right;
 }
 
 .gm-member-avatar {
@@ -1230,4 +1321,122 @@ body.group-sidebar-collapsed .group-manage-page {
     flex: 1;
     min-width: 120px;
   }
+}
+
+/* Pending Invites Section */
+.gm-pending-invites-section {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+}
+
+.gm-pending-invites-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gm-pending-invite-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  transition: all 0.2s ease;
+}
+
+.gm-pending-invite-item:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.gm-pending-invite-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #92400e;
+  font-size: 16px;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+}
+
+.gm-pending-invite-icon.accepted {
+  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+  color: #065f46;
+}
+
+.gm-pending-invite-icon.rejected {
+  background: linear-gradient(135deg, #fee2e2, #fecaca);
+  color: #991b1b;
+}
+
+.gm-pending-invite-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.gm-pending-invite-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+  margin-bottom: 2px;
+}
+
+.gm-pending-invite-email {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.gm-pending-invite-time {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.gm-pending-invite-status {
+  flex-shrink: 0;
+}
+
+.gm-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.gm-status-badge.pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.gm-status-badge.pending i {
+  font-size: 10px;
+}
+
+.gm-status-badge.accepted {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.gm-status-badge.accepted i {
+  font-size: 10px;
+  color: #10b981;
+}
+
+.gm-status-badge.rejected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.gm-status-badge.rejected i {
+  font-size: 10px;
+  color: #dc2626;
 }

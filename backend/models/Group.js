@@ -48,6 +48,40 @@ const groupSchema = new mongoose.Schema({
       type: Date
     }
   }],
+  // Lưu lời mời đang chờ phản hồi để không bị mất khi reload
+  pendingInvites: [{
+    email: {
+      type: String,
+      required: true,
+      lowercase: true,
+      trim: true
+    },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    invitedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    status: {
+      type: String,
+      enum: ['pending', 'accepted', 'rejected'],
+      default: 'pending'
+    },
+    invitedAt: {
+      type: Date,
+      default: Date.now
+    },
+    respondedAt: {
+      type: Date
+    },
+    notificationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Notification'
+    }
+  }],
   color: {
     type: String,
     default: '#4CAF50'
@@ -60,7 +94,9 @@ const groupSchema = new mongoose.Schema({
       transactions: { type: Boolean, default: true },
       members: { type: Boolean, default: false }, // Chỉ hiển thị số lượng, không hiển thị tên
       statistics: { type: Boolean, default: true },
-      charts: { type: Boolean, default: true }
+      charts: { type: Boolean, default: true },
+      debts: { type: Boolean, default: false }, // Chia sẻ thông tin công nợ chi tiết
+      posts: { type: Boolean, default: false } // Chia sẻ bài viết hoạt động nhóm
     },
     createdAt: { type: Date },
     expiresAt: { type: Date } // Tùy chọn hết hạn

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import './Register.css';
-import { FaUser, FaEnvelope, FaLock, FaUserPlus, FaExclamationCircle, FaCheckCircle } from 'react-icons/fa';
+import { FaUser, FaEnvelope, FaLock, FaUserPlus, FaExclamationCircle, FaCheckCircle, FaKey } from 'react-icons/fa';
 
 function Register() {
   const [name, setName] = useState('');
@@ -10,13 +10,25 @@ function Register() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
+  const [showVerification, setShowVerification] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [registeredEmail, setRegisteredEmail] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validate email format trước khi gửi
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError('Email không đúng định dạng. Vui lòng nhập email hợp lệ (ví dụ: example@gmail.com)');
+      return;
+    }
+    
     if (password !== confirmPassword) {
       setError('Mật khẩu không khớp!');
       return;
     }
+    
     setLoading(true);
     setError('');
     setSuccess('');
@@ -28,21 +40,91 @@ function Register() {
       });
       const data = await response.json();
       if (response.ok) {
-        setSuccess(data.message);
-        setName('');
-        setEmail('');
-        setPassword('');
-        setConfirmPassword('');
-        // THÊM: Lưu flag để hiển thị tour sau khi đăng ký thành công
+        if (data.requiresVerification) {
+          setSuccess(data.message);
+          setRegisteredEmail(email);
+          setShowVerification(true);
+          setName('');
+          setPassword('');
+          setConfirmPassword('');
+        } else {
+          setSuccess(data.message);
+          localStorage.setItem('justRegistered', 'true');
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 1200);
+        }
+      } else {
+        // Hiển thị lỗi cụ thể
+        if (data.emailError) {
+          // Lỗi email không tồn tại hoặc không hợp lệ
+          setError(data.message);
+        } else if (data.configError) {
+          setError(data.message);
+        } else {
+          setError(data.message);
+        }
+        
+        // Nếu là lỗi email, reset trường email để user nhập lại
+        if (data.emailError) {
+          setEmail('');
+        }
+      }
+    } catch (err) {
+      setError('Lỗi kết nối mạng. Vui lòng kiểm tra kết nối internet của bạn.');
+    }
+    setLoading(false);
+  };
+
+  const handleVerification = async (e) => {
+    e.preventDefault();
+    if (!verificationCode || verificationCode.length !== 6) {
+      setError('Vui lòng nhập mã xác thực 6 số');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    setSuccess('');
+    try {
+      const response = await fetch('http://localhost:5000/api/auth/verify-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: registeredEmail, code: verificationCode }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setSuccess('Xác thực thành công! Đang chuyển đến trang đăng nhập...');
         localStorage.setItem('justRegistered', 'true');
         setTimeout(() => {
           window.location.href = '/login';
-        }, 1200);
+        }, 1500);
       } else {
         setError(data.message);
       }
     } catch (err) {
-      setError('Network error');
+      setError('Lỗi kết nối mạng');
+    }
+    setLoading(false);
+  };
+
+  const handleResendCode = async () => {
+    setLoading(true);
+    setError('');
+    setSuccess('');
+    try {
+      const response = await fetch('http://localhost:5000/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: registeredEmail }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setSuccess('Mã xác thực mới đã được gửi đến email của bạn!');
+      } else {
+        setError(data.message);
+      }
+    } catch (err) {
+      setError('Lỗi kết nối mạng');
     }
     setLoading(false);
   };
@@ -52,8 +134,12 @@ function Register() {
       <div className="auth-wrapper">
         <div className="auth-card">
           <div className="auth-content">
-            <h2 className="auth-title">Tạo tài khoản</h2>
-            <p className="auth-subtitle">Đăng ký để bắt đầu quản lý tài chính của bạn</p>
+            <h2 className="auth-title">{showVerification ? 'Xác thực email' : 'Tạo tài khoản'}</h2>
+            <p className="auth-subtitle">
+              {showVerification 
+                ? 'Nhập mã xác thực đã được gửi đến email của bạn' 
+                : 'Đăng ký để bắt đầu quản lý tài chính của bạn'}
+            </p>
             
             {error && (
               <div className="alert alert-danger">
@@ -69,7 +155,75 @@ function Register() {
               </div>
             )}
             
-            <form onSubmit={handleSubmit} className="auth-form">
+            {showVerification ? (
+              <form onSubmit={handleVerification} className="auth-form">
+                <div className="verification-info">
+                  <p>📧 Mã xác thực đã được gửi đến:</p>
+                  <p className="email-highlight">{registeredEmail}</p>
+                  <div className="verification-note">
+                    <p>⏱️ Không nhận được email sau 2 phút?</p>
+                    <ul>
+                      <li>Kiểm tra thư mục <strong>Spam/Junk</strong></li>
+                      <li>Đảm bảo email của bạn <strong>chính xác</strong></li>
+                      <li>Click "Gửi lại mã" bên dưới</li>
+                    </ul>
+                  </div>
+                </div>
+                
+                <div className="form-group">
+                  <div className="input-icon">
+                    <FaKey />
+                  </div>
+                  <input
+                    type="text"
+                    value={verificationCode}
+                    onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    required
+                    placeholder="Nhập mã 6 số"
+                    className="form-control verification-input"
+                    maxLength="6"
+                  />
+                </div>
+                
+                <button type="submit" className="btn-submit" disabled={loading}>
+                  {loading ? (
+                    <span className="btn-spinner"></span>
+                  ) : (
+                    <>
+                      <FaCheckCircle /> Xác thực
+                    </>
+                  )}
+                </button>
+                
+                <div className="resend-section">
+                  <p>Không nhận được mã?</p>
+                  <button 
+                    type="button" 
+                    onClick={handleResendCode} 
+                    className="btn-link"
+                    disabled={loading}
+                  >
+                    Gửi lại mã
+                  </button>
+                </div>
+                
+                <div className="back-section">
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      setShowVerification(false);
+                      setVerificationCode('');
+                      setError('');
+                      setSuccess('');
+                    }} 
+                    className="btn-link"
+                  >
+                    ← Quay lại đăng ký
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleSubmit} className="auth-form">
               <div className="form-group">
                 <div className="input-icon">
                   <FaUser />
@@ -141,6 +295,7 @@ function Register() {
                 )}
               </button>
             </form>
+            )}
             
             <div className="auth-alt">
               <p>Đã có tài khoản? <a href="/login">Đăng nhập</a></p>

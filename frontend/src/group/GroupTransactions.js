@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import GroupSidebar from './GroupSidebar';
 import './GroupTransactions.css';
@@ -72,6 +72,16 @@ export default function GroupTransactions() {
   const [repayTransaction, setRepayTransaction] = useState(null);
   const [repayWallet, setRepayWallet] = useState('');
   const [repaying, setRepaying] = useState(false);
+
+  // State for filtering transactions
+  const [filterMember, setFilterMember] = useState('');
+  const [filterTransactionType, setFilterTransactionType] = useState('');
+  const [filterAmount, setFilterAmount] = useState('');
+  const [filterDate, setFilterDate] = useState('');
+
+  // State for pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   // Lấy thông tin người dùng hiện tại
   const getCurrentUser = () => {
@@ -241,6 +251,102 @@ export default function GroupTransactions() {
     // eslint-disable-next-line
   }, [groupId, token]);
 
+  // Filter transactions based on filter criteria
+  const filteredTxs = useMemo(() => {
+    return txs.filter(tx => {
+      // Filter by creator name only
+      if (filterMember.trim()) {
+        const memberName = filterMember.toLowerCase().trim();
+        let found = false;
+        
+        // Check creator - ưu tiên lấy từ createdBy object
+        if (tx.createdBy) {
+          if (typeof tx.createdBy === 'object') {
+            const creatorName = (tx.createdBy.name || tx.createdBy.email || '').toLowerCase();
+            if (creatorName.includes(memberName)) {
+              found = true;
+            }
+          } else if (typeof tx.createdBy === 'string' && group) {
+            // Nếu createdBy là string ID, tìm trong group members/owner
+            const creatorId = tx.createdBy;
+            
+            // Tìm trong owner
+            if (group.owner && String(group.owner._id || group.owner) === String(creatorId)) {
+              const ownerName = (group.owner.name || group.owner.email || '').toLowerCase();
+              if (ownerName.includes(memberName)) {
+                found = true;
+              }
+            }
+            
+            // Tìm trong members
+            if (!found && Array.isArray(group.members)) {
+              const member = group.members.find(m => 
+                String(m.user?._id || m.user) === String(creatorId)
+              );
+              if (member && member.user && typeof member.user === 'object') {
+                const memName = (member.user.name || member.user.email || '').toLowerCase();
+                if (memName.includes(memberName)) {
+                  found = true;
+                }
+              }
+            }
+          }
+        }
+        
+        // Fallback sang payer nếu chưa tìm thấy
+        if (!found && tx.payer && typeof tx.payer === 'object') {
+          const payerName = (tx.payer.name || tx.payer.email || '').toLowerCase();
+          if (payerName.includes(memberName)) {
+            found = true;
+          }
+        }
+        
+        if (!found) return false;
+      }
+
+      // Filter by transaction type
+      if (filterTransactionType) {
+        if (tx.transactionType !== filterTransactionType) {
+          return false;
+        }
+      }
+
+      // Filter by date
+      if (filterDate) {
+        const txDate = new Date(tx.date || tx.createdAt || tx.created);
+        const filterDateObj = new Date(filterDate);
+        const txDateStr = txDate.toISOString().split('T')[0];
+        const filterDateStr = filterDateObj.toISOString().split('T')[0];
+        if (txDateStr !== filterDateStr) {
+          return false;
+        }
+      }
+
+      // Filter by amount (exact match or contains)
+      if (filterAmount && Number(filterAmount) > 0) {
+        const txAmount = Number(tx.amount || 0);
+        const filterAmountNum = Number(filterAmount);
+        // Lọc theo số tiền chính xác
+        if (txAmount !== filterAmountNum) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [txs, filterMember, filterTransactionType, filterDate, filterAmount, group]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterMember, filterTransactionType, filterDate, filterAmount]);
+
+  // Calculate pagination
+  const totalPages = Math.ceil(filteredTxs.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedTxs = filteredTxs.slice(startIndex, endIndex);
+
   // Toggle chọn/bỏ chọn thành viên
   const toggleMemberSelection = (member) => {
     setSelectedMembers(prev => {
@@ -331,8 +437,8 @@ export default function GroupTransactions() {
       // Kiểu 1: Mỗi người nợ toàn bộ số tiền
       return numAmount;
     } else if (transactionType === 'equal_split') {
-      // Kiểu 2: Chia đều cho tất cả người tham gia bao gồm người tạo
-      return numAmount / (selectedMembers.length + 1); // +1 for creator
+      // Kiểu 2: Chia đều cho các người được chọn (không bao gồm người tạo)
+      return selectedMembers.length > 0 ? numAmount / selectedMembers.length : 0;
     } else if (transactionType === 'percentage_split') {
       // Kiểu 3: Cần phần trăm cụ thể cho từng người
       return 0; // Sẽ tính riêng cho từng người
@@ -735,9 +841,9 @@ export default function GroupTransactions() {
 
 	const amt = Number(editAmount || 0);
 
-	// equal_split: every participant (including creator) pays equal share
+	// equal_split: chia đều cho các người được chọn (không bao gồm người tạo)
 	if (editTransactionType === 'equal_split') {
-		const total = (editSelectedMembers.length + 1) || 1; // include creator
+		const total = editSelectedMembers.length || 1; // chỉ tính các người được chọn
 		const per = Number((amt / total).toFixed(2));
 		setEditSelectedMembers(prev => prev.map(m => ({ ...m, shareAmount: per })));
 		setPercentages([]); // clear percentages
@@ -1216,7 +1322,7 @@ export default function GroupTransactions() {
                           <div>Tổng tiền:</div>
                           <div>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(amount) || 0)}</div>
                           <div>÷</div>
-                          <div>{selectedMembers.length + 1} người</div>
+                          <div>{selectedMembers.length} người</div>
                           <div className="gt-equals">=</div>
                         </>
                       )}
@@ -1233,10 +1339,10 @@ export default function GroupTransactions() {
                         <>Mỗi người được chọn nợ: {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(calculatePerPersonAmount())}</>
                       )}
                       {transactionType === 'equal_split' && (
-                        <>Mỗi người (bao gồm tôi): {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(calculatePerPersonAmount())}</>
+                        <>Mỗi người được chọn: {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(calculatePerPersonAmount())}</>
                       )}
                       {transactionType === 'percentage_split' && (
-                        <>Tùy chỉnh phần trăm cho mỗi người (bao gồm tôi)</>
+                        <>Tùy chỉnh phần trăm cho mỗi người được chọn</>
                       )}
                     </div>
                   </div>
@@ -1247,7 +1353,7 @@ export default function GroupTransactions() {
                     <div>
                       Đã chọn: <strong>{selectedMembers.length}</strong> người
                       {transactionType === 'equal_split' && (
-                        <span className="gt-info-badge">+ Bạn = {selectedMembers.length + 1} người tham gia</span>
+                        <span className="gt-info-badge">{selectedMembers.length} người tham gia</span>
                       )}
                       {transactionType === 'percentage_split' && (
                         <span className="gt-info-badge">+ Bạn = {selectedMembers.length + 1} người tham gia</span>
@@ -1350,16 +1456,103 @@ export default function GroupTransactions() {
 
           <section className="gt-list-card">
             <h2>Danh sách giao dịch</h2>
+            
+            {/* Filter Section */}
+            {!loadingTxs && txs.length > 0 && (
+              <div className="gt-filter-section">
+                <div className="gt-filter-header">
+                  <i className="fas fa-filter"></i>
+                  <span>Lọc giao dịch</span>
+                </div>
+                <div className="gt-filter-controls">
+                  <div className="gt-filter-item">
+                    <label>
+                      <i className="fas fa-user"></i> Người tạo
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Tìm theo tên người tạo..."
+                      value={filterMember}
+                      onChange={(e) => setFilterMember(e.target.value)}
+                      className="gt-filter-input"
+                    />
+                  </div>
+                  <div className="gt-filter-item">
+                    <label>
+                      <i className="fas fa-tag"></i> Kiểu giao dịch
+                    </label>
+                    <select
+                      value={filterTransactionType}
+                      onChange={(e) => setFilterTransactionType(e.target.value)}
+                      className="gt-filter-input"
+                    >
+                      <option value="">Tất cả</option>
+                      <option value="payer_single">Trả đơn</option>
+                      <option value="payer_for_others">Trả giúp</option>
+                      <option value="equal_split">Chia đều</option>
+                      <option value="percentage_split">Chia phần trăm</option>
+                    </select>
+                  </div>
+                  <div className="gt-filter-item">
+                    <label>
+                      <i className="fas fa-coins"></i> Số tiền
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="Nhập số tiền cụ thể..."
+                      value={filterAmount}
+                      onChange={(e) => setFilterAmount(e.target.value)}
+                      className="gt-filter-input"
+                      min="0"
+                    />
+                  </div>
+                  <div className="gt-filter-item">
+                    <label>
+                      <i className="fas fa-calendar"></i> Ngày
+                    </label>
+                    <input
+                      type="date"
+                      value={filterDate}
+                      onChange={(e) => setFilterDate(e.target.value)}
+                      className="gt-filter-input"
+                    />
+                  </div>
+                  <div className="gt-filter-clear-wrapper">
+                    <button
+                      className="gt-filter-clear-btn"
+                      onClick={() => {
+                        setFilterMember('');
+                        setFilterTransactionType('');
+                        setFilterAmount('');
+                        setFilterDate('');
+                      }}
+                      title="Xóa bộ lọc"
+                    >
+                      <i className="fas fa-times"></i> Xóa bộ lọc
+                    </button>
+                  </div>
+                </div>
+                {(filterMember || filterTransactionType || filterDate || filterAmount) && (
+                  <div className="gt-filter-result">
+                    Hiển thị {filteredTxs.length} / {txs.length} giao dịch
+                  </div>
+                )}
+              </div>
+            )}
+
             {loadingTxs ? (
               <div className="gm-loading">Đang tải giao dịch...</div>
             ) : error ? (
               <div className="gm-error">{error}</div>
             ) : txs.length === 0 ? (
               <div className="gm-empty-state">Chưa có giao dịch</div>
+            ) : filteredTxs.length === 0 ? (
+              <div className="gm-empty-state">Không tìm thấy giao dịch phù hợp với bộ lọc</div>
             ) : (
-              <div className="gt-list-container">
-                <ul className="gt-list">
-                  {txs.map(tx => {
+              <>
+                <div className="gt-list-container">
+                  <ul className="gt-list">
+                    {paginatedTxs.map(tx => {
                     const totalParticipants = getTotalParticipants(tx);
                      const isPayer = isUserPayer(tx);
                      const isParticipant = isUserParticipant(tx);
@@ -1503,37 +1696,47 @@ export default function GroupTransactions() {
                             <div className="gt-payer">
                               <span className="gt-label">Người tạo:</span> 
                               <strong>{(() => {
-                                console.log('Transaction debug:', { 
-                                  txId: tx._id, 
-                                  createdBy: tx.createdBy, 
-                                  createdByType: typeof tx.createdBy,
-                                  payer: tx.payer,
-                                  payerType: typeof tx.payer
-                                });
-                                
-                                // 1. Ưu tiên lấy từ createdBy object
+                                // 1. Ưu tiên lấy từ createdBy object (đã được populate từ backend)
                                 if (tx.createdBy && typeof tx.createdBy === 'object') {
-                                  return tx.createdBy.name || (tx.createdBy.email ? tx.createdBy.email.split('@')[0] : 'Người tạo');
-                                }
-                                
-                                // 2. Nếu createdBy là string ID, thử tìm trong group members
-                                if (tx.createdBy && typeof tx.createdBy === 'string') {
-                                  // Kiểm tra xem có phải là current user không
-                                  if (currentUser && String(tx.createdBy) === String(currentUser.id)) {
-                                    return currentUser.name || currentUser.email?.split('@')[0] || 'Bạn';
+                                  // Nếu có name hoặc email từ createdBy, dùng luôn
+                                  if (tx.createdBy.name) {
+                                    return tx.createdBy.name;
                                   }
-                                  // Thử tìm trong group members/owner
-                                  if (group) {
-                                    if (group.owner && String(group.owner._id || group.owner) === String(tx.createdBy)) {
+                                  if (tx.createdBy.email) {
+                                    return tx.createdBy.email.split('@')[0];
+                                  }
+                                  // Nếu createdBy là object nhưng không có name/email, lấy _id để tìm trong group
+                                  const creatorId = tx.createdBy._id || tx.createdBy.id;
+                                  if (creatorId && group) {
+                                    // Tìm trong owner
+                                    if (group.owner && String(group.owner._id || group.owner) === String(creatorId)) {
                                       return group.owner.name || group.owner.email?.split('@')[0] || 'Chủ nhóm';
                                     }
+                                    // Tìm trong members
                                     if (Array.isArray(group.members)) {
                                       const member = group.members.find(m => 
-                                        String(m.user?._id || m.user) === String(tx.createdBy)
+                                        String(m.user?._id || m.user) === String(creatorId)
                                       );
                                       if (member && member.user && typeof member.user === 'object') {
                                         return member.user.name || member.user.email?.split('@')[0] || 'Thành viên';
                                       }
+                                    }
+                                  }
+                                }
+                                
+                                // 2. Nếu createdBy là string ID, tìm trong group members/owner trước
+                                if (tx.createdBy && typeof tx.createdBy === 'string' && group) {
+                                  // Ưu tiên tìm trong owner
+                                  if (group.owner && String(group.owner._id || group.owner) === String(tx.createdBy)) {
+                                    return group.owner.name || group.owner.email?.split('@')[0] || 'Chủ nhóm';
+                                  }
+                                  // Tìm trong members
+                                  if (Array.isArray(group.members)) {
+                                    const member = group.members.find(m => 
+                                      String(m.user?._id || m.user) === String(tx.createdBy)
+                                    );
+                                    if (member && member.user && typeof member.user === 'object') {
+                                      return member.user.name || member.user.email?.split('@')[0] || 'Thành viên';
                                     }
                                   }
                                 }
@@ -1797,8 +2000,39 @@ export default function GroupTransactions() {
                       </li>
                     );
                   })}
-                </ul>
-              </div>
+                  </ul>
+                </div>
+                
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="gt-pagination">
+                    <button
+                      className="gt-pagination-btn"
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      title="Trang trước"
+                    >
+                      <i className="fas fa-chevron-left">Trang trước </i>
+                    </button>
+                    
+                    <div className="gt-pagination-info">
+                      <span>Trang {currentPage} / {totalPages}</span>
+                      <span className="gt-pagination-count">
+                        ({startIndex + 1}-{Math.min(endIndex, filteredTxs.length)} / {filteredTxs.length})
+                      </span>
+                    </div>
+                    
+                    <button
+                      className="gt-pagination-btn"
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      title="Trang sau"
+                    >
+                      <i className="fas fa-chevron-right">Trang sau</i>
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </section>
         </div>
@@ -1959,8 +2193,8 @@ export default function GroupTransactions() {
                         })()}
 
                         {editTransactionType === 'equal_split' && (() => {
-                          const totalParts = editSelectedMembers.length + 1; // +1 for creator
-                          const per = totalParts ? Number((Number(editAmount || 0) / totalParts).toFixed(2)) : 0;
+                          const totalParts = editSelectedMembers.length; // Chỉ tính các người được chọn, không bao gồm người tạo
+                          const per = totalParts > 0 ? Number((Number(editAmount || 0) / totalParts).toFixed(2)) : 0;
                           return (
                             <>
                               <div className="gt-amount-calculation">
@@ -1971,7 +2205,7 @@ export default function GroupTransactions() {
                                 <div className="gt-equals">=</div>
                               </div>
                               <div className="gt-total-preview">
-                                Mỗi người (bao gồm bạn): <strong>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(per)}</strong>
+                                Mỗi người được chọn: <strong>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(per)}</strong>
                               </div>
                             </>
                           );
@@ -2069,7 +2303,8 @@ export default function GroupTransactions() {
                                   type="button"
                                   className={`gt-toggle-settled ${member.settled ? 'settled' : 'unsettled'}`}
                                   onClick={() => toggleParticipantSettled(idx)}
-                                  title={member.settled ? 'Đánh dấu chưa thanh toán' : 'Đánh dấu đã thanh toán'}
+                                  disabled={true}
+                                  title={member.settled ? 'Đã thanh toán - không thể sửa' : 'Chưa thanh toán - không thể đánh dấu đã thanh toán trong modal sửa'}
                                 >
                                   {member.settled ? 'Đã thanh toán' : 'Chưa thanh toán'}
                                 </button>

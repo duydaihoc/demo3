@@ -289,10 +289,77 @@
 .pgp-footer { max-width:1100px; margin:40px auto 60px; padding:0 20px; text-align:center; font-size:12px; color:#64748b; }
 .pgp-footer p { display:inline-flex; align-items:center; gap:6px; background:#fff; padding:10px 16px; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,.06); }
 
+/* Debts Section */
+.pgp-debts-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:18px; }
+.pgp-debt-card { background:#fff; border-radius:16px; padding:18px; box-shadow:0 4px 14px rgba(0,0,0,.08); transition:all .3s; }
+.pgp-debt-card:hover { transform:translateY(-4px); box-shadow:0 8px 24px rgba(0,0,0,.12); }
+
+.pgp-debt-header { margin-bottom:16px; }
+.pgp-debt-parties { display:flex; align-items:center; justify-content:space-around; gap:12px; }
+.pgp-debt-party { display:flex; flex-direction:column; align-items:center; gap:6px; flex:1; }
+.pgp-debt-avatar { 
+  width:50px; height:50px; border-radius:50%; 
+  display:flex; align-items:center; justify-content:center; 
+  color:#fff; font-weight:700; font-size:20px;
+}
+.pgp-debt-avatar.creditor { background:linear-gradient(135deg,#10b981,#059669); }
+.pgp-debt-avatar.debtor { background:linear-gradient(135deg,#f59e0b,#d97706); }
+.pgp-debt-name { font-weight:600; font-size:14px; color:#1e293b; text-align:center; }
+.pgp-debt-role { font-size:11px; color:#64748b; text-align:center; }
+.pgp-debt-arrow { font-size:28px; color:#cbd5e1; }
+
+.pgp-debt-amount { text-align:center; padding:12px 0; border-top:1px solid #f1f5f9; border-bottom:1px solid #f1f5f9; margin-bottom:12px; }
+.pgp-debt-total { 
+  font-size:24px; font-weight:800; 
+  background:linear-gradient(135deg,#2a5298,#4ecdc4); 
+  -webkit-background-clip:text; color:transparent; 
+}
+.pgp-debt-count { font-size:12px; color:#64748b; margin-top:4px; }
+
+.pgp-debt-details { margin-top:12px; }
+.pgp-debt-details-title { font-size:11px; color:#64748b; font-weight:600; text-transform:uppercase; margin-bottom:8px; }
+.pgp-debt-detail-item { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid #f1f5f9; font-size:12px; }
+.pgp-debt-detail-item:last-child { border-bottom:none; }
+.pgp-debt-detail-title { color:#334155; flex:1; }
+.pgp-debt-detail-amount { color:#0f172a; font-weight:600; }
+.pgp-debt-detail-more { font-size:11px; color:#94a3b8; margin-top:6px; text-align:center; font-style:italic; }
+
+/* Posts Section */
+.pgp-posts-list { display:flex; flex-direction:column; gap:18px; }
+.pgp-post-card { background:#fff; border-radius:16px; padding:18px; box-shadow:0 4px 14px rgba(0,0,0,.08); transition:all .3s; }
+.pgp-post-card:hover { transform:translateY(-2px); box-shadow:0 6px 20px rgba(0,0,0,.1); }
+
+.pgp-post-header { display:flex; gap:12px; margin-bottom:12px; }
+.pgp-post-avatar { 
+  width:44px; height:44px; border-radius:50%; 
+  background:linear-gradient(135deg,#2a5298,#4ecdc4); 
+  color:#fff; font-weight:700; font-size:18px;
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+}
+.pgp-post-meta { flex:1; }
+.pgp-post-author { font-weight:600; font-size:14px; color:#1e293b; }
+.pgp-post-date { font-size:11px; color:#64748b; margin-top:2px; }
+
+.pgp-post-content { font-size:14px; line-height:1.6; color:#334155; margin-bottom:12px; white-space:pre-wrap; }
+
+.pgp-post-images { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:8px; margin-bottom:12px; }
+.pgp-post-image { width:100%; height:180px; object-fit:cover; border-radius:12px; }
+
+.pgp-post-stats { display:flex; gap:16px; padding:10px 0; border-top:1px solid #f1f5f9; border-bottom:1px solid #f1f5f9; font-size:12px; color:#64748b; }
+.pgp-post-stats span { display:flex; align-items:center; gap:6px; }
+.pgp-post-stats i { color:#94a3b8; }
+
+.pgp-post-comments { margin-top:12px; display:flex; flex-direction:column; gap:8px; }
+.pgp-post-comment { font-size:12px; color:#475569; background:#f8fafc; padding:8px 12px; border-radius:8px; line-height:1.5; }
+.pgp-post-comment strong { color:#1e293b; font-weight:600; }
+
 @media (max-width: 720px) {
   .pgp-hero-inner { flex-direction:column; text-align:center; }
   .pgp-meta { justify-content:center; }
   .pgp-donut-block { justify-content:center; }
+  .pgp-debts-grid { grid-template-columns:1fr; }
+  .pgp-debt-parties { flex-direction:column; gap:16px; }
+  .pgp-debt-arrow { transform:rotate(90deg); }
 }
 
 /* Skeleton */

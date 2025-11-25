@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import GroupSidebar from './GroupSidebar';
 import './GroupsPage.css';
@@ -40,10 +40,74 @@ export default function GroupsPage() {
 	const [inviteResult, setInviteResult] = useState(null);
 	const [menuGroupId, setMenuGroupId] = useState(null); // group id đang mở menu 3 chấm
 	const [searchQuery, setSearchQuery] = useState(''); // Tìm kiếm nhóm
+	const [pendingInvites, setPendingInvites] = useState([]); // Lời mời đang chờ phản hồi (đã gửi)
+	const [loadingInvites, setLoadingInvites] = useState(false);
+	const [receivedInvites, setReceivedInvites] = useState([]); // Lời mời nhận được (chờ chấp nhận/từ chối)
+	const [loadingReceivedInvites, setLoadingReceivedInvites] = useState(false);
+	
+	// Cache tên nhóm để tránh fetch nhiều lần
+	const [groupNamesCache, setGroupNamesCache] = useState({});
+	const groupNamesCacheRef = useRef({});
+	const fetchingGroupsRef = useRef(new Set());
+	
+	// Sync ref với state
+	useEffect(() => {
+		groupNamesCacheRef.current = groupNamesCache;
+	}, [groupNamesCache]);
 
 	const API_BASE = 'http://localhost:5000';
 	const getToken = () => localStorage.getItem('token');
-
+	
+	// Helper function để fetch tên nhóm từ API
+	const fetchGroupNameById = useCallback(async (groupId) => {
+		if (!groupId) return;
+		
+		// Kiểm tra cache bằng ref (không trigger re-render)
+		if (groupNamesCacheRef.current[groupId]) return;
+		
+		// Kiểm tra đang fetch
+		if (fetchingGroupsRef.current.has(groupId)) return;
+		
+		fetchingGroupsRef.current.add(groupId);
+		const token = getToken();
+		
+		try {
+			const res = await fetch(`${API_BASE}/api/groups/${groupId}`, {
+				headers: { Authorization: `Bearer ${token}` }
+			});
+			if (res.ok) {
+				const groupData = await res.json().catch(() => null);
+				if (groupData && groupData.name) {
+					setGroupNamesCache(prev => ({ ...prev, [groupId]: groupData.name }));
+				}
+			}
+		} catch (e) {
+			console.warn('Error fetching group name:', e);
+		} finally {
+			fetchingGroupsRef.current.delete(groupId);
+		}
+	}, []);
+	
+	// Helper function để lấy tên nhóm từ cache hoặc notification data
+	const getGroupName = useCallback((invite) => {
+		const data = invite?.data || {};
+		const groupId = data.groupId;
+		
+		// Ưu tiên lấy từ notification data
+		if (data.groupName) return data.groupName;
+		
+		// Lấy từ cache nếu có
+		if (groupId && groupNamesCache[groupId]) return groupNamesCache[groupId];
+		
+		// Nếu chưa có trong cache, fetch từ API
+		if (groupId && !groupNamesCacheRef.current[groupId]) {
+			fetchGroupNameById(groupId);
+		}
+		
+		// Fallback: hiển thị ID
+		return groupId ? `Nhóm #${String(groupId).substring(0, 6)}...` : 'Nhóm';
+	}, [groupNamesCache, fetchGroupNameById]);
+	
 	// ===== Pinned groups (client-side, per user) =====
 	const getCurrentUserId = () => {
 		const token = getToken();
@@ -156,6 +220,19 @@ export default function GroupsPage() {
 			}
 			const data = await res.json();
 			setGroups(data || []);
+			
+			// Cập nhật cache tên nhóm từ danh sách nhóm
+			if (Array.isArray(data)) {
+				const newCache = {};
+				data.forEach(group => {
+					if (group._id && group.name) {
+						newCache[group._id] = group.name;
+					}
+				});
+				if (Object.keys(newCache).length > 0) {
+					setGroupNamesCache(prev => ({ ...prev, ...newCache }));
+				}
+			}
 
 			// Xử lý dữ liệu cho các phần mới
 			const ownerGroups = data.filter(g => isOwner(g));
@@ -189,9 +266,214 @@ export default function GroupsPage() {
 		}
 	}, []);
 
+	// Fetch pending invitations (lời mời đã gửi đang chờ phản hồi)
+	const fetchPendingInvites = useCallback(async () => {
+		const token = getToken();
+		if (!token) return;
+		
+		setLoadingInvites(true);
+		try {
+			const res = await fetch(`${API_BASE}/api/notifications`, {
+				headers: { Authorization: `Bearer ${token}` }
+			});
+			if (!res.ok) {
+				setPendingInvites([]);
+				return;
+			}
+			const data = await res.json().catch(() => []);
+			const notifications = Array.isArray(data) ? data : (Array.isArray(data.notifications) ? data.notifications : []);
+			
+			// Lọc các notification group.invite mà mình là người gửi (sender)
+			const myId = getCurrentUserId();
+			const invites = notifications.filter(notif => {
+				return notif.type === 'group.invite' && 
+				       notif.sender && 
+				       (String(notif.sender._id || notif.sender) === String(myId)) &&
+				       !notif.read; // Chỉ lấy những lời mời chưa được phản hồi
+			});
+			
+			setPendingInvites(invites);
+		} catch (err) {
+			console.error('Error fetching pending invites:', err);
+			setPendingInvites([]);
+		} finally {
+			setLoadingInvites(false);
+		}
+	}, []);
+
+	// Fetch received invitations (lời mời nhận được - chờ chấp nhận/từ chối)
+	const fetchReceivedInvites = useCallback(async () => {
+		const token = getToken();
+		if (!token) return;
+		
+		setLoadingReceivedInvites(true);
+		try {
+			const myId = getCurrentUserId();
+			
+			// Lấy tất cả notifications
+			const res = await fetch(`${API_BASE}/api/notifications`, {
+				headers: { Authorization: `Bearer ${token}` }
+			});
+			if (!res.ok) {
+				setReceivedInvites([]);
+				return;
+			}
+			const data = await res.json().catch(() => []);
+			const notifications = Array.isArray(data) ? data : (Array.isArray(data.notifications) ? data.notifications : []);
+			
+			// Lấy danh sách nhóm để kiểm tra xem user đã là thành viên chưa
+			const groupsRes = await fetch(`${API_BASE}/api/groups`, {
+				headers: { Authorization: `Bearer ${token}` }
+			});
+			const groupsData = groupsRes.ok ? await groupsRes.json().catch(() => []) : [];
+			const userGroups = Array.isArray(groupsData) ? groupsData : [];
+			
+			// Lọc các notification group.invite mà mình là người nhận (recipient)
+			const invites = notifications.filter(notif => {
+				if (notif.type !== 'group.invite') return false;
+				if (!notif.recipient) return false;
+				
+				const recipientId = notif.recipient._id || notif.recipient;
+				if (String(recipientId) !== String(myId)) return false;
+				
+				const groupId = notif.data?.groupId;
+				if (!groupId) return false;
+				
+				// Kiểm tra xem user đã là thành viên của nhóm này chưa
+				const isMember = userGroups.some(g => {
+					if (String(g._id) !== String(groupId)) return false;
+					return g.members && g.members.some(m => {
+						const memberUserId = m.user?._id || m.user;
+						const memberEmail = (m.email || '').toLowerCase().trim();
+						return (memberUserId && String(memberUserId) === String(myId)) ||
+						       (memberEmail && String(memberEmail) === String((notif.recipient?.email || '').toLowerCase().trim()));
+					});
+				});
+				
+				// Nếu đã là thành viên thì không hiển thị lời mời
+				if (isMember) return false;
+				
+				// Kiểm tra xem đã có phản hồi chưa bằng cách tìm notification accepted/rejected
+				const hasResponse = notifications.some(resp => {
+					if (resp.type !== 'group.invite.accepted' && resp.type !== 'group.invite.rejected') return false;
+					const respGroupId = resp.data?.groupId;
+					if (!respGroupId || String(respGroupId) !== String(groupId)) return false;
+					// Response notification: sender là người được mời (người phản hồi)
+					const responseSenderId = resp.sender?._id || resp.sender;
+					return String(responseSenderId) === String(myId);
+				});
+				
+				// Nếu đã có phản hồi thì không hiển thị
+				if (hasResponse) return false;
+				
+				// Nếu notification đã được đánh dấu là đọc và có groupId, có thể đã phản hồi
+				// Nhưng vẫn hiển thị nếu chưa có response notification và chưa là thành viên
+				return true;
+			});
+			
+			setReceivedInvites(invites);
+		} catch (err) {
+			console.error('Error fetching received invites:', err);
+			setReceivedInvites([]);
+		} finally {
+			setLoadingReceivedInvites(false);
+		}
+	}, []);
+
+	// Handle accept group invite
+	const handleAcceptGroupInvite = async (invite) => {
+		const token = getToken();
+		if (!token) return;
+
+		const groupId = invite.data?.groupId;
+		if (!groupId) {
+			alert('Không tìm thấy thông tin nhóm');
+			return;
+		}
+
+		try {
+			const res = await fetch(`${API_BASE}/api/groups/${groupId}/respond-invite`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`
+				},
+				body: JSON.stringify({
+					accept: true,
+					notificationId: invite._id
+				})
+			});
+
+			if (!res.ok) {
+				const err = await res.json().catch(() => ({ message: 'Lỗi khi chấp nhận lời mời' }));
+				alert(err.message);
+				return;
+			}
+
+			// Loại bỏ lời mời khỏi danh sách ngay lập tức
+			setReceivedInvites(prev => prev.filter(inv => inv._id !== invite._id));
+			
+			// Refresh data
+			await fetchGroups();
+			await fetchReceivedInvites();
+			showNotification('✅ Đã tham gia nhóm thành công!', 'success');
+		} catch (error) {
+			console.error('Error accepting group invite:', error);
+			alert('Có lỗi xảy ra khi chấp nhận lời mời');
+		}
+	};
+
+	// Handle reject group invite
+	const handleRejectGroupInvite = async (invite) => {
+		const token = getToken();
+		if (!token) return;
+
+		const groupId = invite.data?.groupId;
+		if (!groupId) {
+			alert('Không tìm thấy thông tin nhóm');
+			return;
+		}
+
+		if (!window.confirm('Bạn có chắc muốn từ chối lời mời này?')) {
+			return;
+		}
+
+		try {
+			const res = await fetch(`${API_BASE}/api/groups/${groupId}/respond-invite`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token}`
+				},
+				body: JSON.stringify({
+					accept: false,
+					notificationId: invite._id
+				})
+			});
+
+			if (!res.ok) {
+				const err = await res.json().catch(() => ({ message: 'Lỗi khi từ chối lời mời' }));
+				alert(err.message);
+				return;
+			}
+
+			// Loại bỏ lời mời khỏi danh sách ngay lập tức
+			setReceivedInvites(prev => prev.filter(inv => inv._id !== invite._id));
+			
+			// Refresh data
+			await fetchReceivedInvites();
+			showNotification('Đã từ chối lời mời', 'info');
+		} catch (error) {
+			console.error('Error rejecting group invite:', error);
+			alert('Có lỗi xảy ra khi từ chối lời mời');
+		}
+	};
+
 	useEffect(() => {
 		fetchGroups();
-	}, [fetchGroups]);
+		fetchPendingInvites();
+		fetchReceivedInvites();
+	}, [fetchGroups, fetchPendingInvites, fetchReceivedInvites]);
 
 	// Thêm helper function để kiểm tra nếu user là owner
 	const isOwner = (group) => {
@@ -340,7 +622,12 @@ export default function GroupsPage() {
 					results.push({ email, ok: false, error: e.message });
 				}
 			}
-			setInviteResult(`Đã gửi ${results.filter(r => r.ok).length}/${results.length} lời mời`);
+			const successCount = results.filter(r => r.ok).length;
+			if (successCount > 0) {
+				setInviteResult(`Đã gửi ${successCount}/${results.length} lời mời. Họ có thể chấp nhận hoặc từ chối trong trang Hoạt động.`);
+			} else {
+				setInviteResult('Không thể gửi lời mời. Vui lòng thử lại.');
+			}
 			// refresh groups list and reset modal (optionally keep modal open)
 			fetchGroups();
 			// optional: close modal automatically after a short delay
@@ -349,7 +636,7 @@ export default function GroupsPage() {
 				setModalStep(1);
 				setCreatedGroup(null);
 				setSelectedFriendEmails([]);
-			}, 900);
+			}, 1500);
 		} catch (err) {
 			setInviteResult('Lỗi khi gửi lời mời');
 			console.error('sendInvitesToGroup error', err);
@@ -658,6 +945,109 @@ export default function GroupsPage() {
 					<div className="groups-error-alert">
 						<i className="fas fa-exclamation-circle"></i> {errorMsg}
 					</div>
+				)}
+
+				{/* Received Invites Section - Lời mời nhận được */}
+				{receivedInvites.length > 0 && (
+					<section className="groups-section-received-invites">
+						<div className="section-header-received">
+							<i className="fas fa-envelope-open"></i>
+							<h2>Lời mời tham gia nhóm</h2>
+							<span className="received-count">{receivedInvites.length}</span>
+						</div>
+						<div className="received-invites-list">
+							{receivedInvites.map(invite => {
+								const groupId = invite.data?.groupId;
+								const groupName = getGroupName(invite);
+								const inviterName = invite.data?.inviterName || invite.sender?.name || invite.sender?.email || 'Người dùng';
+								
+								return (
+									<div key={invite._id} className="received-invite-item">
+										<div className="received-invite-icon">
+											<i className="fas fa-envelope"></i>
+										</div>
+										<div className="received-invite-content">
+											<div className="received-invite-group">
+												<strong>{groupName}</strong>
+											</div>
+											<div className="received-invite-inviter">
+												Được mời bởi: {inviterName}
+											</div>
+											<div className="received-invite-time">
+												{new Date(invite.createdAt).toLocaleDateString('vi-VN', {
+													day: 'numeric',
+													month: 'short',
+													hour: '2-digit',
+													minute: '2-digit'
+												})}
+											</div>
+										</div>
+										<div className="received-invite-actions">
+											<button 
+												className="invite-action-btn accept-btn"
+												onClick={() => handleAcceptGroupInvite(invite)}
+											>
+												<i className="fas fa-check"></i> Chấp nhận
+											</button>
+											<button 
+												className="invite-action-btn reject-btn"
+												onClick={() => handleRejectGroupInvite(invite)}
+											>
+												<i className="fas fa-times"></i> Từ chối
+											</button>
+										</div>
+									</div>
+								);
+							})}
+						</div>
+					</section>
+				)}
+
+				{/* Pending Invites Section - Lời mời đã gửi đang chờ phản hồi */}
+				{pendingInvites.length > 0 && (
+					<section className="groups-section-pending-invites">
+						<div className="section-header-pending">
+							<i className="fas fa-clock"></i>
+							<h2>Lời mời đang chờ phản hồi</h2>
+							<span className="pending-count">{pendingInvites.length}</span>
+						</div>
+						<div className="pending-invites-list">
+							{pendingInvites.map(invite => {
+								const groupId = invite.data?.groupId;
+								const groupName = getGroupName(invite);
+								const recipientEmail = invite.recipient?.email || invite.data?.email || 'Người dùng';
+								
+								return (
+									<div key={invite._id} className="pending-invite-item">
+										<div className="pending-invite-icon">
+											<i className="fas fa-user-clock"></i>
+										</div>
+										<div className="pending-invite-content">
+											<div className="pending-invite-group">
+												<strong>{groupName}</strong>
+											</div>
+											<div className="pending-invite-recipient">
+												Đã mời: {recipientEmail}
+											</div>
+											<div className="pending-invite-time">
+												{new Date(invite.createdAt).toLocaleDateString('vi-VN', {
+													day: 'numeric',
+													month: 'short',
+													hour: '2-digit',
+													minute: '2-digit'
+												})}
+											</div>
+										</div>
+										<div className="pending-invite-status">
+											<span className="status-badge pending">
+												<i className="fas fa-hourglass-half"></i> Đang chờ
+											</span>
+										</div>
+									</div>
+								);
+							})}
+						</div>
+					</section>
 				)}
 
 				{loadingGroups ? (
