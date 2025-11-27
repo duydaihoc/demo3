@@ -111,7 +111,7 @@ export default function GroupsPage() {
 		// Fallback: hiển thị ID
 		return groupId ? `Nhóm #${String(groupId).substring(0, 6)}...` : 'Nhóm';
 	}, [groupNamesCache, fetchGroupNameById]);
-	
+
 	// ===== Pinned groups (client-side, per user) =====
 	const getCurrentUserId = () => {
 		const token = getToken();

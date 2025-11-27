@@ -65,15 +65,15 @@ function Register() {
           setEmail(''); // Reset email field để user nhập lại
         } else {
           setEmailExists(false);
-          if (data.emailError) {
-            // Lỗi email không tồn tại hoặc không hợp lệ
-            setError(data.message);
+        if (data.emailError) {
+          // Lỗi email không tồn tại hoặc không hợp lệ
+          setError(data.message);
             setEmail(''); // Reset email field
-          } else if (data.configError) {
-            setError(data.message);
-          } else {
+        } else if (data.configError) {
+          setError(data.message);
+        } else {
             setError(data.message || 'Đăng ký thất bại. Vui lòng thử lại.');
-          }
+        }
         }
       }
     } catch (err) {
@@ -151,7 +151,7 @@ function Register() {
               <div className="alert alert-danger">
                 <FaExclamationCircle />
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <span>{error}</span>
+                <span>{error}</span>
                   {emailExists && (
                     <div style={{ marginTop: '8px', fontSize: '14px' }}>
                       <a href="/login" style={{ color: '#fff', textDecoration: 'underline', fontWeight: 600 }}>

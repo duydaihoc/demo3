@@ -346,17 +346,17 @@ router.post('/:groupId/respond-invite', auth, async (req, res) => {
       const newMember = {
         user: user._id,
         email: email,
-        role: 'member',
+      role: 'member',
         invited: false,
         joinedAt: new Date()
-      };
+    };
 
       if (existingMember) {
         // Cập nhật thành viên hiện có
         Object.assign(existingMember, newMember);
       } else {
         // Thêm thành viên mới
-        group.members.push(newMember);
+    group.members.push(newMember);
       }
       
       // Cập nhật trạng thái lời mời trong Group model
@@ -370,13 +370,13 @@ router.post('/:groupId/respond-invite', auth, async (req, res) => {
         }
       }
       
-      await group.save();
+    await group.save();
 
       // Thông báo cho owner
       const ownerId = group.owner || group.createdBy;
       if (ownerId) {
-        try {
-          await Notification.create({
+      try {
+        await Notification.create({
             recipient: ownerId,
             sender: user._id,
             type: 'group.invite.accepted',
@@ -387,8 +387,8 @@ router.post('/:groupId/respond-invite', auth, async (req, res) => {
               email: user.email,
               groupName: group.name 
             }
-          });
-        } catch (notifErr) {
+        });
+      } catch (notifErr) {
           console.warn('Failed to notify owner about acceptance:', notifErr.message);
         }
       }

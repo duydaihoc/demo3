@@ -333,6 +333,10 @@
   border-radius: 12px;
   padding: 24px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  max-width: 100%;
+  overflow: hidden;
+  position: relative;
+  box-sizing: border-box;
 }
 
 .goal-creation-header {
@@ -368,6 +372,9 @@
   gap: 32px; /* tăng khoảng cách giữa preview và form fields */
   align-items: flex-start;
   flex-wrap: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 /* Ensure preview has fixed width and sits below inputs */
@@ -396,11 +403,21 @@
 .form-fields {
   flex: 1;
   min-width: 260px;
+  max-width: 100%;
   z-index: 2;
   position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 /* Make sure inputs/selects/textarea have solid background and higher stacking */
+.form-group {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  position: relative;
+}
+
 .form-group input,
 .form-group select,
 .form-group textarea {
@@ -410,6 +427,9 @@
   border: 1px solid #ddd;
   box-shadow: none;
   padding: 14px 12px 10px; /* increase top padding */
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 /* In case placeholder or label styles overlap, ensure labels are above inputs visually */
@@ -428,6 +448,10 @@
   justify-content: flex-end;
   gap: 12px;
   margin-top: 24px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  flex-wrap: wrap;
 }
 
 .cancel-btn {
@@ -438,6 +462,8 @@
   border-radius: 8px;
   font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .cancel-btn:hover {
@@ -453,6 +479,8 @@
   font-weight: 600;
   cursor: pointer;
   box-shadow: 0 8px 16px rgba(42,82,152,0.16);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .submit-goal-btn:hover {
@@ -658,6 +686,9 @@
 /* New color selector styles */
 .color-selector {
   position: relative;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .color-preview {
@@ -691,6 +722,8 @@
   flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 16px;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .color-option {
@@ -733,6 +766,12 @@
   z-index: 100;
   margin-top: 10px;
   transition: all 0.3s ease;
+  box-sizing: border-box;
+  width: 230px;
+  max-width: calc(100% - 20px);
+  /* Đảm bảo không vượt ra ngoài modal */
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .color-picker-container::before {
@@ -740,11 +779,10 @@
   position: absolute;
   top: -8px;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) rotate(45deg);
   width: 16px;
   height: 16px;
   background: #fff;
-  transform: translateX(-50%) rotate(45deg);
   box-shadow: -3px -3px 5px rgba(0, 0, 0, 0.04);
 }
 
@@ -1073,16 +1111,25 @@
   .goal-form,
   .goal-deposit-container {
     flex-direction: column;
+    max-width: 100%;
+    overflow: hidden;
   }
   
   .form-preview {
     width: 100%;
     flex: 0 0 auto;
     margin-bottom: 16px;
+    max-width: 100%;
   }
 
   .goal-card-preview,
   .deposit-card {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .form-fields {
     width: 100%;
     max-width: 100%;
   }
@@ -1090,7 +1137,32 @@
   .form-group label { top: -2px; }
   .form-group input,
   .form-group select,
-  .form-group textarea { padding-bottom: 0px; padding-left: 10px; padding-right:  10px; }
+  .form-group textarea { 
+    padding-bottom: 0px; 
+    padding-left: 10px; 
+    padding-right: 10px; 
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .color-picker-container {
+    max-width: calc(100vw - 32px);
+    left: 0;
+    right: 0;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .form-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .cancel-btn,
+  .submit-goal-btn {
+    width: 100%;
+  }
 }
 
 @media (max-width: 600px) {

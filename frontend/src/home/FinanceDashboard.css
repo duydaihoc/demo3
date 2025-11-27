@@ -455,6 +455,9 @@
   display: grid;
   grid-template-columns: 1.6fr 1fr;
   gap: 16px;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .fd-insights-header {
@@ -465,16 +468,27 @@
   margin-bottom: 4px;
   border-bottom: 1px solid #eef2f8;
   padding-bottom: 8px;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .fd-insights-title {
   font-weight: 800;
   font-size: 1.1rem;
   color: #2a5298;
+  flex: 1;
+  min-width: 0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 .fd-insights-sub {
   font-size: 0.85rem;
   color: #5b768c;
   font-weight: 700;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .fd-insights-body {
@@ -483,6 +497,10 @@
 
 .fd-insights-chart {
   min-height: 160px;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+  position: relative;
 }
 
 .fd-insights-list {
@@ -492,6 +510,9 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 .fd-insights-list li {
   display: flex;
@@ -503,9 +524,32 @@
   border: 1px solid #eef2f8;
   padding: 8px 10px;
   border-radius: 10px;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
-.fd-insights-list li.ins-item { line-height: 1.15rem; }
-.fd-insights-list .dot { color: #4ecdc4; font-size: 1.2rem; line-height: 1; transform: translateY(-1px); }
+.fd-insights-list li.ins-item { 
+  line-height: 1.15rem; 
+  flex-wrap: wrap;
+}
+.fd-insights-list .dot { 
+  color: #4ecdc4; 
+  font-size: 1.2rem; 
+  line-height: 1; 
+  transform: translateY(-1px);
+  flex-shrink: 0;
+}
+
+.ins-text {
+  flex: 1;
+  min-width: 0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  line-height: 1.4;
+}
 
 .ins-badge {
   font-size: .55rem;
@@ -518,6 +562,7 @@
   color: #1f355d;
   flex-shrink: 0;
   margin-top: 2px;
+  white-space: nowrap;
 }
 .ins-badge.ins-trend    { background: linear-gradient(90deg,#2a5298,#4ecdc4); color:#fff; }
 .ins-badge.ins-forecast { background: linear-gradient(90deg,#4ecdc4,#2a5298); color:#fff; }
@@ -526,7 +571,28 @@
 .ins-badge.ins-focus    { background: linear-gradient(90deg,#6c5ce7,#9b59b6); color:#fff; }
 
 @media (max-width: 900px) {
-  .fd-insights { grid-template-columns: 1fr; gap: 12px; }
-  .fd-insights-chart { min-height: 140px; }
-  .ins-badge { font-size:.5rem; padding:3px 5px; }
+  .fd-insights { 
+    grid-template-columns: 1fr; 
+    gap: 12px; 
+    padding: 12px;
+  }
+  .fd-insights-chart { 
+    min-height: 140px; 
+    max-width: 100%;
+    overflow: hidden;
+  }
+  .fd-insights-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .fd-insights-sub {
+    white-space: normal;
+  }
+  .ins-badge { 
+    font-size:.5rem; 
+    padding:3px 5px; 
+  }
+  .fd-insights-list li {
+    flex-wrap: wrap;
+  }
 }
