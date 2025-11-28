@@ -72,7 +72,13 @@ const familySchema = new mongoose.Schema({
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     createdAt: { type: Date, default: Date.now },
     purchasedAt: { type: Date },
-    purchasedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+    purchasedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    // THÊM: Thông tin thanh toán
+    purchaseAmount: { type: Number },
+    purchaseWalletId: { type: mongoose.Schema.Types.ObjectId, ref: 'Wallet' },
+    purchaseType: { type: String, enum: ['personal', 'family'], default: 'personal' }, // personal: ví cá nhân, family: quỹ gia đình
+    purchaseTransactionId: { type: mongoose.Schema.Types.ObjectId, ref: 'FamilyTransaction' }, // ID của giao dịch đã tạo khi mua
+    purchaseWalletTransactionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Transaction' } // ID của wallet transaction (nếu mua bằng ví cá nhân)
   }],
   // NEW: Thêm danh sách việc cần làm
   todoList: [{

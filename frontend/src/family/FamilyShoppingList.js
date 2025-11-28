@@ -25,6 +25,18 @@ export default function FamilyShoppingList() {
   const [itemToDelete, setItemToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Purchase modal state
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+  const [itemToPurchase, setItemToPurchase] = useState(null);
+  const [purchaseAmount, setPurchaseAmount] = useState('');
+  const [paymentType, setPaymentType] = useState('personal'); // 'personal' or 'family'
+  const [selectedWalletId, setSelectedWalletId] = useState('');
+  const [userWallets, setUserWallets] = useState([]);
+  const [loadingWallets, setLoadingWallets] = useState(false);
+  const [purchasing, setPurchasing] = useState(false);
+  const [defaultWallet, setDefaultWallet] = useState(null); // Ví mặc định đã liên kết
+  const [autoLinkEnabled, setAutoLinkEnabled] = useState(false);
+
   // MỚI: controls & ui state
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all'); // all | purchased | unpurchased
@@ -116,6 +128,46 @@ export default function FamilyShoppingList() {
     fetchFamilyInfo(); // THÊM: load family info
   }, [navigate, fetchCategories, fetchShoppingList, fetchFamilyInfo]);
 
+  // Helper function để lấy current user (định nghĩa trước để dùng trong useEffect)
+  const getCurrentUser = useCallback(() => {
+    try {
+      const t = token;
+      if (!t) return null;
+      const payload = JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      return {
+        id: payload.id || payload._id || payload.userId || '',
+        name: payload.name || '',
+        email: payload.email || ''
+      };
+    } catch (e) { return null; }
+  }, [token]);
+
+  // Load ví mặc định từ localStorage (giống như trong FamilyTransactions)
+  useEffect(() => {
+    const currentUser = getCurrentUser();
+    if (!selectedFamilyId || !currentUser?.id) return;
+    
+    // Lưu theo cả familyId và userId để mỗi người có ví riêng
+    const walletKey = `family_${selectedFamilyId}_user_${currentUser.id}_defaultWallet`;
+    const enabledKey = `family_${selectedFamilyId}_user_${currentUser.id}_autoLink`;
+    
+    const savedWallet = localStorage.getItem(walletKey);
+    const savedEnabled = localStorage.getItem(enabledKey);
+    
+    if (savedWallet) {
+      try {
+        const wallet = JSON.parse(savedWallet);
+        setDefaultWallet(wallet);
+      } catch (e) {
+        console.error('Error parsing saved wallet:', e);
+      }
+    }
+    
+    if (savedEnabled) {
+      setAutoLinkEnabled(savedEnabled === 'true');
+    }
+  }, [selectedFamilyId, getCurrentUser]);
+
   // Thêm item mới với API THẬT
   const handleAddItem = async (e) => {
     e.preventDefault();
@@ -166,34 +218,160 @@ export default function FamilyShoppingList() {
     }
   };
 
-  // Toggle trạng thái mua với API THẬT
-  const toggleItemPurchased = async (itemId, currentStatus) => {
+  // Fetch user wallets
+  const fetchUserWallets = useCallback(async () => {
+    if (!token) return;
+    setLoadingWallets(true);
     try {
-      console.log('Toggling purchase status for item:', itemId, 'current:', currentStatus);
-      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/shopping-list/${itemId}`, {
-        method: 'PATCH',
+      const res = await fetch(`${API_BASE}/api/family/wallets/user`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (!res.ok) {
+        throw new Error('Không thể tải danh sách ví');
+      }
+      
+      const data = await res.json();
+      setUserWallets(data);
+      
+      // Cập nhật defaultWallet nếu nó có trong danh sách
+      const currentUser = getCurrentUser();
+      if (defaultWallet && currentUser?.id) {
+        const updatedWallet = data.find(w => w._id === defaultWallet._id);
+        if (updatedWallet) {
+          setDefaultWallet(updatedWallet);
+          // Cập nhật localStorage
+          const walletKey = `family_${selectedFamilyId}_user_${currentUser.id}_defaultWallet`;
+          localStorage.setItem(walletKey, JSON.stringify(updatedWallet));
+        }
+      }
+      
+      return data; // Trả về data để có thể sử dụng trong openPurchaseModal
+    } catch (err) {
+      console.error("Error fetching user wallets:", err);
+      showNotification('Không thể tải danh sách ví', 'error');
+      return [];
+    } finally {
+      setLoadingWallets(false);
+    }
+  }, [token, API_BASE, defaultWallet, selectedFamilyId, getCurrentUser]);
+
+  // Mở modal mua
+  const openPurchaseModal = async (item) => {
+    if (item.purchased) {
+      // Nếu đã mua, kiểm tra quyền hoàn tiền
+      const currentUser = getCurrentUser();
+      if (!currentUser || String(item.purchasedBy?._id || item.purchasedBy) !== String(currentUser.id)) {
+        showNotification('Chỉ người đã mua sản phẩm này mới được phép hoàn tiền', 'error');
+        return;
+      }
+      // Hoàn tiền
+      await handleRefund(item._id);
+      return;
+    }
+    
+    setItemToPurchase(item);
+    setPurchaseAmount('');
+    setPaymentType('personal');
+    
+    // Load danh sách ví trước và đợi kết quả
+    const wallets = await fetchUserWallets();
+    
+    // Tự động chọn ví mặc định nếu có và đã bật auto-link
+    if (autoLinkEnabled && defaultWallet && wallets && wallets.length > 0) {
+      // Kiểm tra ví mặc định có trong danh sách không
+      const walletExists = wallets.some(w => w._id === defaultWallet._id);
+      if (walletExists) {
+        setSelectedWalletId(defaultWallet._id);
+      } else {
+        // Nếu ví mặc định không có trong danh sách, tìm lại từ danh sách mới
+        const updatedWallet = wallets.find(w => w._id === defaultWallet._id);
+        if (updatedWallet) {
+          setDefaultWallet(updatedWallet);
+          setSelectedWalletId(updatedWallet._id);
+        } else {
+          setSelectedWalletId('');
+        }
+      }
+    } else {
+      setSelectedWalletId('');
+    }
+    
+    setShowPurchaseModal(true);
+  };
+
+  // Xử lý mua sản phẩm
+  const handlePurchase = async (e) => {
+    e.preventDefault();
+    
+    if (!purchaseAmount || Number(purchaseAmount) <= 0) {
+      showNotification('Vui lòng nhập số tiền hợp lệ', 'error');
+      return;
+    }
+    
+    if (paymentType === 'personal' && !selectedWalletId) {
+      showNotification('Vui lòng chọn ví cá nhân', 'error');
+      return;
+    }
+    
+    setPurchasing(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/shopping-list/${itemToPurchase._id}/purchase`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ purchased: !currentStatus })
+        body: JSON.stringify({
+          amount: Number(purchaseAmount),
+          walletId: paymentType === 'personal' ? selectedWalletId : null,
+          paymentType: paymentType
+        })
       });
       
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.message || 'Không thể cập nhật trạng thái');
+        throw new Error(errData.message || 'Không thể mua sản phẩm');
       }
       
-      showNotification(
-        !currentStatus ? 'Đã đánh dấu sản phẩm đã mua' : 'Đã đánh dấu sản phẩm chưa mua', 
-        'success'
-      );
-      
-      // Refresh danh sách
+      showNotification('Đã mua sản phẩm thành công', 'success');
+      setShowPurchaseModal(false);
+      setItemToPurchase(null);
+      setPurchaseAmount('');
       await fetchShoppingList();
     } catch (err) {
-      console.error("Error updating item:", err);
-      showNotification('Không thể cập nhật trạng thái sản phẩm', 'error');
+      console.error("Error purchasing item:", err);
+      showNotification(err.message || 'Không thể mua sản phẩm', 'error');
+    } finally {
+      setPurchasing(false);
+    }
+  };
+
+  // Xử lý hoàn tiền
+  const handleRefund = async (itemId) => {
+    if (!window.confirm('Bạn có chắc chắn muốn hoàn tiền cho sản phẩm này?')) {
+      return;
+    }
+    
+    try {
+      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/shopping-list/${itemId}/refund`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        }
+      });
+      
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || 'Không thể hoàn tiền');
+      }
+      
+      showNotification('Đã hoàn tiền thành công', 'success');
+      await fetchShoppingList();
+    } catch (err) {
+      console.error("Error refunding item:", err);
+      showNotification(err.message || 'Không thể hoàn tiền', 'error');
     }
   };
 
@@ -234,20 +412,7 @@ export default function FamilyShoppingList() {
     }
   };
 
-  // Helper: kiểm tra owner
-  const getCurrentUser = useCallback(() => {
-    try {
-      const t = token;
-      if (!t) return null;
-      const payload = JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-      return {
-        id: payload.id || payload._id || payload.userId || '',
-        name: payload.name || '',
-        email: payload.email || ''
-      };
-    } catch (e) { return null; }
-  }, [token]);
-
+  // Helper: kiểm tra owner (getCurrentUser đã được định nghĩa ở trên)
   const currentUser = getCurrentUser();
   const isOwner = !!(familyInfo && currentUser && (String(familyInfo.owner?._id || familyInfo.owner) === String(currentUser.id)));
 
@@ -993,9 +1158,21 @@ export default function FamilyShoppingList() {
                           <td>{item.creatorName || 'Thành viên'}</td>
                           <td>{new Date(item.createdAt).toLocaleDateString('vi-VN')}</td>
                           <td>
-                            <span className={`fsl-status-badge ${item.purchased ? 'purchased' : 'pending'}`}>
-                              {item.purchased ? 'Đã mua' : 'Chưa mua'}
-                            </span>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <span className={`fsl-status-badge ${item.purchased ? 'purchased' : 'pending'}`}>
+                                {item.purchased ? 'Đã mua' : 'Chưa mua'}
+                              </span>
+                              {item.purchased && item.purchasedByName && (
+                                <span style={{ fontSize: '11px', color: '#64748b' }}>
+                                  bởi {item.purchasedByName}
+                                </span>
+                              )}
+                              {item.purchased && item.purchaseAmount && (
+                                <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>
+                                  {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(item.purchaseAmount)}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td>
                             <div className="fsl-table-actions">
@@ -1006,10 +1183,14 @@ export default function FamilyShoppingList() {
                               )}
                               <button 
                                 className={`fsl-action-btn ${item.purchased ? 'undo' : 'check'}`} 
-                                onClick={() => toggleItemPurchased(item._id, item.purchased)}
+                                onClick={() => openPurchaseModal(item)}
+                                disabled={item.purchased && (() => {
+                                  const currentUser = getCurrentUser();
+                                  return !currentUser || String(item.purchasedBy?._id || item.purchasedBy) !== String(currentUser.id);
+                                })()}
                               >
                                 <i className={`fas ${item.purchased ? 'fa-undo' : 'fa-check'}`}></i>
-                                <span className="btn-text">{item.purchased ? 'Chưa mua' : 'Đã mua'}</span>
+                                <span className="btn-text">{item.purchased ? 'Hoàn tiền' : 'Đã mua'}</span>
                               </button>
                               {canDeleteItem(item) && (
                                 <button className="fsl-action-btn delete" onClick={() => openDeleteModal(item)}>
@@ -1036,6 +1217,16 @@ export default function FamilyShoppingList() {
                           <div className="fsl-note-purchased">
                             <i className="fas fa-check-circle"></i>
                             Đã mua
+                            {item.purchasedByName && (
+                              <span style={{ marginLeft: '8px', fontSize: '12px', opacity: 0.8 }}>
+                                bởi {item.purchasedByName}
+                              </span>
+                            )}
+                            {item.purchaseAmount && (
+                              <span style={{ marginLeft: '8px', fontSize: '12px', opacity: 0.8 }}>
+                                • {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(item.purchaseAmount)}
+                              </span>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1074,10 +1265,14 @@ export default function FamilyShoppingList() {
                         )}
                         <button 
                           className={`fsl-note-btn ${item.purchased ? 'undo' : 'check'}`} 
-                          onClick={() => toggleItemPurchased(item._id, item.purchased)}
+                          onClick={() => openPurchaseModal(item)}
+                          disabled={item.purchased && (() => {
+                            const currentUser = getCurrentUser();
+                            return !currentUser || String(item.purchasedBy?._id || item.purchasedBy) !== String(currentUser.id);
+                          })()}
                         >
                           <i className={`fas ${item.purchased ? 'fa-undo' : 'fa-check'}`}></i>
-                          {item.purchased ? 'Chưa mua' : 'Đã mua'}
+                          {item.purchased ? 'Hoàn tiền' : 'Đã mua'}
                         </button>
                         {canDeleteItem(item) && (
                           <button className="fsl-note-btn delete" onClick={() => openDeleteModal(item)}>
@@ -1398,6 +1593,139 @@ export default function FamilyShoppingList() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Purchase Modal */}
+      {showPurchaseModal && itemToPurchase && (
+        <div 
+          className="fsl-modal-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowPurchaseModal(false);
+            }
+          }}
+        >
+          <div className="fsl-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="fsl-modal-header">
+              <h3>Mua sản phẩm</h3>
+              <button 
+                className="fsl-modal-close"
+                onClick={() => setShowPurchaseModal(false)}
+                disabled={purchasing}
+              >
+                &times;
+              </button>
+            </div>
+            
+            <form onSubmit={handlePurchase} className="fsl-form">
+              <div className="fsl-form-group">
+                <label>Thông tin sản phẩm</label>
+                <div style={{ 
+                  padding: '12px', 
+                  background: 'rgba(241, 245, 249, 0.6)', 
+                  borderRadius: '8px',
+                  marginBottom: '8px'
+                }}>
+                  <div style={{ fontWeight: 600, marginBottom: '4px' }}>{itemToPurchase.name}</div>
+                  {itemToPurchase.notes && (
+                    <div style={{ fontSize: '13px', color: '#64748b', fontStyle: 'italic' }}>
+                      {itemToPurchase.notes}
+                    </div>
+                  )}
+                  <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>
+                    Số lượng: x{itemToPurchase.quantity}
+                  </div>
+                </div>
+              </div>
+
+              <div className="fsl-form-group">
+                <label>Số tiền *</label>
+                <input
+                  type="number"
+                  value={purchaseAmount}
+                  onChange={(e) => setPurchaseAmount(e.target.value)}
+                  placeholder="Nhập số tiền"
+                  required
+                  min="1"
+                  step="1"
+                  disabled={purchasing}
+                />
+              </div>
+
+              <div className="fsl-form-group">
+                <label>Phương thức thanh toán *</label>
+                <select
+                  value={paymentType}
+                  onChange={(e) => {
+                    setPaymentType(e.target.value);
+                    if (e.target.value === 'family') {
+                      setSelectedWalletId('');
+                    }
+                  }}
+                  disabled={purchasing}
+                >
+                  <option value="personal">Ví cá nhân</option>
+                  <option value="family">Quỹ gia đình</option>
+                </select>
+              </div>
+
+              {paymentType === 'personal' && (
+                <div className="fsl-form-group">
+                  <label>Chọn ví *</label>
+                  {loadingWallets ? (
+                    <div style={{ padding: '12px', textAlign: 'center', color: '#64748b' }}>
+                      <i className="fas fa-spinner fa-spin"></i> Đang tải danh sách ví...
+                    </div>
+                  ) : userWallets.length === 0 ? (
+                    <div style={{ padding: '12px', textAlign: 'center', color: '#ef4444' }}>
+                      <i className="fas fa-exclamation-triangle"></i> Bạn chưa có ví nào. Vui lòng tạo ví trước.
+                    </div>
+                  ) : (
+                    <select
+                      value={selectedWalletId}
+                      onChange={(e) => setSelectedWalletId(e.target.value)}
+                      required
+                      disabled={purchasing}
+                    >
+                      <option value="">-- Chọn ví --</option>
+                      {userWallets.map(wallet => (
+                        <option key={wallet._id} value={wallet._id}>
+                          {wallet.name} - {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(wallet.currentBalance || 0)}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
+
+              <div className="fsl-form-actions">
+                <button 
+                  type="button" 
+                  className="fsl-btn secondary"
+                  onClick={() => setShowPurchaseModal(false)}
+                  disabled={purchasing}
+                >
+                  <i className="fas fa-times"></i> Hủy
+                </button>
+                <button 
+                  type="submit" 
+                  className="fsl-btn primary"
+                  disabled={purchasing || (paymentType === 'personal' && !selectedWalletId)}
+                >
+                  {purchasing ? (
+                    <>
+                      <i className="fas fa-spinner fa-spin"></i> Đang xử lý...
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-shopping-cart"></i> Xác nhận mua
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

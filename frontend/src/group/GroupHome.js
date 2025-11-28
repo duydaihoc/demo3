@@ -321,60 +321,60 @@ export default function GroupHome() {
             </div>
 
             <div className="gh-section-content">
-              {recentGroups.length === 0 ? (
-                <div className="gh-empty-state">
-                  <i className="fas fa-users"></i>
-                  <p>Chưa có nhóm nào</p>
-                  <button className="gh-btn primary" onClick={() => navigate('/groups')}>
-                    Tạo nhóm đầu tiên
-                  </button>
-                </div>
-              ) : (
-                <div className="gh-groups-list">
-                  {recentGroups.map(group => {
-                    const groupId = group._id || group.id;
-                    const groupTxs = allTransactions.filter(tx => 
-                      (tx.groupInfo?.id === groupId) || 
-                      (tx.group === groupId) || 
-                      (tx.groupId === groupId)
-                    );
-                    const groupTotal = groupTxs.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
-                    const memberCount = group.members?.length || 0;
+            {recentGroups.length === 0 ? (
+              <div className="gh-empty-state">
+                <i className="fas fa-users"></i>
+                <p>Chưa có nhóm nào</p>
+                <button className="gh-btn primary" onClick={() => navigate('/groups')}>
+                  Tạo nhóm đầu tiên
+                </button>
+              </div>
+            ) : (
+              <div className="gh-groups-list">
+                {recentGroups.map(group => {
+                  const groupId = group._id || group.id;
+                  const groupTxs = allTransactions.filter(tx => 
+                    (tx.groupInfo?.id === groupId) || 
+                    (tx.group === groupId) || 
+                    (tx.groupId === groupId)
+                  );
+                  const groupTotal = groupTxs.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
+                  const memberCount = group.members?.length || 0;
 
-                    return (
-                      <div 
-                        key={groupId} 
-                        className="gh-group-card"
-                        onClick={() => navigate(`/groups/${groupId}/transactions`)}
-                        style={{ 
-                          background: getGroupGradient(group),
-                          cursor: 'pointer'
-                        }}
-                      >
-                        <div className="gh-group-card-header">
-                          <h3>{group.name || 'Nhóm không tên'}</h3>
-                          <span className="gh-group-badge">
-                            <i className="fas fa-users"></i> {memberCount} thành viên
-                          </span>
-                        </div>
-                        <div className="gh-group-card-stats">
-                          <div className="gh-group-stat">
-                            <i className="fas fa-exchange-alt"></i>
-                            <span>{groupTxs.length} giao dịch</span>
-                          </div>
-                          <div className="gh-group-stat">
-                            <i className="fas fa-wallet"></i>
-                            <span>{formatCurrency(groupTotal)}</span>
-                          </div>
-                        </div>
-                        {group.description && (
-                          <p className="gh-group-description">{group.description}</p>
-                        )}
+                  return (
+                    <div 
+                      key={groupId} 
+                      className="gh-group-card"
+                      onClick={() => navigate(`/groups/${groupId}/transactions`)}
+                      style={{ 
+                        background: getGroupGradient(group),
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <div className="gh-group-card-header">
+                        <h3>{group.name || 'Nhóm không tên'}</h3>
+                        <span className="gh-group-badge">
+                          <i className="fas fa-users"></i> {memberCount} thành viên
+                        </span>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
+                      <div className="gh-group-card-stats">
+                        <div className="gh-group-stat">
+                          <i className="fas fa-exchange-alt"></i>
+                          <span>{groupTxs.length} giao dịch</span>
+                        </div>
+                        <div className="gh-group-stat">
+                          <i className="fas fa-wallet"></i>
+                          <span>{formatCurrency(groupTotal)}</span>
+                        </div>
+                      </div>
+                      {group.description && (
+                        <p className="gh-group-description">{group.description}</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
               
               {allGroups.length > 3 && (
                 <div className="gh-pagination">
@@ -407,81 +407,81 @@ export default function GroupHome() {
             </div>
 
             <div className="gh-section-content">
-              {recentTransactions.length === 0 ? (
-                <div className="gh-empty-state">
-                  <i className="fas fa-receipt"></i>
-                  <p>Chưa có giao dịch nào</p>
-                </div>
-              ) : (
-                <div className="gh-transactions-list">
-                  {recentTransactions.map(tx => {
-                    // Lấy thông tin nhóm từ nhiều nguồn để đảm bảo có dữ liệu
-                    let groupInfo = tx.groupInfo;
-                    
-                    // Nếu không có groupInfo, thử lấy từ groupsData
-                    if (!groupInfo && tx.groupId) {
-                      const foundGroup = groups.find(g => 
-                        String(g._id || g.id) === String(tx.groupId || tx.group)
-                      );
-                      if (foundGroup) {
-                        groupInfo = {
-                          id: String(foundGroup._id || foundGroup.id),
-                          name: foundGroup.name,
-                          color: foundGroup.color,
-                          ownerId: foundGroup.owner?._id || foundGroup.owner
-                        };
-                      }
+            {recentTransactions.length === 0 ? (
+              <div className="gh-empty-state">
+                <i className="fas fa-receipt"></i>
+                <p>Chưa có giao dịch nào</p>
+              </div>
+            ) : (
+              <div className="gh-transactions-list">
+                {recentTransactions.map(tx => {
+                  // Lấy thông tin nhóm từ nhiều nguồn để đảm bảo có dữ liệu
+                  let groupInfo = tx.groupInfo;
+                  
+                  // Nếu không có groupInfo, thử lấy từ groupsData
+                  if (!groupInfo && tx.groupId) {
+                    const foundGroup = groups.find(g => 
+                      String(g._id || g.id) === String(tx.groupId || tx.group)
+                    );
+                    if (foundGroup) {
+                      groupInfo = {
+                        id: String(foundGroup._id || foundGroup.id),
+                        name: foundGroup.name,
+                        color: foundGroup.color,
+                        ownerId: foundGroup.owner?._id || foundGroup.owner
+                      };
                     }
-                    
-                    const payerName = tx.payer?.name || tx.payer?.email || 'Người tạo';
-                    const categoryName = tx.category?.name || 'Chưa phân loại';
-                    const categoryIcon = tx.category?.icon || '';
-                    const groupName = groupInfo?.name || 'Nhóm không xác định';
+                  }
+                  
+                  const payerName = tx.payer?.name || tx.payer?.email || 'Người tạo';
+                  const categoryName = tx.category?.name || 'Chưa phân loại';
+                  const categoryIcon = tx.category?.icon || '';
+                  const groupName = groupInfo?.name || 'Nhóm không xác định';
 
-                    return (
-                      <div 
-                        key={tx._id || tx.id} 
-                        className="gh-transaction-item"
-                        onClick={() => {
-                          if (groupInfo?.id) {
-                            navigate(`/groups/${groupInfo.id}/transactions`);
-                          }
-                        }}
-                        style={{ cursor: groupInfo?.id ? 'pointer' : 'default' }}
-                      >
-                        <div className="gh-transaction-date">
-                          {new Date(tx.date || tx.createdAt).toLocaleDateString('vi-VN', { 
-                            day: '2-digit', 
-                            month: '2-digit' 
-                          })}
-                        </div>
-                        <div className="gh-transaction-content">
-                          <div className="gh-transaction-title">{tx.title || 'Giao dịch nhóm'}</div>
-                          <div className="gh-transaction-meta">
-                            <span className="gh-transaction-group" style={{ 
-                              background: groupInfo ? getGroupGradient({ color: groupInfo.color }) : 'linear-gradient(135deg, #64748b, #94a3b8)'
-                            }}>
-                              <i className="fas fa-users"></i> {groupName}
-                            </span>
-                            <span className="gh-transaction-separator">•</span>
-                            <span className="gh-transaction-category">
-                              {categoryIcon && <span className="gh-category-icon">{categoryIcon}</span>}
-                              <span>{categoryName}</span>
-                            </span>
-                            <span className="gh-transaction-separator">•</span>
-                            <span className="gh-transaction-payer">
-                              <i className="fas fa-user"></i> {payerName}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="gh-transaction-amount">
-                          {formatCurrency(tx.amount || 0)}
+                  return (
+                    <div 
+                      key={tx._id || tx.id} 
+                      className="gh-transaction-item"
+                      onClick={() => {
+                        if (groupInfo?.id) {
+                          navigate(`/groups/${groupInfo.id}/transactions`);
+                        }
+                      }}
+                      style={{ cursor: groupInfo?.id ? 'pointer' : 'default' }}
+                    >
+                      <div className="gh-transaction-date">
+                        {new Date(tx.date || tx.createdAt).toLocaleDateString('vi-VN', { 
+                          day: '2-digit', 
+                          month: '2-digit' 
+                        })}
+                      </div>
+                      <div className="gh-transaction-content">
+                        <div className="gh-transaction-title">{tx.title || 'Giao dịch nhóm'}</div>
+                        <div className="gh-transaction-meta">
+                          <span className="gh-transaction-group" style={{ 
+                            background: groupInfo ? getGroupGradient({ color: groupInfo.color }) : 'linear-gradient(135deg, #64748b, #94a3b8)'
+                          }}>
+                            <i className="fas fa-users"></i> {groupName}
+                          </span>
+                          <span className="gh-transaction-separator">•</span>
+                          <span className="gh-transaction-category">
+                            {categoryIcon && <span className="gh-category-icon">{categoryIcon}</span>}
+                            <span>{categoryName}</span>
+                          </span>
+                          <span className="gh-transaction-separator">•</span>
+                          <span className="gh-transaction-payer">
+                            <i className="fas fa-user"></i> {payerName}
+                          </span>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
+                      <div className="gh-transaction-amount">
+                        {formatCurrency(tx.amount || 0)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
               
               {allUserTransactions.length > 4 && (
                 <div className="gh-pagination">

@@ -10,6 +10,7 @@ const FamilyTransaction = require('../models/FamilyTransaction');
 const Transaction = require('../models/Transaction'); // wallet transactions model
 const FamilyBalance = require('../models/FamilyBalance');
 const Category = require('../models/Category'); // cần để validate category
+const Wallet = require('../models/Wallet');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -1136,6 +1137,7 @@ router.get('/:familyId/shopping-list', authenticateToken, async (req, res) => {
       ]
     })
     .populate('shoppingList.createdBy', 'name email')
+    .populate('shoppingList.purchasedBy', 'name email')
     .populate('shoppingList.category', 'name icon type');
 
     if (!family) {
@@ -1147,10 +1149,11 @@ router.get('/:familyId/shopping-list', authenticateToken, async (req, res) => {
       new Date(b.createdAt) - new Date(a.createdAt)
     );
 
-    // Thêm tên người tạo và thông tin danh mục vào từng item
+    // Thêm tên người tạo, người mua và thông tin danh mục vào từng item
     const shoppingListWithCreator = shoppingList.map(item => ({
       ...item.toObject(),
       creatorName: item.createdBy?.name || 'Thành viên',
+      purchasedByName: item.purchasedBy?.name || null,
       categoryInfo: item.category ? {
         _id: item.category._id,
         name: item.category.name,
@@ -1448,6 +1451,307 @@ router.delete('/:familyId/shopping-list/purchased/clear', authenticateToken, asy
     });
   } catch (error) {
     console.error('Error clearing purchased items:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// API: Mua sản phẩm (trừ tiền từ ví hoặc quỹ gia đình)
+router.post('/:familyId/shopping-list/:itemId/purchase', authenticateToken, async (req, res) => {
+  try {
+    const { familyId, itemId } = req.params;
+    const { amount, walletId, paymentType } = req.body; // paymentType: 'personal' hoặc 'family'
+    const userId = req.user.id || req.user._id;
+
+    // Validate input
+    if (!amount || Number(amount) <= 0) {
+      return res.status(400).json({ message: 'Số tiền phải lớn hơn 0' });
+    }
+
+    if (!paymentType || !['personal', 'family'].includes(paymentType)) {
+      return res.status(400).json({ message: 'Loại thanh toán không hợp lệ' });
+    }
+
+    if (paymentType === 'personal' && !walletId) {
+      return res.status(400).json({ message: 'Vui lòng chọn ví cá nhân' });
+    }
+
+    // Tìm gia đình
+    const family = await Family.findOne({
+      _id: familyId,
+      $or: [
+        { 'members.user': userId },
+        { owner: userId }
+      ]
+    });
+
+    if (!family) {
+      return res.status(403).json({ message: 'Bạn không có quyền truy cập gia đình này' });
+    }
+
+    // Tìm item trong danh sách
+    const item = family.shoppingList.id(itemId);
+    if (!item) {
+      return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
+    }
+
+    if (item.purchased) {
+      return res.status(400).json({ message: 'Sản phẩm này đã được mua rồi' });
+    }
+
+    const purchaseAmount = Number(amount);
+    
+    // Khai báo biến để lưu transaction IDs
+    let familyTransaction = null;
+    let walletTransaction = null;
+
+    // Kiểm tra số dư và trừ tiền
+    if (paymentType === 'personal') {
+      // Kiểm tra ví có tồn tại và thuộc về user không
+      const wallet = await Wallet.findById(walletId);
+      if (!wallet) {
+        return res.status(404).json({ message: 'Không tìm thấy ví' });
+      }
+
+      if (String(wallet.owner) !== String(userId)) {
+        return res.status(403).json({ message: 'Bạn không có quyền sử dụng ví này' });
+      }
+
+      // Kiểm tra số dư ví
+      if (wallet.initialBalance < purchaseAmount) {
+        return res.status(400).json({ 
+          message: `Số dư ví không đủ. Hiện tại: ${wallet.initialBalance.toLocaleString('vi-VN')} VND` 
+        });
+      }
+
+      // Trừ tiền từ ví
+      wallet.initialBalance -= purchaseAmount;
+      await wallet.save();
+
+      // Tạo family transaction trước để có _id để thêm vào metadata
+      familyTransaction = new FamilyTransaction({
+        familyId: familyId,
+        type: 'expense',
+        amount: purchaseAmount,
+        description: `Mua sản phẩm: ${item.name}`,
+        category: item.category || null,
+        transactionScope: 'personal',
+        date: new Date(),
+        createdBy: userId,
+        linkedWallet: walletId,
+        isLinkedToWallet: true
+      });
+      await familyTransaction.save();
+
+      // Tạo wallet transaction ghi lại giao dịch với metadata đầy đủ để đánh dấu là giao dịch gia đình
+      walletTransaction = new Transaction({
+        wallet: walletId,
+        type: 'expense',
+        amount: purchaseAmount,
+        description: `Mua sản phẩm: ${item.name}`,
+        category: item.category || null,
+        date: new Date(),
+        metadata: {
+          source: 'family_personal',
+          familyId: familyId,
+          familyName: family.name || '',
+          familyTransactionId: familyTransaction._id
+        }
+      });
+      await walletTransaction.save();
+
+      // Cập nhật linkedTransaction trong family transaction
+      familyTransaction.linkedTransaction = walletTransaction._id;
+      await familyTransaction.save();
+
+      // Cập nhật số dư cá nhân trong FamilyBalance
+      await FamilyBalance.updateBalance(familyId, userId, purchaseAmount, 'expense', 'personal');
+
+    } else if (paymentType === 'family') {
+      // Kiểm tra số dư quỹ gia đình - sử dụng getBalance để tính đúng từ giao dịch
+      let familyBalance = await FamilyBalance.getBalance(familyId);
+      
+      if (familyBalance.familyBalance < purchaseAmount) {
+        return res.status(400).json({ 
+          message: `Số dư quỹ gia đình không đủ. Hiện tại: ${familyBalance.familyBalance.toLocaleString('vi-VN')} VND` 
+        });
+      }
+
+      // Tạo family transaction ghi lại giao dịch trước
+      familyTransaction = new FamilyTransaction({
+        familyId: familyId,
+        type: 'expense',
+        amount: purchaseAmount,
+        description: `Mua sản phẩm: ${item.name}`,
+        category: item.category || null,
+        transactionScope: 'family',
+        date: new Date(),
+        createdBy: userId
+      });
+      await familyTransaction.save();
+
+      // Cập nhật số dư quỹ gia đình (sử dụng updateBalance để đảm bảo tính nhất quán)
+      await FamilyBalance.updateBalance(familyId, userId, purchaseAmount, 'expense', 'family');
+    }
+
+    // Cập nhật thông tin mua sắm
+    item.purchased = true;
+    item.purchasedAt = new Date();
+    item.purchasedBy = userId;
+    item.purchaseAmount = purchaseAmount;
+    item.purchaseWalletId = paymentType === 'personal' ? walletId : null;
+    item.purchaseType = paymentType;
+    
+    // Lưu transaction IDs để có thể xóa sau khi hoàn tiền
+    if (paymentType === 'personal') {
+      item.purchaseTransactionId = familyTransaction._id;
+      item.purchaseWalletTransactionId = walletTransaction._id;
+    } else {
+      item.purchaseTransactionId = familyTransaction._id;
+      item.purchaseWalletTransactionId = null;
+    }
+
+    await family.save();
+
+    // Populate thông tin
+    await Family.populate(item, { path: 'createdBy', select: 'name email' });
+    await Family.populate(item, { path: 'purchasedBy', select: 'name email' });
+    await Family.populate(item, { path: 'category', select: 'name icon type' });
+
+    const responseItem = {
+      ...item.toObject(),
+      creatorName: item.createdBy?.name || 'Thành viên',
+      purchasedByName: item.purchasedBy?.name || null,
+      categoryInfo: item.category ? {
+        _id: item.category._id,
+        name: item.category.name,
+        icon: item.category.icon,
+        type: item.category.type
+      } : null
+    };
+
+    res.json(responseItem);
+  } catch (error) {
+    console.error('Error purchasing item:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// API: Hoàn tiền khi ấn lại "chưa mua"
+router.post('/:familyId/shopping-list/:itemId/refund', authenticateToken, async (req, res) => {
+  try {
+    const { familyId, itemId } = req.params;
+    const userId = req.user.id || req.user._id;
+
+    // Tìm gia đình
+    const family = await Family.findOne({
+      _id: familyId,
+      $or: [
+        { 'members.user': userId },
+        { owner: userId }
+      ]
+    });
+
+    if (!family) {
+      return res.status(403).json({ message: 'Bạn không có quyền truy cập gia đình này' });
+    }
+
+    // Tìm item trong danh sách
+    const item = family.shoppingList.id(itemId);
+    if (!item) {
+      return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
+    }
+
+    if (!item.purchased) {
+      return res.status(400).json({ message: 'Sản phẩm này chưa được mua' });
+    }
+
+    // Kiểm tra quyền: chỉ người đã mua mới được hoàn tiền
+    if (String(item.purchasedBy) !== String(userId)) {
+      return res.status(403).json({ message: 'Chỉ người đã mua sản phẩm này mới được phép hoàn tiền' });
+    }
+
+    if (!item.purchaseAmount || item.purchaseAmount <= 0) {
+      return res.status(400).json({ message: 'Không có thông tin số tiền để hoàn lại' });
+    }
+
+    const refundAmount = item.purchaseAmount;
+    const paymentType = item.purchaseType || 'personal';
+    const walletId = item.purchaseWalletId;
+
+    // Xóa giao dịch đã tạo khi mua (thay vì tạo giao dịch mới)
+    if (item.purchaseTransactionId) {
+      // Xóa FamilyTransaction
+      const familyTx = await FamilyTransaction.findById(item.purchaseTransactionId);
+      if (familyTx) {
+        // Nếu là giao dịch personal và có linked wallet transaction, cần xóa cả wallet transaction
+        if (familyTx.isLinkedToWallet && familyTx.linkedTransaction && familyTx.transactionScope === 'personal') {
+          const wallet = await Wallet.findById(familyTx.linkedWallet);
+          if (wallet) {
+            // Hoàn tiền vào ví (hoàn tác chi tiêu)
+            wallet.initialBalance += refundAmount;
+            await wallet.save();
+            
+            // Xóa wallet transaction
+            await Transaction.findByIdAndDelete(familyTx.linkedTransaction);
+            
+            // Cập nhật số dư cá nhân trong FamilyBalance
+            await FamilyBalance.updateBalance(familyId, userId, refundAmount, 'income', 'personal');
+          }
+        } else if (familyTx.transactionScope === 'family') {
+          // Nếu là giao dịch family, hoàn tiền vào quỹ gia đình
+          // Sử dụng updateBalance để đảm bảo tính nhất quán
+          await FamilyBalance.updateBalance(familyId, userId, refundAmount, 'income', 'family');
+        }
+        
+        // Xóa FamilyTransaction
+        await FamilyTransaction.findByIdAndDelete(item.purchaseTransactionId);
+      }
+    } else {
+      // Fallback: Nếu không có transactionId, hoàn tiền theo cách cũ (không tạo transaction mới)
+      if (paymentType === 'personal' && walletId) {
+        const wallet = await Wallet.findById(walletId);
+        if (wallet && String(wallet.owner) === String(userId)) {
+          wallet.initialBalance += refundAmount;
+          await wallet.save();
+          await FamilyBalance.updateBalance(familyId, userId, refundAmount, 'income', 'personal');
+        }
+      } else if (paymentType === 'family') {
+        let familyBalance = await FamilyBalance.getBalance(familyId);
+        familyBalance.familyBalance += refundAmount;
+        await familyBalance.save();
+      }
+    }
+
+    // Cập nhật trạng thái sản phẩm
+    item.purchased = false;
+    item.purchasedAt = undefined;
+    item.purchasedBy = undefined;
+    item.purchaseAmount = undefined;
+    item.purchaseWalletId = undefined;
+    item.purchaseType = undefined;
+    item.purchaseTransactionId = undefined;
+    item.purchaseWalletTransactionId = undefined;
+
+    await family.save();
+
+    // Populate thông tin
+    await Family.populate(item, { path: 'createdBy', select: 'name email' });
+    await Family.populate(item, { path: 'category', select: 'name icon type' });
+
+    const responseItem = {
+      ...item.toObject(),
+      creatorName: item.createdBy?.name || 'Thành viên',
+      categoryInfo: item.category ? {
+        _id: item.category._id,
+        name: item.category.name,
+        icon: item.category.icon,
+        type: item.category.type
+      } : null
+    };
+
+    res.json(responseItem);
+  } catch (error) {
+    console.error('Error refunding item:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
