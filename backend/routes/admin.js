@@ -847,4 +847,231 @@ router.get('/families/:familyId/transfer-activities', auth, async (req, res) => 
   }
 });
 
+// GET /api/admin/families/:familyId/budgets - Admin endpoint to get family budgets
+router.get('/families/:familyId/budgets', auth, async (req, res) => {
+  try {
+    // Verify admin role
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    const { familyId } = req.params;
+    if (!familyId) {
+      return res.status(400).json({ message: 'Family ID required' });
+    }
+
+    const family = await Family.findById(familyId)
+      .populate('budgets.category', 'name icon type');
+
+    if (!family) {
+      return res.status(404).json({ message: 'Family not found' });
+    }
+
+    // Attach related family transactions to each budget (same category, same month)
+    const budgetsWithTx = await Promise.all((family.budgets || []).map(async (b) => {
+      const budgetObj = (b.toObject && typeof b.toObject === 'function') ? b.toObject() : { ...b };
+      const categoryId = budgetObj.category?._id || budgetObj.category;
+      let start = new Date();
+      let end = new Date();
+      if (budgetObj.date) {
+        const d = new Date(budgetObj.date);
+        start = new Date(d.getFullYear(), d.getMonth(), 1);
+        end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+      } else {
+        const now = new Date();
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+      }
+
+      const txFilter = {
+        familyId,
+        transactionScope: 'family',
+        type: 'expense',
+        tags: { $ne: 'transfer' },
+        date: { $gte: start, $lte: end }
+      };
+      if (categoryId) txFilter.category = categoryId;
+
+      const relatedTxs = await FamilyTransaction.find(txFilter)
+        .populate('createdBy', 'name email')
+        .populate('category', 'name icon type')
+        .sort({ date: -1 })
+        .lean();
+
+      budgetObj.transactions = relatedTxs || [];
+      return budgetObj;
+    }));
+
+    res.json(budgetsWithTx);
+  } catch (err) {
+    console.error('Admin family budgets error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// GET /api/admin/families/:familyId/receipt-images - Admin endpoint to get family receipt images
+router.get('/families/:familyId/receipt-images', auth, async (req, res) => {
+  try {
+    // Verify admin role
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    const { familyId } = req.params;
+    if (!familyId) {
+      return res.status(400).json({ message: 'Family ID required' });
+    }
+
+    const { limit = 50 } = req.query;
+
+    const family = await Family.findById(familyId)
+      .populate('receiptImages.uploadedBy', 'name email')
+      .populate('receiptImages.verifiedBy', 'name email')
+      .populate('receiptImages.category', 'name icon type')
+      .populate('receiptImages.linkedTransaction', 'description amount type date');
+
+    if (!family) {
+      return res.status(404).json({ message: 'Family not found' });
+    }
+
+    let receiptImages = family.receiptImages || [];
+    
+    // Sắp xếp theo ngày upload mới nhất
+    receiptImages = receiptImages.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+
+    // Giới hạn số lượng
+    const limitedImages = receiptImages.slice(0, parseInt(limit));
+
+    // Thêm URL để xem hình ảnh
+    const imagesWithUrls = limitedImages.map(img => ({
+      ...img.toObject(),
+      imageUrl: `http://localhost:5000/uploads/receipts/${img.filename}`,
+      uploaderName: img.uploadedBy?.name || 'Thành viên',
+      verifierName: img.verifiedBy?.name || null,
+      categoryInfo: img.category ? {
+        _id: img.category._id,
+        name: img.category.name,
+        icon: img.category.icon,
+        type: img.category.type
+      } : null
+    }));
+
+    res.json({
+      receiptImages: imagesWithUrls
+    });
+  } catch (err) {
+    console.error('Admin family receipt images error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// GET /api/admin/families/:familyId/todo-list - Admin endpoint to get family todo list
+router.get('/families/:familyId/todo-list', auth, async (req, res) => {
+  try {
+    // Verify admin role
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    const { familyId } = req.params;
+    if (!familyId) {
+      return res.status(400).json({ message: 'Family ID required' });
+    }
+
+    const family = await Family.findById(familyId)
+      .populate('todoList.createdBy', 'name email')
+      .populate('todoList.completedBy', 'name email')
+      .populate('todoList.assignedTo', 'name email')
+      .populate('todoList.completionStatus.user', 'name email');
+
+    if (!family) {
+      return res.status(404).json({ message: 'Family not found' });
+    }
+
+    let todoList = family.todoList || [];
+    todoList = todoList.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    const todoListWithInfo = todoList.map(item => {
+      const itemObj = item.toObject();
+      const totalAssigned = itemObj.assignedTo ? itemObj.assignedTo.length : 0;
+      const completedDetails = itemObj.completionStatus || [];
+      const completedMembers = completedDetails.filter(cs => cs.completed).map(cs => cs.user);
+      const notCompletedMembers = completedDetails.filter(cs => !cs.completed).map(cs => cs.user);
+
+      const assignedToObjs = itemObj.assignedTo || [];
+      const assignedToNames = assignedToObjs.map(assignee => assignee.name || 'Thành viên');
+      const completedNames = completedDetails.filter(cs => cs.completed && cs.user)
+        .map(cs => cs.user.name || 'Thành viên');
+      const notCompletedNames = completedDetails.filter(cs => !cs.completed && cs.user)
+        .map(cs => cs.user.name || 'Thành viên');
+
+      return {
+        ...itemObj,
+        creatorName: itemObj.createdBy?.name || 'Thành viên',
+        completedByName: itemObj.completedBy?.name || null,
+        assignedToNames,
+        completedNames,
+        notCompletedNames,
+        totalAssigned,
+        completedCount: completedNames.length,
+        completionPercentage: totalAssigned > 0 ? Math.round((completedNames.length / totalAssigned) * 100) : 0,
+        allCompleted: totalAssigned > 0 && completedNames.length === totalAssigned,
+        completionDetails: completedDetails
+      };
+    });
+
+    res.json(todoListWithInfo);
+  } catch (err) {
+    console.error('Admin family todo list error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// GET /api/admin/families/:familyId/shopping-list - Admin endpoint to get family shopping list
+router.get('/families/:familyId/shopping-list', auth, async (req, res) => {
+  try {
+    // Verify admin role
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    const { familyId } = req.params;
+    if (!familyId) {
+      return res.status(400).json({ message: 'Family ID required' });
+    }
+
+    const family = await Family.findById(familyId)
+      .populate('shoppingList.createdBy', 'name email')
+      .populate('shoppingList.purchasedBy', 'name email')
+      .populate('shoppingList.category', 'name icon type');
+
+    if (!family) {
+      return res.status(404).json({ message: 'Family not found' });
+    }
+
+    // Sắp xếp theo ngày tạo mới nhất
+    const shoppingList = (family.shoppingList || []).sort((a, b) => 
+      new Date(b.createdAt) - new Date(a.createdAt)
+    );
+
+    // Thêm tên người tạo, người mua và thông tin danh mục vào từng item
+    const shoppingListWithCreator = shoppingList.map(item => ({
+      ...item.toObject(),
+      creatorName: item.createdBy?.name || 'Thành viên',
+      purchasedByName: item.purchasedBy?.name || null,
+      categoryInfo: item.category ? {
+        _id: item.category._id,
+        name: item.category.name,
+        icon: item.category.icon,
+        type: item.category.type
+      } : null
+    }));
+
+    res.json(shoppingListWithCreator);
+  } catch (err) {
+    console.error('Admin family shopping list error:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
 module.exports = router;

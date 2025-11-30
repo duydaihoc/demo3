@@ -606,6 +606,29 @@ router.put('/transactions/:id', authenticateToken, async (req, res) => {
       }
     }
     
+    // MỚI: Cập nhật purchaseAmount trong shopping list item nếu giao dịch này liên quan đến shopping list
+    if (amount && transaction.type === 'expense') {
+      try {
+        const family = await Family.findById(transaction.familyId);
+        
+        if (family && family.shoppingList && Array.isArray(family.shoppingList)) {
+          // Tìm item có purchaseTransactionId trùng với transaction ID này
+          const shoppingItem = family.shoppingList.find(item => 
+            item.purchaseTransactionId && String(item.purchaseTransactionId) === String(transaction._id)
+          );
+          
+          if (shoppingItem) {
+            shoppingItem.purchaseAmount = newAmount;
+            await family.save();
+            console.log(`Updated purchaseAmount for shopping item ${shoppingItem._id} to ${newAmount}`);
+          }
+        }
+      } catch (err) {
+        console.error('Error updating shopping list item purchaseAmount:', err);
+        // Không throw error, chỉ log để không ảnh hưởng đến việc update transaction
+      }
+    }
+    
     // Populate và trả về
     await transaction.populate('category', 'name icon type');
     await transaction.populate('createdBy', 'name email');

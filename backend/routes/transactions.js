@@ -570,6 +570,35 @@ router.put('/:id', requireAuth, async (req, res) => {
     }
 
     const updated = await tx.save();
+    
+    // MỚI: Cập nhật purchaseAmount trong shopping list item nếu wallet transaction này liên quan đến shopping list
+    if (amount && tx.type === 'expense' && tx.metadata && tx.metadata.source === 'family_personal') {
+      try {
+        const Family = require('../models/family');
+        const familyId = tx.metadata.familyId;
+        
+        if (familyId) {
+          const family = await Family.findById(familyId);
+          
+          if (family && family.shoppingList && Array.isArray(family.shoppingList)) {
+            // Tìm item có purchaseWalletTransactionId trùng với wallet transaction ID này
+            const shoppingItem = family.shoppingList.find(item => 
+              item.purchaseWalletTransactionId && String(item.purchaseWalletTransactionId) === String(tx._id)
+            );
+            
+            if (shoppingItem) {
+              shoppingItem.purchaseAmount = Number(amount);
+              await family.save();
+              console.log(`Updated purchaseAmount for shopping item ${shoppingItem._id} to ${amount}`);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error updating shopping list item purchaseAmount from wallet transaction:', err);
+        // Không throw error, chỉ log để không ảnh hưởng đến việc update transaction
+      }
+    }
+    
     const populated = await Transaction.findById(updated._id)
       .populate('wallet')
       .populate('category')

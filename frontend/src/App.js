@@ -24,6 +24,7 @@ import GroupTransactions from './group/GroupTransactions'; // <-- new import
 import GroupManagePage from './group/GroupManagePage';
 import GroupMemberPage from './group/GroupMemberPage';
 import AdminGroupViewPage from './admin/AdminGroupViewPage';
+import AdminFamilyViewPage from './admin/AdminFamilyViewPage';
 import FamilyHome from './family/FamilyHome'; // Import FamilyHome component
 import FamilySwitchPage from './family/FamilySwitchPage';
 import FamilySelectorPage from './family/FamilySelectorPage';
@@ -99,6 +100,7 @@ function AppRoutes() {
 				<Route path="/admin/groups/view/:groupId" element={<AdminGroupViewPage />} />
 				<Route path="/admin/groups/transition-group" element={<AdminGroupTransactionsPage />} />
 				<Route path="/admin/families" element={<AdminFamiliesPage />} />
+				<Route path="/admin/families/:familyId" element={<AdminFamilyViewPage />} />
 				<Route path="/admin/categories" element={<AdminCategoriesPage />} /> {/* Add new route */}
 				<Route path="/admin/transactions" element={<AdminTransactionsPage />} /> {/* Add new route */}
 				<Route path="/admin/supports" element={<AdminSupportsPage />} />

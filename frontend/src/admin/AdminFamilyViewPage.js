@@ -114,11 +114,15 @@ function AdminFamilyViewPage() {
       if (res.ok) {
         const data = await res.json();
         setBudgets(Array.isArray(data) ? data : []);
+      } else {
+        console.error('Failed to fetch budgets:', res.status, res.statusText);
+        const errorData = await res.json().catch(() => ({}));
+        console.error('Error details:', errorData);
       }
     } catch (err) {
       console.error('Error fetching budgets:', err);
     }
-  }, [familyId, token]);
+  }, [familyId, token, API_BASE]);
 
   // Fetch receipt images
   const fetchReceiptImages = useCallback(async () => {
@@ -132,11 +136,15 @@ function AdminFamilyViewPage() {
       if (res.ok) {
         const data = await res.json();
         setReceiptImages(Array.isArray(data.receiptImages) ? data.receiptImages : []);
+      } else {
+        console.error('Failed to fetch receipt images:', res.status, res.statusText);
+        const errorData = await res.json().catch(() => ({}));
+        console.error('Error details:', errorData);
       }
     } catch (err) {
       console.error('Error fetching receipt images:', err);
     }
-  }, [familyId, token]);
+  }, [familyId, token, API_BASE]);
 
   // Fetch todo list
   const fetchTodoList = useCallback(async () => {
@@ -150,11 +158,15 @@ function AdminFamilyViewPage() {
       if (res.ok) {
         const data = await res.json();
         setTodoList(Array.isArray(data) ? data : []);
+      } else {
+        console.error('Failed to fetch todo list:', res.status, res.statusText);
+        const errorData = await res.json().catch(() => ({}));
+        console.error('Error details:', errorData);
       }
     } catch (err) {
       console.error('Error fetching todo list:', err);
     }
-  }, [familyId, token]);
+  }, [familyId, token, API_BASE]);
 
   // Fetch shopping list
   const fetchShoppingList = useCallback(async () => {
@@ -168,11 +180,15 @@ function AdminFamilyViewPage() {
       if (res.ok) {
         const data = await res.json();
         setShoppingList(Array.isArray(data) ? data : []);
+      } else {
+        console.error('Failed to fetch shopping list:', res.status, res.statusText);
+        const errorData = await res.json().catch(() => ({}));
+        console.error('Error details:', errorData);
       }
     } catch (err) {
       console.error('Error fetching shopping list:', err);
     }
-  }, [familyId, token]);
+  }, [familyId, token, API_BASE]);
 
   useEffect(() => {
     const role = localStorage.getItem('role');

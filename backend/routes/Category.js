@@ -283,6 +283,9 @@ router.post('/fix-index', async (req, res) => {
 // @route   POST /api/categories/seed
 // @desc    Seed default categories
 // @access  Public
+// NOTE: Endpoint này đã được comment để giữ lại cho tương lai nếu cần tạo lại danh mục mặc định
+// Để sử dụng lại, bỏ comment và gọi POST /api/categories/seed
+/*
 router.post('/seed', async (req, res) => {
   try {
     // Xóa tất cả danh mục hệ thống (không có owner)
@@ -330,6 +333,7 @@ router.post('/seed', async (req, res) => {
     res.status(500).json({ message: 'Server Error', error: err.message });
   }
 });
+*/
 
 // @route   PUT /api/categories/:id
 // @desc    Update a category

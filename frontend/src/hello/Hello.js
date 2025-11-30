@@ -36,29 +36,29 @@ export default function Hello() {
 
   const featureData = {
     personal: {
-      title: 'Quản lý cá nhân',
-      desc: 'Theo dõi ví cá nhân, mục tiêu tiết kiệm và phân tích chi tiêu hàng ngày.',
-      pills: ['Đa ví', 'Mục tiêu', 'Phân loại tự động', 'Báo cáo PDF', 'Gợi ý điều chỉnh']
+      title: 'Quản lý cá nhân thông minh',
+      desc: 'Quản lý tài chính cá nhân toàn diện với đa ví, mục tiêu tiết kiệm, phân tích chi tiêu và báo cáo chi tiết.',
+      pills: ['Đa ví không giới hạn', 'Mục tiêu tiết kiệm', 'Bản đồ chi tiêu', 'Timeline chi tiêu', 'Xuất PDF/CSV', 'Phân tích theo danh mục']
     },
     group: {
-      title: 'Nhóm & Ghi nợ',
-      desc: 'Chia sẻ chi phí, ghi nợ minh bạch và nhắc nhở thanh toán tự động.',
-      pills: ['Tạo nhóm', 'Phân quyền', 'Ghi nợ', 'Tự động chia', 'Lịch sử minh bạch']
+      title: 'Nhóm & Ghi nợ thông minh',
+      desc: 'Quản lý chi tiêu nhóm, chia sẻ chi phí, ghi nợ minh bạch và tối ưu hóa thanh toán tự động.',
+      pills: ['Tạo nhóm không giới hạn', 'Chia chi phí tự động', 'Ghi nợ thông minh', 'Tối ưu thanh toán', 'Hoạt động nhóm', 'Lịch sử minh bạch']
     },
     family: {
-      title: 'Liên kết ví gia đình',
-      desc: 'Tập trung tài chính gia đình, phân vai trò quản lý và theo dõi tổng hợp.',
-      pills: ['Phân vai trò', 'Tổng hợp dòng tiền', 'Giới hạn chi', 'Cảnh báo sớm']
+      title: 'Quản lý gia đình toàn diện',
+      desc: 'Quản lý tài chính gia đình tập trung với danh sách mua sắm, việc cần làm, ngân sách và lưu trữ hóa đơn.',
+      pills: ['Danh sách mua sắm', 'Việc cần làm', 'Ngân sách gia đình', 'Lưu trữ hóa đơn', 'Giao dịch gia đình', 'Phân vai trò']
     },
     ai: {
       title: 'Trợ lý AI Gemini',
-      desc: 'Phân tích xu hướng, tạo giao dịch bằng ngôn ngữ tự nhiên & gợi ý tối ưu.',
-      pills: ['Hiểu ngữ cảnh', 'Tối ưu hóa', 'Hỏi đáp tài chính', 'Gợi ý tiết kiệm']
+      desc: 'Trợ lý thông minh với công nghệ AI tiên tiến, tạo giao dịch bằng ngôn ngữ tự nhiên và phân tích xu hướng.',
+      pills: ['Tạo giao dịch bằng giọng nói', 'Phân tích xu hướng', 'Gợi ý tài chính', 'Hỏi đáp thông minh', 'Hiểu ngữ cảnh', 'Tối ưu hóa chi tiêu']
     },
-    security: {
-      title: 'Bảo mật & Tin cậy',
-      desc: 'Mã hóa dữ liệu, xác thực an toàn và cảnh báo bất thường.',
-      pills: ['Mã hóa', 'Theo dõi bất thường', 'Nhật ký bảo mật', 'Sao lưu']
+    advanced: {
+      title: 'Tính năng nâng cao',
+      desc: 'Các công cụ mạnh mẽ hỗ trợ quản lý tài chính hiệu quả với biểu đồ, thống kê và xuất dữ liệu.',
+      pills: ['Biểu đồ trực quan', 'Thống kê chi tiết', 'Xuất dữ liệu', 'Bản đồ chi tiêu', 'Phân tích theo thời gian', 'Quản lý danh mục']
     }
   };
 
@@ -157,9 +157,9 @@ export default function Hello() {
 
       <section className="hero-section">
         <div className="hero-content">
-          <h1 className="animate-on-scroll">Quản lý tài chính thông minh cho gia đình</h1>
+          <h1 className="animate-on-scroll">Quản lý tài chính thông minh toàn diện</h1>
           <p className="hero-subtitle animate-on-scroll">
-            Giải pháp toàn diện: Quản lý cá nhân, nhóm chi tiêu, liên kết ví gia đình, ghi nợ thông minh và trợ lý AI
+            Giải pháp hoàn chỉnh: Quản lý cá nhân, nhóm chi tiêu, gia đình, danh sách mua sắm, việc cần làm, ngân sách, lưu trữ hóa đơn và trợ lý AI Gemini
           </p>
           <div className="hero-cta animate-on-scroll">
             <Link to="/register" className="cta-primary">Dùng thử miễn phí</Link>
@@ -204,7 +204,7 @@ export default function Hello() {
                 {key === 'group' && '👥'}
                 {key === 'family' && '🏠'}
                 {key === 'ai' && '🤖'}
-                {key === 'security' && '🔒'}
+                {key === 'advanced' && '⚡'}
               </span>
               <span>{featureData[key].title}</span>
             </button>
@@ -230,13 +230,15 @@ export default function Hello() {
             <div className="feature-icon-large">
               <i className="fas fa-user-circle"></i>
             </div>
-            <h3>Quản lý cá nhân</h3>
-            <p>Kiểm soát hoàn toàn tài chính cá nhân với giao diện trực quan và dễ sử dụng</p>
+            <h3>Quản lý cá nhân thông minh</h3>
+            <p>Quản lý tài chính cá nhân toàn diện với đa ví, mục tiêu tiết kiệm, bản đồ chi tiêu và phân tích chi tiết</p>
             <ul className="feature-highlights">
-              <li><i className="fas fa-check"></i> Tạo và quản lý nhiều ví riêng</li>
-              <li><i className="fas fa-check"></i> Phân loại giao dịch tự động</li>
-              <li><i className="fas fa-check"></i> Báo cáo chi tiêu chi tiết</li>
-              <li><i className="fas fa-check"></i> Đặt mục tiêu tiết kiệm</li>
+              <li><i className="fas fa-check"></i> Tạo và quản lý nhiều ví không giới hạn</li>
+              <li><i className="fas fa-check"></i> Đặt mục tiêu tiết kiệm với theo dõi tiến độ</li>
+              <li><i className="fas fa-check"></i> Bản đồ chi tiêu với vị trí địa lý</li>
+              <li><i className="fas fa-check"></i> Timeline chi tiêu trực quan</li>
+              <li><i className="fas fa-check"></i> Xuất báo cáo PDF/CSV</li>
+              <li><i className="fas fa-check"></i> Phân tích chi tiêu theo danh mục</li>
             </ul>
             <span className="feature-badge">Miễn phí</span>
           </div>
@@ -245,12 +247,14 @@ export default function Hello() {
             <div className="feature-icon-large">
               <i className="fas fa-users"></i>
             </div>
-            <h3>Nhóm chi tiêu & Ghi nợ</h3>
-            <p>Quản lý chi tiêu chung với bạn bè, đồng nghiệp một cách dễ dàng và minh bạch</p>
+            <h3>Nhóm chi tiêu & Ghi nợ thông minh</h3>
+            <p>Quản lý chi tiêu nhóm, chia sẻ chi phí, ghi nợ minh bạch và tối ưu hóa thanh toán tự động</p>
             <ul className="feature-highlights">
-              <li><i className="fas fa-check"></i> Tạo nhóm không giới hạn</li>
+              <li><i className="fas fa-check"></i> Tạo nhóm không giới hạn thành viên</li>
+              <li><i className="fas fa-check"></i> Chia chi phí tự động (chia đều, theo phần trăm)</li>
               <li><i className="fas fa-check"></i> Ghi nợ và thanh toán thông minh</li>
-              <li><i className="fas fa-check"></i> Chia sẻ chi phí tự động</li>
+              <li><i className="fas fa-check"></i> Tối ưu hóa thanh toán (giảm số lần chuyển)</li>
+              <li><i className="fas fa-check"></i> Hoạt động nhóm và lịch sử minh bạch</li>
               <li><i className="fas fa-check"></i> Thông báo nhắc nhở thanh toán</li>
             </ul>
             <span className="feature-badge">Pro</span>
@@ -260,30 +264,34 @@ export default function Hello() {
             <div className="feature-icon-large">
               <i className="fas fa-home"></i>
             </div>
-            <h3>Liên kết ví gia đình</h3>
-            <p>Quản lý tài chính gia đình tập trung, minh bạch và hiệu quả</p>
+            <h3>Quản lý gia đình toàn diện</h3>
+            <p>Quản lý tài chính gia đình tập trung với danh sách mua sắm, việc cần làm, ngân sách và lưu trữ hóa đơn</p>
             <ul className="feature-highlights">
-              <li><i className="fas fa-check"></i> Liên kết ví giữa các thành viên</li>
-              <li><i className="fas fa-check"></i> Phân quyền quản lý linh hoạt</li>
-              <li><i className="fas fa-check"></i> Theo dõi chi tiêu gia đình</li>
-              <li><i className="fas fa-check"></i> Báo cáo tài chính tổng hợp</li>
+              <li><i className="fas fa-check"></i> Danh sách mua sắm với mua/hoàn tiền</li>
+              <li><i className="fas fa-check"></i> Danh sách việc cần làm với phân công</li>
+              <li><i className="fas fa-check"></i> Ngân sách gia đình với theo dõi tiến độ</li>
+              <li><i className="fas fa-check"></i> Lưu trữ hóa đơn với OCR</li>
+              <li><i className="fas fa-check"></i> Giao dịch gia đình (quỹ/ví cá nhân)</li>
+              <li><i className="fas fa-check"></i> Phân vai trò và quyền quản lý</li>
             </ul>
             <span className="feature-badge">Family Plan</span>
           </div>
 
           <div className="feature-card-large animate-on-scroll">
             <div className="feature-icon-large">
-              <i className="fas fa-wallet"></i>
+              <i className="fas fa-shopping-cart"></i>
             </div>
-            <h3>Đa ví thông minh</h3>
-            <p>Quản lý nhiều nguồn tiền khác nhau một cách khoa học và có hệ thống</p>
+            <h3>Danh sách mua sắm thông minh</h3>
+            <p>Quản lý danh sách mua sắm gia đình với tính năng mua hàng, thanh toán và hoàn tiền tự động</p>
             <ul className="feature-highlights">
-              <li><i className="fas fa-check"></i> Tạo ví không giới hạn</li>
-              <li><i className="fas fa-check"></i> Chuyển tiền giữa các ví</li>
-              <li><i className="fas fa-check"></i> Danh mục chi tiêu riêng biệt</li>
-              <li><i className="fas fa-check"></i> Theo dõi số dư realtime</li>
+              <li><i className="fas fa-check"></i> Tạo và quản lý danh sách mua sắm</li>
+              <li><i className="fas fa-check"></i> Mua hàng bằng ví cá nhân hoặc quỹ gia đình</li>
+              <li><i className="fas fa-check"></i> Tự động tạo giao dịch khi mua</li>
+              <li><i className="fas fa-check"></i> Hoàn tiền thông minh</li>
+              <li><i className="fas fa-check"></i> Xuất danh sách PDF/CSV</li>
+              <li><i className="fas fa-check"></i> Phân loại theo danh mục</li>
             </ul>
-            <span className="feature-badge">Miễn phí</span>
+            <span className="feature-badge">Family Plan</span>
           </div>
 
           <div className="feature-card-large animate-on-scroll">
@@ -291,29 +299,33 @@ export default function Hello() {
               <i className="fas fa-robot"></i>
             </div>
             <h3>Trợ lý AI Gemini</h3>
-            <p>Trợ lý thông minh hỗ trợ quản lý tài chính 24/7 với công nghệ AI tiên tiến</p>
+            <p>Trợ lý thông minh với công nghệ AI tiên tiến, tạo giao dịch bằng ngôn ngữ tự nhiên và phân tích xu hướng</p>
             <ul className="feature-highlights">
-              <li><i className="fas fa-check"></i> Tạo giao dịch bằng giọng nói</li>
-              <li><i className="fas fa-check"></i> Phân tích xu hướng chi tiêu</li>
-              <li><i className="fas fa-check"></i> Tư vấn tài chính cá nhân hóa</li>
-              <li><i className="fas fa-check"></i> Gợi ý tiết kiệm thông minh</li>
+              <li><i className="fas fa-check"></i> Tạo giao dịch bằng ngôn ngữ tự nhiên</li>
+              <li><i className="fas fa-check"></i> Phân tích xu hướng chi tiêu thông minh</li>
+              <li><i className="fas fa-check"></i> Gợi ý tài chính cá nhân hóa</li>
+              <li><i className="fas fa-check"></i> Hỏi đáp tài chính 24/7</li>
+              <li><i className="fas fa-check"></i> Hiểu ngữ cảnh và học hỏi</li>
+              <li><i className="fas fa-check"></i> Tối ưu hóa chi tiêu tự động</li>
             </ul>
             <span className="feature-badge">AI Powered</span>
           </div>
 
           <div className="feature-card-large animate-on-scroll">
             <div className="feature-icon-large">
-              <i className="fas fa-user-friends"></i>
+              <i className="fas fa-chart-line"></i>
             </div>
-            <h3>Quản lý thành viên</h3>
-            <p>Kết nối và quản lý thành viên trong gia đình hoặc nhóm một cách hiệu quả</p>
+            <h3>Phân tích & Báo cáo nâng cao</h3>
+            <p>Công cụ phân tích mạnh mẽ với biểu đồ trực quan, thống kê chi tiết và xuất dữ liệu đa định dạng</p>
             <ul className="feature-highlights">
-              <li><i className="fas fa-check"></i> Thêm thành viên không giới hạn</li>
-              <li><i className="fas fa-check"></i> Phân quyền chi tiết</li>
-              <li><i className="fas fa-check"></i> Theo dõi hoạt động thành viên</li>
-              <li><i className="fas fa-check"></i> Lịch sử giao dịch minh bạch</li>
+              <li><i className="fas fa-check"></i> Biểu đồ trực quan (Pie, Bar, Line)</li>
+              <li><i className="fas fa-check"></i> Thống kê chi tiết theo thời gian</li>
+              <li><i className="fas fa-check"></i> Phân tích theo danh mục</li>
+              <li><i className="fas fa-check"></i> Xuất dữ liệu PDF/CSV/TXT</li>
+              <li><i className="fas fa-check"></i> Bản đồ chi tiêu với vị trí</li>
+              <li><i className="fas fa-check"></i> Timeline chi tiêu trực quan</li>
             </ul>
-            <span className="feature-badge">Pro</span>
+            <span className="feature-badge">Premium</span>
           </div>
         </div>
       </section>
@@ -387,22 +399,37 @@ export default function Hello() {
             </thead>
             <tbody>
               <tr>
-                <td>Quản lý ví cá nhân</td>
+                <td>Quản lý đa ví cá nhân</td>
                 <td><span className="check-icon" aria-hidden>✓</span></td>
                 <td><span className="check-icon" aria-hidden>✓</span></td>
               </tr>
               <tr>
-                <td>Nhóm chi tiêu</td>
+                <td>Nhóm chi tiêu & Ghi nợ</td>
                 <td><span className="check-icon" aria-hidden>✓</span></td>
                 <td><span className="cross-icon" aria-hidden>✕</span></td>
               </tr>
               <tr>
-                <td>Liên kết ví gia đình</td>
+                <td>Quản lý gia đình toàn diện</td>
                 <td><span className="check-icon" aria-hidden>✓</span></td>
                 <td><span className="cross-icon" aria-hidden>✕</span></td>
               </tr>
               <tr>
-                <td>Ghi nợ thông minh</td>
+                <td>Danh sách mua sắm thông minh</td>
+                <td><span className="check-icon" aria-hidden>✓</span></td>
+                <td><span className="cross-icon" aria-hidden>✕</span></td>
+              </tr>
+              <tr>
+                <td>Danh sách việc cần làm</td>
+                <td><span className="check-icon" aria-hidden>✓</span></td>
+                <td><span className="cross-icon" aria-hidden>✕</span></td>
+              </tr>
+              <tr>
+                <td>Ngân sách gia đình</td>
+                <td><span className="check-icon" aria-hidden>✓</span></td>
+                <td><span className="cross-icon" aria-hidden>✕</span></td>
+              </tr>
+              <tr>
+                <td>Lưu trữ hóa đơn với OCR</td>
                 <td><span className="check-icon" aria-hidden>✓</span></td>
                 <td><span className="cross-icon" aria-hidden>✕</span></td>
               </tr>
@@ -412,12 +439,22 @@ export default function Hello() {
                 <td><span className="cross-icon" aria-hidden>✕</span></td>
               </tr>
               <tr>
-                <td>Quản lý thành viên</td>
+                <td>Bản đồ chi tiêu với vị trí</td>
+                <td><span className="check-icon" aria-hidden>✓</span></td>
+                <td><span className="cross-icon" aria-hidden>✕</span></td>
+              </tr>
+              <tr>
+                <td>Mục tiêu tiết kiệm</td>
                 <td><span className="check-icon" aria-hidden>✓</span></td>
                 <td><span className="check-icon" aria-hidden>✓</span></td>
               </tr>
               <tr>
-                <td>Báo cáo chi tiết</td>
+                <td>Xuất dữ liệu PDF/CSV/TXT</td>
+                <td><span className="check-icon" aria-hidden>✓</span></td>
+                <td><span className="cross-icon" aria-hidden>✕</span></td>
+              </tr>
+              <tr>
+                <td>Biểu đồ & Thống kê nâng cao</td>
                 <td><span className="check-icon" aria-hidden>✓</span></td>
                 <td><span className="check-icon" aria-hidden>✓</span></td>
               </tr>

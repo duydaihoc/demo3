@@ -31,13 +31,13 @@ ChartJS.register(
 );
 
 const FinanceDashboard = forwardRef((props, ref) => {
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [walletTotals, setWalletTotals] = useState({});
   const [incomeByCurrency, setIncomeByCurrency] = useState({});
   const [expenseByCurrency, setExpenseByCurrency] = useState({});
   const [topCategories, setTopCategories] = useState([]);
   const [recentTxs, setRecentTxs] = useState([]);
-  const [error, setError] = useState(null);
+  const [, setError] = useState(null);
   // New states for chart
   const [wallets, setWallets] = useState([]);
   const [selectedWallet, setSelectedWallet] = useState('all');

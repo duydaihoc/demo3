@@ -25,6 +25,11 @@ export default function FamilyShoppingList() {
   const [itemToDelete, setItemToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Refund modal state
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [itemToRefund, setItemToRefund] = useState(null);
+  const [refunding, setRefunding] = useState(false);
+
   // Purchase modal state
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [itemToPurchase, setItemToPurchase] = useState(null);
@@ -260,13 +265,12 @@ export default function FamilyShoppingList() {
   const openPurchaseModal = async (item) => {
     if (item.purchased) {
       // Nếu đã mua, kiểm tra quyền hoàn tiền
-      const currentUser = getCurrentUser();
-      if (!currentUser || String(item.purchasedBy?._id || item.purchasedBy) !== String(currentUser.id)) {
-        showNotification('Chỉ người đã mua sản phẩm này mới được phép hoàn tiền', 'error');
+      if (!canRefundItem(item)) {
+        showNotification('Bạn không phải là người mua sản phẩm này. Chỉ người đã mua mới được phép hoàn tiền.', 'error');
         return;
       }
-      // Hoàn tiền
-      await handleRefund(item._id);
+      // Hoàn tiền - mở modal
+      openRefundModal(item);
       return;
     }
     
@@ -347,14 +351,19 @@ export default function FamilyShoppingList() {
     }
   };
 
+  // Mở modal hoàn tiền
+  const openRefundModal = (item) => {
+    setItemToRefund(item);
+    setShowRefundModal(true);
+  };
+
   // Xử lý hoàn tiền
-  const handleRefund = async (itemId) => {
-    if (!window.confirm('Bạn có chắc chắn muốn hoàn tiền cho sản phẩm này?')) {
-      return;
-    }
+  const handleRefund = async () => {
+    if (!itemToRefund) return;
     
+    setRefunding(true);
     try {
-      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/shopping-list/${itemId}/refund`, {
+      const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/shopping-list/${itemToRefund._id}/refund`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -368,15 +377,24 @@ export default function FamilyShoppingList() {
       }
       
       showNotification('Đã hoàn tiền thành công', 'success');
+      setShowRefundModal(false);
+      setItemToRefund(null);
       await fetchShoppingList();
     } catch (err) {
       console.error("Error refunding item:", err);
       showNotification(err.message || 'Không thể hoàn tiền', 'error');
+    } finally {
+      setRefunding(false);
     }
   };
 
   // Mở modal xóa
   const openDeleteModal = (item) => {
+    // Kiểm tra nếu item đã được mua thì không cho phép xóa
+    if (item.purchased) {
+      showNotification('Không thể xóa sản phẩm đã được mua. Vui lòng hoàn tiền trước khi xóa.', 'error');
+      return;
+    }
     setItemToDelete(item);
     setShowDeleteModal(true);
   };
@@ -395,6 +413,13 @@ export default function FamilyShoppingList() {
       
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
+        // Nếu lỗi do item đã được mua, hiển thị thông báo đặc biệt
+        if (errData.code === 'ITEM_PURCHASED' || errData.requiresRefund) {
+          showNotification('Không thể xóa sản phẩm đã được mua. Vui lòng hoàn tiền trước khi xóa.', 'error');
+          setShowDeleteModal(false);
+          setItemToDelete(null);
+          return;
+        }
         throw new Error(errData.message || 'Không thể xóa sản phẩm');
       }
       
@@ -441,6 +466,25 @@ export default function FamilyShoppingList() {
   // THÊM: Helper kiểm tra có thể xóa item không (owner hoặc người tạo)
   const canDeleteItem = (item) => {
     return isOwner || isItemCreator(item);
+  };
+
+  // THÊM: Helper kiểm tra có thể hoàn tiền không (chỉ người mua)
+  const canRefundItem = (item) => {
+    if (!item.purchased) return false;
+    const currentUser = getCurrentUser();
+    if (!currentUser || !item.purchasedBy) return false;
+    
+    // Kiểm tra theo ID nếu purchasedBy là object
+    if (typeof item.purchasedBy === 'object' && item.purchasedBy._id) {
+      return String(item.purchasedBy._id) === String(currentUser.id);
+    }
+    
+    // Kiểm tra theo ID nếu purchasedBy là string
+    if (typeof item.purchasedBy === 'string') {
+      return String(item.purchasedBy) === String(currentUser.id);
+    }
+    
+    return false;
   };
 
   // Open edit modal (owner hoặc người tạo item)
@@ -1183,17 +1227,33 @@ export default function FamilyShoppingList() {
                               )}
                               <button 
                                 className={`fsl-action-btn ${item.purchased ? 'undo' : 'check'}`} 
-                                onClick={() => openPurchaseModal(item)}
-                                disabled={item.purchased && (() => {
-                                  const currentUser = getCurrentUser();
-                                  return !currentUser || String(item.purchasedBy?._id || item.purchasedBy) !== String(currentUser.id);
-                                })()}
+                                onClick={() => {
+                                  if (item.purchased && !canRefundItem(item)) {
+                                    showNotification('Bạn không phải là người mua sản phẩm này. Chỉ người đã mua mới được phép hoàn tiền.', 'error');
+                                    return;
+                                  }
+                                  openPurchaseModal(item);
+                                }}
+                                disabled={item.purchased && !canRefundItem(item)}
+                                style={item.purchased && !canRefundItem(item) ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                                title={item.purchased && !canRefundItem(item) ? 'Bạn không phải là người mua sản phẩm này' : ''}
                               >
                                 <i className={`fas ${item.purchased ? 'fa-undo' : 'fa-check'}`}></i>
                                 <span className="btn-text">{item.purchased ? 'Hoàn tiền' : 'Đã mua'}</span>
                               </button>
-                              {canDeleteItem(item) && (
+                              {canDeleteItem(item) && !item.purchased && (
                                 <button className="fsl-action-btn delete" onClick={() => openDeleteModal(item)}>
+                                  <i className="fas fa-trash"></i> <span className="btn-text">Xóa</span>
+                                </button>
+                              )}
+                              {canDeleteItem(item) && item.purchased && (
+                                <button 
+                                  className="fsl-action-btn delete" 
+                                  onClick={() => showNotification('Không thể xóa sản phẩm đã được mua. Vui lòng hoàn tiền trước.', 'error')}
+                                  disabled
+                                  style={{ opacity: 0.5, cursor: 'not-allowed' }}
+                                  title="Không thể xóa sản phẩm đã được mua. Vui lòng hoàn tiền trước."
+                                >
                                   <i className="fas fa-trash"></i> <span className="btn-text">Xóa</span>
                                 </button>
                               )}
@@ -1265,17 +1325,34 @@ export default function FamilyShoppingList() {
                         )}
                         <button 
                           className={`fsl-note-btn ${item.purchased ? 'undo' : 'check'}`} 
-                          onClick={() => openPurchaseModal(item)}
-                          disabled={item.purchased && (() => {
-                            const currentUser = getCurrentUser();
-                            return !currentUser || String(item.purchasedBy?._id || item.purchasedBy) !== String(currentUser.id);
-                          })()}
+                          onClick={() => {
+                            if (item.purchased && !canRefundItem(item)) {
+                              showNotification('Bạn không phải là người mua sản phẩm này. Chỉ người đã mua mới được phép hoàn tiền.', 'error');
+                              return;
+                            }
+                            openPurchaseModal(item);
+                          }}
+                          disabled={item.purchased && !canRefundItem(item)}
+                          style={item.purchased && !canRefundItem(item) ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                          title={item.purchased && !canRefundItem(item) ? 'Bạn không phải là người mua sản phẩm này' : ''}
                         >
                           <i className={`fas ${item.purchased ? 'fa-undo' : 'fa-check'}`}></i>
                           {item.purchased ? 'Hoàn tiền' : 'Đã mua'}
                         </button>
-                        {canDeleteItem(item) && (
+                        {canDeleteItem(item) && !item.purchased && (
                           <button className="fsl-note-btn delete" onClick={() => openDeleteModal(item)}>
+                            <i className="fas fa-trash"></i>
+                            Xóa
+                          </button>
+                        )}
+                        {canDeleteItem(item) && item.purchased && (
+                          <button 
+                            className="fsl-note-btn delete" 
+                            onClick={() => showNotification('Không thể xóa sản phẩm đã được mua. Vui lòng hoàn tiền trước.', 'error')}
+                            disabled
+                            style={{ opacity: 0.5, cursor: 'not-allowed' }}
+                            title="Không thể xóa sản phẩm đã được mua. Vui lòng hoàn tiền trước."
+                          >
                             <i className="fas fa-trash"></i>
                             Xóa
                           </button>
@@ -1588,6 +1665,147 @@ export default function FamilyShoppingList() {
                   ) : (
                     <>
                       <i className="fas fa-trash-alt"></i> Xác nhận xóa
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Refund Confirmation Modal */}
+      {showRefundModal && itemToRefund && (
+        <div className="fsl-modal-overlay">
+          <div className="fsl-modal fsl-refund-modal">
+            <div className="fsl-modal-header">
+              <h3>
+                <i className="fas fa-undo"></i> Xác nhận hoàn tiền
+              </h3>
+              <button 
+                className="fsl-modal-close"
+                onClick={() => {
+                  setShowRefundModal(false);
+                  setItemToRefund(null);
+                }}
+                disabled={refunding}
+              >
+                &times;
+              </button>
+            </div>
+            
+            <div className="fsl-form">
+              <div className="fsl-refund-warning">
+                <div className="fsl-refund-warning-icon">
+                  <i className="fas fa-undo"></i>
+                </div>
+                <h4>Bạn có chắc chắn muốn hoàn tiền cho sản phẩm này?</h4>
+                <p>Tiền sẽ được hoàn lại vào phương thức thanh toán ban đầu</p>
+                
+                <div className="fsl-refund-item-preview">
+                  <div className="fsl-refund-item-preview-label">Thông tin sản phẩm:</div>
+                  <div className="fsl-refund-item-preview-title">{itemToRefund.name}</div>
+                  {itemToRefund.notes && (
+                    <div className="fsl-refund-item-preview-desc">{itemToRefund.notes}</div>
+                  )}
+                  <div className="fsl-refund-item-preview-badges">
+                    <span className="fsl-quantity-badge" style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '4px 12px',
+                      background: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
+                      color: 'white',
+                      borderRadius: '12px',
+                      fontSize: '12px',
+                      fontWeight: 600
+                    }}>
+                      <i className="fas fa-box"></i>
+                      Số lượng: x{itemToRefund.quantity}
+                    </span>
+                    {itemToRefund.purchaseAmount && (
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '4px 12px',
+                        background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.15) 100%)',
+                        border: '1px solid rgba(16, 185, 129, 0.3)',
+                        borderRadius: '12px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        color: '#059669'
+                      }}>
+                        <i className="fas fa-money-bill-wave"></i>
+                        Số tiền: {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(itemToRefund.purchaseAmount)}
+                      </span>
+                    )}
+                    {itemToRefund.purchasedByName && (
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '4px 12px',
+                        background: '#e3f2fd',
+                        color: '#1976d2',
+                        borderRadius: '12px',
+                        fontSize: '12px',
+                        fontWeight: 500
+                      }}>
+                        <i className="fas fa-user-check"></i>
+                        Đã mua bởi: {itemToRefund.purchasedByName}
+                      </span>
+                    )}
+                    {itemToRefund.purchaseType && (
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '4px 12px',
+                        background: itemToRefund.purchaseType === 'personal' 
+                          ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(99, 102, 241, 0.15) 100%)'
+                          : 'linear-gradient(135deg, rgba(42, 82, 152, 0.15) 0%, rgba(78, 205, 196, 0.15) 100%)',
+                        border: itemToRefund.purchaseType === 'personal'
+                          ? '1px solid rgba(59, 130, 246, 0.3)'
+                          : '1px solid rgba(42, 82, 152, 0.3)',
+                        borderRadius: '12px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        color: itemToRefund.purchaseType === 'personal' ? '#2563eb' : '#2a5298'
+                      }}>
+                        <i className={itemToRefund.purchaseType === 'personal' ? 'fas fa-wallet' : 'fas fa-home'}></i>
+                        {itemToRefund.purchaseType === 'personal' ? 'Ví cá nhân' : 'Quỹ gia đình'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="fsl-form-actions">
+                <button 
+                  type="button" 
+                  className="fsl-btn secondary"
+                  onClick={() => {
+                    setShowRefundModal(false);
+                    setItemToRefund(null);
+                  }}
+                  disabled={refunding}
+                >
+                  <i className="fas fa-times"></i> Hủy
+                </button>
+                <button 
+                  type="button" 
+                  className="fsl-btn refund"
+                  onClick={handleRefund}
+                  disabled={refunding}
+                >
+                  {refunding ? (
+                    <>
+                      <i className="fas fa-spinner fa-spin"></i> Đang hoàn tiền...
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-undo"></i> Xác nhận hoàn tiền
                     </>
                   )}
                 </button>

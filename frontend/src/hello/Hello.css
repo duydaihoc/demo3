@@ -811,14 +811,14 @@ html.hello-scrollable, body.hello-scrollable {
 }
 
 /* ===== ENHANCED FEATURES SECTION ===== */
-.features_showcase {
+.features-showcase {
   padding: 100px 5%;
-  background: var(--gradient-main); /* SỬA: Dùng gradient chính */
+  background: var(--gradient-main);
   position: relative;
   overflow: hidden;
 }
 
-.features_showcase::before {
+.features-showcase::before {
   content: '';
   position: absolute;
   top: 0;
@@ -831,12 +831,12 @@ html.hello-scrollable, body.hello-scrollable {
   pointer-events: none;
 }
 
-.features_showcase .section-title {
+.features-showcase .section-title {
   color: white;
   margin-bottom: 60px;
 }
 
-.features_showcase .section-title::after {
+.features-showcase .section-title::after {
   background: white;
 }
 

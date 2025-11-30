@@ -910,14 +910,22 @@ body.group-sidebar-collapsed .groups-main {
 
 /* Color Picker */
 .color-picker {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 10px;
+	display: grid;
+	grid-template-columns: repeat(5, 1fr);
+	gap: 12px;
+	position: relative;
+	z-index: 0;
+	margin-bottom: 0;
+	padding-bottom: 0;
+	min-height: auto;
+	width: 100%;
 }
 
 .color-picker .swatch {
-	width: 40px;
-	height: 40px;
+	width: 100%;
+	aspect-ratio: 1;
+	max-width: 50px;
+	height: auto;
 	border-radius: 10px;
 	border: 2px solid transparent;
 	cursor: pointer;
@@ -948,9 +956,19 @@ body.group-sidebar-collapsed .groups-main {
 }
 
 .color-hint {
-	margin-top: 12px;
+	margin-top: 16px;
+	margin-bottom: 0;
+	padding-top: 12px;
+	padding-bottom: 0;
 	font-size: 13px;
 	color: #64748b;
+	position: relative;
+	z-index: 10;
+	clear: both;
+	display: block;
+	width: 100%;
+	line-height: 1.5;
+	border-top: 1px solid #f1f5f9;
 }
 
 /* Direction Selector */
@@ -958,6 +976,9 @@ body.group-sidebar-collapsed .groups-main {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 8px;
+	margin-top: 0;
+	margin-bottom: 0;
+	padding: 0;
 }
 
 .direction-btn {
@@ -1073,14 +1094,38 @@ body.group-sidebar-collapsed .groups-main {
 .design-options {
 	display: flex;
 	flex-direction: column;
-	gap: 24px;
+	gap: 32px;
+	padding: 0;
+}
+
+.design-option {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	padding: 20px;
+	background: #ffffff;
+	border: 1px solid #e2e8f0;
+	border-radius: 12px;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.design-option:first-child {
+	margin-bottom: 0;
+}
+
+.design-option:last-child {
+	margin-top: 0;
 }
 
 .design-option h4 {
-	margin: 0 0 12px 0;
+	margin: 0 0 16px 0;
 	font-size: 14px;
 	color: #475569;
 	font-weight: 600;
+}
+
+.design-option .color-picker {
+	margin-bottom: 0;
 }
 
 /* Invite Friends Styles (keep existing) */

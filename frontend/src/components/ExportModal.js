@@ -96,7 +96,6 @@ function ExportModal({
         const isFamilyTransfer = tx.metadata && tx.metadata.source === 'family_transfer';
         const isFamilyPersonal = tx.metadata && tx.metadata.source === 'family_personal';
         const isFamilyTx = !!(tx.metadata && (tx.metadata.familyId || tx.metadata.familyTransactionId || isFamilyTransfer || isFamilyPersonal));
-        const isPersonalTx = !isGroupTx && !isFamilyTx;
         
         if (isGroupTx) return { type: 'group', isPending: tx.isPending === true };
         if (isFamilyTx) return { type: 'family', isTransfer: isFamilyTransfer, isPersonal: isFamilyPersonal };

@@ -1399,6 +1399,19 @@ router.delete('/:familyId/shopping-list/:itemId', authenticateToken, async (req,
       });
     }
 
+    // MỚI: Kiểm tra nếu item đã được mua thì không cho phép xóa
+    // Người dùng phải hoàn tiền trước khi xóa
+    if (item.purchased) {
+      return res.status(400).json({ 
+        message: 'Không thể xóa sản phẩm đã được mua. Vui lòng hoàn tiền trước khi xóa.',
+        code: 'ITEM_PURCHASED',
+        requiresRefund: true,
+        purchasedBy: item.purchasedBy,
+        purchaseAmount: item.purchaseAmount,
+        purchaseType: item.purchaseType
+      });
+    }
+
     // Lưu thông tin item trước khi xóa để trả về
     const deletedItemInfo = {
       _id: item._id,

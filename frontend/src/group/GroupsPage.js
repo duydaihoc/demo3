@@ -1328,9 +1328,6 @@ export default function GroupsPage() {
 															);
 														})}
 													</div>
-													<div className="color-hint">
-														Chọn nhiều màu để tạo hiệu ứng gradient đẹp mắt
-													</div>
 												</div>
 												
 												<div className="design-option">

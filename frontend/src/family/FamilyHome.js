@@ -7,7 +7,6 @@ export default function FamilyHome() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [familyData, setFamilyData] = useState(null);
-  const [budgets, setBudgets] = useState([]);
   const [error, setError] = useState(null);
   // Thêm state cho người dùng hiện tại
   const [currentUser, setCurrentUser] = useState(null);
@@ -33,7 +32,6 @@ export default function FamilyHome() {
   const [deleteBudgetLoading, setDeleteBudgetLoading] = useState(false);
   // State cho tiến độ ngân sách
   const [budgetProgress, setBudgetProgress] = useState({});
-  const [loadingProgress, setLoadingProgress] = useState(false);
   // State cho modal chi tiết ngân sách
   const [budgetDetailModal, setBudgetDetailModal] = useState({ show: false, budget: null, transactions: [] });
   const [budgetDetailLoading, setBudgetDetailLoading] = useState(false);
@@ -120,7 +118,6 @@ export default function FamilyHome() {
   // Thêm hàm fetchBudgetProgress
   const fetchBudgetProgress = useCallback(async () => {
     if (!token || !selectedFamilyId) return;
-    setLoadingProgress(true);
     try {
       const res = await fetch(`${API_BASE}/api/family/${selectedFamilyId}/budget-progress`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -130,8 +127,6 @@ export default function FamilyHome() {
       setBudgetProgress(data);
     } catch (err) {
       setBudgetProgress({});
-    } finally {
-      setLoadingProgress(false);
     }
   }, [token, selectedFamilyId, API_BASE]);
 
@@ -1097,7 +1092,7 @@ export default function FamilyHome() {
                     {budgetDetailModal.transactions.map(tx => (
                       <tr key={tx._id}>
                         <td style={{ padding:8 }}>{new Date(tx.date || tx.createdAt).toLocaleDateString('vi-VN')}</td>
-                        <td style={{ padding:8 }}>{tx.description || (tx.category && tx.category.name) || '—'}</td>
+                        <td style={{ padding:8 }}>{(tx.description || (tx.category && tx.category.name)) || '—'}</td>
                         <td style={{ padding:8, textAlign:'right' }}>{tx.type === 'expense' ? '-' : '+'}{formatCurrency(tx.amount)}</td>
                         <td style={{ padding:8 }}>{tx.creatorName || (tx.createdBy && tx.createdBy.name) || '—'}</td>
                       </tr>
@@ -1150,7 +1145,7 @@ export default function FamilyHome() {
                       <tr key={tx._id || tx.id} style={{ borderBottom:'1px solid #f3f4f6' }}>
                         <td style={{ padding:8 }}>{new Date(tx.date || tx.createdAt).toLocaleDateString('vi-VN')}</td>
                         <td style={{ padding:8 }}>{tx.description || tx.title || '—'}</td>
-                        <td style={{ padding:8 }}>{tx.category && (tx.category.name || tx.category) || '—'}</td>
+                        <td style={{ padding:8 }}>{((tx.category && (tx.category.name || tx.category)) || '—')}</td>
                         <td style={{ padding:8, textAlign:'right' }}>{tx.type === 'expense' ? '-' : '+'}{formatCurrency(tx.amount)}</td>
                         <td style={{ padding:8 }}>{tx.creatorName || (tx.createdBy && tx.createdBy.name) || '—'}</td>
                         <td style={{ padding:8 }}>{tx.transactionScope || tx.scope || 'family'}</td>
